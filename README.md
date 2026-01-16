@@ -63,6 +63,26 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively); you only need 
 
 ---
 
+## File Edit Approval
+
+Dippy can also auto-approve file edits (`Write`, `Edit`, `MultiEdit` tools) using the same config system. To enable:
+
+```json
+"matcher": "Bash|Write|Edit|MultiEdit"
+```
+
+Then use `allow-edit`, `ask-edit`, `deny-edit` rules in your config:
+
+```
+allow-edit src/**        # auto-approve source edits
+ask-edit **/config.*     # prompt for config changes
+deny-edit **/.env*       # block env file edits
+```
+
+See [File Operation Rules](docs/config-v1.md#proposal-file-operation-rules) for details.
+
+---
+
 ## Configuration
 
 ⚠️ Configuration is still evolving; syntax and behaviors may change.
