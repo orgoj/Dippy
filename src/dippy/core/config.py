@@ -719,6 +719,7 @@ def log_decision(
     rule: str | None = None,
     message: str | None = None,
     command: str | None = None,
+    cwd: Path | None = None,
 ) -> None:
     """Log a decision. No-op if logging not configured or disabled."""
     global _log_disabled
@@ -735,6 +736,8 @@ def log_decision(
         entry["message"] = message
     if _log_config.full and command is not None:
         entry["command"] = command
+    if cwd is not None:
+        entry["cwd"] = str(cwd)
     entry["ts"] = datetime.now(timezone.utc).isoformat()
 
     try:

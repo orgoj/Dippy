@@ -190,6 +190,7 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
         "allow" if result.action == "allow" else result.action,
         result.reason,
         command=command,
+        cwd=cwd,
     )
 
     if result.action == "allow":
