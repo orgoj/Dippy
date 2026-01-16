@@ -108,6 +108,11 @@ deny python "Use uv run python, which runs in project environment"  # remind Cla
 allow-redirect /tmp/**                 # allow temp file writes
 deny-redirect **/.env* "Never write secrets, as me to do it"        # block env writes
 
+# Option-specific rules
+allow-opt git status fetch log diff     # allow these git subcommands
+deny-opt "git commit" --no-verify       # block commits skipping hooks
+ask-opt "git push" --force "Use --force-with-lease instead"  # prompt for force push
+
 after git commit * "Reread prompts/next-iteration.md"  # after hook keeps Claude on task, following instructions
 ```
 

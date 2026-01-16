@@ -9,6 +9,8 @@ allow uv run pytest *
 #allow uv run python -c *
 allow uv run python -m pytest *
 
+deny .venv/bin/*
+
 #---- Just ----#
 allow just check *
 allow just fmt *

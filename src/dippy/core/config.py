@@ -35,6 +35,7 @@ class Rule:
     message: str | None = None
     source: str | None = None  # file path
     scope: str | None = None  # user/project/env
+    items: list[str] | None = None  # for option rules: list of items to match anywhere
 
 
 @dataclass
@@ -179,6 +180,37 @@ def load_config(cwd: Path) -> Config:
     return config
 
 
+def _parse_option_rule(decision: str, rest: str) -> Rule:
+    """Parse an option rule: <prefix> <item1> <item2>...
+
+    The prefix can be quoted (e.g., "git commit") or a single word (e.g., git).
+    Items are subcommands or flags to match anywhere in the command.
+    """
+    # Extract message first if present
+    pattern, message = _extract_message(rest)
+
+    # Parse prefix and items
+    # Prefix can be quoted or single word
+    import shlex
+    try:
+        parts = shlex.split(pattern)
+    except ValueError:
+        # Fallback to simple split if shlex fails
+        parts = pattern.split()
+
+    if not parts:
+        raise ValueError("option rule requires prefix and items")
+
+    # First part is prefix, rest are items
+    prefix = parts[0]
+    items = parts[1:] if len(parts) > 1 else []
+
+    if not items:
+        raise ValueError("option rule requires at least one item to match")
+
+    return Rule(decision, prefix, message=message, items=items)
+
+
 def parse_config(text: str, source: str | None = None) -> Config:
     """Parse config text into Config object. Logs and skips invalid lines."""
     import logging
@@ -246,6 +278,21 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
                 after_rules.append(Rule("after", pattern, message=message))
+
+            elif directive == "allow-opt":
+                if not rest:
+                    raise ValueError("requires a prefix and items")
+                rules.append(_parse_option_rule("allow", rest))
+
+            elif directive == "ask-opt":
+                if not rest:
+                    raise ValueError("requires a prefix and items")
+                rules.append(_parse_option_rule("ask", rest))
+
+            elif directive == "deny-opt":
+                if not rest:
+                    raise ValueError("requires a prefix and items")
+                rules.append(_parse_option_rule("deny", rest))
 
             elif directive == "set":
                 _apply_setting(settings, rest)
@@ -537,11 +584,50 @@ def _glob_match(text: str, pattern: str) -> bool:
         return False
 
 
+def _match_option_rule(rule: Rule, words: list[str]) -> bool:
+    """Check if an option rule matches the command words.
+
+    Matches if:
+    1. Command words start with the rule's prefix
+    2. Any item from rule.items matches any word exactly (word-boundary)
+
+    Flags like --foo match --foo exactly, not --foo-bar.
+    Use glob patterns like --foo* in normal rules for prefix matching.
+    """
+    if not rule.items:
+        return False
+
+    # Check prefix match
+    prefix_words = rule.pattern.split()
+    if len(words) < len(prefix_words):
+        return False
+    for i, pw in enumerate(prefix_words):
+        if words[i] != pw:
+            return False
+
+    # Check if any item matches any remaining word exactly
+    remaining_words = words[len(prefix_words):]
+    items_set = set(rule.items)
+    return bool(items_set.intersection(remaining_words))
+
+
 def _match_words(words: list[str], config: Config, cwd: Path) -> Match | None:
     """Match command words against rules. Returns last matching rule."""
     normalized_cmd = _normalize_words(words, cwd)
     result: Match | None = None
     for rule in config.rules:
+        # Option rules use different matching logic
+        if rule.items is not None:
+            if _match_option_rule(rule, words):
+                result = Match(
+                    decision=rule.decision,
+                    pattern=rule.pattern,
+                    message=rule.message,
+                    source=rule.source,
+                    scope=rule.scope,
+                )
+                continue
+
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
         matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)

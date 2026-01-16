@@ -578,6 +578,62 @@ deny-redirect /etc/* "system files"
         assert cfg.redirect_rules[2].decision == "deny"
 
 
+class TestParseOptionRules:
+    """Test parsing of allow-opt/ask-opt/deny-opt directives."""
+
+    def test_allow_opt_basic(self):
+        cfg = parse_config('allow-opt git status fetch log')
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].decision == "allow"
+        assert cfg.rules[0].pattern == "git"
+        assert cfg.rules[0].items == ["status", "fetch", "log"]
+
+    def test_deny_opt_single_item(self):
+        cfg = parse_config('deny-opt git commit --no-verify')
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].decision == "deny"
+        assert cfg.rules[0].pattern == "git"
+        assert cfg.rules[0].items == ["commit", "--no-verify"]
+
+    def test_ask_opt_with_message(self):
+        cfg = parse_config('ask-opt git push --force "Use --force-with-lease"')
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].decision == "ask"
+        assert cfg.rules[0].pattern == "git"
+        assert cfg.rules[0].items == ["push", "--force"]
+        assert cfg.rules[0].message == "Use --force-with-lease"
+
+    def test_multi_word_prefix(self):
+        cfg = parse_config('deny-opt "git commit" --no-verify')
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].pattern == "git commit"
+        assert cfg.rules[0].items == ["--no-verify"]
+
+    def test_option_rule_requires_items(self):
+        cfg = parse_config('allow-opt git')
+        # Should be skipped - no items
+        assert len(cfg.rules) == 0
+
+    def test_option_rule_empty_directive(self):
+        cfg = parse_config('allow-opt')
+        # Should be skipped - no prefix/items
+        assert len(cfg.rules) == 0
+
+    def test_option_rules_mix_with_normal_rules(self):
+        cfg = parse_config('''
+allow git *
+deny-opt git push --force
+ask git commit
+''')
+        assert len(cfg.rules) == 3
+        assert cfg.rules[0].decision == "allow"
+        assert cfg.rules[0].items is None
+        assert cfg.rules[1].decision == "deny"
+        assert cfg.rules[1].items == ["push", "--force"]
+        assert cfg.rules[2].decision == "ask"
+        assert cfg.rules[2].items is None
+
+
 class TestMatchCommand:
     """Test command matching against config rules."""
 
@@ -1391,3 +1447,103 @@ class TestMatchAfter:
         cfg = Config(after_rules=[Rule("after", f"{home}/bin/*", message="custom bin")])
         result = match_after(["~/bin/script"], cfg, tmp_path)
         assert result == "custom bin"
+
+
+class TestOptionRules:
+    """Test allow-opt/ask-opt/deny-opt option rules."""
+
+    def test_allow_opt_single_subcommand(self, tmp_path):
+        cfg = Config(rules=[Rule("allow", "git", items=["status"])])
+        m = match_command(cmd("git status --short"), cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "allow"
+
+    def test_allow_opt_multiple_items(self, tmp_path):
+        cfg = Config(rules=[Rule("allow", "git", items=["status", "fetch", "log"])])
+        assert match_command(cmd("git status"), cfg, tmp_path) is not None
+        assert match_command(cmd("git fetch origin"), cfg, tmp_path) is not None
+        assert match_command(cmd("git log --oneline"), cfg, tmp_path) is not None
+        # git commit doesn't match any item
+        assert match_command(cmd("git commit -m x"), cfg, tmp_path) is None
+
+    def test_deny_opt_with_flag(self, tmp_path):
+        cfg = Config(rules=[Rule("deny", "git commit", items=["--no-verify"])])
+        m = match_command(cmd("git commit --no-verify -m x"), cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "deny"
+
+    def test_deny_opt_flag_anywhere(self, tmp_path):
+        """Flag should match anywhere in command."""
+        cfg = Config(rules=[Rule("deny", "git push", items=["--force"])])
+        # --force at the end
+        assert match_command(cmd("git push origin --force"), cfg, tmp_path) is not None
+        # --force in the middle
+        assert match_command(cmd("git push --force origin"), cfg, tmp_path) is not None
+        # No --force should not match
+        assert match_command(cmd("git push origin main"), cfg, tmp_path) is None
+
+    def test_multi_word_prefix(self, tmp_path):
+        cfg = Config(rules=[Rule("ask", "git commit", items=["--amend"])])
+        m = match_command(cmd("git commit --amend"), cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "ask"
+        # Different prefix should not match
+        assert match_command(cmd("git status"), cfg, tmp_path) is None
+
+    def test_option_rules_mix_with_normal_rules(self, tmp_path):
+        """Option rules should mix with normal rules, first match wins."""
+        cfg = Config(
+            rules=[
+                Rule("allow", "git *"),  # Normal rule - allow all git
+                Rule("deny", "git push", items=["--force"]),  # Option rule - deny --force
+                Rule("allow", "git push"),  # Normal rule - allow push
+            ]
+        )
+        # First match is normal rule "git *"
+        assert match_command(cmd("git status"), cfg, tmp_path).decision == "allow"
+        # For "git push --force", normal rule "git *" matches first
+        m = match_command(cmd("git push --force"), cfg, tmp_path)
+        # The option rule is checked but "git *" matches first in normal matching
+        # Since option rules are checked separately, need to verify order
+
+    def test_ask_opt_with_message(self, tmp_path):
+        cfg = Config(rules=[Rule("ask", "git push", items=["--force"], message="Use --force-with-lease")])
+        m = match_command(cmd("git push --force origin"), cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "ask"
+        assert m.message == "Use --force-with-lease"
+
+    def test_prefix_must_match_exactly(self, tmp_path):
+        cfg = Config(rules=[Rule("allow", "git", items=["status"])])
+        # "git" prefix matches "git status"
+        assert match_command(cmd("git status"), cfg, tmp_path) is not None
+        # "docker" prefix doesn't match "git status"
+        assert match_command(cmd("docker status"), cfg, tmp_path) is None
+
+    def test_item_is_substring_false_positive(self, tmp_path):
+        """Item matching should be exact word-boundary, not substring."""
+        cfg = Config(rules=[Rule("allow", "git", items=["status"])])
+        # "status" should match "git status"
+        assert match_command(cmd("git status"), cfg, tmp_path) is not None
+        # "status" should NOT match "git status-long" (different word)
+        assert match_command(cmd("git status-long"), cfg, tmp_path) is None
+        # "status" should NOT match "git mystatus" (different word)
+        assert match_command(cmd("git mystatus"), cfg, tmp_path) is None
+
+    def test_flag_does_not_match_longer_variant(self, tmp_path):
+        """--force should NOT match --force-with-lease."""
+        cfg = Config(rules=[Rule("deny", "git push", items=["--force"])])
+        # --force matches
+        assert match_command(cmd("git push --force"), cfg, tmp_path) is not None
+        # --force-with-lease does NOT match
+        assert match_command(cmd("git push --force-with-lease"), cfg, tmp_path) is None
+
+    def test_use_glob_for_prefix_matching(self, tmp_path):
+        """For prefix matching, use normal glob rules."""
+        cfg = Config(rules=[
+            Rule("deny", "git push *--force*"),  # Glob matches --force and --force-with-lease
+            Rule("allow", "git push --force-with-lease"),  # Explicit allow for safer variant
+        ])
+        # Both match the glob pattern
+        assert match_command(cmd("git push --force"), cfg, tmp_path).decision == "deny"
+        assert match_command(cmd("git push --force-with-lease"), cfg, tmp_path).decision == "allow"

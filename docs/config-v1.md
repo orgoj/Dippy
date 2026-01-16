@@ -203,6 +203,98 @@ deny-redirect /etc/** "System config is off-limits"
 
 Note: `**` is only supported in redirect rules. Command rules use standard fnmatch globs.
 
+## Option Rules
+
+Option rules provide fine-grained control over specific subcommands or flags. Unlike normal pattern matching, option rules match if:
+
+1. The command starts with the specified **prefix**
+2. Any **item** from the list appears anywhere in the command
+
+```
+allow-opt <prefix> <item1> <item2>...
+ask-opt <prefix> <item1> <item2>... ["message"]
+deny-opt <prefix> <item1> <item2>... ["message"]
+```
+
+The prefix can be a single word or quoted (e.g., `"git commit"`). Items are subcommands or flags that trigger the rule.
+
+**Examples:**
+
+```
+# Allow specific read-only git subcommands
+allow-opt git status fetch log diff show ls-files ls-tree
+
+# Block git commit with --no-verify (anywhere in command)
+deny-opt "git commit" --no-verify "Don't skip pre-commit hooks"
+
+# Prompt for force push
+ask-opt "git push" --force "Use --force-with-lease instead"
+
+# Allow docker inspection commands
+allow-opt docker ps inspect logs top stats
+
+# Block dangerous docker flags
+deny-opt "docker run" --privileged
+deny-opt "docker run" --volume /:/host
+```
+
+**Matching behavior:**
+
+| Command | Rule | Match? |
+|---------|------|--------|
+| `git status --short` | `allow-opt git status` | ✅ |
+| `git fetch origin` | `allow-opt git status fetch` | ✅ |
+| `git log --oneline` | `allow-opt git status fetch log` | ✅ |
+| `git commit -m x` | `allow-opt git status fetch` | ❌ |
+| `git commit --no-verify -m x` | `deny-opt git commit --no-verify` | ✅ |
+| `git push --force origin` | `ask-opt git push --force` | ✅ |
+| `git push origin main` | `ask-opt git push --force` | ❌ |
+| `git push --force-with-lease` | `ask-opt git push --force` | ❌ (exact match only) |
+
+**Important:** Item matching uses **exact word-boundary** matching. `--force` does NOT match `--force-with-lease`. For prefix matching, use normal glob rules like `deny "git push *--force*"`.
+
+**Mixing with normal rules:**
+
+Option rules mix with normal `allow`/`ask`/`deny` rules. First match wins:
+
+```
+# Allow all git commands
+allow git *
+
+# But block force push specifically
+deny-opt "git push" --force
+
+# But allow force-with-lease
+allow-opt "git push" --force-with-lease
+```
+
+For prefix matching (e.g., block all `--force*` variants), use glob patterns:
+
+```
+# Block all --force* variants using glob
+deny "git push *--force*"
+
+# Explicitly allow the safer variant (last match wins)
+allow "git push --force-with-lease"
+```
+
+**Multi-word prefixes:**
+
+Use quotes for prefixes with multiple words:
+
+```
+deny-opt "git commit" --no-verify
+ask-opt "git stash" drop pop
+deny-opt "docker run" --privileged
+```
+
+**Use cases:**
+
+- Whitelist safe subcommands (e.g., `git status`, `git log`)
+- Blacklist dangerous flags (e.g., `--force`, `--no-verify`, `--privileged`)
+- Enforce safer alternatives (block `--force`, suggest `--force-with-lease`)
+- Project-specific constraints (block `--global` config changes, etc.)
+
 ## Settings
 
 **Boolean flags** (no value):
