@@ -304,11 +304,26 @@ set log-full             # log full commands (requires log path set)
 
 **Value settings:**
 ```
-set default allow        # YOLO mode: 'allow' or 'ask' (default: ask)
+# Default behavior when no rule matches (default: ask)
+set default ask          # Prompt for approval - safest option
+set default pass         # Don't intercept - let Claude's permission system decide
+set default allow        # Auto-approve everything without explicit rule
+
+# Logging
 set log ~/.dippy/audit.log  # enable logging to path
 ```
 
 Settings use kebab-case or snake_case interchangeably.
+
+### Default Behavior
+
+The `set default` directive controls what happens when a command doesn't match any explicit rule:
+
+| Value | Behavior | Use Case |
+|-------|----------|----------|
+| `ask` | Prompt user for approval | Safest - explicit approval for unknown commands |
+| `pass` | Return empty response; Claude handles it | Hybrid - Dippy only handles explicitly configured rules |
+| `allow` | Auto-approve | YOLO mode - trust everything not explicitly blocked |
 
 ## Logging
 

@@ -577,6 +577,24 @@ deny-redirect /etc/* "system files"
         assert cfg.redirect_rules[1].decision == "ask"
         assert cfg.redirect_rules[2].decision == "deny"
 
+    def test_set_default_allow(self):
+        cfg = parse_config("set default allow")
+        assert cfg.default == "allow"
+
+    def test_set_default_ask(self):
+        cfg = parse_config("set default ask")
+        assert cfg.default == "ask"
+
+    def test_set_default_pass(self):
+        cfg = parse_config("set default pass")
+        assert cfg.default == "pass"
+
+    def test_set_default_invalid(self):
+        # Invalid default values are logged and skipped, not raised
+        cfg = parse_config("set default invalid")
+        # Default remains "ask" when invalid value is provided
+        assert cfg.default == "ask"
+
 
 class TestParseOptionRules:
     """Test parsing of allow-opt/ask-opt/deny-opt directives."""

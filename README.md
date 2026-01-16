@@ -99,6 +99,11 @@ Sample config:
 set log ~/.dippy/audit.log             # write audit log to this path
 set log-full                           # include full command in audit log
 
+# Default behavior for commands with no matching rule
+set default ask                        # prompt for approval (default)
+# set default pass                    # don't intercept - let Claude decide
+# set default allow                   # auto-approve everything without explicit rule
+
 deny docker *                          # block all docker by default
 allow docker run nginx:*               # allow nginx runs
 deny docker run *--privileged*         # still ban privileged mode, last matching rule wins

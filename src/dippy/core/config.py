@@ -51,7 +51,7 @@ class Config:
     after_rules: list[Rule] = field(default_factory=list)
     """After rules for PostToolUse feedback."""
 
-    default: str = "ask"  # 'allow' | 'ask'
+    default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
 
@@ -383,8 +383,8 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
 
     # Choice settings
     elif key_normalized == "default":
-        if value not in ("allow", "ask"):
-            raise ValueError(f"'default' must be 'allow' or 'ask', got '{value}'")
+        if value not in ("allow", "ask", "pass"):
+            raise ValueError(f"'default' must be 'allow', 'ask' or 'pass', got '{value}'")
         settings[key_normalized] = value
 
     # Path settings

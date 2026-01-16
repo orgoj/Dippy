@@ -174,6 +174,12 @@ def deny(reason: str = "denied by config") -> dict:
     }
 
 
+def pass_(reason: str = "passing through") -> dict:
+    """Return empty response to let Claude handle permissions with its default behavior."""
+    logging.info(f"PASS: {reason}")
+    return {}
+
+
 # === Main Logic ===
 
 
@@ -197,6 +203,8 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
         return approve(result.reason)
     elif result.action == "deny":
         return deny(result.reason)
+    elif result.action == "pass":
+        return pass_(result.reason)
     else:
         return ask(result.reason)
 

@@ -19,7 +19,7 @@ from dippy.vendor.parable import parse, ParseError
 class Decision:
     """Result of analyzing an AST node."""
 
-    action: Literal["allow", "ask", "deny"]
+    action: Literal["allow", "ask", "deny", "pass"]
     reason: str
     # For tracing: child decisions that contributed to this one
     children: list["Decision"] = field(default_factory=list)
@@ -291,6 +291,13 @@ def _analyze_simple_command(words: list[str], config: Config, cwd: Path) -> Deci
             msg = config_match.message or config_match.pattern
             return Decision("ask", f"{base}: {msg}")
 
+    # 1b. No rule matched - check config.default for fallback behavior
+    if config.default == "pass":
+        return Decision("pass", "no matching rule, passing through")
+    if config.default == "allow":
+        return Decision("allow", f"{base} (default allow)")
+    # For default="ask", continue to analyzer logic below
+
     # 2. Handle prefix commands (time, env, timeout, etc.)
     if base in PREFIX_COMMANDS and len(tokens) > 1:
         if base == "command" and len(tokens) > 1 and tokens[1] in ("-v", "-V"):
@@ -391,13 +398,17 @@ def _combine(decisions: list[Decision]) -> Decision:
     deny_reasons = [d.reason for d in decisions if d.action == "deny"]
     ask_reasons = [d.reason for d in decisions if d.action == "ask"]
     allow_reasons = [d.reason for d in decisions if d.action == "allow"]
+    pass_reasons = [d.reason for d in decisions if d.action == "pass"]
 
-    # deny > ask > allow
+    # deny > ask > allow > pass
     if deny_reasons:
         return Decision("deny", ", ".join(deny_reasons), children=decisions)
 
     if ask_reasons:
         return Decision("ask", ", ".join(ask_reasons), children=decisions)
 
-    # All allowed
-    return Decision("allow", ", ".join(allow_reasons), children=decisions)
+    if allow_reasons:
+        return Decision("allow", ", ".join(allow_reasons), children=decisions)
+
+    # All pass
+    return Decision("pass", ", ".join(pass_reasons), children=decisions)
