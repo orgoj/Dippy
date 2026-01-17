@@ -33,15 +33,17 @@ Use this skill when:
 
 ```bash
 git worktree add .worktrees/merge-upstream original/main
-cd .worktrees/merge-upstream
+# Use subshell for all worktree operations:
+(cd .worktrees/merge-upstream && git log -1 --oneline)
 ```
 
 Or for specific branch:
 ```bash
 git worktree add .worktrees/merge-feature -b merge-feature origin/your-branch
-cd .worktrees/merge-feature
-git merge original/branch-to-merge
+(cd .worktrees/merge-feature && git merge original/branch-to-merge)
 ```
+
+**CRITICAL**: Always use subshells `(cd DIR && ...)` - never bare `cd` commands!
 
 ### Step 2: Resolve conflicts carefully
 
@@ -61,7 +63,7 @@ Common conflict patterns in this repo:
 ### Step 3: Run tests BEFORE committing
 
 ```bash
-just test  # or: uv run pytest
+(cd .worktrees/merge-upstream && just test)  # or: uv run pytest
 ```
 
 **CRITICAL**: Never commit merge until ALL tests pass!
@@ -74,22 +76,19 @@ If tests fail:
 ### Step 4: Complete merge in worktree
 
 ```bash
-git add -A
-git commit -m "Merge original/branch: description of what's added
+(cd .worktrees/merge-upstream && git add -A && git commit -m "Merge original/branch: description of what's added
 
 - Preserved local features: list them
 - Added upstream features: list them
 - Fixed conflicts in: list files
 
-Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>"
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>")
 ```
 
 ### Step 5: Bring changes to main worktree
 
 ```bash
-# Return to main worktree
-cd /path/to/main/repo
-
+# You should already be in main worktree (project root)
 # Merge from the worktree branch (fast-forward or merge)
 git merge merge-upstream
 
@@ -123,10 +122,10 @@ git worktree remove --force .worktrees/merge-upstream
 
 Fix in worktree, don't commit broken state:
 ```bash
-# Stay in worktree, fix issues
-# Re-run tests
-just test
+# Fix issues in worktree using subshells
+(cd .worktrees/merge-upstream && just test)
 # Only then commit
+(cd .worktrees/merge-upstream && git add -A && git commit --amend)
 ```
 
 ## Anti-Patterns
@@ -136,6 +135,7 @@ just test
 - **NEVER** use `git reset --hard` during active rebase
 - **NEVER** assume remote names - verify with `git remote -v`
 - **NEVER** rush through conflict resolution
+- **NEVER** use bare `cd` commands - always use subshells `(cd DIR && ...)`
 
 ## Project-Specific Notes
 
