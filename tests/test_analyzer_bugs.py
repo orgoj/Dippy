@@ -470,3 +470,165 @@ class TestSubshellContext:
         config = parse_config("allow [@subshell] echo *\nallow ls *")
         result = analyze("(ls $(echo test))", config, tmp_path)
         assert result.action == "allow"
+
+
+class TestBracegroupContext:
+    """Test that @bracegroup context flag is set correctly in analyzer."""
+
+    def test_cd_in_bracegroup_allowed(self, tmp_path):
+        """cd inside brace group matches [@bracegroup] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@bracegroup] cd *")
+        result = analyze("{ cd /tmp; }", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_cd_outside_bracegroup_denied(self, tmp_path):
+        """cd outside brace group doesn't match [@bracegroup] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@bracegroup] cd *")
+        result = analyze("cd /tmp", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_bracegroup_not_subshell(self, tmp_path):
+        """Brace group is NOT a subshell - @subshell rule shouldn't match."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@subshell] cd *")
+        result = analyze("{ cd /tmp; }", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_subshell_not_bracegroup(self, tmp_path):
+        """Subshell is NOT a brace group - @bracegroup rule shouldn't match."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@bracegroup] cd *")
+        result = analyze("(cd /tmp)", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_nested_bracegroup(self, tmp_path):
+        """Nested brace groups have @bracegroup context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@bracegroup] cd *")
+        result = analyze("{ { cd /tmp; }; }", config, tmp_path)
+        assert result.action == "allow"
+
+
+class TestPipelineContext:
+    """Test that @pipeline context flag is set correctly in analyzer."""
+
+    def test_cmd_in_pipeline_allowed(self, tmp_path):
+        """Command in pipeline matches [@pipeline] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@pipeline] rm *\nallow cat *")
+        result = analyze("cat file | rm -rf /", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_cmd_outside_pipeline_denied(self, tmp_path):
+        """Command outside pipeline doesn't match [@pipeline] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny rm *\nallow [@pipeline] rm *")
+        result = analyze("rm -rf /", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_all_commands_in_pipeline_have_flag(self, tmp_path):
+        """All commands in pipeline have @pipeline context."""
+        from dippy.core.config import parse_config
+
+        # Both cat and grep should match [@pipeline] rule
+        config = parse_config("allow [@pipeline] cat *\nallow [@pipeline] grep *")
+        result = analyze("cat file | grep pattern", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_list_not_pipeline(self, tmp_path):
+        """List (&&) is NOT a pipeline - @pipeline rule shouldn't match."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny rm *\nallow [@pipeline] rm *\nallow ls *")
+        result = analyze("ls && rm file", config, tmp_path)
+        assert result.action == "deny"
+
+
+class TestCompoundContext:
+    """Test that @compound context flag covers all compound contexts."""
+
+    def test_compound_in_subshell(self, tmp_path):
+        """Subshell has @compound context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@compound] cd *")
+        result = analyze("(cd /tmp)", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_compound_in_bracegroup(self, tmp_path):
+        """Brace group has @compound context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@compound] cd *")
+        result = analyze("{ cd /tmp; }", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_compound_in_pipeline(self, tmp_path):
+        """Pipeline has @compound context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@compound] cat *\nallow [@compound] grep *")
+        result = analyze("cat file | grep pattern", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_compound_in_list(self, tmp_path):
+        """List (&&, ||) has @compound context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@compound] ls *\nallow [@compound] echo *")
+        result = analyze("ls && echo done", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_compound_not_in_simple_command(self, tmp_path):
+        """Simple command does NOT have @compound context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@compound] cd *")
+        result = analyze("cd /tmp", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_compound_covers_all_contexts(self, tmp_path):
+        """@compound matches subshell, bracegroup, pipeline, and list."""
+        from dippy.core.config import parse_config
+
+        # Single rule should match all compound contexts
+        config = parse_config("allow [@compound] rm *")
+
+        # Subshell
+        result = analyze("(rm file)", config, tmp_path)
+        assert result.action == "allow", "subshell should have @compound"
+
+        # Brace group
+        result = analyze("{ rm file; }", config, tmp_path)
+        assert result.action == "allow", "bracegroup should have @compound"
+
+        # Pipeline
+        result = analyze("cat x | rm file", config, tmp_path)
+        assert result.action == "allow", "pipeline should have @compound"
+
+        # List
+        result = analyze("ls && rm file", config, tmp_path)
+        assert result.action == "allow", "list should have @compound"
+
+    def test_specific_flag_with_compound(self, tmp_path):
+        """Specific flags work alongside @compound."""
+        from dippy.core.config import parse_config
+
+        # Rule requires both @subshell AND @compound
+        config = parse_config("allow [@subshell,@compound] cd *")
+        result = analyze("(cd /tmp)", config, tmp_path)
+        assert result.action == "allow"
+
+        # Brace group has @compound but not @subshell
+        config2 = parse_config("deny cd *\nallow [@subshell,@compound] cd *")
+        result2 = analyze("{ cd /tmp; }", config2, tmp_path)
+        assert result2.action == "deny"

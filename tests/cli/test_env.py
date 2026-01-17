@@ -38,7 +38,8 @@ TESTS = [
     ("env mv src dst", False),
     ("env python script.py", False),  # unknown command
     ("env npm install", False),
-    ("env sudo ls", False),
+    ("env sudo ls", True),  # sudo delegates to ls which is safe
+    ("env sudo rm file.txt", False),  # sudo delegates to rm which needs confirmation
     ("env FOO=bar BAZ=qux rm file.txt", False),
     #
     # === EDGE CASES ===

@@ -52,7 +52,7 @@ set <key> [value]              # settings
 Rules can be restricted to specific execution contexts using `[flags]` syntax:
 
 ```
-allow [flags] <glob>           # only match when ALL flags are present
+allow [flags] <glob>           # only match when conditions are met
 deny [flags] <glob>
 ask [flags] <glob> "message"
 ```
@@ -62,30 +62,54 @@ ask [flags] <glob> "message"
 | Flag | Context | Example |
 |------|---------|---------|
 | `@subshell` | Inside `(...)` | `(cd /tmp && make)` |
-
-More flags coming soon: `@bracegroup`, `@pipeline`, `@compound`, and wrapper flags like `ssh`, `sudo`.
+| `@bracegroup` | Inside `{ ...; }` | `{ cd /tmp; make; }` |
+| `@pipeline` | Part of `cmd1 \| cmd2` | `cat file | grep x` |
+| `@compound` | Any compound context (subshell, bracegroup, pipeline, list) | All of above |
+| `ssh` | Inside `ssh "command"` | `ssh host "rm /tmp/*"` |
+| `sudo` | Inside `sudo`, `doas`, `pkexec` | `sudo rm /etc/passwd` |
 
 **Flag syntax:**
-- AST context flags use `@` prefix: `@subshell`
+- AST context flags use `@` prefix: `@subshell`, `@compound`
+- Wrapper flags have no prefix: `ssh`, `sudo`
 - Multiple flags use AND logic: `[@subshell,ssh]` requires BOTH
+- **Negation:** `!` prefix means flag must NOT be present: `[!@subshell]`
 - Rules without flags match any context (backward compatible)
 
-**Example: Allow `cd` only in subshells**
+**Example: Deny `cd` outside subshells**
 
+```
+deny [!@subshell] cd *          # deny cd when NOT in subshell
+```
+
+This is equivalent to:
 ```
 deny cd *                      # block standalone cd
-allow [@subshell] cd *         # but allow in subshells like (cd /tmp && make)
+allow [@subshell] cd *         # but allow in subshells
 ```
 
-This prevents AI from accidentally changing the session's working directory while still allowing safe patterns like `(cd build && ./configure)`.
+**Example: Allow `rm` via SSH only in `/tmp`**
+
+```
+deny [ssh] rm *                # deny rm via SSH anywhere
+allow [ssh] rm /tmp/**         # but allow in /tmp
+```
+
+**Example: Mixed required and negated flags**
+
+```
+allow [ssh,!@subshell] rm *    # ssh required, but NOT in subshell
+```
+
+This matches `ssh host "rm /tmp/x"` but NOT `ssh host "(rm /tmp/x)"`.
 
 **How it works:**
 
-When Dippy analyzes `(cd /tmp && ls)`:
-1. Parser detects the outer `()` as a subshell
-2. Commands inside get `@subshell` context flag
-3. Rule `allow [@subshell] cd *` matches because flag is present
-4. Standalone `cd /tmp` has no `@subshell` flag, matches `deny cd *`
+When Dippy analyzes `ssh host "(rm /tmp/x)"`:
+1. Parser detects outer `ssh` wrapper → sets `ssh` flag
+2. Parser detects inner `(...)` subshell → sets `@subshell` and `@compound` flags
+3. Rule `allow [ssh] rm *` matches (ssh flag present)
+4. Rule `deny [ssh,!@subshell] rm *` does NOT match (@subshell negated)
+5. Rule `allow [@compound] rm *` matches (@compound present)
 
 **Escaping in patterns:** Use `[*]`, `[?]`, `[[]` to match literal glob characters.
 

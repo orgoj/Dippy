@@ -113,7 +113,8 @@ deny python "Use uv run python, which runs in project environment"  # remind Cla
 allow-redirect /tmp/**                 # allow temp file writes
 deny-redirect **/.env* "Never write secrets, ask me to do it"       # block env writes
 
-# Context-aware rules (e.g., allow cd only in subshells)
+# Context-aware rules (flags: @subshell, @compound, ssh, sudo, use ! to negate)
+deny [!@subshell] cd *                 # deny cd when NOT in subshell (equivalent below)
 deny cd *                              # block standalone cd
 allow [@subshell] cd *                 # but allow (cd /tmp && make)
 

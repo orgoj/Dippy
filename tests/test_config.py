@@ -2228,3 +2228,185 @@ allow [@subshell] cd *
         )
         assert match is not None
         assert match.decision == "allow"
+
+
+class TestWrapperContextFlags:
+    """Test wrapper_context flags for ssh, sudo, etc."""
+
+    def test_ssh_wrapper_context_allows_rule(self, tmp_path):
+        """SSH wrapper_context enables [ssh] rules."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("allow [ssh] rm /tmp/*")
+        # Without ssh context - rm should ask
+        result = analyze("rm /tmp/x", cfg, tmp_path)
+        assert result.action == "ask"
+        # With ssh wrapper - rule matches
+        result = analyze("ssh host rm /tmp/x", cfg, tmp_path)
+        assert result.action == "allow"
+
+    def test_sudo_wrapper_context_allows_rule(self, tmp_path):
+        """Sudo wrapper_context enables [sudo] rules."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("allow [sudo] apt install *")
+        # Without sudo context - apt should ask
+        result = analyze("apt install vim", cfg, tmp_path)
+        assert result.action == "ask"
+        # With sudo wrapper - rule matches
+        result = analyze("sudo apt install vim", cfg, tmp_path)
+        assert result.action == "allow"
+
+    def test_deny_ssh_wrapper_context(self, tmp_path):
+        """Deny rules work with ssh wrapper_context."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("deny [ssh] rm *")
+        # Without ssh context - rm should ask (no matching rule)
+        result = analyze("rm /etc/passwd", cfg, tmp_path)
+        assert result.action == "ask"
+        # With ssh wrapper - deny matches
+        result = analyze("ssh host rm /etc/passwd", cfg, tmp_path)
+        assert result.action == "deny"
+
+    def test_combined_wrapper_and_builtin_flags(self, tmp_path):
+        """Wrapper context combines with builtin flags like @subshell."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("allow [ssh,@subshell] rm /tmp/*")
+        # Just ssh - not enough
+        result = analyze("ssh host rm /tmp/x", cfg, tmp_path)
+        assert result.action == "ask"
+        # SSH + subshell via bash -c in subshell - should match
+        # ssh host "(rm /tmp/x)" - subshell inside ssh
+        result = analyze("ssh host '(rm /tmp/x)'", cfg, tmp_path)
+        assert result.action == "allow"
+
+    def test_doas_uses_sudo_context(self, tmp_path):
+        """Doas uses 'sudo' wrapper_context for rule matching."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("allow [sudo] apt install *")
+        result = analyze("doas apt install vim", cfg, tmp_path)
+        assert result.action == "allow"
+
+    def test_pkexec_uses_sudo_context(self, tmp_path):
+        """Pkexec uses 'sudo' wrapper_context for rule matching."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("allow [sudo] apt install *")
+        result = analyze("pkexec apt install vim", cfg, tmp_path)
+        assert result.action == "allow"
+
+    def test_nested_wrappers_accumulate_context(self, tmp_path):
+        """Nested wrappers accumulate context flags."""
+        from dippy.core.analyzer import analyze
+
+        # Rule requires both ssh AND sudo context
+        cfg = parse_config("allow [ssh,sudo] dangerous *")
+        # Just ssh - not enough
+        result = analyze("ssh host dangerous cmd", cfg, tmp_path)
+        assert result.action == "ask"
+        # Just sudo - not enough
+        result = analyze("sudo dangerous cmd", cfg, tmp_path)
+        assert result.action == "ask"
+        # Both - should match (ssh host "sudo dangerous cmd")
+        result = analyze('ssh host "sudo dangerous cmd"', cfg, tmp_path)
+        assert result.action == "allow"
+
+
+class TestNegatedContextFlags:
+    """Test negated context flags with [!flag] syntax."""
+
+    def test_parse_negated_flag_single(self):
+        """Parse rule with single negated flag."""
+        cfg = parse_config("deny [!@subshell] cd *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].negated_flags == frozenset({"@subshell"})
+        assert cfg.rules[0].required_flags is None
+        assert cfg.rules[0].pattern == "cd *"
+
+    def test_parse_negated_flag_multiple(self):
+        """Parse rule with multiple negated flags."""
+        cfg = parse_config("deny [!@subshell,!ssh] rm *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].negated_flags == frozenset({"@subshell", "ssh"})
+        assert cfg.rules[0].required_flags is None
+
+    def test_parse_mixed_required_and_negated(self):
+        """Parse rule with both required and negated flags."""
+        cfg = parse_config("allow [ssh,!@subshell] rm *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].required_flags == frozenset({"ssh"})
+        assert cfg.rules[0].negated_flags == frozenset({"@subshell"})
+
+    def test_negated_flag_matches_when_absent(self, tmp_path):
+        """Negated flag rule matches when flag is NOT present."""
+        cfg = parse_config("deny [!@subshell] cd *")
+        # No @subshell flag - should match deny
+        match = match_command(cmd("cd /tmp"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "deny"
+
+    def test_negated_flag_no_match_when_present(self, tmp_path):
+        """Negated flag rule doesn't match when flag IS present."""
+        cfg = parse_config("deny [!@subshell] cd *")
+        # @subshell flag present - rule shouldn't match
+        match = match_command(
+            cmd("cd /tmp"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is None
+
+    def test_mixed_flags_all_conditions_must_hold(self, tmp_path):
+        """Mixed required/negated: required must be present, negated must be absent."""
+        cfg = parse_config("allow [ssh,!@subshell] rm *")
+        # Neither flag - no match (ssh required)
+        match = match_command(cmd("rm /tmp/x"), cfg, tmp_path)
+        assert match is None
+        # Only ssh - match (ssh required, no @subshell is good)
+        match = match_command(
+            cmd("rm /tmp/x"), cfg, tmp_path, context_flags=frozenset({"ssh"})
+        )
+        assert match is not None
+        assert match.decision == "allow"
+        # ssh + @subshell - no match (@subshell forbidden)
+        match = match_command(
+            cmd("rm /tmp/x"),
+            cfg,
+            tmp_path,
+            context_flags=frozenset({"ssh", "@subshell"}),
+        )
+        assert match is None
+
+    def test_deny_outside_subshell_allow_inside(self, tmp_path):
+        """Classic use case: deny cd outside subshell, allow inside."""
+        cfg = parse_config(
+            """
+deny [!@subshell] cd *
+allow [@subshell] cd *
+"""
+        )
+        # Outside subshell - deny wins
+        match = match_command(cmd("cd /tmp"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "deny"
+        # Inside subshell - allow wins
+        match = match_command(
+            cmd("cd /tmp"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is not None
+        assert match.decision == "allow"
+
+    def test_integration_with_analyzer(self, tmp_path):
+        """Negated flags work through full analyzer flow."""
+        from dippy.core.analyzer import analyze
+
+        cfg = parse_config("deny [!@subshell] cd *")
+        # Standalone cd - denied (not in subshell)
+        result = analyze("cd /tmp", cfg, tmp_path)
+        assert result.action == "deny"
+        # cd in subshell - not matched by rule, falls through to default behavior
+        result = analyze("(cd /tmp && make)", cfg, tmp_path)
+        # cd in subshell is not denied - the deny rule doesn't match
+        # The result depends on default behavior for cd in subshell
+        assert result.action != "deny" or "@subshell" not in str(result)

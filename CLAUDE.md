@@ -24,6 +24,7 @@ just check       # All of the above in parallel — MUST PASS before committing
 - testing: use existing test suite (`just test`), never write adhoc tests
 - verification: check actual running system (real log files) instead of writing adhoc tests
 - documentation: always read README.md before making assumptions about config/log locations
+- documentation: update docs/README when adding/changing features
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 
 ## Git

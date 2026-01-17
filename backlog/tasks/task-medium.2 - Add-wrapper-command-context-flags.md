@@ -1,11 +1,13 @@
 ---
 id: TASK-MEDIUM.2
 title: Add wrapper command context flags
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@myself'
 created_date: '2026-01-17 17:56'
-updated_date: '2026-01-17 18:09'
+updated_date: '2026-01-17 20:27'
 labels: []
+milestone: m-0
 dependencies: []
 parent_task_id: TASK-MEDIUM
 ---
@@ -44,9 +46,19 @@ Reference: docs/plans/2026-01-17-context-aware-rules-design.md
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 CLI handlers return wrapper_context for delegate actions
-_analyze_simple_command passes wrapper_context as flag
-ssh handler sets wrapper_context="ssh"
-sudo handler sets wrapper_context="sudo"
-Tests verify [ssh] and [sudo] flags work
+- [x] #1 CLI handlers return wrapper_context for delegate actions
+- [x] #2 _analyze_simple_command passes wrapper_context as flag
+- [x] #3 ssh handler sets wrapper_context="ssh"
+- [x] #4 sudo handler sets wrapper_context="sudo"
+- [x] #5 Tests verify [ssh] and [sudo] flags work
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add wrapper_context field to Classification dataclass in cli/__init__.py
+2. Modify _analyze_simple_command to extract wrapper_context from delegate result and add it to context_flags
+3. Create ssh.py CLI handler that delegates with wrapper_context="ssh"
+4. Create sudo.py CLI handler that delegates with wrapper_context="sudo"
+5. Add tests for [ssh] and [sudo] context flags in analyzer
+<!-- SECTION:PLAN:END -->

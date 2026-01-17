@@ -2,12 +2,14 @@
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
-deny python3 * "Use `uv run python`"
-deny python * "Use `uv run python`"
-deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
-allow uv run pytest *
+#deny python3 * "Use `uv run python`"
+#deny python * "Use `uv run python`"
+#deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
 #allow uv run python -c *
+
 allow uv run python -m pytest *
+allow uv run pytest *
+allow pytest run *
 
 deny .venv/bin/*
 
@@ -19,6 +21,8 @@ allow just test *
 
 deny mkdir * "Use ralative path: mkdir -p ./..."
 allow mkdir -p ./**
+deny mkdir -p ./../**
+deny mkdir -p ./**/../**
 
 deny git worktree add * "Use relative path: git worktree add .worktrees/..."
 allow git worktree add .worktrees/**

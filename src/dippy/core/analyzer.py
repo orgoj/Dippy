@@ -67,9 +67,11 @@ def _analyze_node(
         return _analyze_command(node, config, cwd, context_flags)
 
     elif kind == "pipeline":
+        # Add @pipeline and @compound context flags for commands inside pipeline
+        pipeline_flags = context_flags | frozenset({"@pipeline", "@compound"})
         # All commands in pipeline must be safe
         decisions = [
-            _analyze_node(cmd, config, cwd, context_flags) for cmd in node.commands
+            _analyze_node(cmd, config, cwd, pipeline_flags) for cmd in node.commands
         ]
         result = _combine(decisions)
         if result.action == "allow":
@@ -78,6 +80,8 @@ def _analyze_node(
         return result
 
     elif kind == "list":
+        # Add @compound context flag for commands in list (cmd1 && cmd2 || cmd3)
+        list_flags = context_flags | frozenset({"@compound"})
         # All parts must be safe (skip operators like && ||)
         parts = [p for p in node.parts if getattr(p, "kind", None) != "operator"]
         # Check if first part is `cd <literal>` - use that path for subsequent parts
@@ -86,9 +90,7 @@ def _analyze_node(
             cd_target = _extract_cd_target(parts[0])
             if cd_target:
                 effective_cwd = _resolve_cd_target(cd_target, cwd)
-        decisions = [
-            _analyze_node(p, config, effective_cwd, context_flags) for p in parts
-        ]
+        decisions = [_analyze_node(p, config, effective_cwd, list_flags) for p in parts]
         result = _combine(decisions)
         if result.action == "allow":
             reasons = [d.reason for d in decisions]
@@ -159,14 +161,16 @@ def _analyze_node(
         return _analyze_node(node.body, config, cwd, context_flags)
 
     elif kind == "subshell":
-        # Add @subshell context flag for commands inside subshell
-        subshell_flags = context_flags | frozenset({"@subshell"})
+        # Add @subshell and @compound context flags for commands inside subshell
+        subshell_flags = context_flags | frozenset({"@subshell", "@compound"})
         decisions = [_analyze_node(node.body, config, cwd, subshell_flags)]
         decisions.extend(_analyze_redirects(node, config, cwd))
         return _combine(decisions)
 
     elif kind == "brace-group":
-        decisions = [_analyze_node(node.body, config, cwd, context_flags)]
+        # Add @bracegroup and @compound context flags for commands inside brace group
+        bracegroup_flags = context_flags | frozenset({"@bracegroup", "@compound"})
+        decisions = [_analyze_node(node.body, config, cwd, bracegroup_flags)]
         decisions.extend(_analyze_redirects(node, config, cwd))
         return _combine(decisions)
 
@@ -455,8 +459,12 @@ def _analyze_simple_command(
         if result.action == "approve":
             return Decision("allow", desc)
         elif result.action == "delegate" and result.inner_command:
-            # Delegate to inner command (e.g., bash -c 'inner')
-            inner_decision = analyze(result.inner_command, config, cwd, context_flags)
+            # Delegate to inner command (e.g., bash -c 'inner', ssh host 'cmd')
+            # Add wrapper_context as context flag if present
+            inner_flags = context_flags
+            if result.wrapper_context:
+                inner_flags = context_flags | frozenset({result.wrapper_context})
+            inner_decision = analyze(result.inner_command, config, cwd, inner_flags)
             return inner_decision
         else:
             return Decision("ask", desc)
