@@ -25,8 +25,9 @@ from dippy.core.config import (
     load_config,
     log_decision,
     match_after_mcp,
-    match_edit,
+    match_after_web,
     match_mcp,
+    match_web,
 )
 from dippy.core.analyzer import analyze
 
@@ -261,6 +262,40 @@ def handle_mcp_post_tool_use(tool_name: str, config: Config) -> None:
     # empty string or None = silent (no output)
 
 
+# === WebSearch Tool Handling ===
+
+
+def check_web_tool(query: str, config: Config) -> dict:
+    """Check if a WebSearch tool should be approved based on config rules.
+
+    Args:
+        query: WebSearch query string.
+        config: Loaded configuration.
+
+    Returns:
+        Hook response dict, or empty dict if no rules match (defer to default).
+    """
+    match = match_web(query, config)
+    if match is None:
+        return {}  # No rules match - defer to Claude's default behavior
+    reason = match.message if match.message else f"[{match.pattern}]"
+    log_decision(match.decision, reason, rule=match.pattern)
+    if match.decision == "allow":
+        return approve(reason)
+    elif match.decision == "deny":
+        return deny(reason)
+    else:
+        return ask(reason)
+
+
+def handle_web_post_tool_use(query: str, config: Config) -> None:
+    """Handle PostToolUse hook for WebSearch - output feedback if rule matches."""
+    message = match_after_web(query, config)
+    if message:  # non-empty string
+        print(f"🐤 {message}")
+    # empty string or None = silent (no output)
+
+
 # === Hook Entry Point ===
 
 # Tool names that indicate shell/bash commands
@@ -382,30 +417,25 @@ def main():
                     print(json.dumps(result))
                 return
 
-            # Check if this is a file operation tool
-            if tool_name in FILE_TOOL_NAMES:
-                file_path = tool_input.get("file_path", "")
-                if file_path and hook_event != "PostToolUse":
-                    # Check for bypass permissions mode first
+            # Check if this is a WebSearch tool
+            if tool_name == "WebSearch":
+                query = tool_input.get("query", "")
+                # Check for bypass permissions mode first
+                if hook_event != "PostToolUse":
                     permission_mode = input_data.get("permission_mode", "default")
-                    if permission_mode in (
-                        "bypassPermissions",
-                        "dontAsk",
-                        "acceptEdits",
-                    ):
+                    if permission_mode in ("bypassPermissions", "dontAsk"):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
-                        log_decision(
-                            "allow", tool=tool_name, file_path=file_path, cwd=cwd
-                        )
+                        log_decision("allow", permission_mode)
                         print(json.dumps(approve(permission_mode)))
                         return
-
-                    logging.info(f"Checking file op: {tool_name} -> {file_path}")
-                    result = check_file_tool(tool_name, file_path, config, cwd)
+                # Handle WebSearch tool
+                if hook_event == "PostToolUse":
+                    logging.info(f"PostToolUse WebSearch: {query}")
+                    handle_web_post_tool_use(query, config)
+                else:
+                    logging.info(f"Checking WebSearch: {query}")
+                    result = check_web_tool(query, config)
                     print(json.dumps(result))
-                    return
-                # No file_path or PostToolUse - fall through to default behavior
-                print(json.dumps({}))
                 return
 
             # Only handle shell/bash commands
