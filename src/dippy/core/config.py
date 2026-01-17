@@ -57,6 +57,9 @@ class Config:
     after_mcp_rules: list[Rule] = field(default_factory=list)
     """After-MCP rules for PostToolUse feedback on MCP tools."""
 
+    edit_rules: list[Rule] = field(default_factory=list)
+    """Edit rules for Write/Edit/MultiEdit tools."""
+
     default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
@@ -115,6 +118,7 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         after_rules=base.after_rules + overlay.after_rules,
         mcp_rules=base.mcp_rules + overlay.mcp_rules,
         after_mcp_rules=base.after_mcp_rules + overlay.after_mcp_rules,
+        edit_rules=base.edit_rules + overlay.edit_rules,
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
@@ -137,6 +141,7 @@ def _tag_rules(config: Config, source: str, scope: str) -> Config:
         after_mcp_rules=[
             replace(r, source=source, scope=scope) for r in config.after_mcp_rules
         ],
+        edit_rules=[replace(r, source=source, scope=scope) for r in config.edit_rules],
     )
 
 
@@ -204,6 +209,7 @@ def _parse_option_rule(decision: str, rest: str) -> Rule:
     # Parse prefix and items
     # Prefix can be quoted or single word
     import shlex
+
     try:
         parts = shlex.split(pattern)
     except ValueError:
@@ -232,6 +238,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     after_rules: list[Rule] = []
     mcp_rules: list[Rule] = []
     after_mcp_rules: list[Rule] = []
+    edit_rules: list[Rule] = []
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -331,6 +338,27 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 pattern, message = _extract_message(rest)
                 after_mcp_rules.append(Rule("after", pattern, message=message))
 
+            elif directive == "allow-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                edit_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+
+            elif directive == "ask-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "deny-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                )
+
             elif directive == "set":
                 _apply_setting(settings, rest)
 
@@ -346,6 +374,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         after_rules=after_rules,
         mcp_rules=mcp_rules,
         after_mcp_rules=after_mcp_rules,
+        edit_rules=edit_rules,
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
@@ -423,7 +452,9 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
     # Choice settings
     elif key_normalized == "default":
         if value not in ("allow", "ask", "pass"):
-            raise ValueError(f"'default' must be 'allow', 'ask' or 'pass', got '{value}'")
+            raise ValueError(
+                f"'default' must be 'allow', 'ask' or 'pass', got '{value}'"
+            )
         settings[key_normalized] = value
 
     # Path settings
@@ -645,7 +676,7 @@ def _match_option_rule(rule: Rule, words: list[str]) -> bool:
             return False
 
     # Check if any item matches any remaining word exactly
-    remaining_words = words[len(prefix_words):]
+    remaining_words = words[len(prefix_words) :]
     items_set = set(rule.items)
     return bool(items_set.intersection(remaining_words))
 
@@ -850,6 +881,34 @@ def match_after_mcp(tool_name: str, config: Config) -> str | None:
     return result
 
 
+def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
+    """Match file path against edit rules for Write/Edit/MultiEdit tools.
+
+    Uses same glob matching as redirect rules. Last matching rule wins.
+
+    Args:
+        file_path: Absolute path to the file being edited.
+        config: Loaded configuration.
+        cwd: Current working directory for path resolution.
+
+    Returns:
+        Match object for the last matching rule, or None if no match.
+    """
+    normalized_path = _normalize_path(file_path, cwd)
+    result: Match | None = None
+    for rule in config.edit_rules:
+        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        if _glob_match(normalized_path, normalized_pattern):
+            result = Match(
+                decision=rule.decision,
+                pattern=rule.pattern,
+                message=rule.message,
+                source=rule.source,
+                scope=rule.scope,
+            )
+    return result
+
+
 # === Logging ===
 
 
@@ -886,11 +945,13 @@ def configure_logging(config: Config) -> None:
 
 def log_decision(
     decision: str,
-    cmd: str,
+    cmd: str | None = None,
     rule: str | None = None,
     message: str | None = None,
     command: str | None = None,
     cwd: Path | None = None,
+    tool: str | None = None,
+    file_path: str | None = None,
 ) -> None:
     """Log a decision. No-op if logging not configured or disabled."""
     global _log_disabled
@@ -900,7 +961,9 @@ def log_decision(
     if _log_config is None or _log_disabled:
         return
 
-    entry: dict[str, str | None] = {"decision": decision, "cmd": cmd}
+    entry: dict[str, str | None] = {"decision": decision}
+    if cmd is not None:
+        entry["cmd"] = cmd
     if rule is not None:
         entry["rule"] = rule
     if message is not None:
@@ -909,6 +972,10 @@ def log_decision(
         entry["command"] = command
     if cwd is not None:
         entry["cwd"] = str(cwd)
+    if tool is not None:
+        entry["tool"] = tool
+    if file_path is not None:
+        entry["file_path"] = file_path
     entry["ts"] = datetime.now(timezone.utc).isoformat()
 
     try:

@@ -25,6 +25,7 @@ from dippy.core.config import (
     load_config,
     log_decision,
     match_after_mcp,
+    match_edit,
     match_mcp,
 )
 from dippy.core.analyzer import analyze
@@ -273,6 +274,42 @@ SHELL_TOOL_NAMES = frozenset(
     }
 )
 
+# Tool names that indicate file operations
+FILE_TOOL_NAMES = frozenset({"Write", "Edit", "MultiEdit"})
+
+
+def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -> dict:
+    """Check if a file operation should be approved based on edit rules.
+
+    Args:
+        tool_name: Tool name (Write, Edit, MultiEdit).
+        file_path: Absolute path to the file being edited.
+        config: Loaded configuration.
+        cwd: Current working directory.
+
+    Returns:
+        Hook response dict, or empty dict if no rules match (defer to default).
+    """
+    match = match_edit(file_path, config, cwd)
+    if match is None:
+        return {}  # No rules match - defer to Claude's default behavior
+
+    reason = match.message if match.message else f"[{match.pattern}]"
+    log_decision(
+        match.decision,
+        rule=match.pattern,
+        tool=tool_name,
+        file_path=file_path,
+        cwd=cwd,
+    )
+
+    if match.decision == "allow":
+        return approve(reason)
+    elif match.decision == "deny":
+        return deny(reason)
+    else:
+        return ask(reason)
+
 
 def main():
     """Main entry point for the hook."""
@@ -343,6 +380,32 @@ def main():
                     logging.info(f"Checking MCP: {tool_name}")
                     result = check_mcp_tool(tool_name, config)
                     print(json.dumps(result))
+                return
+
+            # Check if this is a file operation tool
+            if tool_name in FILE_TOOL_NAMES:
+                file_path = tool_input.get("file_path", "")
+                if file_path and hook_event != "PostToolUse":
+                    # Check for bypass permissions mode first
+                    permission_mode = input_data.get("permission_mode", "default")
+                    if permission_mode in (
+                        "bypassPermissions",
+                        "dontAsk",
+                        "acceptEdits",
+                    ):
+                        logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
+                        log_decision(
+                            "allow", tool=tool_name, file_path=file_path, cwd=cwd
+                        )
+                        print(json.dumps(approve(permission_mode)))
+                        return
+
+                    logging.info(f"Checking file op: {tool_name} -> {file_path}")
+                    result = check_file_tool(tool_name, file_path, config, cwd)
+                    print(json.dumps(result))
+                    return
+                # No file_path or PostToolUse - fall through to default behavior
+                print(json.dumps({}))
                 return
 
             # Only handle shell/bash commands

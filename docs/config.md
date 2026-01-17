@@ -473,11 +473,11 @@ code --install-extension dippy-syntax-*.vsix
 ```
 Highlights `.dippy` files and files named `config` (for `~/.dippy/config`).
 
-## Proposal: File Operation Rules
+## File Operation Rules
 
-Claude Code hooks can match on `Write`, `Edit`, and `MultiEdit` tools, not just `Bash`. This would let Dippy control file modifications with per-project config.
+Claude Code hooks can match on `Write`, `Edit`, and `MultiEdit` tools, not just `Bash`. This lets Dippy control file modifications with per-project config.
 
-### Proposed Syntax
+### Syntax
 
 ```
 allow-edit <glob>

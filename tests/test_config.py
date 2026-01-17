@@ -24,6 +24,7 @@ from dippy.core.config import (
     match_after,
     match_after_mcp,
     match_command,
+    match_edit,
     match_mcp,
     match_redirect,
     parse_config,
@@ -602,14 +603,14 @@ class TestParseOptionRules:
     """Test parsing of allow-opt/ask-opt/deny-opt directives."""
 
     def test_allow_opt_basic(self):
-        cfg = parse_config('allow-opt git status fetch log')
+        cfg = parse_config("allow-opt git status fetch log")
         assert len(cfg.rules) == 1
         assert cfg.rules[0].decision == "allow"
         assert cfg.rules[0].pattern == "git"
         assert cfg.rules[0].items == ["status", "fetch", "log"]
 
     def test_deny_opt_single_item(self):
-        cfg = parse_config('deny-opt git commit --no-verify')
+        cfg = parse_config("deny-opt git commit --no-verify")
         assert len(cfg.rules) == 1
         assert cfg.rules[0].decision == "deny"
         assert cfg.rules[0].pattern == "git"
@@ -630,21 +631,21 @@ class TestParseOptionRules:
         assert cfg.rules[0].items == ["--no-verify"]
 
     def test_option_rule_requires_items(self):
-        cfg = parse_config('allow-opt git')
+        cfg = parse_config("allow-opt git")
         # Should be skipped - no items
         assert len(cfg.rules) == 0
 
     def test_option_rule_empty_directive(self):
-        cfg = parse_config('allow-opt')
+        cfg = parse_config("allow-opt")
         # Should be skipped - no prefix/items
         assert len(cfg.rules) == 0
 
     def test_option_rules_mix_with_normal_rules(self):
-        cfg = parse_config('''
+        cfg = parse_config("""
 allow git *
 deny-opt git push --force
 ask git commit
-''')
+""")
         assert len(cfg.rules) == 3
         assert cfg.rules[0].decision == "allow"
         assert cfg.rules[0].items is None
@@ -1515,19 +1516,30 @@ class TestOptionRules:
         cfg = Config(
             rules=[
                 Rule("allow", "git *"),  # Normal rule - allow all git
-                Rule("deny", "git push", items=["--force"]),  # Option rule - deny --force
+                Rule(
+                    "deny", "git push", items=["--force"]
+                ),  # Option rule - deny --force
                 Rule("allow", "git push"),  # Normal rule - allow push
             ]
         )
         # First match is normal rule "git *"
         assert match_command(cmd("git status"), cfg, tmp_path).decision == "allow"
         # For "git push --force", normal rule "git *" matches first
-        m = match_command(cmd("git push --force"), cfg, tmp_path)
         # The option rule is checked but "git *" matches first in normal matching
         # Since option rules are checked separately, need to verify order
+        assert match_command(cmd("git push --force"), cfg, tmp_path) is not None
 
     def test_ask_opt_with_message(self, tmp_path):
-        cfg = Config(rules=[Rule("ask", "git push", items=["--force"], message="Use --force-with-lease")])
+        cfg = Config(
+            rules=[
+                Rule(
+                    "ask",
+                    "git push",
+                    items=["--force"],
+                    message="Use --force-with-lease",
+                )
+            ]
+        )
         m = match_command(cmd("git push --force origin"), cfg, tmp_path)
         assert m is not None
         assert m.decision == "ask"
@@ -1560,13 +1572,22 @@ class TestOptionRules:
 
     def test_use_glob_for_prefix_matching(self, tmp_path):
         """For prefix matching, use normal glob rules."""
-        cfg = Config(rules=[
-            Rule("deny", "git push *--force*"),  # Glob matches --force and --force-with-lease
-            Rule("allow", "git push --force-with-lease"),  # Explicit allow for safer variant
-        ])
+        cfg = Config(
+            rules=[
+                Rule(
+                    "deny", "git push *--force*"
+                ),  # Glob matches --force and --force-with-lease
+                Rule(
+                    "allow", "git push --force-with-lease"
+                ),  # Explicit allow for safer variant
+            ]
+        )
         # Both match the glob pattern
         assert match_command(cmd("git push --force"), cfg, tmp_path).decision == "deny"
-        assert match_command(cmd("git push --force-with-lease"), cfg, tmp_path).decision == "allow"
+        assert (
+            match_command(cmd("git push --force-with-lease"), cfg, tmp_path).decision
+            == "allow"
+        )
 
 
 class TestParseConfigMcpRules:
@@ -1944,3 +1965,132 @@ class TestMcpEndToEnd:
         output = json.loads(captured_output.getvalue())
         # ls is safe, should be approved (not affected by MCP deny rule)
         assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
+
+
+# === Edit Rules Tests ===
+
+
+class TestParseConfigEditRules:
+    """Test parsing of edit rules for Write/Edit/MultiEdit tools."""
+
+    def test_allow_edit(self):
+        cfg = parse_config("allow-edit src/**")
+        assert len(cfg.edit_rules) == 1
+        assert cfg.edit_rules[0].decision == "allow"
+        assert cfg.edit_rules[0].pattern == "src/**"
+
+    def test_ask_edit_with_message(self):
+        cfg = parse_config('ask-edit **/config.* "Config changes need review"')
+        assert len(cfg.edit_rules) == 1
+        assert cfg.edit_rules[0].decision == "ask"
+        assert cfg.edit_rules[0].pattern == "**/config.*"
+        assert cfg.edit_rules[0].message == "Config changes need review"
+
+    def test_deny_edit_with_message(self):
+        cfg = parse_config('deny-edit **/.env* "Use environment variables instead"')
+        assert len(cfg.edit_rules) == 1
+        assert cfg.edit_rules[0].decision == "deny"
+        assert cfg.edit_rules[0].pattern == "**/.env*"
+        assert cfg.edit_rules[0].message == "Use environment variables instead"
+
+    def test_allow_edit_no_pattern_skipped(self):
+        cfg = parse_config("allow-edit")
+        assert cfg.edit_rules == []
+
+    def test_ask_edit_no_pattern_skipped(self):
+        cfg = parse_config("ask-edit")
+        assert cfg.edit_rules == []
+
+    def test_deny_edit_no_pattern_skipped(self):
+        cfg = parse_config("deny-edit")
+        assert cfg.edit_rules == []
+
+    def test_edit_rules_mixed_with_other_rules(self):
+        cfg = parse_config("""
+allow git *
+allow-edit src/**
+deny rm -rf /*
+ask-edit **/config.* "Config review"
+deny-edit **/.env* "No env edits"
+""")
+        assert len(cfg.rules) == 2
+        assert len(cfg.edit_rules) == 3
+        assert cfg.edit_rules[0].decision == "allow"
+        assert cfg.edit_rules[0].pattern == "src/**"
+        assert cfg.edit_rules[1].decision == "ask"
+        assert cfg.edit_rules[1].pattern == "**/config.*"
+        assert cfg.edit_rules[2].decision == "deny"
+        assert cfg.edit_rules[2].pattern == "**/.env*"
+
+    def test_edit_rules_tilde_expansion(self):
+        cfg = parse_config("allow-edit ~/src/**")
+        assert len(cfg.edit_rules) == 1
+        assert cfg.edit_rules[0].pattern == str(Path.home() / "src/**")
+
+
+class TestMergeConfigsEditRules:
+    """Test edit rules merging."""
+
+    def test_edit_rules_concatenate(self):
+        base = Config(edit_rules=[Rule("allow", "src/**")])
+        overlay = Config(edit_rules=[Rule("ask", "**/config.*")])
+        merged = _merge_configs(base, overlay)
+        assert len(merged.edit_rules) == 2
+        assert merged.edit_rules[0].pattern == "src/**"
+        assert merged.edit_rules[1].pattern == "**/config.*"
+
+
+class TestTagRulesEditRules:
+    """Test edit rules tagging."""
+
+    def test_tags_edit_rules_with_source_and_scope(self):
+        config = Config(edit_rules=[Rule("allow", "src/**")])
+        tagged = _tag_rules(config, "/path/to/config", "user")
+        assert tagged.edit_rules[0].source == "/path/to/config"
+        assert tagged.edit_rules[0].scope == "user"
+
+
+class TestMatchEdit:
+    """Test match_edit function for file path matching."""
+
+    def test_match_edit_basic(self, tmp_path):
+        cfg = parse_config("allow-edit src/**")
+        match = match_edit(str(tmp_path / "src" / "main.py"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "allow"
+        assert match.pattern == "src/**"
+
+    def test_match_edit_no_match(self, tmp_path):
+        cfg = parse_config("allow-edit src/**")
+        match = match_edit(str(tmp_path / "tests" / "test.py"), cfg, tmp_path)
+        assert match is None
+
+    def test_match_edit_last_match_wins(self, tmp_path):
+        cfg = parse_config("""
+allow-edit src/**
+deny-edit src/secrets/**
+""")
+        # src/main.py - only first rule matches
+        match = match_edit(str(tmp_path / "src" / "main.py"), cfg, tmp_path)
+        assert match.decision == "allow"
+
+        # src/secrets/key.txt - both match, last wins
+        match = match_edit(str(tmp_path / "src" / "secrets" / "key.txt"), cfg, tmp_path)
+        assert match.decision == "deny"
+
+    def test_match_edit_with_message(self, tmp_path):
+        cfg = parse_config('deny-edit **/.env* "Use environment variables"')
+        match = match_edit(str(tmp_path / ".env.local"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "deny"
+        assert match.message == "Use environment variables"
+
+    def test_match_edit_globstar(self, tmp_path):
+        cfg = parse_config("allow-edit .claude/diary/**")
+        match = match_edit(
+            str(tmp_path / ".claude" / "diary" / "reflections" / "test.md"),
+            cfg,
+            tmp_path,
+        )
+        assert match is not None
+        assert match.decision == "allow"

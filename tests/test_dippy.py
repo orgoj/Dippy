@@ -4052,7 +4052,9 @@ class TestPassAction:
 
         # First check analyzer directly
         decision = analyze("unknown-command xyz", cfg, tmp_path)
-        assert decision.action == "pass", f"Expected 'pass', got '{decision.action}': reason='{decision.reason}' children={decision.children}"
+        assert decision.action == "pass", (
+            f"Expected 'pass', got '{decision.action}': reason='{decision.reason}' children={decision.children}"
+        )
 
         # Then check the full check_command flow
         result = check_command("unknown-command xyz", cfg, tmp_path)
@@ -4065,11 +4067,13 @@ class TestPassAction:
 
         cfg = Config(
             default="pass",
-            rules=[Rule(decision="deny", pattern="rm*", message="Never delete")]
+            rules=[Rule(decision="deny", pattern="rm*", message="Never delete")],
         )
         result = check_command("rm -rf /tmp/test", cfg, tmp_path)
         assert result["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert "Never delete" in result["hookSpecificOutput"]["permissionDecisionReason"]
+        assert (
+            "Never delete" in result["hookSpecificOutput"]["permissionDecisionReason"]
+        )
 
     def test_explicit_allow_overrides_pass_default(self, tmp_path):
         """Explicit allow rule should override default=pass."""
@@ -4077,8 +4081,7 @@ class TestPassAction:
         from dippy.dippy import check_command
 
         cfg = Config(
-            default="pass",
-            rules=[Rule(decision="allow", pattern="git status")]
+            default="pass", rules=[Rule(decision="allow", pattern="git status")]
         )
         result = check_command("git status", cfg, tmp_path)
         assert result["hookSpecificOutput"]["permissionDecision"] == "allow"

@@ -79,7 +79,7 @@ ask-edit **/config.*     # prompt for config changes
 deny-edit **/.env*       # block env file edits
 ```
 
-See [File Operation Rules](docs/config-v1.md#proposal-file-operation-rules) for details.
+See [File Operation Rules](docs/config.md#file-operation-rules) for details.
 
 ---
 
