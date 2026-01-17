@@ -4,7 +4,9 @@ title: Jak povolit cd jen v subshell?
 status: To Do
 assignee: []
 created_date: '2026-01-16 06:23'
+updated_date: '2026-01-16 20:59'
 labels: []
+milestone: m-0
 dependencies: []
 ---
 
