@@ -67,3 +67,9 @@ def needs_confirmation(result: dict) -> bool:
     """Check if a hook result requires user confirmation."""
     output = result.get("hookSpecificOutput", {})
     return output.get("permissionDecision") == "ask"
+
+
+@pytest.fixture(autouse=True)
+def disable_logging_in_tests(monkeypatch):
+    """Disable logging to production audit.log during tests."""
+    monkeypatch.setenv("DIPPY_TEST_NO_LOG", "1")

@@ -341,6 +341,11 @@ class TestScopeIsolation:
 class TestLogging:
     """Test structured logging."""
 
+    @pytest.fixture(autouse=True)
+    def enable_logging_for_tests(self, monkeypatch):
+        """Override global disable to allow testing logging functionality."""
+        monkeypatch.delenv("DIPPY_TEST_NO_LOG", raising=False)
+
     def test_no_logging_when_disabled(self, tmp_path):
         config = Config(log=None)
         configure_logging(config)

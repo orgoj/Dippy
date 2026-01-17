@@ -925,9 +925,17 @@ _log_disabled: bool = False  # Set on first failure, prevents repeated attempts
 
 
 def configure_logging(config: Config) -> None:
-    """Configure logging based on config settings. Call once at startup."""
+    """Configure logging based on config settings. Call once at startup.
+
+    Set DIPPY_TEST_NO_LOG=1 to disable logging (used in tests).
+    """
     global _log_config, _log_disabled
     _log_disabled = False
+
+    # Allow tests to disable logging via environment variable
+    if os.environ.get("DIPPY_TEST_NO_LOG"):
+        _log_config = None
+        return
 
     if config.log is None:
         _log_config = None

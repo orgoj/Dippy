@@ -1,10 +1,11 @@
 ---
 id: TASK-5
 title: dissable log to file in tests
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@myself'
 created_date: '2026-01-17 15:52'
-updated_date: '2026-01-17 15:53'
+updated_date: '2026-01-17 16:26'
 labels:
   - log
 dependencies: []
@@ -20,5 +21,27 @@ mozna override pres env?
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 po susteni testu nesmi but v normalnim log file nic z testu
+- [x] #1 po susteni testu nesmi but v normalnim log file nic z testu
 <!-- AC:END -->
+
+## Implementation Plan
+
+<!-- SECTION:PLAN:BEGIN -->
+1. Add DIPPY_TEST_NO_LOG environment variable support to disable logging
+2. Modify configure_logging() to check for this env var
+3. Add pytest fixture to conftest.py that sets this env var for all tests
+4. Verify tests pass and no entries appear in production log file
+<!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+- Added DIPPY_TEST_NO_LOG env var check to configure_logging()
+- Added autouse fixture in conftest.py to set env var for all tests
+- TestLogging class has own fixture to re-enable logging for its tests
+
+Files modified:
+- src/dippy/core/config.py
+- tests/conftest.py
+- tests/test_config.py
+<!-- SECTION:NOTES:END -->
