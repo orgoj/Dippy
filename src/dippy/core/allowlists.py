@@ -54,8 +54,8 @@ SIMPLE_SAFE = frozenset(
         "ripgrep",
         "ag",
         "ack",
-        "fd",
-        "fzf",
+        # fd removed - has unsafe flags (-x/--exec), handled by cli/fd.py
+        # fzf removed - has unsafe --bind options, handled by cli/fzf.py
         "locate",
         # === Text Processing ===
         "uniq",
@@ -127,7 +127,7 @@ SIMPLE_SAFE = frozenset(
         # === Process & Resource Monitoring ===
         "atos",
         "btop",
-        "dmesg",
+        # dmesg removed - has unsafe flags (-c/--clear), handled by cli/dmesg.py
         "footprint",
         "fs_usage",
         "heap",
