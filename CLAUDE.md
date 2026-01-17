@@ -32,3 +32,4 @@ just check       # All of the above in parallel — MUST PASS before committing
 - operations: always check `git status` first to detect interrupted states
 - merges: use worktrees for large upstream merges (see skill: safe-upstream-merge)
 - commits: run `just test` BEFORE committing, never commit failing tests
+- commits: use conventional format (feat:, fix:, chore:, docs:) with Co-Authored-By trailer
