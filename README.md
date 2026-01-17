@@ -11,7 +11,7 @@
 
 Dippy is a shell command hook that auto-approves safe commands while still prompting for anything destructive. When it blocks, your custom deny messages can steer Claude back on track—no wasted turns. Get up to **40% faster development** without disabling permissions entirely.
 
-Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bash parser—no external dependencies, just pure Python. A combined 10,000+ tests.
+Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bash parser—no external dependencies, just pure Python. 9,500+ tests.
 
 ![Screenshot](images/screenshot.png)
 
@@ -40,20 +40,20 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 git clone https://github.com/ldayton/Dippy.git
 ```
 
-Add to `~/.claude/settings.json` (or use `/hooks` interactively); you only need `PostToolUse` if you want `after` rules in your config:
+Add to `~/.claude/settings.json` (or use `/hooks` interactively):
 
 ```json
 {
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__.*",
         "hooks": [{ "type": "command", "command": "/path/to/Dippy/bin/dippy-hook" }]
       }
     ],
     "PostToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|mcp__.*",
         "hooks": [{ "type": "command", "command": "/path/to/Dippy/bin/dippy-hook" }]
       }
     ]
@@ -111,17 +111,22 @@ deny docker run *--privileged*         # still ban privileged mode, last matchin
 deny python "Use uv run python, which runs in project environment"  # remind Claude to use uv
 
 allow-redirect /tmp/**                 # allow temp file writes
-deny-redirect **/.env* "Never write secrets, as me to do it"        # block env writes
+deny-redirect **/.env* "Never write secrets, ask me to do it"       # block env writes
 
 # Option-specific rules
 allow-opt git status fetch log diff     # allow these git subcommands
 deny-opt "git commit" --no-verify       # block commits skipping hooks
 ask-opt "git push" --force "Use --force-with-lease instead"  # prompt for force push
 
-after git commit * "Reread prompts/next-iteration.md"  # after hook keeps Claude on task, following instructions
+# MCP tool rules
+allow-mcp mcp__github__get_*           # allow read-only GitHub MCP tools
+allow-mcp mcp__github__list_*
+deny-mcp mcp__*__delete_* "No deletions"  # block destructive MCP operations
+
+after git commit * "Reread prompts/next-iteration.md"  # after hook keeps Claude on task
 ```
 
-Configuration reference: `docs/config-v1.md`
+Configuration reference: [docs/config.md](docs/config.md)
 
 ---
 
