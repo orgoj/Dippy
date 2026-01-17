@@ -6,7 +6,53 @@
 
 **What we don't protect against:** Malicious actors, compromised AI, adversarial prompt injection. If someone is actively trying to bypass Dippy, they can.
 
-This is stated in config-v1.md: "Not adversarial - protecting against AI mistakes, not malicious actors."
+This is stated in [config.md](config.md): "Not adversarial - protecting against AI mistakes, not malicious actors."
+
+## Core Philosophy
+
+**Approve what we know is safe. Ask about everything else.**
+
+Dippy uses a conservative allowlist approach:
+
+1. **Config rules** (highest priority) - User-defined overrides
+2. **Built-in allowlist** - Known safe read-only commands
+3. **CLI handlers** - Tool-specific logic for git, docker, kubectl, etc.
+4. **Default: ask** - Unknown commands always prompt
+
+This means Dippy errs on the side of caution. If we don't recognize a command, we ask. There's no blocklist of "dangerous" patterns - instead, anything not explicitly safe requires approval.
+
+### Built-in Safe Commands
+
+About 90 read-only commands are pre-approved (see `allowlists.py`):
+
+- **File viewing:** cat, head, tail, less, bat
+- **Directory listing:** ls, tree, exa, find
+- **Search:** grep, rg, ag, ack
+- **Info:** stat, file, wc, du, df, pwd
+- **Text processing:** cut, sort, uniq, diff, jq
+- **System info:** ps, whoami, hostname, uname, date
+- **Network diagnostics:** ping, dig, netstat
+
+### CLI Handlers
+
+Complex tools get specialized handlers that understand their subcommands:
+
+| Tool | Safe | Needs Approval |
+|------|------|----------------|
+| git | status, log, diff, branch | push, commit, reset, rebase |
+| docker | ps, images, inspect | run, rm, stop, build |
+| kubectl | get, describe, logs | delete, apply, exec |
+| aws | s3 ls, ec2 describe-* | s3 rm, ec2 terminate-* |
+
+### Decision Priority
+
+When multiple rules could apply, most restrictive wins:
+
+```
+deny > ask > allow
+```
+
+If a pipeline has one unsafe command, the whole thing requires approval.
 
 ## Architecture
 
@@ -31,18 +77,19 @@ This is stated in config-v1.md: "Not adversarial - protecting against AI mistake
 ┌─────────────────────────────┐    ┌─────────────────────────────┐
 │      Simple Commands        │    │      Redirect Targets       │
 │                             │    │                             │
-│  1. "cd /tmp"               │    │  1. "log.txt" (stdout)      │
-│  2. "rm -rf *"              │    │                             │
-│  3. "echo done"             │    │                             │
+│  1. "cd /tmp"     → allow   │    │  1. "log.txt" → ask         │
+│  2. "rm -rf *"    → ask     │    │                             │
+│  3. "echo done"   → allow   │    │                             │
 └─────────────────────────────┘    └─────────────────────────────┘
                     │                              │
-                    ▼                              ▼
-┌─────────────────────────────┐    ┌─────────────────────────────┐
-│   Command Rule Engine       │    │   Redirect Rule Engine      │
-│                             │    │                             │
-│  fnmatch against patterns   │    │  glob (with **) against     │
-│  from config                │    │  patterns from config       │
-└─────────────────────────────┘    └─────────────────────────────┘
+                    └──────────────┬──────────────┘
+                                   ▼
+                    ┌─────────────────────────────┐
+                    │     Combine Decisions       │
+                    │                             │
+                    │  deny > ask > allow         │
+                    │  Result: ASK                │
+                    └─────────────────────────────┘
 ```
 
 ## What the Parser Handles
@@ -67,7 +114,6 @@ The parser breaks down bash syntax BEFORE rule matching:
 - **Variable expansion:** `$HOME` stays as `$HOME` (shell expands it later)
 - **Glob expansion:** `*.txt` stays as `*.txt` (shell expands it later)
 - **Alias resolution:** We don't know what aliases exist
-- **Arithmetic:** `$((1+1))` is opaque to us
 
 These are expanded by the shell AFTER approval. We match the literal string.
 
@@ -143,7 +189,15 @@ root:x:0:0::/root:/bin/bash
 EOF
 ```
 
-Redirect `/etc/passwd` is extracted and matched. The here-doc content is not analyzed (it's data, not commands).
+Redirect `/etc/passwd` is extracted and matched. Unquoted heredocs are also scanned for command substitutions:
+
+```bash
+cat <<EOF
+$(rm -rf /)
+EOF
+```
+
+This would trigger approval because the cmdsub contains `rm -rf /`. Quoted heredocs (`<<'EOF'`) are not expanded by bash, so they're treated as data.
 
 ### Process Substitution
 
@@ -152,6 +206,30 @@ diff <(cat a) <(cat b)
 ```
 
 Commands extracted: `cat a`, `cat b`, `diff <(...) <(...)`.
+
+### Arithmetic Expressions
+
+```bash
+(( x = $(dangerous_cmd) ))
+```
+
+Command substitutions inside `(( ))` arithmetic are analyzed. The inner command is extracted and checked.
+
+### Parameter Expansions
+
+```bash
+echo ${x:-$(rm -rf /)}
+```
+
+Command substitutions nested in parameter expansions (`${x:-...}`, `${x:=...}`, etc.) are analyzed. This catches cmdsubs in default values.
+
+### C-style For Loops
+
+```bash
+for (( i=$(rm foo); i<10; i++ )); do echo $i; done
+```
+
+Command substitutions in the init, condition, and increment expressions of `for (( ))` loops are analyzed.
 
 ## Trust Assumptions
 

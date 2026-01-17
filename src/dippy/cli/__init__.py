@@ -26,6 +26,9 @@ class Classification:
     action: Literal["approve", "ask", "delegate"]
     inner_command: str | None = None  # Required when action="delegate"
     description: str | None = None  # Optional, overrides default description
+    redirect_targets: tuple[str, ...] | None = (
+        None  # File targets to check against redirect rules
+    )
 
 
 class CLIHandler(Protocol):
@@ -109,8 +112,3 @@ def _load_handler(module_name: str) -> Optional[CLIHandler]:
         return importlib.import_module(f".{module_name}", package="dippy.cli")
     except ImportError:
         return None
-
-
-def list_handlers() -> list[str]:
-    """List all available CLI handler module names."""
-    return sorted(set(KNOWN_HANDLERS.values()))
