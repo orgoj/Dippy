@@ -16,3 +16,11 @@ allow just check *
 allow just fmt *
 allow just lint *
 allow just test *
+
+allow mkdir -p ./**
+deny mkdir * "Use ralative path: mkdir -p ./..."
+
+allow git worktree add .worktrees/**
+deny git worktree add * "Use relative path: git worktree add .worktrees/..."
+
+allow git add *
