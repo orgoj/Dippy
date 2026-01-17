@@ -61,7 +61,7 @@ SIMPLE_SAFE = frozenset(
         "basename",  # strip directory from path
         "dirname",  # strip filename from path
         "pwd",  # print working directory
-        "cd",  # change directory
+        # cd removed - context-aware: allow [@subshell] cd *
         "readlink",  # resolve symbolic link
         "realpath",  # resolve canonical path
         # === Search & Find ===

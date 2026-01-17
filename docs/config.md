@@ -47,6 +47,46 @@ after <glob> "message"         # post-action feedback with message to AI
 set <key> [value]              # settings
 ```
 
+### Context Flags
+
+Rules can be restricted to specific execution contexts using `[flags]` syntax:
+
+```
+allow [flags] <glob>           # only match when ALL flags are present
+deny [flags] <glob>
+ask [flags] <glob> "message"
+```
+
+**Available flags:**
+
+| Flag | Context | Example |
+|------|---------|---------|
+| `@subshell` | Inside `(...)` | `(cd /tmp && make)` |
+
+More flags coming soon: `@bracegroup`, `@pipeline`, `@compound`, and wrapper flags like `ssh`, `sudo`.
+
+**Flag syntax:**
+- AST context flags use `@` prefix: `@subshell`
+- Multiple flags use AND logic: `[@subshell,ssh]` requires BOTH
+- Rules without flags match any context (backward compatible)
+
+**Example: Allow `cd` only in subshells**
+
+```
+deny cd *                      # block standalone cd
+allow [@subshell] cd *         # but allow in subshells like (cd /tmp && make)
+```
+
+This prevents AI from accidentally changing the session's working directory while still allowing safe patterns like `(cd build && ./configure)`.
+
+**How it works:**
+
+When Dippy analyzes `(cd /tmp && ls)`:
+1. Parser detects the outer `()` as a subshell
+2. Commands inside get `@subshell` context flag
+3. Rule `allow [@subshell] cd *` matches because flag is present
+4. Standalone `cd /tmp` has no `@subshell` flag, matches `deny cd *`
+
 **Escaping in patterns:** Use `[*]`, `[?]`, `[[]` to match literal glob characters.
 
 **Escaping in messages:** Use `\"` for literal quotes, `\\` for literal backslash.

@@ -2099,3 +2099,132 @@ deny-edit src/secrets/**
         )
         assert match is not None
         assert match.decision == "allow"
+
+
+class TestContextFlags:
+    """Test context-aware rules with [flags] syntax."""
+
+    def test_parse_context_flags_single(self):
+        """Parse rule with single context flag."""
+        cfg = parse_config("allow [@subshell] cd *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].required_flags == frozenset({"@subshell"})
+        assert cfg.rules[0].pattern == "cd *"
+
+    def test_parse_context_flags_multiple(self):
+        """Parse rule with multiple context flags (AND logic)."""
+        cfg = parse_config("allow [@subshell,ssh] rm *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].required_flags == frozenset({"@subshell", "ssh"})
+
+    def test_parse_no_context_flags(self):
+        """Rules without flags have None required_flags."""
+        cfg = parse_config("allow ls *")
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].required_flags is None
+
+    def test_match_with_matching_flags(self, tmp_path):
+        """Rule matches when all required flags are present."""
+        cfg = parse_config("allow [@subshell] cd *")
+        match = match_command(
+            cmd("cd /tmp"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is not None
+        assert match.decision == "allow"
+
+    def test_match_without_required_flags(self, tmp_path):
+        """Rule doesn't match when required flags are missing."""
+        cfg = parse_config("allow [@subshell] cd *")
+        # No context flags - rule shouldn't match
+        match = match_command(cmd("cd /tmp"), cfg, tmp_path, context_flags=None)
+        assert match is None
+
+    def test_match_with_extra_flags(self, tmp_path):
+        """Rule matches when context has more flags than required."""
+        cfg = parse_config("allow [@subshell] cd *")
+        # Context has more flags than required - should still match
+        match = match_command(
+            cmd("cd /tmp"),
+            cfg,
+            tmp_path,
+            context_flags=frozenset({"@subshell", "ssh"}),
+        )
+        assert match is not None
+        assert match.decision == "allow"
+
+    def test_match_and_logic(self, tmp_path):
+        """Multiple flags use AND logic - all must be present."""
+        cfg = parse_config("allow [@subshell,ssh] rm *")
+        # Only one flag present - shouldn't match
+        match = match_command(
+            cmd("rm /tmp/x"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is None
+        # Both flags present - should match
+        match = match_command(
+            cmd("rm /tmp/x"),
+            cfg,
+            tmp_path,
+            context_flags=frozenset({"@subshell", "ssh"}),
+        )
+        assert match is not None
+        assert match.decision == "allow"
+
+    def test_backward_compatibility(self, tmp_path):
+        """Rules without flags match regardless of context."""
+        cfg = parse_config("allow ls *")
+        # No context flags
+        match = match_command(cmd("ls -la"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "allow"
+        # With context flags - still matches
+        match = match_command(
+            cmd("ls -la"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is not None
+        assert match.decision == "allow"
+
+    def test_deny_with_flags(self, tmp_path):
+        """Deny rules with context flags."""
+        cfg = parse_config("deny [ssh] rm *")
+        # Without ssh flag - no match
+        match = match_command(cmd("rm /tmp/x"), cfg, tmp_path)
+        assert match is None
+        # With ssh flag - matches deny
+        match = match_command(
+            cmd("rm /tmp/x"), cfg, tmp_path, context_flags=frozenset({"ssh"})
+        )
+        assert match is not None
+        assert match.decision == "deny"
+
+    def test_ask_with_flags(self, tmp_path):
+        """Ask rules with context flags and message."""
+        cfg = parse_config('ask [@subshell] dangerous * "Confirm subshell command"')
+        match = match_command(
+            cmd("dangerous --flag"),
+            cfg,
+            tmp_path,
+            context_flags=frozenset({"@subshell"}),
+        )
+        assert match is not None
+        assert match.decision == "ask"
+        assert match.message == "Confirm subshell command"
+
+    def test_last_matching_wins_with_flags(self, tmp_path):
+        """Last matching rule wins, considering flag requirements."""
+        cfg = parse_config(
+            """
+deny cd *
+allow [@subshell] cd *
+"""
+        )
+        # Without @subshell flag - only deny matches
+        match = match_command(cmd("cd /tmp"), cfg, tmp_path)
+        assert match is not None
+        assert match.decision == "deny"
+        # With @subshell flag - both match, last wins (allow)
+        match = match_command(
+            cmd("cd /tmp"), cfg, tmp_path, context_flags=frozenset({"@subshell"})
+        )
+        assert match is not None
+        assert match.decision == "allow"

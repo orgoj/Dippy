@@ -36,6 +36,7 @@ class Rule:
     source: str | None = None  # file path
     scope: str | None = None  # user/project/env
     items: list[str] | None = None  # for option rules: list of items to match anywhere
+    required_flags: frozenset[str] | None = None  # context flags that must all match
 
 
 @dataclass
@@ -197,6 +198,35 @@ def load_config(cwd: Path) -> Config:
     return config
 
 
+def _extract_context_flags(s: str) -> tuple[str, frozenset[str] | None]:
+    """Extract context flags from a pattern string.
+
+    Syntax: [flag1,flag2,...] pattern
+    AST flags start with @ (e.g., @subshell)
+    Wrapper flags have no prefix (e.g., ssh)
+
+    Returns (remaining_pattern, frozenset_of_flags or None).
+    """
+    s = s.strip()
+    if not s.startswith("["):
+        return s, None
+
+    # Find closing bracket
+    end = s.find("]")
+    if end == -1:
+        return s, None  # Malformed, treat as pattern
+
+    flags_str = s[1:end].strip()
+    remaining = s[end + 1 :].strip()
+
+    if not flags_str:
+        return remaining, None
+
+    # Parse comma-separated flags
+    flags = frozenset(f.strip() for f in flags_str.split(",") if f.strip())
+    return remaining, flags if flags else None
+
+
 def _parse_option_rule(decision: str, rest: str) -> Rule:
     """Parse an option rule: <prefix> <item1> <item2>...
 
@@ -255,22 +285,47 @@ def parse_config(text: str, source: str | None = None) -> Config:
             if directive == "allow":
                 if not rest:
                     raise ValueError("requires a pattern")
-                rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+                pattern_part, flags = _extract_context_flags(rest)
+                if not pattern_part:
+                    raise ValueError("requires a pattern after flags")
+                rules.append(
+                    Rule(
+                        "allow",
+                        _expand_pattern_tildes(pattern_part),
+                        required_flags=flags,
+                    )
+                )
 
             elif directive == "ask":
                 if not rest:
                     raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
+                pattern_part, flags = _extract_context_flags(rest)
+                if not pattern_part:
+                    raise ValueError("requires a pattern after flags")
+                pattern, message = _extract_message(pattern_part)
                 rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                    Rule(
+                        "ask",
+                        _expand_pattern_tildes(pattern),
+                        message=message,
+                        required_flags=flags,
+                    )
                 )
 
             elif directive == "deny":
                 if not rest:
                     raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
+                pattern_part, flags = _extract_context_flags(rest)
+                if not pattern_part:
+                    raise ValueError("requires a pattern after flags")
+                pattern, message = _extract_message(pattern_part)
                 rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                    Rule(
+                        "deny",
+                        _expand_pattern_tildes(pattern),
+                        message=message,
+                        required_flags=flags,
+                    )
                 )
 
             elif directive == "allow-redirect":
@@ -681,11 +736,31 @@ def _match_option_rule(rule: Rule, words: list[str]) -> bool:
     return bool(items_set.intersection(remaining_words))
 
 
-def _match_words(words: list[str], config: Config, cwd: Path) -> Match | None:
-    """Match command words against rules. Returns last matching rule."""
+def _match_words(
+    words: list[str],
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+) -> Match | None:
+    """Match command words against rules. Returns last matching rule.
+
+    Args:
+        words: Command words to match.
+        config: Configuration with rules.
+        cwd: Current working directory for path resolution.
+        context_flags: Optional set of active context flags (e.g., {"@subshell"}).
+            Rules with required_flags only match if all flags are present.
+    """
     normalized_cmd = _normalize_words(words, cwd)
     result: Match | None = None
+    active_flags = context_flags or frozenset()
+
     for rule in config.rules:
+        # Check context flags first - rule only applies if all required flags are present
+        if rule.required_flags is not None:
+            if not rule.required_flags.issubset(active_flags):
+                continue
+
         # Option rules use different matching logic
         if rule.items is not None:
             if _match_option_rule(rule, words):
@@ -750,13 +825,19 @@ def _match_redirect(target: str, config: Config, cwd: Path) -> Match | None:
     return result
 
 
-def match_command(cmd: SimpleCommand, config: Config, cwd: Path) -> Match | None:
+def match_command(
+    cmd: SimpleCommand,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+) -> Match | None:
     """Match command and its redirects against config rules.
 
     Args:
         cmd: SimpleCommand with words and redirects from parsed bash.
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
+        context_flags: Optional set of active context flags (e.g., {"@subshell"}).
 
     Returns:
         Match object for the deciding rule, or None if no rules matched.
@@ -766,7 +847,7 @@ def match_command(cmd: SimpleCommand, config: Config, cwd: Path) -> Match | None
     matches: list[Match] = []
 
     # Match command words
-    cmd_match = _match_words(cmd.words, config, cwd)
+    cmd_match = _match_words(cmd.words, config, cwd, context_flags)
     if cmd_match:
         matches.append(cmd_match)
 

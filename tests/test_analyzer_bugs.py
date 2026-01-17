@@ -380,7 +380,8 @@ class TestCdPathResolution:
 
         target_dir = tmp_path / "myproject"
         target_dir.mkdir()
-        config = parse_config(f"allow {target_dir}/tool *")
+        # cd is context-aware, so we need to allow it explicitly
+        config = parse_config(f"allow cd *\nallow {target_dir}/tool *")
         # cwd is tmp_path, but cd changes to target_dir
         result = analyze(f"cd {target_dir} && ./tool --flag", config, tmp_path)
         assert result.action == "allow"
@@ -390,6 +391,82 @@ class TestCdPathResolution:
         from dippy.core.config import parse_config
 
         home = Path.home()
-        config = parse_config(f"allow {home}/script *")
+        # cd is context-aware, so we need to allow it explicitly
+        config = parse_config(f"allow cd *\nallow {home}/script *")
         result = analyze("cd ~ && ./script arg", config, Path("/somewhere/else"))
+        assert result.action == "allow"
+
+
+class TestSubshellContext:
+    """Test that @subshell context flag is set correctly in analyzer."""
+
+    def test_cd_in_subshell_allowed(self, tmp_path):
+        """cd inside subshell matches [@subshell] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@subshell] cd *")
+        result = analyze("(cd /tmp)", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_cd_outside_subshell_denied(self, tmp_path):
+        """cd outside subshell doesn't match [@subshell] rule."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@subshell] cd *")
+        result = analyze("cd /tmp", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_cd_in_compound_not_subshell(self, tmp_path):
+        """cd in compound command (&&) is NOT in subshell context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@subshell] cd *")
+        # cd && ls is NOT a subshell, so cd should be denied
+        result = analyze("cd /tmp && ls", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_cd_in_subshell_with_compound(self, tmp_path):
+        """cd inside subshell with compound is in subshell context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@subshell] cd *\nallow ls *")
+        # (cd && ls) - entire command is in subshell
+        result = analyze("(cd /tmp && ls)", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_nested_subshell(self, tmp_path):
+        """Nested subshells both have @subshell context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@subshell] cd *")
+        result = analyze("((cd /tmp))", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_brace_group_not_subshell(self, tmp_path):
+        """Brace group {} is NOT a subshell."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("deny cd *\nallow [@subshell] cd *")
+        result = analyze("{ cd /tmp; }", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_subshell_with_other_commands(self, tmp_path):
+        """Commands in subshell inherit @subshell context."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow [@subshell] rm *")
+        result = analyze("(rm /tmp/x)", config, tmp_path)
+        assert result.action == "allow"
+        # Same command outside subshell shouldn't match
+        config2 = parse_config("allow [@subshell] rm *")
+        result2 = analyze("rm /tmp/x", config2, tmp_path)
+        assert result2.action == "ask"
+
+    def test_cmdsub_inside_subshell(self, tmp_path):
+        """Command substitution inside subshell has @subshell context."""
+        from dippy.core.config import parse_config
+
+        # echo inside $() inside () should have @subshell from outer ()
+        config = parse_config("allow [@subshell] echo *\nallow ls *")
+        result = analyze("(ls $(echo test))", config, tmp_path)
         assert result.action == "allow"
