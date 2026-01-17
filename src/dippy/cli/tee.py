@@ -1,15 +1,12 @@
 """tee command handler - writes stdin to files."""
 
-from __future__ import annotations
-
-from dippy.cli import Classification, HandlerContext
+from dippy.cli import Classification
 
 COMMANDS = ["tee"]
 
 
-def classify(ctx: HandlerContext) -> Classification:
+def classify(tokens: list[str]) -> Classification:
     """Classify tee command by extracting target files."""
-    tokens = ctx.tokens
     base = "tee"
     targets = []
     i = 1
@@ -27,12 +24,12 @@ def classify(ctx: HandlerContext) -> Classification:
         i += 1
     if not targets:
         # tee with no files just copies stdin to stdout
-        return Classification("allow", description=base)
+        return Classification("approve", description=base)
     desc = (
         f"{base} {targets[0]}" if len(targets) == 1 else f"{base} {len(targets)} files"
     )
     return Classification(
-        "allow",
+        "approve",
         description=desc,
         redirect_targets=tuple(targets),
     )

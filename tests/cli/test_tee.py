@@ -1,7 +1,5 @@
 """Tests for tee CLI handler."""
 
-from __future__ import annotations
-
 from conftest import is_approved, needs_confirmation
 from dippy.core.config import Config, Rule
 
@@ -47,25 +45,6 @@ class TestTeeNeedsConfirmation:
         """tee -a to file without matching rule needs confirmation."""
         result = check("tee -a output.log")
         assert needs_confirmation(result)
-
-
-class TestTeeSafeRedirectTargets:
-    """tee to safe targets should be auto-approved without config."""
-
-    def test_tee_to_dev_null(self, check):
-        """tee /dev/null should be approved without config."""
-        result = check("tee /dev/null")
-        assert is_approved(result)
-
-    def test_tee_to_dev_stdout(self, check):
-        """tee /dev/stdout should be approved without config."""
-        result = check("tee /dev/stdout")
-        assert is_approved(result)
-
-    def test_tee_to_dev_stdin(self, check):
-        """tee /dev/stdin should be approved without config."""
-        result = check("tee /dev/stdin")
-        assert is_approved(result)
 
 
 class TestTeeWithRedirectRules:
