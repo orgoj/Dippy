@@ -39,3 +39,5 @@ Thumbs.db
 
 # VS Code extension build artifacts
 *.vsix
+
+.worktrees/
