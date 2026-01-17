@@ -255,7 +255,7 @@ deny-opt "docker run" --volume /:/host
 
 **Mixing with normal rules:**
 
-Option rules mix with normal `allow`/`ask`/`deny` rules. First match wins:
+Option rules mix with normal `allow`/`ask`/`deny` rules. Last match wins:
 
 ```
 # Allow all git commands

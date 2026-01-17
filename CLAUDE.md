@@ -25,3 +25,10 @@ just check       # All of the above in parallel — MUST PASS before committing
 - verification: check actual running system (real log files) instead of writing adhoc tests
 - documentation: always read README.md before making assumptions about config/log locations
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
+
+## Git
+
+- remotes: `original`=upstream (ldayton/Dippy), `origin`=fork (orgoj/Dippy)
+- operations: always check `git status` first to detect interrupted states
+- merges: use worktrees for large upstream merges (see skill: safe-upstream-merge)
+- commits: run `just test` BEFORE committing, never commit failing tests
