@@ -1,7 +1,5 @@
 """Tests for yq CLI handler."""
 
-from __future__ import annotations
-
 import pytest
 
 from conftest import is_approved, needs_confirmation
