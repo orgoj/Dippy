@@ -4,6 +4,7 @@ import fnmatch
 import os
 import re
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 # Cache home directory at module load - fails fast if HOME is unset
@@ -65,6 +66,7 @@ class Config:
     default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
+    log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
 
 
 @dataclass
@@ -158,6 +160,38 @@ def _load_config_file(path: Path) -> Config:
     return parse_config(text, source=str(path))
 
 
+def _rotate_logs(config: Config) -> None:
+    """Rotate audit log daily and clean up old logs.
+
+    Only rotates once per day (first run after midnight).
+    Safe to call multiple times - checks if already rotated today.
+    """
+    # Skip if logging disabled or rotation disabled
+    if config.log is None or config.log_rotate_max_days <= 0:
+        return
+
+    # Check if we already rotated today
+    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    rotated_path = config.log.parent / f"audit-{yesterday}.log"
+
+    if rotated_path.exists():
+        return  # Already rotated today, nothing to do
+
+    # Rotate: rename current log to yesterday's date
+    if config.log.exists():
+        config.log.rename(rotated_path)
+
+    # Clean up old logs
+    cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime("%Y-%m-%d")
+    for old_log in config.log.parent.glob("audit-*.log"):
+        # Extract date from filename: "audit-YYYY-MM-DD.log"
+        parts = old_log.stem.split("-")
+        if len(parts) >= 4:
+            date_str = "-".join(parts[1:4])  # Extract YYYY-MM-DD
+            if date_str < cutoff:
+                old_log.unlink()
+
+
 def load_config(cwd: Path) -> Config:
     """Load config from ~/.dippy/config, .dippy, and $DIPPY_CONFIG.
 
@@ -195,6 +229,9 @@ def load_config(cwd: Path) -> Config:
             raise ConfigError(
                 f"permission denied accessing {env_config_path}"
             ) from None
+
+    # Rotate logs at the end of config loading
+    _rotate_logs(config)
 
     return config
 
@@ -456,6 +493,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
+        log_rotate_max_days=settings.get("log_rotate_max_days", 30),
     )
 
 
@@ -540,6 +578,15 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         if value is None:
             raise ValueError("'log' requires a path")
         settings[key_normalized] = Path(value).expanduser()
+
+    # Integer settings
+    elif key_normalized == "log_rotate_max_days":
+        if value is None:
+            raise ValueError("'log-rotate-max-days' requires a number")
+        try:
+            settings[key_normalized] = int(value)
+        except ValueError:
+            raise ValueError(f"'log-rotate-max-days' must be an integer, got '{value}'")
 
     else:
         raise ValueError(f"unknown setting '{key}'")

@@ -375,6 +375,7 @@ set default allow        # Auto-approve everything without explicit rule
 
 # Logging
 set log ~/.dippy/audit.log  # enable logging to path
+set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
 ```
 
 Settings use kebab-case or snake_case interchangeably.
@@ -524,6 +525,8 @@ To enable after rules, register Dippy for PostToolUse in `settings.json` (see In
 - Audit log (configurable path) - written by `log_decision()`, requires `set log <path>`
 
 **Log path:** The `~/.dippy/` directory may have write issues when running as a Claude Code hook. Using `~/.claude/dippy-audit.log` is more reliable.
+
+**Log rotation:** Dippy automatically rotates audit logs daily. The current log is renamed to `audit-YYYY-MM-DD.log` (yesterday's date) on the first run after midnight. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
 **Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
 

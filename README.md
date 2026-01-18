@@ -98,6 +98,7 @@ Sample config:
 ```
 set log ~/.dippy/audit.log             # write audit log to this path
 set log-full                           # include full command in audit log
+set log-rotate-max-days 30             # keep rotated logs for N days (0 = disable)
 
 # Default behavior for commands with no matching rule
 set default ask                        # prompt for approval (default)
