@@ -359,6 +359,15 @@ deny-opt "docker run" --privileged
 - Enforce safer alternatives (block `--force`, suggest `--force-with-lease`)
 - Project-specific constraints (block `--global` config changes, etc.)
 
+## Bash Test Constructs
+
+Allow bash `[ ]` and `[[ ]]` test commands:
+
+```
+# allow bash test (first [] is flag)
+allow [] [[] *
+```
+
 ## Settings
 
 **Boolean flags** (no value):

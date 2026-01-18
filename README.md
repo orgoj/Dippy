@@ -124,6 +124,9 @@ allow-opt git status fetch log diff     # allow these git subcommands
 deny-opt "git commit" --no-verify       # block commits skipping hooks
 ask-opt "git push" --force "Use --force-with-lease instead"  # prompt for force push
 
+# Bash test constructs ([ ] and [[ ]])
+allow [] [[] *                          # allow test commands: [ -f file ], [[ condition1 && condition2 ]]
+
 # MCP tool rules
 allow-mcp mcp__github__get_*           # allow read-only GitHub MCP tools
 allow-mcp mcp__github__list_*
