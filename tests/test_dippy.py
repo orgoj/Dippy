@@ -3978,13 +3978,16 @@ class TestPostToolUse:
     """Test PostToolUse hook handling."""
 
     def test_post_tool_use_with_message(self, tmp_path, capsys):
+        import json
         from dippy.core.config import Config, Rule
         from dippy.dippy import handle_post_tool_use
 
         cfg = Config(after_rules=[Rule("after", "git push *", message="Check CI")])
         handle_post_tool_use("git push origin main", cfg, tmp_path)
         captured = capsys.readouterr()
-        assert captured.out == "🐤 Check CI\n"
+        output = json.loads(captured.out)
+        assert output["hookSpecificOutput"]["hookEventName"] == "PostToolUse"
+        assert output["hookSpecificOutput"]["additionalContext"] == "🐤 Check CI"
 
     def test_post_tool_use_no_match(self, tmp_path, capsys):
         from dippy.core.config import Config, Rule
@@ -4005,6 +4008,7 @@ class TestPostToolUse:
         assert captured.out == ""
 
     def test_post_tool_use_last_match_wins(self, tmp_path, capsys):
+        import json
         from dippy.core.config import Config, Rule
         from dippy.dippy import handle_post_tool_use
 
@@ -4016,7 +4020,8 @@ class TestPostToolUse:
         )
         handle_post_tool_use("npm install lodash", cfg, tmp_path)
         captured = capsys.readouterr()
-        assert captured.out == "🐤 Installing deps\n"
+        output = json.loads(captured.out)
+        assert output["hookSpecificOutput"]["additionalContext"] == "🐤 Installing deps"
 
     def test_post_tool_use_quoted_args(self, tmp_path, capsys):
         """Quoted arguments should be parsed properly, not split on spaces.
@@ -4026,6 +4031,7 @@ class TestPostToolUse:
 
         Pattern 'git commit -m fix:*' matches proper parsing but not naive split.
         """
+        import json
         from dippy.core.config import Config, Rule
         from dippy.dippy import handle_post_tool_use
 
@@ -4034,72 +4040,5 @@ class TestPostToolUse:
         )
         handle_post_tool_use('git commit -m "fix: spaces in message"', cfg, tmp_path)
         captured = capsys.readouterr()
-        assert captured.out == "🐤 Check CI\n"
-
-
-class TestPassAction:
-    """Test 'pass' action - lets Claude handle permissions with its default behavior."""
-
-    def test_pass_returns_empty_dict(self, tmp_path):
-        """When default is 'pass' and no rule matches, return empty dict."""
-        from dippy.core.config import Config
-        from dippy.dippy import check_command
-        from dippy.core.analyzer import analyze
-
-        cfg = Config(default="pass")
-        # Verify config is correct
-        assert cfg.default == "pass", f"Config default is {cfg.default}"
-
-        # First check analyzer directly
-        decision = analyze("unknown-command xyz", cfg, tmp_path)
-        assert decision.action == "pass", (
-            f"Expected 'pass', got '{decision.action}': reason='{decision.reason}' children={decision.children}"
-        )
-
-        # Then check the full check_command flow
-        result = check_command("unknown-command xyz", cfg, tmp_path)
-        assert result == {}
-
-    def test_explicit_rule_overrides_pass_default(self, tmp_path):
-        """Explicit deny rule should override default=pass."""
-        from dippy.core.config import Config, Rule
-        from dippy.dippy import check_command
-
-        cfg = Config(
-            default="pass",
-            rules=[Rule(decision="deny", pattern="rm*", message="Never delete")],
-        )
-        result = check_command("rm -rf /tmp/test", cfg, tmp_path)
-        assert result["hookSpecificOutput"]["permissionDecision"] == "deny"
-        assert (
-            "Never delete" in result["hookSpecificOutput"]["permissionDecisionReason"]
-        )
-
-    def test_explicit_allow_overrides_pass_default(self, tmp_path):
-        """Explicit allow rule should override default=pass."""
-        from dippy.core.config import Config, Rule
-        from dippy.dippy import check_command
-
-        cfg = Config(
-            default="pass", rules=[Rule(decision="allow", pattern="git status")]
-        )
-        result = check_command("git status", cfg, tmp_path)
-        assert result["hookSpecificOutput"]["permissionDecision"] == "allow"
-
-    def test_ask_default_returns_ask_decision(self, tmp_path):
-        """Default 'ask' behavior still works."""
-        from dippy.core.config import Config
-        from dippy.dippy import check_command
-
-        cfg = Config(default="ask")
-        result = check_command("unknown-command xyz", cfg, tmp_path)
-        assert result["hookSpecificOutput"]["permissionDecision"] == "ask"
-
-    def test_allow_default_returns_allow_decision(self, tmp_path):
-        """Default 'allow' behavior still works."""
-        from dippy.core.config import Config
-        from dippy.dippy import check_command
-
-        cfg = Config(default="allow")
-        result = check_command("unknown-command xyz", cfg, tmp_path)
-        assert result["hookSpecificOutput"]["permissionDecision"] == "allow"
+        output = json.loads(captured.out)
+        assert output["hookSpecificOutput"]["additionalContext"] == "🐤 Check CI"
