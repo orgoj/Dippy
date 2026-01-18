@@ -19,11 +19,6 @@ allow just fmt *
 allow just lint *
 allow just test *
 
-deny mkdir * "Use ralative path: mkdir -p ./..."
-allow mkdir -p ./**
-deny mkdir -p ./../**
-deny mkdir -p ./**/../**
-
 deny git worktree add * "Use relative path: git worktree add .worktrees/..."
 allow git worktree add .worktrees/**
 

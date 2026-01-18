@@ -26,6 +26,13 @@ just check       # All of the above in parallel — MUST PASS before committing
 - documentation: always read README.md before making assumptions about config/log locations
 - documentation: update docs/README when adding/changing features
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
+- development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
+- background tasks: daily cleanup/rotation tasks should run once per relevant period, not on every startup/write
+- log rotation: use yesterday's date for rotated files (active file always has current name)
+
+## Communication
+
+- communication: when user uses "kurva" repeatedly, pay attention - they're correcting fundamental misunderstandings
 
 ## Git
 
