@@ -102,6 +102,131 @@ just test
 git worktree remove .worktrees/merge-upstream
 ```
 
+## Cherry-Pick from External Forks
+
+When cherry-picking commits from another user's fork (not upstream):
+
+### Step 1: Add remote and fetch
+
+```bash
+git remote add <name> git@github.com:user/repo.git
+git fetch <name>
+```
+
+### Step 2: Create worktree for cherry-pick
+
+```bash
+git worktree add .worktrees/cherry-pick-<feature> HEAD
+(cd .worktrees/cherry-pick-<feature> && git status)
+```
+
+### Step 3: Cherry-pick with strategy
+
+For new feature additions where both sides should coexist:
+```bash
+# Use theirs strategy to accept incoming changes
+(cd .worktrees/cherry-pick-<feature> && git cherry-pick -X theirs <commit-hash>)
+```
+
+**CRITICAL**: After `-X theirs`, manually restore any local features that were removed:
+1. Check diff to see what's missing
+2. Manually add back local features (fields, functions, directives)
+3. Test to ensure both features work together
+
+### Step 4: Commit merge of features
+
+If conflicts occurred and you manually merged features:
+```bash
+(cd .worktrees/cherry-pick-<feature> && git add -A && git commit -m "Merge external feature with local features
+
+- Preserved local features: list them
+- Added external features: list them
+- Both coexist: explanation
+
+Co-Authored-By: <Original Author> <email>
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>")
+```
+
+### Step 5: Cherry-pick additional commits
+
+For second and subsequent commits:
+```bash
+# Must commit previous changes first!
+(cd .worktrees/cherry-pick-<feature> && git cherry-pick -X theirs <next-commit-hash>)
+```
+
+### Step 6: Run tests in worktree
+
+```bash
+(cd .worktrees/cherry-pick-<feature> && just test)
+```
+
+**CRITICAL**: All tests must pass before proceeding!
+
+### Step 7: Merge to main worktree
+
+```bash
+# Get worktree HEAD commit
+(cd .worktrees/cherry-pick-<feature> && git log -1 --oneline)
+
+# Merge that commit to main
+git merge <worktree-commit-hash>  # Fast-forward works best
+```
+
+### Step 8: Verify in main worktree
+
+```bash
+just test  # Must pass in main worktree too
+git status  # Verify clean state
+```
+
+### Step 9: Cleanup
+
+```bash
+git worktree remove .worktrees/cherry-pick-<feature>
+```
+
+**Key differences from upstream merge:**
+- Use `-X theirs` to accept new functionality
+- Must manually preserve local customizations
+- Use commit hash for merge, not worktree path
+- Document both external author and your merge work
+
+### Tracking Cherry-Picks
+
+**IMPORTANT**: Always reference original commits to avoid duplication:
+
+```bash
+# Check what's already cherry-picked
+git log --oneline --grep="Cherry-pick from"
+
+# When cherry-picking, document original commit:
+git cherry-pick -X theirs <commit-hash>
+# Then amend commit message to include:
+# Cherry-pick from: <remote>/<commit-hash>
+# Original: <author> "<original-message>"
+```
+
+**Example commit message format:**
+```
+feat: add WebSearch auto-approval support
+
+Cherry-pick from: tony/9ce9cfe
+Original: Tony Nekola "Add WebSearch auto-approval support"
+- Merged with local edit_rules feature
+- Both coexist without conflicts
+
+Co-Authored-By: Tony Nekola <tony.nekola@silk.us>
+Co-Authored-By: Claude Opus 4.5 <noreply@anthropic.com>
+```
+
+**Check if already merged:**
+```bash
+# Compare commit content (same changes = different hashes)
+git log --all --source --oneline --grep="<commit-title>"
+git show <original-hash> | grep -q "<unique-code>" && git log -S"<unique-code>" --oneline
+```
+
 ## Recovery Procedures
 
 ### Interrupted rebase detected
@@ -136,12 +261,20 @@ Fix in worktree, don't commit broken state:
 - **NEVER** assume remote names - verify with `git remote -v`
 - **NEVER** rush through conflict resolution
 - **NEVER** use bare `cd` commands - always use subshells `(cd DIR && ...)`
+- **NEVER** merge worktree path directly - use commit hash: `git merge <hash>` not `git merge .worktrees/name`
+- **NEVER** forget to manually restore local features after `-X theirs` cherry-pick
 
 ## Project-Specific Notes
 
 This repo (dippy) has:
 - Remote `original` = ldayton/Dippy (upstream)
 - Remote `origin` = orgoj/Dippy (fork)
-- Local features to preserve: `allow-opt/ask-opt/deny-opt`, `set default pass`
+- Local features to preserve: `allow-opt/ask-opt/deny-opt`, `edit_rules` (Write/Edit/MultiEdit), `set default pass`
 - Test command: `just test` or `uv run pytest`
 - SIMPLE_SAFE vs CLI handlers: commands with unsafe flag variants need handlers, not SIMPLE_SAFE
+
+When merging external WebSearch or edit rule features:
+- Both `web_rules` and `edit_rules` use similar patterns - preserve both
+- Config structure: add new rule fields to dataclass, merge/tag/parse functions
+- Add new directives in parse_config after existing directive blocks
+- Both check functions and handlers follow same pattern as MCP tools

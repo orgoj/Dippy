@@ -25,6 +25,7 @@ just check       # All of the above in parallel — MUST PASS before committing
 - verification: check actual running system (real log files) instead of writing adhoc tests
 - documentation: always read README.md before making assumptions about config/log locations
 - documentation: update docs/README when adding/changing features
+- documentation: keep docs minimal and tool-specific - don't explain technologies users already know
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 - development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
 - background tasks: daily cleanup/rotation tasks should run once per relevant period, not on every startup/write
