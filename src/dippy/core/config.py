@@ -60,13 +60,16 @@ class Config:
     after_mcp_rules: list[Rule] = field(default_factory=list)
     """After-MCP rules for PostToolUse feedback on MCP tools."""
 
+    edit_rules: list[Rule] = field(default_factory=list)
+    """Edit rules for Write/Edit/MultiEdit tools."""
+
     web_rules: list[Rule] = field(default_factory=list)
     """WebSearch tool rules in load order."""
 
     after_web_rules: list[Rule] = field(default_factory=list)
     """After-web rules for PostToolUse feedback on WebSearch."""
 
-    default: str = "ask"  # 'allow' | 'ask'
+    default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
@@ -125,6 +128,7 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         after_rules=base.after_rules + overlay.after_rules,
         mcp_rules=base.mcp_rules + overlay.mcp_rules,
         after_mcp_rules=base.after_mcp_rules + overlay.after_mcp_rules,
+        edit_rules=base.edit_rules + overlay.edit_rules,
         web_rules=base.web_rules + overlay.web_rules,
         after_web_rules=base.after_web_rules + overlay.after_web_rules,
         # Settings: overlay wins if set
@@ -149,6 +153,7 @@ def _tag_rules(config: Config, source: str, scope: str) -> Config:
         after_mcp_rules=[
             replace(r, source=source, scope=scope) for r in config.after_mcp_rules
         ],
+        edit_rules=[replace(r, source=source, scope=scope) for r in config.edit_rules],
         web_rules=[replace(r, source=source, scope=scope) for r in config.web_rules],
         after_web_rules=[
             replace(r, source=source, scope=scope) for r in config.after_web_rules
@@ -332,6 +337,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     after_rules: list[Rule] = []
     mcp_rules: list[Rule] = []
     after_mcp_rules: list[Rule] = []
+    edit_rules: list[Rule] = []
     web_rules: list[Rule] = []
     after_web_rules: list[Rule] = []
     settings: dict[str, bool | int | str | Path] = {}
@@ -461,6 +467,27 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 pattern, message = _extract_message(rest)
                 after_mcp_rules.append(Rule("after", pattern, message=message))
 
+            elif directive == "allow-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                edit_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+
+            elif directive == "ask-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "deny-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                )
+
             elif directive == "allow-web":
                 pattern = rest if rest else "*"
                 web_rules.append(Rule("allow", pattern))
@@ -498,6 +525,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         after_rules=after_rules,
         mcp_rules=mcp_rules,
         after_mcp_rules=after_mcp_rules,
+        edit_rules=edit_rules,
         web_rules=web_rules,
         after_web_rules=after_web_rules,
         default=settings.get("default", "ask"),
@@ -1091,6 +1119,34 @@ def match_after_web(query: str, config: Config) -> str | None:
     for rule in config.after_web_rules:
         if fnmatch.fnmatch(query, rule.pattern):
             result = rule.message if rule.message is not None else ""
+    return result
+
+
+def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
+    """Match file path against edit rules for Write/Edit/MultiEdit tools.
+
+    Uses same glob matching as redirect rules. Last matching rule wins.
+
+    Args:
+        file_path: Absolute path to the file being edited.
+        config: Loaded configuration.
+        cwd: Current working directory for path resolution.
+
+    Returns:
+        Match object for the last matching rule, or None if no match.
+    """
+    normalized_path = _normalize_path(file_path, cwd)
+    result: Match | None = None
+    for rule in config.edit_rules:
+        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        if _glob_match(normalized_path, normalized_pattern):
+            result = Match(
+                decision=rule.decision,
+                pattern=rule.pattern,
+                message=rule.message,
+                source=rule.source,
+                scope=rule.scope,
+            )
     return result
 
 

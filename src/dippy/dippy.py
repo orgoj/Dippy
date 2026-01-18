@@ -26,6 +26,7 @@ from dippy.core.config import (
     log_decision,
     match_after_mcp,
     match_after_web,
+    match_edit,
     match_mcp,
     match_web,
 )
@@ -436,6 +437,32 @@ def main():
                     logging.info(f"Checking WebSearch: {query}")
                     result = check_web_tool(query, config)
                     print(json.dumps(result))
+                return
+
+            # Check if this is a file operation tool
+            if tool_name in FILE_TOOL_NAMES:
+                file_path = tool_input.get("file_path", "")
+                if file_path and hook_event != "PostToolUse":
+                    # Check for bypass permissions mode first
+                    permission_mode = input_data.get("permission_mode", "default")
+                    if permission_mode in (
+                        "bypassPermissions",
+                        "dontAsk",
+                        "acceptEdits",
+                    ):
+                        logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
+                        log_decision(
+                            "allow", tool=tool_name, file_path=file_path, cwd=cwd
+                        )
+                        print(json.dumps(approve(permission_mode)))
+                        return
+
+                    logging.info(f"Checking file op: {tool_name} -> {file_path}")
+                    result = check_file_tool(tool_name, file_path, config, cwd)
+                    print(json.dumps(result))
+                    return
+                # No file_path or PostToolUse - fall through to default behavior
+                print(json.dumps({}))
                 return
 
             # Only handle shell/bash commands
