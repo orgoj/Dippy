@@ -45,7 +45,7 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
-addopts = "-v --tb=short -n auto"
+addopts = "--tb=line -q --color=no -p no:sugar"
 
 [tool.coverage.run]
 source = ["src/dippy"]

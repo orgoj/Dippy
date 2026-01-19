@@ -5,12 +5,18 @@ Shell command approval hook for AI coding assistants.
 ## Commands
 
 ```bash
-just test        # Run tests (Python 3.14)
-just test-all    # All Python versions (3.11-3.14)
-just lint        # Lint (ruff check)
-just fmt         # Format (ruff format)
-just check       # All of the above in parallel — MUST PASS before committing
+just test          # Run tests (Python 3.12, quiet mode - errors only)
+just test-parallel # Run tests in parallel (with xdist -n auto)
+just test-py312    # Run tests (Python 3.12, explicit)
+just lint          # Lint (ruff check)
+just fmt           # Format (ruff format)
+just check         # All of the above in parallel — MUST PASS before committing
 ```
+
+**Test output:**
+- Default `just test`: quiet mode, shows only summary and errors (no progress dots)
+- Use `just test-parallel` for faster parallel execution with xdist
+- `just check` uses `test-parallel` for speed
 
 ## Project Context
 

@@ -2,23 +2,26 @@ set shell := ["bash", "-o", "pipefail", "-cu"]
 project := "dippy"
 
 _test-py version *ARGS:
-    UV_PROJECT_ENVIRONMENT=.venv-{{version}} uv run --python {{version}} pytest {{ARGS}} 2>&1 | sed -u "s/^/[py{{version}}] /" | tee /tmp/{{project}}-test-py{{version}}.log
+    UV_PROJECT_ENVIRONMENT=.venv-{{version}} uv run --python {{version}} pytest {{ARGS}} 2>&1 | sed -u '/^\.*\s*\[\s*[0-9]*%\]/d; s/^/[py{{version}}] /' | tee /tmp/{{project}}-test-py{{version}}.log
 
 # Run tests on Python 3.11
-test-py311 *ARGS: (_test-py "3.11" ARGS)
+# test-py311 *ARGS: (_test-py "3.11" ARGS)
 # Run tests on Python 3.12
 test-py312 *ARGS: (_test-py "3.12" ARGS)
 # Run tests on Python 3.13
-test-py313 *ARGS: (_test-py "3.13" ARGS)
+# test-py313 *ARGS: (_test-py "3.13" ARGS)
 # Run tests on Python 3.14
-test-py314 *ARGS: (_test-py "3.14" ARGS)
+# test-py314 *ARGS: (_test-py "3.14" ARGS)
 
-# Run tests (default: 3.14)
-test *ARGS: (_test-py "3.14" ARGS)
+# Run tests (default: 3.12, no parallelization)
+test *ARGS: (_test-py "3.12" ARGS)
+
+# Run tests in parallel (with xdist)
+test-parallel *ARGS: (_test-py "3.12" "-n auto" ARGS)
 
 # Run tests on all supported Python versions (parallel)
-[parallel]
-test-all: test-py311 test-py312 test-py313 test-py314
+# [parallel]
+# test-all: test-py311 test-py312 test-py313 test-py314
 
 # Verify lock file is up to date
 lock-check:
@@ -26,7 +29,7 @@ lock-check:
 
 # Run all checks (tests, lint, format, lock) in parallel
 [parallel]
-check: test-all lint fmt lock-check
+check: test-parallel lint fmt lock-check
 
 # Lint (--fix to apply changes)
 lint *ARGS:

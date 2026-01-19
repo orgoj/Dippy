@@ -10,6 +10,7 @@ allow rm -rf /**/__pycache__
 allow uv run python -m pytest *
 allow uv run pytest *
 allow pytest run *
+allow pytest run
 
 deny .venv/bin/*
 
