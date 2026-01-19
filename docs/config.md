@@ -44,8 +44,53 @@ deny-redirect <glob> "message" # reject with message shown to AI
 after <glob>                   # post-action feedback (silent)
 after <glob> "message"         # post-action feedback with message to AI
 
+include <path-or-pattern>     # include external config file(s)
+
 set <key> [value]              # settings
 ```
+
+### Include Directive
+
+The `include` directive allows you to split configuration across multiple files for better organization and reusability.
+
+```
+include <path-or-pattern>
+```
+
+**Features:**
+
+- **Glob patterns**: `include .dippy-ok-*` includes all matching files
+- **Home expansion**: `include ~/.dippy/shared-rules` expands `~`
+- **Relative paths**: Resolved relative to the including file's directory
+- **Recursive**: Included files can include other files
+- **Circular detection**: Raises error on circular includes
+- **Inline expansion**: Content inserted as if written at that location
+
+**Examples:**
+
+```
+# Include shared project rules
+include .dippy-local-*
+
+# Include team defaults from home
+include ~/.dippy/team-defaults
+
+# Include all developer-specific overrides
+include .dippy-dev-*
+
+# Include with glob pattern
+include conf.d/*.conf
+```
+
+**Precedence:**
+- Included rules are inserted at the point of inclusion
+- Last-match-wins applies across includes
+- Later includes override earlier ones
+
+**Error handling:**
+- Missing files: Warning logged, config continues loading
+- Circular includes: ConfigError raised immediately
+- Empty pattern: Warning logged, skipped
 
 ### Context Flags
 

@@ -161,6 +161,106 @@ def _tag_rules(config: Config, source: str, scope: str) -> Config:
     )
 
 
+def _expand_includes(
+    text: str,
+    base_dir: Path,
+    current_file: Path,
+    included_files: set[Path],
+) -> str:
+    """Recursively expand include directives.
+
+    Args:
+        text: Config text to process
+        base_dir: Directory to resolve relative paths from
+        current_file: Current config file (for circular detection)
+        included_files: Set of already included files (circular detection)
+
+    Returns:
+        Text with all includes expanded inline
+
+    Raises:
+        ConfigError: On circular includes or I/O errors
+    """
+    import glob
+    import logging
+
+    # Track this file
+    included_files.add(current_file.resolve())
+
+    result_lines = []
+    for lineno, line in enumerate(text.splitlines(), 1):
+        stripped = line.strip()
+
+        # Check if this is an include directive (with or without pattern)
+        if not stripped.startswith("include"):
+            result_lines.append(line)
+            continue
+
+        # Must be "include" followed by whitespace or EOL
+        if len(stripped) > 7 and not stripped[7].isspace():
+            # Not an include directive, just a line starting with "include"
+            result_lines.append(line)
+            continue
+
+        # Parse include directive
+        pattern = stripped[7:].strip() if len(stripped) > 7 else ""
+        if not pattern:
+            logging.warning(
+                f"{current_file}:{lineno}: empty include pattern (skipped)"
+            )
+            continue
+
+        # Expand ~ and resolve relative to base_dir
+        pattern_path = Path(pattern).expanduser()
+        if not pattern_path.is_absolute():
+            pattern_path = base_dir / pattern_path
+
+        # Expand glob pattern
+        matches = sorted(glob.glob(str(pattern_path)))
+
+        if not matches:
+            logging.warning(
+                f"{current_file}:{lineno}: no files match '{pattern}' (skipped)"
+            )
+            continue
+
+        # Process each matched file
+        for match_str in matches:
+            match_path = Path(match_str).resolve()
+
+            # Circular include detection
+            if match_path in included_files:
+                raise ConfigError(
+                    f"circular include: {current_file} -> {match_path}"
+                )
+
+            # Read and recursively expand
+            try:
+                included_text = match_path.read_text()
+            except PermissionError:
+                raise ConfigError(
+                    f"permission denied reading included file: {match_path}"
+                ) from None
+            except OSError as e:
+                raise ConfigError(
+                    f"cannot read included file {match_path}: {e}"
+                ) from None
+
+            # Recursive expansion (included file can have includes)
+            expanded = _expand_includes(
+                included_text,
+                match_path.parent,  # Relative paths in included file resolve from its dir
+                match_path,
+                included_files,
+            )
+
+            # Add expanded content with comment marker
+            result_lines.append(f"# included from: {match_path}")
+            result_lines.append(expanded)
+
+    return "\n".join(result_lines)
+
+
 def _load_config_file(path: Path) -> Config:
     """Read and parse a config file. Raises ConfigError on I/O failure."""
     try:
@@ -169,6 +269,11 @@ def _load_config_file(path: Path) -> Config:
         raise ConfigError(f"permission denied reading config: {path}") from None
     except OSError as e:
         raise ConfigError(f"cannot read config {path}: {e}") from None
+
+    # Preprocess includes
+    included_files: set[Path] = set()
+    text = _expand_includes(text, path.parent, path, included_files)
+
     return parse_config(text, source=str(path))
 
 

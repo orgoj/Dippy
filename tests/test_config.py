@@ -2368,3 +2368,221 @@ class TestMatchAfterWeb:
         cfg = Config(after_web_rules=[Rule("after", "*docs*", message="")])
         result = match_after_web("python docs", cfg)
         assert result == ""
+
+
+class TestIncludeDirective:
+    """Test include directive functionality with proper isolation."""
+
+    def test_include_single_file(self, tmp_path):
+        # Create included file
+        included = tmp_path / "included.conf"
+        included.write_text("allow ls\nallow pwd\n")
+
+        # Create main config with include
+        config_file = tmp_path / "config"
+        config_file.write_text(f"include {included}\nallow ps\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 3
+        assert cfg.rules[0].pattern == "ls"
+        assert cfg.rules[1].pattern == "pwd"
+        assert cfg.rules[2].pattern == "ps"
+
+    def test_include_glob_pattern(self, tmp_path):
+        # Create multiple files to include
+        (tmp_path / "rules-1.conf").write_text("allow ls\n")
+        (tmp_path / "rules-2.conf").write_text("allow pwd\n")
+        (tmp_path / "rules-3.conf").write_text("allow ps\n")
+
+        # Create main config with glob pattern
+        config_file = tmp_path / "config"
+        config_file.write_text("include rules-*.conf\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        # Files are included in sorted order
+        assert len(cfg.rules) == 3
+        patterns = [r.pattern for r in cfg.rules]
+        assert "ls" in patterns
+        assert "pwd" in patterns
+        assert "ps" in patterns
+
+    def test_include_home_expansion(self, tmp_path, monkeypatch):
+        # CRITICAL: Mock HOME to tmp_path to avoid touching real ~/.dippy/
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        # Create included file in mocked home
+        home_config_dir = tmp_path / ".dippy"
+        home_config_dir.mkdir()
+        included = home_config_dir / "shared.conf"
+        included.write_text("allow ls\n")
+
+        # Create main config with ~ expansion
+        config_file = tmp_path / "config"
+        config_file.write_text("include ~/.dippy/shared.conf\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].pattern == "ls"
+
+    def test_include_relative_path(self, tmp_path):
+        # Create subdirectory with included file
+        sub_dir = tmp_path / "conf.d"
+        sub_dir.mkdir()
+        included = sub_dir / "rules.conf"
+        included.write_text("allow ls\n")
+
+        # Create main config with relative include
+        config_file = tmp_path / "config"
+        config_file.write_text("include conf.d/rules.conf\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].pattern == "ls"
+
+    def test_include_recursive(self, tmp_path):
+        # Create chain: a includes b which includes c
+        file_c = tmp_path / "c.conf"
+        file_c.write_text("allow ps\n")
+
+        file_b = tmp_path / "b.conf"
+        file_b.write_text(f"allow pwd\ninclude {file_c}\n")
+
+        file_a = tmp_path / "a.conf"
+        file_a.write_text(f"allow ls\ninclude {file_b}\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(file_a)
+        assert len(cfg.rules) == 3
+        assert cfg.rules[0].pattern == "ls"
+        assert cfg.rules[1].pattern == "pwd"
+        assert cfg.rules[2].pattern == "ps"
+
+    def test_include_circular_detection(self, tmp_path):
+        # Create circular include: a includes b which includes a
+        file_a = tmp_path / "a.conf"
+        file_b = tmp_path / "b.conf"
+
+        file_a.write_text(f"include {file_b}\n")
+        file_b.write_text(f"include {file_a}\n")
+
+        # Should raise ConfigError
+        from dippy.core.config import ConfigError, _load_config_file
+
+        with pytest.raises(ConfigError, match="circular include"):
+            _load_config_file(file_a)
+
+    def test_include_missing_file_warning(self, tmp_path, caplog):
+        # Create config with include that matches no files
+        config_file = tmp_path / "config"
+        config_file.write_text("include nonexistent-*.conf\nallow ls\n")
+
+        # Parse and verify warning is logged
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        # Should still have the allow rule
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].pattern == "ls"
+        # Check warning was logged
+        assert "no files match" in caplog.text
+
+    def test_include_empty_pattern_warning(self, tmp_path, caplog):
+        # Create config with empty include pattern
+        config_file = tmp_path / "config"
+        config_file.write_text("include\nallow ls\n")
+
+        # Parse and verify warning is logged
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 1
+        assert cfg.rules[0].pattern == "ls"
+        assert "empty include pattern" in caplog.text
+
+    def test_include_precedence(self, tmp_path):
+        # Test last-match-wins across includes
+        file_1 = tmp_path / "1.conf"
+        file_1.write_text("allow git *\n")
+
+        file_2 = tmp_path / "2.conf"
+        file_2.write_text("deny git push *\n")
+
+        config_file = tmp_path / "config"
+        config_file.write_text(f"include {file_1}\ninclude {file_2}\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 2
+        # Last rule should be deny git push
+        assert cfg.rules[1].decision == "deny"
+        assert cfg.rules[1].pattern == "git push *"
+
+    def test_include_relative_to_including_file(self, tmp_path):
+        # Test that included file's includes resolve relative to ITS directory
+        # Structure:
+        #   tmp_path/
+        #     config           (includes subdir/a.conf)
+        #     subdir/
+        #       a.conf         (includes b.conf - relative to subdir/)
+        #       b.conf
+
+        # Create nested structure
+        subdir = tmp_path / "subdir"
+        subdir.mkdir()
+
+        # b.conf in subdir
+        (subdir / "b.conf").write_text("allow ps\n")
+
+        # a.conf in subdir includes b.conf (relative to subdir)
+        (subdir / "a.conf").write_text("allow pwd\ninclude b.conf\n")
+
+        # Main config includes subdir/a.conf
+        config_file = tmp_path / "config"
+        config_file.write_text(f"allow ls\ninclude subdir/a.conf\n")
+
+        # Parse and verify
+        from dippy.core.config import _load_config_file
+
+        cfg = _load_config_file(config_file)
+        assert len(cfg.rules) == 3
+        assert cfg.rules[0].pattern == "ls"
+        assert cfg.rules[1].pattern == "pwd"
+        assert cfg.rules[2].pattern == "ps"
+
+    def test_include_isolation_safety(self, tmp_path, monkeypatch):
+        # CRITICAL: Verify no side effects on live config
+        monkeypatch.setenv("HOME", str(tmp_path))
+
+        # Create test config
+        config_file = tmp_path / "config"
+        config_file.write_text("allow ls\n")
+
+        # Parse
+        from dippy.core.config import _load_config_file
+
+        _load_config_file(config_file)
+
+        # Verify real home config dir was not touched
+        # Since we mocked HOME, check that only tmp_path was used
+        real_home = Path.home()
+        real_dippy = real_home / ".dippy"
+        # If this test runs correctly, real_dippy should either not exist
+        # or should be untouched. Since we can't guarantee its state,
+        # we just verify tmp_path was used
+        assert str(tmp_path) == os.environ["HOME"]

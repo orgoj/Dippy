@@ -96,6 +96,10 @@ Dippy reads config from (lowest to highest priority):
 Sample config:
 
 ```
+# Include external config files
+include ~/.dippy/defaults/*            # include shared rules from home
+include .dippy-local-*                 # include project-specific overrides (glob pattern)
+
 set log ~/.dippy/audit.log             # write audit log to this path
 set log-full                           # include full command in audit log
 set log-rotate-max-days 30             # keep rotated logs for N days (0 = disable)
@@ -134,6 +138,20 @@ deny-mcp mcp__*__delete_* "No deletions"  # block destructive MCP operations
 
 after git commit * "Reread prompts/next-iteration.md"  # after hook keeps Claude on task
 ```
+
+### Include Directive
+
+Split configuration across multiple files:
+
+```
+include <path-or-pattern>
+```
+
+- **Glob patterns**: `include .dippy-ok-*` includes all matching files
+- **Home expansion**: `include ~/.dippy/shared-rules` expands `~`
+- **Relative paths**: Resolved relative to the including file
+- **Recursive**: Included files can include other files
+- **Last-match-wins**: Later includes override earlier ones
 
 Configuration reference: [docs/config.md](docs/config.md)
 
