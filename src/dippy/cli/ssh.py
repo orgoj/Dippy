@@ -97,5 +97,5 @@ def classify(tokens: list[str], cwd: Path | None = None) -> Classification:
         "delegate",
         inner_command=remote_cmd,
         description=f"ssh {host}",
-        wrapper_context="ssh",
+        wrapper_context=["ssh"],
     )

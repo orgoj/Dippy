@@ -44,7 +44,8 @@ deny-redirect <glob> "message" # reject with message shown to AI
 after <glob>                   # post-action feedback (silent)
 after <glob> "message"         # post-action feedback with message to AI
 
-include <path-or-pattern>     # include external config file(s)
+include <path-or-pattern>      # include external config file(s)
+wrapper <command_name>         # define custom wrapper command
 
 set <key> [value]              # settings
 ```
@@ -112,6 +113,76 @@ ask [flags] <glob> "message"
 | `@compound` | Any compound context (subshell, bracegroup, pipeline, list) | All of above |
 | `ssh` | Inside `ssh "command"` | `ssh host "rm /tmp/*"` |
 | `sudo` | Inside `sudo`, `doas`, `pkexec` | `sudo rm /etc/passwd` |
+| `<custom>` | Inside user-defined wrappers | `wrap server1 free -h` |
+
+### Custom Wrappers
+
+Define your own wrapper commands with the `wrapper` directive:
+
+```
+wrapper <command_name>
+```
+
+**Example:**
+
+```
+# Define custom wrapper
+wrapper wrap
+
+# Allow free on server1 via wrap
+allow [wrap,server1] free *
+
+# Deny rm on server1 (any wrapper)
+deny [server1] rm *
+```
+
+**Usage:**
+
+```bash
+wrap server1 free -h          # wrapper=wrap, dest=server1, cmd=free -h
+wrap server1 ls -la           # Allowed
+wrap server1 rm /tmp/x        # Denied
+```
+
+**Wrapper syntax:**
+
+```
+<wrapper> [options] <destination> [inner_command]
+```
+
+- `wrapper`: Command name defined in config
+- `options`: Optional flags (same as SSH: `-p`, `-i`, `-l`, etc.)
+- `destination`: First non-option token (becomes context flag)
+- `inner_command`: Everything after destination (can be empty for interactive)
+
+**Context flags from wrappers:**
+
+Custom wrappers automatically set TWO context flags:
+1. Wrapper name: `["wrap"]`
+2. Destination: `["server1"]`
+
+Both flags are available for rule matching:
+
+```
+allow [wrap,server1] free *    # Both wrapper AND destination
+allow [server1] free *          # Destination only (any wrapper)
+allow [wrap] free *             # Wrapper only (any destination)
+deny [!wrap] rm *              # Negation: rm WITHOUT wrapper
+```
+
+**Multiple wrappers:**
+
+```
+wrapper wrap
+wrapper tmux-cli
+wrapper ssh-gateway
+```
+
+Wrappers merge via set union across config scopes (user + project).
+
+**Built-in wrappers vs custom:**
+
+Built-in wrappers (`ssh`, `sudo`) work the same way but are predefined. Custom wrappers let you define project-specific tools with the same context-aware control.
 
 **Flag syntax:**
 - AST context flags use `@` prefix: `@subshell`, `@compound`

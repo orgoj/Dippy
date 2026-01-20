@@ -1,5 +1,7 @@
 # Dippy config for Dippy
 
+include .dippy-yolo
+
 #---- Python ----#
 allow rm -rf /**/__pycache__
 deny python3 * "Use `uv run python`"

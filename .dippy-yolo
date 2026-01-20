@@ -1,0 +1,3 @@
+deny-edit .dippy*
+
+allow uv run *

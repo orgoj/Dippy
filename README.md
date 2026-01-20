@@ -123,6 +123,11 @@ deny [!@subshell] cd *                 # deny cd when NOT in subshell (equivalen
 deny cd *                              # block standalone cd
 allow [@subshell] cd *                 # but allow (cd /tmp && make)
 
+# Custom wrappers (define project-specific tools with context flags)
+wrapper wrap                           # define custom wrapper
+allow [wrap,server1] free *            # allow free on server1 via wrap
+deny [server1] rm *                    # deny rm on server1 (any wrapper)
+
 # Option-specific rules
 allow-opt git status fetch log diff     # allow these git subcommands
 deny-opt "git commit" --no-verify       # block commits skipping hooks

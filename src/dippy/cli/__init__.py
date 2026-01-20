@@ -29,7 +29,9 @@ class Classification:
     redirect_targets: tuple[str, ...] | None = (
         None  # File targets to check against redirect rules
     )
-    wrapper_context: str | None = None  # Context flag for wrapper commands (ssh, sudo)
+    wrapper_context: list[str] | None = (
+        None  # Context flags for wrapper commands (ssh, sudo)
+    )
 
 
 class CLIHandler(Protocol):

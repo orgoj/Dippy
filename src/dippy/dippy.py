@@ -200,6 +200,7 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
         result.reason,
         command=command,
         cwd=cwd,
+        context_flags=result.context_flags,
     )
 
     if result.action == "allow":

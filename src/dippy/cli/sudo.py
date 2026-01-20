@@ -75,5 +75,5 @@ def classify(tokens: list[str], cwd: Path | None = None) -> Classification:
         "delegate",
         inner_command=inner_cmd,
         description=base,
-        wrapper_context="sudo",
+        wrapper_context=["sudo"],
     )

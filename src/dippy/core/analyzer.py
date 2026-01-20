@@ -5,6 +5,7 @@ Single recursive walk of bash AST with consistent decision-making.
 Unknown constructs default to ask. Decisions bubble up (deny > ask > allow).
 """
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -14,6 +15,8 @@ from dippy.core.allowlists import SIMPLE_SAFE, WRAPPER_COMMANDS
 from dippy.cli import get_handler, get_description
 from dippy.vendor.parable import parse, ParseError
 
+logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Decision:
@@ -21,6 +24,7 @@ class Decision:
 
     action: Literal["allow", "ask", "deny", "pass"]
     reason: str
+    context_flags: frozenset[str] | None = None
     # For tracing: child decisions that contributed to this one
     children: list["Decision"] = field(default_factory=list)
 
@@ -362,6 +366,86 @@ def _analyze_redirects(node, config: Config, cwd: Path) -> list[Decision]:
     return decisions
 
 
+def _extract_wrapper_args(
+    tokens: list[str],
+) -> tuple[str | None, str]:
+    """Extract wrapper destination and inner command from tokens.
+
+    Args:
+        tokens: Command tokens starting with wrapper name
+
+    Returns:
+        (destination, inner_command) tuple
+        - destination: First non-option token, or None if not found
+        - inner_command: Everything after destination, empty string if no inner
+
+    Example:
+        ["wrap", "server1", "free", "-h"] -> ("server1", "free -h")
+        ["wrap", "-p", "2222", "server1", "ls"] -> ("server1", "ls")
+        ["wrap", "server1"] -> ("server1", "")
+        ["wrap"] -> (None, "")
+    """
+    if not tokens or len(tokens) < 2:
+        return None, ""
+
+    # Options that take an argument (same as ssh.py)
+    opts_with_arg = {
+        "-b",
+        "-c",
+        "-D",
+        "-E",
+        "-e",
+        "-F",
+        "-I",
+        "-i",
+        "-J",
+        "-L",
+        "-l",
+        "-m",
+        "-O",
+        "-o",
+        "-p",
+        "-Q",
+        "-R",
+        "-S",
+        "-W",
+        "-w",
+    }
+
+    i = 1  # Skip wrapper name (tokens[0])
+    dest = None
+
+    while i < len(tokens):
+        tok = tokens[i]
+        if tok == "--":
+            # End of options - next token is destination
+            i += 1
+            if i < len(tokens):
+                dest = tokens[i]
+                i += 1
+            break
+        elif tok.startswith("-"):
+            if tok in opts_with_arg:
+                # Skip option and its argument
+                i += 2
+            else:
+                # Flag without argument
+                i += 1
+        else:
+            # First non-option is the destination
+            dest = tok
+            i += 1
+            break
+
+    if dest is None:
+        return None, ""
+
+    # Everything after destination is the inner command
+    inner_cmd = " ".join(tokens[i:]) if i < len(tokens) else ""
+
+    return dest, inner_cmd
+
+
 def _analyze_simple_command(
     words: list[str],
     config: Config,
@@ -390,22 +474,46 @@ def _analyze_simple_command(
     config_match = match_command(cmd, config, cwd, context_flags)
     if config_match:
         if config_match.decision == "allow":
-            return Decision("allow", f"{base} ({config_match.pattern})")
+            return Decision("allow", f"{base} ({config_match.pattern})", context_flags=context_flags)
         elif config_match.decision == "deny":
             msg = config_match.message or config_match.pattern
-            return Decision("deny", f"{base}: {msg}")
+            return Decision("deny", f"{base}: {msg}", context_flags=context_flags)
         else:  # ask
             msg = config_match.message or config_match.pattern
-            return Decision("ask", f"{base}: {msg}")
+            return Decision("ask", f"{base}: {msg}", context_flags=context_flags)
 
     # 1b. No rule matched - check config.default for fallback behavior
     if config.default == "pass":
-        return Decision("pass", "no matching rule, passing through")
+        return Decision("pass", "no matching rule, passing through", context_flags=context_flags)
     if config.default == "allow":
-        return Decision("allow", f"{base} (default allow)")
+        return Decision("allow", f"{base} (default allow)", context_flags=context_flags)
     # For default="ask", continue to analyzer logic below
 
-    # 2. Handle wrapper commands (time, timeout, etc.) - analyze inner command
+    # 2. Handle custom wrapper commands (defined in config)
+    if base in config.wrappers:
+        dest, inner_cmd = _extract_wrapper_args(tokens)
+        logger.debug(f"custom wrapper '{base}' detected: dest={dest}, inner_cmd={inner_cmd!r}")
+
+        if dest is None:
+            # No destination - ask for clarification
+            logger.debug(f"custom wrapper '{base}': no destination, asking")
+            return Decision("ask", base, context_flags=context_flags)
+
+        # Build context flags: wrapper name + destination
+        wrapper_flags = {base, dest}
+        inner_flags = context_flags | frozenset(wrapper_flags)
+        logger.debug(f"custom wrapper '{base}': adding context flags {sorted(wrapper_flags)}")
+
+        if not inner_cmd:
+            # No inner command - interactive wrapper session
+            logger.debug(f"custom wrapper '{base}': no inner command, asking")
+            return Decision("ask", f"{base} {dest}", context_flags=inner_flags)
+
+        # Delegate to inner command analysis with wrapper context
+        logger.debug(f"custom wrapper '{base}': delegating to inner command {inner_cmd!r}")
+        return analyze(inner_cmd, config, cwd, inner_flags)
+
+    # 3. Handle built-in wrapper commands (time, timeout, etc.) - analyze inner command
     if base in WRAPPER_COMMANDS and len(tokens) > 1:
         if base == "command" and len(tokens) > 1 and tokens[1] in ("-v", "-V"):
             return Decision("allow", "command -v")
@@ -426,15 +534,15 @@ def _analyze_simple_command(
 
         if j < len(tokens):
             return _analyze_simple_command(tokens[j:], config, cwd, context_flags)
-        return Decision("ask", base)
+        return Decision("ask", base, context_flags=context_flags)
 
     # 3. Simple safe commands
     if base in SIMPLE_SAFE:
-        return Decision("allow", base)
+        return Decision("allow", base, context_flags=context_flags)
 
     # 4. Version/help checks
     if _is_version_or_help(tokens):
-        return Decision("allow", f"{base} --help")
+        return Decision("allow", f"{base} --help", context_flags=context_flags)
 
     # 5. CLI-specific handlers
     handler = get_handler(base)
@@ -455,22 +563,27 @@ def _analyze_simple_command(
                     # allow - continue checking other targets
                 else:
                     # No matching rule - ask by default for file writes
-                    return Decision("ask", desc)
+                    return Decision("ask", desc, context_flags=context_flags)
         if result.action == "approve":
-            return Decision("allow", desc)
+            return Decision("allow", desc, context_flags=context_flags)
         elif result.action == "delegate" and result.inner_command:
             # Delegate to inner command (e.g., bash -c 'inner', ssh host 'cmd')
-            # Add wrapper_context as context flag if present
+            # Add wrapper_context items as context flags if present
             inner_flags = context_flags
             if result.wrapper_context:
-                inner_flags = context_flags | frozenset({result.wrapper_context})
+                inner_flags = context_flags | frozenset(result.wrapper_context)
             inner_decision = analyze(result.inner_command, config, cwd, inner_flags)
+            # Preserve outer context flags in the final decision
+            if inner_decision.context_flags:
+                inner_decision.context_flags = inner_decision.context_flags | inner_flags
+            else:
+                inner_decision.context_flags = inner_flags
             return inner_decision
         else:
-            return Decision("ask", desc)
+            return Decision("ask", desc, context_flags=context_flags)
 
     # 6. Unknown command - default ask
-    return Decision("ask", get_description(tokens, base))
+    return Decision("ask", get_description(tokens, base), context_flags=context_flags)
 
 
 def _is_version_or_help(tokens: list[str]) -> bool:
@@ -703,6 +816,9 @@ def _combine(decisions: list[Decision]) -> Decision:
     if not decisions:
         return Decision("allow", "empty")
 
+    # Get context_flags from first decision with non-empty flags
+    context_flags = next((d.context_flags for d in decisions if d.context_flags), None)
+
     # Collect reasons by decision level
     deny_reasons = [d.reason for d in decisions if d.action == "deny"]
     ask_reasons = [d.reason for d in decisions if d.action == "ask"]
@@ -711,13 +827,13 @@ def _combine(decisions: list[Decision]) -> Decision:
 
     # deny > ask > allow > pass
     if deny_reasons:
-        return Decision("deny", ", ".join(deny_reasons), children=decisions)
+        return Decision("deny", ", ".join(deny_reasons), context_flags=context_flags, children=decisions)
 
     if ask_reasons:
-        return Decision("ask", ", ".join(ask_reasons), children=decisions)
+        return Decision("ask", ", ".join(ask_reasons), context_flags=context_flags, children=decisions)
 
     if allow_reasons:
-        return Decision("allow", ", ".join(allow_reasons), children=decisions)
+        return Decision("allow", ", ".join(allow_reasons), context_flags=context_flags, children=decisions)
 
     # All pass
-    return Decision("pass", ", ".join(pass_reasons), children=decisions)
+    return Decision("pass", ", ".join(pass_reasons), context_flags=context_flags, children=decisions)

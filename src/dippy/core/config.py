@@ -1,6 +1,7 @@
 """Dippy configuration system v1."""
 
 import fnmatch
+import logging
 import os
 import re
 from dataclasses import dataclass, field, replace
@@ -38,7 +39,9 @@ class Rule:
     scope: str | None = None  # user/project/env
     items: list[str] | None = None  # for option rules: list of items to match anywhere
     required_flags: frozenset[str] | None = None  # context flags that must all match
-    negated_flags: frozenset[str] | None = None  # context flags that must NOT be present
+    negated_flags: frozenset[str] | None = (
+        None  # context flags that must NOT be present
+    )
 
 
 @dataclass
@@ -68,6 +71,9 @@ class Config:
 
     after_web_rules: list[Rule] = field(default_factory=list)
     """After-web rules for PostToolUse feedback on WebSearch."""
+
+    wrappers: set[str] = field(default_factory=set)
+    """Custom wrapper commands (e.g., 'wrap', 'tmux-cli')."""
 
     default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
@@ -131,6 +137,8 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         edit_rules=base.edit_rules + overlay.edit_rules,
         web_rules=base.web_rules + overlay.web_rules,
         after_web_rules=base.after_web_rules + overlay.after_web_rules,
+        # Wrappers accumulate (union of both)
+        wrappers=base.wrappers | overlay.wrappers,
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
@@ -205,9 +213,7 @@ def _expand_includes(
         # Parse include directive
         pattern = stripped[7:].strip() if len(stripped) > 7 else ""
         if not pattern:
-            logging.warning(
-                f"{current_file}:{lineno}: empty include pattern (skipped)"
-            )
+            logging.warning(f"{current_file}:{lineno}: empty include pattern (skipped)")
             continue
 
         # Expand ~ and resolve relative to base_dir
@@ -230,9 +236,7 @@ def _expand_includes(
 
             # Circular include detection
             if match_path in included_files:
-                raise ConfigError(
-                    f"circular include: {current_file} -> {match_path}"
-                )
+                raise ConfigError(f"circular include: {current_file} -> {match_path}")
 
             # Read and recursively expand
             try:
@@ -299,7 +303,9 @@ def _rotate_logs(config: Config) -> None:
         config.log.rename(rotated_path)
 
     # Clean up old logs
-    cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime(
+        "%Y-%m-%d"
+    )
     for old_log in config.log.parent.glob("audit-*.log"):
         # Extract date from filename: "audit-YYYY-MM-DD.log"
         parts = old_log.stem.split("-")
@@ -445,6 +451,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     edit_rules: list[Rule] = []
     web_rules: list[Rule] = []
     after_web_rules: list[Rule] = []
+    wrappers: set[str] = set()
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -615,6 +622,22 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 pattern, message = _extract_message(rest)
                 after_web_rules.append(Rule("after", pattern, message=message))
 
+            elif directive == "wrapper":
+                if not rest:
+                    raise ValueError("requires a command name")
+                wrapper_name = rest.strip()
+                if not wrapper_name:
+                    raise ValueError("wrapper name cannot be empty")
+                if wrapper_name.startswith("-"):
+                    raise ValueError(
+                        f"wrapper name cannot start with '-': {wrapper_name}"
+                    )
+                if wrapper_name in wrappers:
+                    logging.warning(
+                        f"{prefix}line {lineno}: duplicate wrapper definition: {wrapper_name}"
+                    )
+                wrappers.add(wrapper_name)
+
             elif directive == "set":
                 _apply_setting(settings, rest)
 
@@ -633,6 +656,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         edit_rules=edit_rules,
         web_rules=web_rules,
         after_web_rules=after_web_rules,
+        wrappers=wrappers,
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
@@ -1306,6 +1330,7 @@ def log_decision(
     cwd: Path | None = None,
     tool: str | None = None,
     file_path: str | None = None,
+    context_flags: frozenset[str] | None = None,
 ) -> None:
     """Log a decision. No-op if logging not configured or disabled."""
     global _log_disabled
@@ -1315,7 +1340,7 @@ def log_decision(
     if _log_config is None or _log_disabled:
         return
 
-    entry: dict[str, str | None] = {"decision": decision}
+    entry: dict[str, str | None | list[str]] = {"decision": decision}
     if cmd is not None:
         entry["cmd"] = cmd
     if rule is not None:
@@ -1330,6 +1355,8 @@ def log_decision(
         entry["tool"] = tool
     if file_path is not None:
         entry["file_path"] = file_path
+    if context_flags is not None and context_flags:
+        entry["context_flags"] = sorted(context_flags)
     entry["ts"] = datetime.now(timezone.utc).isoformat()
 
     try:
