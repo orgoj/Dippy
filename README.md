@@ -7,6 +7,25 @@
 
 ---
 
+<!-- FORK ENHANCEMENTS START -->
+### 🍴 Fork Enhancements (vs [upstream](https://github.com/ldayton/Dippy))
+
+- **File Edit Approval** — `allow-edit`, `ask-edit`, `deny-edit` rules for Write/Edit/MultiEdit tools
+- **Include directive** — `include <path-or-glob>` for composable config files
+- **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
+- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.)
+- **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
+- **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
+- **Structured JSON output** — for PostToolUse hooks *(by tony)*
+- **Bash test constructs** — support for `[ ]` and `[[ ]]` conditions
+- **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
+- **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
+- **Audit log** — `cwd` field added for better context
+- **82 more safe commands** — expanded allowlist from man page review
+<!-- FORK ENHANCEMENTS END -->
+
+---
+
 > **Stop the permission fatigue.** Claude Code asks for approval on every `ls`, `git status`, and `cat` - destroying your flow state. You check Slack, come back, and your assistant's just sitting there waiting.
 
 Dippy is a shell command hook that auto-approves safe commands while still prompting for anything destructive. When it blocks, your custom deny messages can steer Claude back on track—no wasted turns. Get up to **40% faster development** without disabling permissions entirely.
