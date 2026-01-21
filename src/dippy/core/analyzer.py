@@ -473,13 +473,18 @@ def _analyze_simple_command(
     cmd = SimpleCommand(words=words)
     config_match = match_command(cmd, config, cwd, context_flags)
     if config_match:
+        # Format reason without redundant base prefix if pattern already starts with base
+        pattern = config_match.pattern
+        pattern_starts_with_base = pattern == base or pattern.startswith(f"{base} ")
         if config_match.decision == "allow":
-            return Decision("allow", f"{base} ({config_match.pattern})", context_flags=context_flags)
+            if pattern_starts_with_base:
+                return Decision("allow", pattern, context_flags=context_flags)
+            return Decision("allow", f"{base} ({pattern})", context_flags=context_flags)
         elif config_match.decision == "deny":
-            msg = config_match.message or config_match.pattern
+            msg = config_match.message or pattern
             return Decision("deny", f"{base}: {msg}", context_flags=context_flags)
         else:  # ask
-            msg = config_match.message or config_match.pattern
+            msg = config_match.message or pattern
             return Decision("ask", f"{base}: {msg}", context_flags=context_flags)
 
     # 1b. No rule matched - check config.default for fallback behavior
