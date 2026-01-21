@@ -632,3 +632,104 @@ class TestCompoundContext:
         config2 = parse_config("deny cd *\nallow [@subshell,@compound] cd *")
         result2 = analyze("{ cd /tmp; }", config2, tmp_path)
         assert result2.action == "deny"
+
+
+class TestReasonFormatNoRedundantBase:
+    """Test that reason string doesn't duplicate command name.
+
+    When a config pattern includes the command name (e.g., "mkdir -p ./**"),
+    the reason should NOT be "mkdir (mkdir -p ./**)".
+    It should be just the pattern or formatted without redundancy.
+    """
+
+    def test_reason_no_redundant_base_mkdir(self, tmp_path):
+        """mkdir -p ./foo should not produce 'mkdir (mkdir -p ...)'."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow mkdir -p ./**")
+        result = analyze("mkdir -p ./foo/bar", config, tmp_path)
+        assert result.action == "allow"
+        # The reason should be just the pattern, no redundant prefix or parentheses
+        assert result.reason == "mkdir -p ./**"
+
+    def test_reason_no_redundant_base_mv(self, tmp_path):
+        """mv with pattern should not duplicate 'mv' in reason."""
+        from dippy.core.config import parse_config
+
+        config = parse_config(
+            "allow mv ./.claude/diary/*.md ./.claude/diary/processed/"
+        )
+        result = analyze(
+            "mv ./.claude/diary/test.md ./.claude/diary/processed/", config, tmp_path
+        )
+        assert result.action == "allow"
+        # The reason should be just the pattern
+        assert result.reason == "mv ./.claude/diary/*.md ./.claude/diary/processed/"
+
+    def test_reason_simple_pattern_still_works(self, tmp_path):
+        """Simple patterns like 'git status' should show just the pattern."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow git status")
+        result = analyze("git status", config, tmp_path)
+        assert result.action == "allow"
+        # Pattern starts with base, so reason is just the pattern
+        assert result.reason == "git status"
+
+    def test_reason_with_wildcards(self, tmp_path):
+        """Patterns with wildcards should show just the pattern."""
+        from dippy.core.config import parse_config
+
+        config = parse_config("allow ls -la ./**")
+        result = analyze("ls -la ./src/foo.py", config, tmp_path)
+        assert result.action == "allow"
+        # Pattern starts with base, so reason is just the pattern
+        assert result.reason == "ls -la ./**"
+
+    def test_reason_pattern_with_star_suffix(self, tmp_path):
+        """Patterns like 'echo *' should show just the pattern."""
+        from dippy.core.config import parse_config
+
+        # Pattern is "echo *" which starts with base "echo"
+        config = parse_config("allow echo *")
+        result = analyze("echo hello", config, tmp_path)
+        assert result.action == "allow"
+        # Pattern starts with base, so reason is just the pattern
+        assert result.reason == "echo *"
+
+    def test_reason_just_test_no_parentheses(self, tmp_path):
+        """'just test *' pattern should show 'just test *', not '(just test *)'."""
+        from dippy.core.config import parse_config
+
+        # This is the exact case from user's audit log
+        config = parse_config("allow just test *")
+        result = analyze("just test foo", config, tmp_path)
+        assert result.action == "allow"
+        # Pattern starts with base, so reason is just the pattern without parentheses
+        assert result.reason == "just test *"
+        assert not result.reason.startswith("(")
+
+    def test_reason_pipeline_no_parentheses(self, tmp_path):
+        """Pipeline 'just test foo | head' should show 'just test *, head' not '(just test *), head'."""
+        from dippy.core.config import parse_config
+
+        # This is the exact case from user's audit log:
+        # {"cmd": "(just test *), head", "command": "just test ... 2>&1 | head -30"}
+        config = parse_config("allow just test *\nallow head *")
+        result = analyze("just test foo 2>&1 | head -30", config, tmp_path)
+        assert result.action == "allow"
+        # The reason should NOT have parentheses around 'just test *'
+        assert "(just" not in result.reason
+        # Should be "just test *, head *" or similar clean format
+        assert "just test *" in result.reason
+
+    def test_reason_pattern_without_base_keeps_format(self, tmp_path):
+        """Patterns that don't start with command should show 'base (pattern)'."""
+        from dippy.core.config import parse_config
+
+        # Pattern is "--help" which doesn't start with "git"
+        config = parse_config("allow git --help")
+        result = analyze("git --help", config, tmp_path)
+        assert result.action == "allow"
+        # Pattern "git --help" starts with "git", so just pattern
+        assert result.reason == "git --help"

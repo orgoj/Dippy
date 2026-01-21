@@ -24,7 +24,6 @@ from dippy.core.config import (
     match_after,
     match_after_mcp,
     match_command,
-    match_edit,
     match_mcp,
     match_redirect,
     match_after_web,
@@ -2554,7 +2553,7 @@ class TestIncludeDirective:
 
         # Main config includes subdir/a.conf
         config_file = tmp_path / "config"
-        config_file.write_text(f"allow ls\ninclude subdir/a.conf\n")
+        config_file.write_text("allow ls\ninclude subdir/a.conf\n")
 
         # Parse and verify
         from dippy.core.config import _load_config_file
@@ -2580,9 +2579,4 @@ class TestIncludeDirective:
 
         # Verify real home config dir was not touched
         # Since we mocked HOME, check that only tmp_path was used
-        real_home = Path.home()
-        real_dippy = real_home / ".dippy"
-        # If this test runs correctly, real_dippy should either not exist
-        # or should be untouched. Since we can't guarantee its state,
-        # we just verify tmp_path was used
         assert str(tmp_path) == os.environ["HOME"]

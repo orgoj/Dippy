@@ -38,7 +38,9 @@ class Rule:
     scope: str | None = None  # user/project/env
     items: list[str] | None = None  # for option rules: list of items to match anywhere
     required_flags: frozenset[str] | None = None  # context flags that must all match
-    negated_flags: frozenset[str] | None = None  # context flags that must NOT be present
+    negated_flags: frozenset[str] | None = (
+        None  # context flags that must NOT be present
+    )
 
 
 @dataclass
@@ -205,9 +207,7 @@ def _expand_includes(
         # Parse include directive
         pattern = stripped[7:].strip() if len(stripped) > 7 else ""
         if not pattern:
-            logging.warning(
-                f"{current_file}:{lineno}: empty include pattern (skipped)"
-            )
+            logging.warning(f"{current_file}:{lineno}: empty include pattern (skipped)")
             continue
 
         # Expand ~ and resolve relative to base_dir
@@ -230,9 +230,7 @@ def _expand_includes(
 
             # Circular include detection
             if match_path in included_files:
-                raise ConfigError(
-                    f"circular include: {current_file} -> {match_path}"
-                )
+                raise ConfigError(f"circular include: {current_file} -> {match_path}")
 
             # Read and recursively expand
             try:
@@ -299,7 +297,9 @@ def _rotate_logs(config: Config) -> None:
         config.log.rename(rotated_path)
 
     # Clean up old logs
-    cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime("%Y-%m-%d")
+    cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime(
+        "%Y-%m-%d"
+    )
     for old_log in config.log.parent.glob("audit-*.log"):
         # Extract date from filename: "audit-YYYY-MM-DD.log"
         parts = old_log.stem.split("-")

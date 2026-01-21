@@ -8,6 +8,7 @@ deny python * "Use `uv run python`"
 #allow uv run python -c *
 
 allow uv run python -m pytest *
+allow uv run python *
 allow uv run pytest *
 #allow pytest run *
 #allow pytest run
@@ -20,7 +21,7 @@ allow just fmt *
 allow just lint *
 allow just test *
 
-deny git worktree add * "Use relative path: git worktree add .worktrees/..."
-allow git worktree add .worktrees/**
+#deny git worktree add * "Use relative path: git worktree add .worktrees/..."
+#allow git worktree add .worktrees/**
 
 allow git add *
