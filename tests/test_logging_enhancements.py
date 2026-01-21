@@ -13,7 +13,7 @@ def test_log_decision_with_context_flags():
     config = parse_config("wrapper wrap")
 
     # Create temp file for logging
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
         log_path = Path(f.name)
 
     try:
@@ -24,6 +24,7 @@ def test_log_decision_with_context_flags():
         try:
             # Configure logging to temp file
             from dippy.core.config import Config
+
             test_config = Config(log=log_path, log_full=True)
             configure_logging(test_config)
 
@@ -38,7 +39,11 @@ def test_log_decision_with_context_flags():
 
             # Read and verify log file
             log_content = log_path.read_text()
-            entries = [json.loads(line) for line in log_content.strip().split('\n') if line.strip()]
+            entries = [
+                json.loads(line)
+                for line in log_content.strip().split("\n")
+                if line.strip()
+            ]
 
             assert len(entries) == 1
             entry = entries[0]
@@ -62,7 +67,7 @@ def test_log_decision_with_context_flags():
 
 def test_log_decision_without_context_flags():
     """Test that log_decision works without context_flags."""
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
         log_path = Path(f.name)
 
     try:
@@ -71,6 +76,7 @@ def test_log_decision_without_context_flags():
 
         try:
             from dippy.core.config import Config
+
             test_config = Config(log=log_path)
             configure_logging(test_config)
 
@@ -83,7 +89,11 @@ def test_log_decision_without_context_flags():
 
             # Read and verify log file
             log_content = log_path.read_text()
-            entries = [json.loads(line) for line in log_content.strip().split('\n') if line.strip()]
+            entries = [
+                json.loads(line)
+                for line in log_content.strip().split("\n")
+                if line.strip()
+            ]
 
             assert len(entries) == 1
             entry = entries[0]
@@ -104,7 +114,7 @@ def test_log_decision_without_context_flags():
 
 def test_log_decision_with_empty_context_flags():
     """Test that empty context_flags are not logged."""
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as f:
+    with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
         log_path = Path(f.name)
 
     try:
@@ -113,6 +123,7 @@ def test_log_decision_with_empty_context_flags():
 
         try:
             from dippy.core.config import Config
+
             test_config = Config(log=log_path)
             configure_logging(test_config)
 
@@ -126,7 +137,11 @@ def test_log_decision_with_empty_context_flags():
 
             # Read and verify log file
             log_content = log_path.read_text()
-            entries = [json.loads(line) for line in log_content.strip().split('\n') if line.strip()]
+            entries = [
+                json.loads(line)
+                for line in log_content.strip().split("\n")
+                if line.strip()
+            ]
 
             assert len(entries) == 1
             entry = entries[0]
@@ -140,3 +155,51 @@ def test_log_decision_with_empty_context_flags():
 
     finally:
         log_path.unlink(missing_ok=True)
+
+
+def test_context_flags_propagated_in_pipeline():
+    """Test that @pipeline and @compound flags are propagated to final Decision."""
+    from dippy.core.analyzer import analyze
+    from dippy.core.config import Config
+
+    config = Config()
+    cwd = Path.cwd()
+
+    # Pipeline should have @pipeline and @compound flags
+    result = analyze("ls | head", config, cwd)
+    assert result.action == "allow"
+    assert result.context_flags is not None
+    assert "@pipeline" in result.context_flags
+    assert "@compound" in result.context_flags
+
+
+def test_context_flags_propagated_in_list():
+    """Test that @compound flag is propagated in list (&&) constructs."""
+    from dippy.core.analyzer import analyze
+    from dippy.core.config import Config
+
+    config = Config()
+    cwd = Path.cwd()
+
+    # List (&&) should have @compound flag
+    result = analyze("echo test && ls", config, cwd)
+    assert result.action == "allow"
+    assert result.context_flags is not None
+    assert "@compound" in result.context_flags
+
+
+def test_context_flags_propagated_in_subshell():
+    """Test that @subshell and @compound flags are propagated from subshell."""
+    from dippy.core.analyzer import analyze
+    from dippy.core.config import parse_config
+
+    # Need to allow cd in subshell for this test
+    config = parse_config("allow [@subshell] cd *")
+    cwd = Path.cwd()
+
+    # Subshell should have @subshell and @compound flags
+    result = analyze("(cd /tmp && pwd)", config, cwd)
+    assert result.action == "allow"
+    assert result.context_flags is not None
+    assert "@subshell" in result.context_flags
+    assert "@compound" in result.context_flags

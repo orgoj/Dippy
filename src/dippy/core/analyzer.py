@@ -80,7 +80,12 @@ def _analyze_node(
         result = _combine(decisions)
         if result.action == "allow":
             reasons = [d.reason for d in decisions]
-            return Decision("allow", ", ".join(reasons), children=decisions)
+            return Decision(
+                "allow",
+                ", ".join(reasons),
+                context_flags=pipeline_flags,
+                children=decisions,
+            )
         return result
 
     elif kind == "list":
@@ -98,7 +103,12 @@ def _analyze_node(
         result = _combine(decisions)
         if result.action == "allow":
             reasons = [d.reason for d in decisions]
-            return Decision("allow", ", ".join(reasons), children=decisions)
+            return Decision(
+                "allow",
+                ", ".join(reasons),
+                context_flags=list_flags,
+                children=decisions,
+            )
         return result
 
     elif kind == "if":
@@ -489,7 +499,9 @@ def _analyze_simple_command(
 
     # 1b. No rule matched - check config.default for fallback behavior
     if config.default == "pass":
-        return Decision("pass", "no matching rule, passing through", context_flags=context_flags)
+        return Decision(
+            "pass", "no matching rule, passing through", context_flags=context_flags
+        )
     if config.default == "allow":
         return Decision("allow", f"{base} (default allow)", context_flags=context_flags)
     # For default="ask", continue to analyzer logic below
@@ -497,7 +509,9 @@ def _analyze_simple_command(
     # 2. Handle custom wrapper commands (defined in config)
     if base in config.wrappers:
         dest, inner_cmd = _extract_wrapper_args(tokens)
-        logger.debug(f"custom wrapper '{base}' detected: dest={dest}, inner_cmd={inner_cmd!r}")
+        logger.debug(
+            f"custom wrapper '{base}' detected: dest={dest}, inner_cmd={inner_cmd!r}"
+        )
 
         if dest is None:
             # No destination - ask for clarification
@@ -507,7 +521,9 @@ def _analyze_simple_command(
         # Build context flags: wrapper name + destination
         wrapper_flags = {base, dest}
         inner_flags = context_flags | frozenset(wrapper_flags)
-        logger.debug(f"custom wrapper '{base}': adding context flags {sorted(wrapper_flags)}")
+        logger.debug(
+            f"custom wrapper '{base}': adding context flags {sorted(wrapper_flags)}"
+        )
 
         if not inner_cmd:
             # No inner command - interactive wrapper session
@@ -515,7 +531,9 @@ def _analyze_simple_command(
             return Decision("ask", f"{base} {dest}", context_flags=inner_flags)
 
         # Delegate to inner command analysis with wrapper context
-        logger.debug(f"custom wrapper '{base}': delegating to inner command {inner_cmd!r}")
+        logger.debug(
+            f"custom wrapper '{base}': delegating to inner command {inner_cmd!r}"
+        )
         return analyze(inner_cmd, config, cwd, inner_flags)
 
     # 3. Handle built-in wrapper commands (time, timeout, etc.) - analyze inner command
@@ -580,7 +598,9 @@ def _analyze_simple_command(
             inner_decision = analyze(result.inner_command, config, cwd, inner_flags)
             # Preserve outer context flags in the final decision
             if inner_decision.context_flags:
-                inner_decision.context_flags = inner_decision.context_flags | inner_flags
+                inner_decision.context_flags = (
+                    inner_decision.context_flags | inner_flags
+                )
             else:
                 inner_decision.context_flags = inner_flags
             return inner_decision
@@ -832,13 +852,30 @@ def _combine(decisions: list[Decision]) -> Decision:
 
     # deny > ask > allow > pass
     if deny_reasons:
-        return Decision("deny", ", ".join(deny_reasons), context_flags=context_flags, children=decisions)
+        return Decision(
+            "deny",
+            ", ".join(deny_reasons),
+            context_flags=context_flags,
+            children=decisions,
+        )
 
     if ask_reasons:
-        return Decision("ask", ", ".join(ask_reasons), context_flags=context_flags, children=decisions)
+        return Decision(
+            "ask",
+            ", ".join(ask_reasons),
+            context_flags=context_flags,
+            children=decisions,
+        )
 
     if allow_reasons:
-        return Decision("allow", ", ".join(allow_reasons), context_flags=context_flags, children=decisions)
+        return Decision(
+            "allow",
+            ", ".join(allow_reasons),
+            context_flags=context_flags,
+            children=decisions,
+        )
 
     # All pass
-    return Decision("pass", ", ".join(pass_reasons), context_flags=context_flags, children=decisions)
+    return Decision(
+        "pass", ", ".join(pass_reasons), context_flags=context_flags, children=decisions
+    )
