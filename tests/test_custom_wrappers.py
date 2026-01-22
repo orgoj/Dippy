@@ -244,3 +244,72 @@ class TestWrapperConfigMerge:
         merged = _merge_configs(base, overlay)
 
         assert merged.wrappers == {"wrap"}
+
+
+class TestLnavWrapperValidation:
+    """Test run-on-server wrapper with lnav command validation."""
+
+    def test_lnav_correct_format_allowed(self):
+        """Correct lnav format with -n -c SQL -c :write-table-to is allowed."""
+        config = parse_config(
+            """
+            wrapper run-on-server
+            deny [run-on-server] lnav * "Use exact format: lnav -n -c SQL -c :write-table-to - /log/file.log"
+            allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
+        """
+        )
+        cmd = 'run-on-server ferda7 \'lnav -n -c ";SELECT col" -c ":write-table-to -" /log/file.log\''
+        result = analyze(cmd, config, Path.cwd())
+        assert result.action == "allow"
+
+    def test_lnav_missing_semicolon_denied(self):
+        """lnav without semicolon prefix in SQL is denied."""
+        config = parse_config(
+            """
+            wrapper run-on-server
+            deny [run-on-server] lnav * "Use exact format: lnav -n -c SQL -c :write-table-to - /log/file.log"
+            allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
+        """
+        )
+        cmd = 'run-on-server ferda7 \'lnav -n -c "SELECT col" -c ":write-table-to -" /log/file.log\''
+        result = analyze(cmd, config, Path.cwd())
+        assert result.action == "deny"
+
+    def test_lnav_missing_n_flag_denied(self):
+        """lnav without -n flag is denied."""
+        config = parse_config(
+            """
+            wrapper run-on-server
+            deny [run-on-server] lnav * "Use exact format: lnav -n -c SQL -c :write-table-to - /log/file.log"
+            allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
+        """
+        )
+        cmd = 'run-on-server ferda7 \'lnav -c ";SELECT col" -c ":write-table-to -" /log/file.log\''
+        result = analyze(cmd, config, Path.cwd())
+        assert result.action == "deny"
+
+    def test_lnav_missing_second_c_denied(self):
+        """lnav without second -c (write-table-to) is denied."""
+        config = parse_config(
+            """
+            wrapper run-on-server
+            deny [run-on-server] lnav * "Use exact format: lnav -n -c SQL -c :write-table-to - /log/file.log"
+            allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
+        """
+        )
+        cmd = 'run-on-server ferda7 \'lnav -n -c ";SELECT col" /log/file.log\''
+        result = analyze(cmd, config, Path.cwd())
+        assert result.action == "deny"
+
+    def test_lnav_wrong_path_denied(self):
+        """lnav with path not matching /log/**log is denied."""
+        config = parse_config(
+            """
+            wrapper run-on-server
+            deny [run-on-server] lnav * "Use exact format: lnav -n -c SQL -c :write-table-to - /log/file.log"
+            allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
+        """
+        )
+        cmd = 'run-on-server ferda7 \'lnav -n -c ";SELECT col" -c ":write-table-to -" /var/log/file.log\''
+        result = analyze(cmd, config, Path.cwd())
+        assert result.action == "deny"
