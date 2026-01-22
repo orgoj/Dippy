@@ -1999,876 +1999,114 @@ class TestMcpEndToEnd:
         assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
 
 
-class TestParseConfigWebRules:
-    """Test parsing of WebSearch tool rules."""
+class TestAlias:
+    """Test alias directive for mapping wrapper scripts to canonical names."""
 
-    def test_allow_web(self):
-        cfg = parse_config("allow-web")
-        assert len(cfg.web_rules) == 1
-        assert cfg.web_rules[0].decision == "allow"
-        assert cfg.web_rules[0].pattern == "*"
-
-    def test_allow_web_with_pattern(self):
-        cfg = parse_config("allow-web *framework*")
-        assert len(cfg.web_rules) == 1
-        assert cfg.web_rules[0].decision == "allow"
-        assert cfg.web_rules[0].pattern == "*framework*"
-
-    def test_ask_web_with_pattern_and_message(self):
-        cfg = parse_config('ask-web *password* "Sensitive search"')
-        assert len(cfg.web_rules) == 1
-        assert cfg.web_rules[0].decision == "ask"
-        assert cfg.web_rules[0].pattern == "*password*"
-        assert cfg.web_rules[0].message == "Sensitive search"
-
-    def test_ask_web_pattern_only(self):
-        cfg = parse_config("ask-web *secret*")
-        assert len(cfg.web_rules) == 1
-        assert cfg.web_rules[0].decision == "ask"
-        assert cfg.web_rules[0].pattern == "*secret*"
-        assert cfg.web_rules[0].message is None
-
-    def test_deny_web_with_pattern_and_message(self):
-        cfg = parse_config('deny-web *hack* "Blocked search"')
-        assert len(cfg.web_rules) == 1
-        assert cfg.web_rules[0].decision == "deny"
-        assert cfg.web_rules[0].pattern == "*hack*"
-        assert cfg.web_rules[0].message == "Blocked search"
-
-    def test_ask_web_no_pattern_skipped(self):
-        cfg = parse_config("ask-web")
-        assert cfg.web_rules == []
-
-    def test_deny_web_no_pattern_skipped(self):
-        cfg = parse_config("deny-web")
-        assert cfg.web_rules == []
-
-    def test_web_rules_mixed_with_other_rules(self):
-        cfg = parse_config("""
-allow git *
-allow-web
-deny rm -rf /*
-ask-web *password* "Review sensitive search"
-deny-web *malware* "Blocked"
-""")
-        assert len(cfg.rules) == 2
-        assert len(cfg.web_rules) == 3
-        assert cfg.web_rules[0].decision == "allow"
-        assert cfg.web_rules[0].pattern == "*"
-        assert cfg.web_rules[1].decision == "ask"
-        assert cfg.web_rules[1].pattern == "*password*"
-        assert cfg.web_rules[2].decision == "deny"
-        assert cfg.web_rules[2].pattern == "*malware*"
-
-
-class TestMergeConfigsWebRules:
-    """Test WebSearch rules merging."""
-
-    def test_web_rules_concatenate(self):
-        base = Config(web_rules=[Rule("allow", "*")])
-        overlay = Config(web_rules=[Rule("ask", "*password*")])
-        merged = _merge_configs(base, overlay)
-        assert len(merged.web_rules) == 2
-        assert merged.web_rules[0].pattern == "*"
-        assert merged.web_rules[1].pattern == "*password*"
-
-
-class TestTagRulesWeb:
-    """Test origin tagging for WebSearch rules."""
-
-    def test_tags_web_rules_with_source_and_scope(self):
-        config = Config(web_rules=[Rule("allow", "*")])
-        tagged = _tag_rules(config, "/path/to/config", SCOPE_USER)
-        assert tagged.web_rules[0].source == "/path/to/config"
-        assert tagged.web_rules[0].scope == SCOPE_USER
-
-
-class TestMatchWeb:
-    """Test WebSearch query matching against config rules."""
-
-    def test_allow_all_matches_any_query(self):
-        cfg = Config(web_rules=[Rule("allow", "*")])
-        m = match_web("python documentation 2026", cfg)
+    def test_alias_tilde_path(self, tmp_path):
+        """alias ~/bin/gh gh + allow gh matches ~/bin/gh pr list."""
+        home = str(Path.home())
+        cfg = parse_config(f"alias ~/bin/gh gh\nallow gh")
+        assert cfg.aliases == {f"{home}/bin/gh": "gh"}
+        c = SimpleCommand(words=["~/bin/gh", "pr", "list"])
+        m = match_command(c, cfg, tmp_path)
         assert m is not None
         assert m.decision == "allow"
-        assert m.pattern == "*"
 
-    def test_pattern_match(self):
-        cfg = Config(web_rules=[Rule("ask", "*password*", message="Sensitive")])
-        m = match_web("how to reset password", cfg)
+    def test_alias_relative_path(self, tmp_path):
+        """alias ./bin/gh gh works."""
+        cfg = parse_config("alias ./bin/gh gh\nallow gh")
+        # Relative paths are stored as-is at parse time, resolved at match time
+        assert cfg.aliases == {"./bin/gh": "gh"}
+        c = SimpleCommand(words=["./bin/gh", "pr", "list"])
+        m = match_command(c, cfg, tmp_path)
         assert m is not None
-        assert m.decision == "ask"
-        assert m.message == "Sensitive"
-
-    def test_no_match_returns_none(self):
-        cfg = Config(web_rules=[Rule("ask", "*password*")])
-        m = match_web("python docs", cfg)
-        assert m is None
-
-    def test_empty_rules_returns_none(self):
-        cfg = Config(web_rules=[])
-        m = match_web("any query", cfg)
-        assert m is None
-
-    def test_last_match_wins(self):
-        cfg = Config(
-            web_rules=[
-                Rule("allow", "*"),
-                Rule("ask", "*secret*", message="Review this"),
-            ]
-        )
-        # First rule matches but second is more specific and wins
-        m = match_web("company secret policy", cfg)
-        assert m is not None
-        assert m.decision == "ask"
-        assert m.message == "Review this"
-
-    def test_deny_with_message(self):
-        cfg = Config(web_rules=[Rule("deny", "*hack*", message="Blocked")])
-        m = match_web("hacking tutorials", cfg)
-        assert m is not None
-        assert m.decision == "deny"
-        assert m.message == "Blocked"
-
-    def test_match_object_fields(self):
-        cfg = Config(
-            web_rules=[
-                Rule(
-                    "ask",
-                    "*api*",
-                    message="API search",
-                    source="/path/to/config",
-                    scope="user",
-                )
-            ]
-        )
-        m = match_web("rest api tutorial", cfg)
-        assert m.decision == "ask"
-        assert m.pattern == "*api*"
-        assert m.message == "API search"
-        assert m.source == "/path/to/config"
-        assert m.scope == "user"
-
-    def test_complex_pattern_priority(self):
-        """Test that the most specific matching rule (last) wins."""
-        cfg = Config(
-            web_rules=[
-                Rule("allow", "*"),  # allow everything
-                Rule("ask", "*sensitive*"),  # ask for sensitive
-                Rule("deny", "*password*"),  # deny password searches
-            ]
-        )
-        # Normal query - should be allowed
-        m = match_web("python docs", cfg)
         assert m.decision == "allow"
-        # Sensitive query - should ask
-        m = match_web("sensitive data handling", cfg)
-        assert m.decision == "ask"
-        # Password query - should be denied
-        m = match_web("how to store password", cfg)
-        assert m.decision == "deny"
 
+    def test_alias_bare_command(self, tmp_path):
+        """alias mygit git + allow git matches mygit status."""
+        cfg = parse_config("alias mygit git\nallow git")
+        assert cfg.aliases == {"mygit": "git"}
+        c = SimpleCommand(words=["mygit", "status"])
+        m = match_command(c, cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "allow"
 
-class TestWebEndToEnd:
-    """End-to-end tests simulating actual hook JSON input/output for WebSearch."""
+    def test_alias_preserves_args(self, tmp_path):
+        """args passed through after alias resolution."""
+        cfg = parse_config("alias mygit git\nallow git commit *")
+        c = SimpleCommand(words=["mygit", "commit", "-m", "message"])
+        m = match_command(c, cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "allow"
 
-    def test_websearch_tool_routed_correctly(self, tmp_path, monkeypatch):
-        """Test that main() routes WebSearch tools through web rules."""
-        import io
-        import json
-        import sys
-
-        # Create config with web rule
-        config_file = tmp_path / ".dippy"
-        config_file.write_text("allow-web\n")
-
-        # Simulate Claude Code hook input for WebSearch tool
-        hook_input = {
-            "tool_name": "WebSearch",
-            "tool_input": {"query": "python documentation"},
-            "hook_event_name": "PreToolUse",
-        }
-
-        # Capture stdout and mock stdin
-        captured_output = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
-        monkeypatch.setattr(sys, "stdout", captured_output)
-        monkeypatch.chdir(tmp_path)
-
-        # Reload and run
-        import importlib
-
-        monkeypatch.setattr(sys, "argv", ["dippy"])
-        import dippy.dippy
-
-        importlib.reload(dippy.dippy)
-        dippy.dippy.main()
-
-        # Verify output
-        output = json.loads(captured_output.getvalue())
-        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
-
-    def test_websearch_tool_no_match_defers(self, tmp_path, monkeypatch):
-        """Test that WebSearch tool with no matching rules returns empty (defer)."""
-        import io
-        import json
-        import sys
-
-        import dippy.core.config
-
-        # Isolate from user's ~/.dippy/config
-        monkeypatch.setattr(
-            dippy.core.config, "USER_CONFIG", tmp_path / "no-such-config"
+    def test_alias_with_rules(self, tmp_path):
+        """alias + allow/deny rules work together."""
+        cfg = parse_config(
+            "alias mygit git\nallow git status\ndeny git push"
         )
-
-        # Config with rule that won't match (empty - no web rules)
-        config_file = tmp_path / ".dippy"
-        config_file.write_text("allow git *\n")
-
-        hook_input = {
-            "tool_name": "WebSearch",
-            "tool_input": {"query": "python docs"},
-            "hook_event_name": "PreToolUse",
-        }
-
-        captured_output = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
-        monkeypatch.setattr(sys, "stdout", captured_output)
-        monkeypatch.chdir(tmp_path)
-
-        import importlib
-
-        monkeypatch.setattr(sys, "argv", ["dippy"])
-        import dippy.dippy
-
-        importlib.reload(dippy.dippy)
-        dippy.dippy.main()
-
-        output = json.loads(captured_output.getvalue())
-        assert output == {}  # Empty = defer to Claude's default
-
-    def test_websearch_tool_deny_blocks(self, tmp_path, monkeypatch):
-        """Test that deny-web rule actually blocks the search."""
-        import io
-        import json
-        import sys
-
-        config_file = tmp_path / ".dippy"
-        config_file.write_text('deny-web *hack* "Blocked search"\n')
-
-        hook_input = {
-            "tool_name": "WebSearch",
-            "tool_input": {"query": "hacking tutorials"},
-            "hook_event_name": "PreToolUse",
-        }
-
-        captured_output = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
-        monkeypatch.setattr(sys, "stdout", captured_output)
-        monkeypatch.chdir(tmp_path)
-
-        import importlib
-
-        monkeypatch.setattr(sys, "argv", ["dippy"])
-        import dippy.dippy
-
-        importlib.reload(dippy.dippy)
-        dippy.dippy.main()
-
-        output = json.loads(captured_output.getvalue())
-        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "deny"
-        assert (
-            "Blocked search" in output["hookSpecificOutput"]["permissionDecisionReason"]
-        )
-
-    def test_bash_tool_not_affected_by_web_rules(self, tmp_path, monkeypatch):
-        """Test that Bash commands still work and aren't affected by web rules."""
-        import io
-        import json
-        import sys
-
-        config_file = tmp_path / ".dippy"
-        config_file.write_text("deny-web *\n")  # Deny all web searches
-
-        # Bash tool, not WebSearch
-        hook_input = {
-            "tool_name": "Bash",
-            "tool_input": {"command": "ls"},
-            "hook_event_name": "PreToolUse",
-        }
-
-        captured_output = io.StringIO()
-        monkeypatch.setattr(sys, "stdin", io.StringIO(json.dumps(hook_input)))
-        monkeypatch.setattr(sys, "stdout", captured_output)
-        monkeypatch.chdir(tmp_path)
-
-        import importlib
-
-        monkeypatch.setattr(sys, "argv", ["dippy"])
-        import dippy.dippy
-
-        importlib.reload(dippy.dippy)
-        dippy.dippy.main()
-
-        output = json.loads(captured_output.getvalue())
-        # ls is safe, should be approved (not affected by web deny rule)
-        assert output.get("hookSpecificOutput", {}).get("permissionDecision") == "allow"
-
-
-class TestParseConfigAfterWebRules:
-    """Test parsing of after-web rules for PostToolUse."""
-
-    def test_after_web_with_message(self):
-        cfg = parse_config('after-web *api* "Check API version compatibility"')
-        assert len(cfg.after_web_rules) == 1
-        assert cfg.after_web_rules[0].decision == "after"
-        assert cfg.after_web_rules[0].pattern == "*api*"
-        assert cfg.after_web_rules[0].message == "Check API version compatibility"
-
-    def test_after_web_pattern_only(self):
-        cfg = parse_config("after-web *docs*")
-        assert len(cfg.after_web_rules) == 1
-        assert cfg.after_web_rules[0].pattern == "*docs*"
-        assert cfg.after_web_rules[0].message is None
-
-    def test_after_web_no_pattern_skipped(self):
-        cfg = parse_config("after-web")
-        assert cfg.after_web_rules == []
-
-    def test_after_web_mixed_with_other_rules(self):
-        cfg = parse_config("""
-allow-web
-after-web *api* "Check version"
-deny-web *hack*
-""")
-        assert len(cfg.web_rules) == 2
-        assert len(cfg.after_web_rules) == 1
-
-
-class TestMergeConfigsAfterWebRules:
-    """Test after-web rules merging."""
-
-    def test_after_web_rules_concatenate(self):
-        base = Config(after_web_rules=[Rule("after", "*api*", message="msg1")])
-        overlay = Config(after_web_rules=[Rule("after", "*docs*", message="msg2")])
-        merged = _merge_configs(base, overlay)
-        assert len(merged.after_web_rules) == 2
-
-
-class TestTagRulesAfterWeb:
-    """Test origin tagging for after-web rules."""
-
-    def test_tags_after_web_rules_with_source_and_scope(self):
-        config = Config(after_web_rules=[Rule("after", "*api*")])
-        tagged = _tag_rules(config, "/path/to/config", SCOPE_USER)
-        assert tagged.after_web_rules[0].source == "/path/to/config"
-        assert tagged.after_web_rules[0].scope == SCOPE_USER
-
-
-class TestMatchAfterWeb:
-    """Test after-web rule matching for PostToolUse feedback."""
-
-    def test_basic_match(self):
-        cfg = Config(after_web_rules=[Rule("after", "*api*", message="Check version")])
-        result = match_after_web("rest api tutorial", cfg)
-        assert result == "Check version"
-
-    def test_no_match(self):
-        cfg = Config(after_web_rules=[Rule("after", "*api*", message="Check version")])
-        result = match_after_web("python basics", cfg)
-        assert result is None
-
-    def test_last_match_wins(self):
-        cfg = Config(
-            after_web_rules=[
-                Rule("after", "*", message="General feedback"),
-                Rule("after", "*api*", message="API-specific feedback"),
-            ]
-        )
-        result = match_after_web("rest api docs", cfg)
-        assert result == "API-specific feedback"
-
-    def test_pattern_only_is_silent(self):
-        cfg = Config(after_web_rules=[Rule("after", "*docs*")])
-        result = match_after_web("python docs", cfg)
-        assert result == ""
-
-    def test_empty_message_is_silent(self):
-        cfg = Config(after_web_rules=[Rule("after", "*docs*", message="")])
-        result = match_after_web("python docs", cfg)
-        assert result == ""
-
-
-class TestIncludeDirective:
-    """Test include directive functionality with proper isolation."""
-
-    def test_include_single_file(self, tmp_path):
-        # Create included file
-        included = tmp_path / "included.conf"
-        included.write_text("allow ls\nallow pwd\n")
-
-        # Create main config with include
-        config_file = tmp_path / "config"
-        config_file.write_text(f"include {included}\nallow ps\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 3
-        assert cfg.rules[0].pattern == "ls"
-        assert cfg.rules[1].pattern == "pwd"
-        assert cfg.rules[2].pattern == "ps"
-
-    def test_include_glob_pattern(self, tmp_path):
-        # Create multiple files to include
-        (tmp_path / "rules-1.conf").write_text("allow ls\n")
-        (tmp_path / "rules-2.conf").write_text("allow pwd\n")
-        (tmp_path / "rules-3.conf").write_text("allow ps\n")
-
-        # Create main config with glob pattern
-        config_file = tmp_path / "config"
-        config_file.write_text("include rules-*.conf\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        # Files are included in sorted order
-        assert len(cfg.rules) == 3
-        patterns = [r.pattern for r in cfg.rules]
-        assert "ls" in patterns
-        assert "pwd" in patterns
-        assert "ps" in patterns
-
-    def test_include_home_expansion(self, tmp_path, monkeypatch):
-        # CRITICAL: Mock HOME to tmp_path to avoid touching real ~/.dippy/
-        monkeypatch.setenv("HOME", str(tmp_path))
-
-        # Create included file in mocked home
-        home_config_dir = tmp_path / ".dippy"
-        home_config_dir.mkdir()
-        included = home_config_dir / "shared.conf"
-        included.write_text("allow ls\n")
-
-        # Create main config with ~ expansion
-        config_file = tmp_path / "config"
-        config_file.write_text("include ~/.dippy/shared.conf\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 1
-        assert cfg.rules[0].pattern == "ls"
-
-    def test_include_relative_path(self, tmp_path):
-        # Create subdirectory with included file
-        sub_dir = tmp_path / "conf.d"
-        sub_dir.mkdir()
-        included = sub_dir / "rules.conf"
-        included.write_text("allow ls\n")
-
-        # Create main config with relative include
-        config_file = tmp_path / "config"
-        config_file.write_text("include conf.d/rules.conf\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 1
-        assert cfg.rules[0].pattern == "ls"
-
-    def test_include_recursive(self, tmp_path):
-        # Create chain: a includes b which includes c
-        file_c = tmp_path / "c.conf"
-        file_c.write_text("allow ps\n")
-
-        file_b = tmp_path / "b.conf"
-        file_b.write_text(f"allow pwd\ninclude {file_c}\n")
-
-        file_a = tmp_path / "a.conf"
-        file_a.write_text(f"allow ls\ninclude {file_b}\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(file_a)
-        assert len(cfg.rules) == 3
-        assert cfg.rules[0].pattern == "ls"
-        assert cfg.rules[1].pattern == "pwd"
-        assert cfg.rules[2].pattern == "ps"
-
-    def test_include_circular_detection(self, tmp_path):
-        # Create circular include: a includes b which includes a
-        file_a = tmp_path / "a.conf"
-        file_b = tmp_path / "b.conf"
-
-        file_a.write_text(f"include {file_b}\n")
-        file_b.write_text(f"include {file_a}\n")
-
-        # Should raise ConfigError
-        from dippy.core.config import ConfigError, _load_config_file
-
-        with pytest.raises(ConfigError, match="circular include"):
-            _load_config_file(file_a)
-
-    def test_include_missing_file_warning(self, tmp_path, caplog):
-        # Create config with include that matches no files
-        config_file = tmp_path / "config"
-        config_file.write_text("include nonexistent-*.conf\nallow ls\n")
-
-        # Parse and verify warning is logged
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        # Should still have the allow rule
-        assert len(cfg.rules) == 1
-        assert cfg.rules[0].pattern == "ls"
-        # Check warning was logged
-        assert "no files match" in caplog.text
-
-    def test_include_empty_pattern_warning(self, tmp_path, caplog):
-        # Create config with empty include pattern
-        config_file = tmp_path / "config"
-        config_file.write_text("include\nallow ls\n")
-
-        # Parse and verify warning is logged
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 1
-        assert cfg.rules[0].pattern == "ls"
-        assert "empty include pattern" in caplog.text
-
-    def test_include_precedence(self, tmp_path):
-        # Test last-match-wins across includes
-        file_1 = tmp_path / "1.conf"
-        file_1.write_text("allow git *\n")
-
-        file_2 = tmp_path / "2.conf"
-        file_2.write_text("deny git push *\n")
-
-        config_file = tmp_path / "config"
-        config_file.write_text(f"include {file_1}\ninclude {file_2}\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 2
-        # Last rule should be deny git push
-        assert cfg.rules[1].decision == "deny"
-        assert cfg.rules[1].pattern == "git push *"
-
-    def test_include_relative_to_including_file(self, tmp_path):
-        # Test that included file's includes resolve relative to ITS directory
-        # Structure:
-        #   tmp_path/
-        #     config           (includes subdir/a.conf)
-        #     subdir/
-        #       a.conf         (includes b.conf - relative to subdir/)
-        #       b.conf
-
-        # Create nested structure
-        subdir = tmp_path / "subdir"
-        subdir.mkdir()
-
-        # b.conf in subdir
-        (subdir / "b.conf").write_text("allow ps\n")
-
-        # a.conf in subdir includes b.conf (relative to subdir)
-        (subdir / "a.conf").write_text("allow pwd\ninclude b.conf\n")
-
-        # Main config includes subdir/a.conf
-        config_file = tmp_path / "config"
-        config_file.write_text("allow ls\ninclude subdir/a.conf\n")
-
-        # Parse and verify
-        from dippy.core.config import _load_config_file
-
-        cfg = _load_config_file(config_file)
-        assert len(cfg.rules) == 3
-        assert cfg.rules[0].pattern == "ls"
-        assert cfg.rules[1].pattern == "pwd"
-        assert cfg.rules[2].pattern == "ps"
-
-    def test_include_isolation_safety(self, tmp_path, monkeypatch):
-        # CRITICAL: Verify no side effects on live config
-        monkeypatch.setenv("HOME", str(tmp_path))
-
-        # Create test config
-        config_file = tmp_path / "config"
-        config_file.write_text("allow ls\n")
-
-        # Parse
-        from dippy.core.config import _load_config_file
-
-        _load_config_file(config_file)
-
-        # Verify real home config dir was not touched
-        # Since we mocked HOME, check that only tmp_path was used
-        assert str(tmp_path) == os.environ["HOME"]
-
-
-class TestFinalConfig:
-    """Tests for 'set final' config file support."""
-
-    def test_parse_set_final(self):
-        """set final ~/.dippy/final parses to Path."""
-        cfg = parse_config("set final ~/.dippy/final")
-        assert cfg.final == Path.home() / ".dippy" / "final"
-
-    def test_parse_set_final_missing_value(self):
-        """set final (no path) raises ValueError and is skipped."""
-        cfg = parse_config("set final")
-        assert cfg.final is None  # Invalid line skipped
-
-    def test_config_final_default_none(self):
-        """Config().final is None by default."""
-        cfg = Config()
-        assert cfg.final is None
-
-    def test_merge_configs_final_overlay_wins(self):
-        """overlay.final overrides base.final."""
-        base = Config(final=Path("/base/final"))
-        overlay = Config(final=Path("/overlay/final"))
-        merged = _merge_configs(base, overlay)
-        assert merged.final == Path("/overlay/final")
-
-    def test_merge_configs_final_base_preserved_if_overlay_none(self):
-        """Base final is preserved if overlay is None."""
-        base = Config(final=Path("/base/final"))
-        overlay = Config()
-        merged = _merge_configs(base, overlay)
-        assert merged.final == Path("/base/final")
-
-    def test_load_config_no_final(self, tmp_path, monkeypatch):
-        """Without 'set final', no final loaded."""
-        user_cfg = tmp_path / "user.cfg"
-        user_cfg.write_text("allow fictcmd123")
-        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
-        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
-
-        config = load_config(tmp_path)
-        assert config.final is None
-        assert len(config.rules) == 1
-        assert config.rules[0].pattern == "fictcmd123"
-
-    def test_load_config_final_loaded_last(self, tmp_path, monkeypatch):
-        """Final rules override all others (last match wins)."""
-        # Setup user config with 'set final'
-        user_cfg = tmp_path / "user.cfg"
-        final_cfg = tmp_path / "final.cfg"
-        user_cfg.write_text(f"allow fictcmd456\nset final {final_cfg}")
-        final_cfg.write_text("deny fictcmd456")
-        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
-        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
-
-        config = load_config(tmp_path)
-        # Final rules are loaded last
-        assert len(config.rules) == 2
-        assert config.rules[0].pattern == "fictcmd456"
-        assert config.rules[0].decision == "allow"
-        assert config.rules[1].pattern == "fictcmd456"
-        assert config.rules[1].decision == "deny"
-
-    def test_load_config_final_missing_warning(self, tmp_path, monkeypatch, caplog):
-        """Missing final file logs warning, continues."""
+        # Allow status
+        c1 = SimpleCommand(words=["mygit", "status"])
+        m1 = match_command(c1, cfg, tmp_path)
+        assert m1 is not None
+        assert m1.decision == "allow"
+        # Deny push
+        c2 = SimpleCommand(words=["mygit", "push"])
+        m2 = match_command(c2, cfg, tmp_path)
+        assert m2 is not None
+        assert m2.decision == "deny"
+
+    def test_alias_missing_target(self, caplog):
+        """alias foo warns and skips."""
         import logging
 
-        user_cfg = tmp_path / "user.cfg"
-        user_cfg.write_text(f"allow fictcmd789\nset final {tmp_path / 'nonexistent'}")
-        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
-        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
-
         with caplog.at_level(logging.WARNING):
-            config = load_config(tmp_path)
+            cfg = parse_config("alias foo")
+        assert cfg.aliases == {}
+        assert "requires exactly two arguments" in caplog.text
 
-        # Config loaded successfully
-        assert len(config.rules) == 1
-        assert config.rules[0].pattern == "fictcmd789"
-        # Warning logged
-        assert any(
-            "Final config not found" in record.message for record in caplog.records
-        )
-
-    @pytest.mark.skipif(os.name == "nt", reason="Unix permissions only")
-    def test_load_config_final_permission_error(self, tmp_path, monkeypatch):
-        """Permission error on final file raises ConfigError."""
-        user_cfg = tmp_path / "user.cfg"
-        final_cfg = tmp_path / "final.cfg"
-        final_cfg.write_text("deny *")
-        final_cfg.chmod(0o000)
-        user_cfg.write_text(f"allow fictcmderror\nset final {final_cfg}")
-        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
-        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
-
-        try:
-            with pytest.raises(ConfigError, match="permission denied"):
-                load_config(tmp_path)
-        finally:
-            final_cfg.chmod(stat.S_IRUSR | stat.S_IWUSR)
-
-    def test_load_config_final_scope_tagging(self, tmp_path, monkeypatch):
-        """Final config rules are tagged with SCOPE_FINAL."""
-        from dippy.core.config import SCOPE_FINAL
-
-        user_cfg = tmp_path / "user.cfg"
-        final_cfg = tmp_path / "final.cfg"
-        user_cfg.write_text(f"allow fictcmdscope\nset final {final_cfg}")
-        final_cfg.write_text("deny fictcmdscope")
-        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
-        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
-
-        config = load_config(tmp_path)
-        # First rule is from user config
-        assert config.rules[0].scope == SCOPE_USER
-        # Second rule is from final config
-        assert config.rules[1].scope == SCOPE_FINAL
-        assert config.rules[1].source == str(final_cfg)
-
-
-class TestMergeConfigsMissingFields:
-    """Regression tests: all Config fields must merge correctly."""
-
-    def test_log_rotate_max_days_overlay_wins(self):
-        """log_rotate_max_days from overlay replaces base value."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(log_rotate_max_days=30)
-        overlay = Config(log_rotate_max_days=7)
-        merged = _merge_configs(base, overlay)
-        assert merged.log_rotate_max_days == 7
-
-    def test_log_rotate_max_days_default_preserves_base(self):
-        """log_rotate_max_days with default (30) in overlay preserves base."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(log_rotate_max_days=14)
-        overlay = Config()  # default is 30
-        merged = _merge_configs(base, overlay)
-        assert merged.log_rotate_max_days == 14
-
-    def test_log_rotate_max_days_zero_disabled(self):
-        """log_rotate_max_days=0 (disabled) in overlay must take effect."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(log_rotate_max_days=30)
-        overlay = Config(log_rotate_max_days=0)
-        merged = _merge_configs(base, overlay)
-        assert merged.log_rotate_max_days == 0
-
-    def test_log_hook_approvals_overlay_false_wins(self):
-        """log_hook_approvals=False in overlay replaces base True."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(log_hook_approvals=True)
-        overlay = Config(log_hook_approvals=False)
-        merged = _merge_configs(base, overlay)
-        assert merged.log_hook_approvals is False
-
-    def test_log_hook_approvals_base_preserved_when_overlay_default(self):
-        """log_hook_approvals default (True) in overlay preserves base False."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(log_hook_approvals=False)
-        overlay = Config()  # default is True
-        merged = _merge_configs(base, overlay)
-        assert merged.log_hook_approvals is False
-
-    def test_aliases_accumulate(self):
-        """aliases from base and overlay are merged (overlay wins on conflict)."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(aliases={"~/bin/gh": "gh", "~/bin/git": "git"})
-        overlay = Config(aliases={"~/bin/docker": "docker"})
-        merged = _merge_configs(base, overlay)
-        assert merged.aliases == {
-            "~/bin/gh": "gh",
-            "~/bin/git": "git",
-            "~/bin/docker": "docker",
-        }
-
-    def test_aliases_overlay_overrides_base_on_conflict(self):
-        """overlay alias overrides base alias for same key."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(aliases={"~/bin/gh": "old_gh"})
-        overlay = Config(aliases={"~/bin/gh": "gh"})
-        merged = _merge_configs(base, overlay)
-        assert merged.aliases["~/bin/gh"] == "gh"
-
-    def test_aliases_empty_overlay_preserves_base(self):
-        """Empty overlay aliases preserves base aliases."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(aliases={"~/bin/gh": "gh"})
-        overlay = Config()  # no aliases
-        merged = _merge_configs(base, overlay)
-        assert merged.aliases == {"~/bin/gh": "gh"}
-
-
-class TestPythonModuleDirectives:
-    """Tests for python-allow-module and python-deny-module config directives."""
-
-    def test_parse_python_allow_module(self, tmp_path):
-        """python-allow-module adds modules to allow list."""
-        from dippy.core.config import _load_config_file
-
-        config_file = tmp_path / "config"
-        config_file.write_text(
-            "python-allow-module numpy\npython-allow-module pandas\n"
-        )
-        config = _load_config_file(config_file)
-        assert config.python_allow_modules == ["numpy", "pandas"]
-
-    def test_parse_python_deny_module(self, tmp_path):
-        """python-deny-module adds modules to deny list."""
-        from dippy.core.config import _load_config_file
-
-        config_file = tmp_path / "config"
-        config_file.write_text("python-deny-module requests\n")
-        config = _load_config_file(config_file)
-        assert config.python_deny_modules == ["requests"]
-
-    def test_python_module_merge_accumulates(self):
-        """Python module lists accumulate across config layers."""
-        from dippy.core.config import Config, _merge_configs
-
-        base = Config(python_allow_modules=["numpy"])
-        overlay = Config(python_allow_modules=["pandas"])
-        merged = _merge_configs(base, overlay)
-        assert merged.python_allow_modules == ["numpy", "pandas"]
-
-    def test_python_allow_module_dotted_name(self, tmp_path):
-        """Dotted module names are valid."""
-        from dippy.core.config import _load_config_file
-
-        config_file = tmp_path / "config"
-        config_file.write_text("python-allow-module http.server\n")
-        config = _load_config_file(config_file)
-        assert config.python_allow_modules == ["http.server"]
-
-    def test_python_allow_module_invalid_name(self, tmp_path, caplog):
-        """Invalid module names are rejected with a warning."""
+    def test_alias_too_many_args(self, caplog):
+        """alias foo bar baz warns and skips."""
         import logging
 
-        from dippy.core.config import _load_config_file
-
-        config_file = tmp_path / "config"
-        config_file.write_text("python-allow-module 123invalid\n")
         with caplog.at_level(logging.WARNING):
-            config = _load_config_file(config_file)
-        assert config.python_allow_modules == []
-        assert "invalid" in caplog.text.lower()
+            cfg = parse_config("alias foo bar baz")
+        assert cfg.aliases == {}
+        assert "requires exactly two arguments" in caplog.text
 
-    def test_python_allow_module_inline_comment(self, tmp_path):
-        """Inline comments are stripped from module names."""
-        from dippy.core.config import _load_config_file
+    def test_alias_redefined(self, caplog):
+        """second alias foo x overwrites first, logs warning."""
+        import logging
 
-        config_file = tmp_path / "config"
-        config_file.write_text("python-allow-module numpy # data science\n")
-        config = _load_config_file(config_file)
-        assert config.python_allow_modules == ["numpy"]
+        with caplog.at_level(logging.WARNING):
+            cfg = parse_config("alias foo bar\nalias foo baz")
+        assert cfg.aliases == {"foo": "baz"}
+        assert "redefined" in caplog.text
+
+    def test_alias_merge(self):
+        """later config overrides earlier alias."""
+        base = Config(aliases={"foo": "bar", "baz": "qux"})
+        overlay = Config(aliases={"foo": "override"})
+        merged = _merge_configs(base, overlay)
+        assert merged.aliases == {"foo": "override", "baz": "qux"}
+
+    def test_alias_with_after_rules(self, tmp_path):
+        """alias works with after rules too."""
+        cfg = parse_config('alias mygit git\nafter git push * "Pushed!"')
+        result = match_after(["mygit", "push", "origin", "main"], cfg, tmp_path)
+        assert result == "Pushed!"
+
+    def test_alias_no_match_without_rule(self, tmp_path):
+        """alias alone doesn't create implicit allow."""
+        cfg = parse_config("alias mygit git")
+        c = SimpleCommand(words=["mygit", "status"])
+        m = match_command(c, cfg, tmp_path)
+        assert m is None
+
+    def test_alias_absolute_path(self, tmp_path):
+        """alias /usr/local/bin/gh gh works."""
+        cfg = parse_config("alias /usr/local/bin/gh gh\nallow gh")
+        assert cfg.aliases == {"/usr/local/bin/gh": "gh"}
+        c = SimpleCommand(words=["/usr/local/bin/gh", "pr", "list"])
+        m = match_command(c, cfg, tmp_path)
+        assert m is not None
+        assert m.decision == "allow"

@@ -115,31 +115,10 @@ class Config:
     after_mcp_rules: list[Rule] = field(default_factory=list)
     """After-MCP rules for PostToolUse feedback on MCP tools."""
 
-    edit_rules: list[Rule] = field(default_factory=list)
-    """Edit rules for Write/Edit/MultiEdit tools."""
-
-    read_rules: list[Rule] = field(default_factory=list)
-    """Read rules for Read tool."""
-
-    web_rules: list[Rule] = field(default_factory=list)
-    """WebSearch tool rules in load order."""
-
-    after_web_rules: list[Rule] = field(default_factory=list)
-    """After-web rules for PostToolUse feedback on WebSearch."""
-
-    wrappers: dict[str, WrapperInfo] = field(default_factory=dict)
-    """Custom wrapper commands mapping name to info."""
-
     aliases: dict[str, str] = field(default_factory=dict)
     """Command aliases mapping source to target (e.g., ~/bin/gh -> gh)."""
 
-    python_allow_modules: list[str] = field(default_factory=list)
-    """Extra modules to treat as safe for Python static analysis."""
-
-    python_deny_modules: list[str] = field(default_factory=list)
-    """Extra modules to treat as dangerous for Python static analysis."""
-
-    default: str = "ask"  # 'allow' | 'ask' | 'pass'
+    default: str = "ask"  # 'allow' | 'ask'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
@@ -213,16 +192,8 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         after_rules=base.after_rules + overlay.after_rules,
         mcp_rules=base.mcp_rules + overlay.mcp_rules,
         after_mcp_rules=base.after_mcp_rules + overlay.after_mcp_rules,
-        edit_rules=base.edit_rules + overlay.edit_rules,
-        read_rules=base.read_rules + overlay.read_rules,
-        web_rules=base.web_rules + overlay.web_rules,
-        after_web_rules=base.after_web_rules + overlay.after_web_rules,
-        # Dicts accumulate (merge dicts)
-        wrappers={**base.wrappers, **overlay.wrappers},
+        # Aliases: overlay wins for conflicting keys
         aliases={**base.aliases, **overlay.aliases},
-        # Python module lists accumulate
-        python_allow_modules=base.python_allow_modules + overlay.python_allow_modules,
-        python_deny_modules=base.python_deny_modules + overlay.python_deny_modules,
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
@@ -587,13 +558,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     after_rules: list[Rule] = []
     mcp_rules: list[Rule] = []
     after_mcp_rules: list[Rule] = []
-    edit_rules: list[Rule] = []
-    read_rules: list[Rule] = []
-    web_rules: list[Rule] = []
-    after_web_rules: list[Rule] = []
-    wrappers: dict[str, WrapperInfo] = {}
-    python_allow_modules: list[str] = []
-    python_deny_modules: list[str] = []
+    aliases: dict[str, str] = {}
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -721,141 +686,18 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 pattern, message = _extract_message(rest)
                 after_mcp_rules.append(Rule("after", pattern, message=message))
 
-            elif directive == "allow-edit":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                edit_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
-
-            elif directive == "ask-edit":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                edit_rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
-                )
-
-            elif directive == "deny-edit":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                edit_rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
-                )
-
-            elif directive == "allow-read":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                read_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
-
-            elif directive == "ask-read":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                read_rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
-                )
-
-            elif directive == "deny-read":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                read_rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
-                )
-
-            elif directive == "allow-web":
-                pattern = rest if rest else "*"
-                web_rules.append(Rule("allow", pattern))
-
-            elif directive == "ask-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                web_rules.append(Rule("ask", pattern, message=message))
-
-            elif directive == "deny-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                web_rules.append(Rule("deny", pattern, message=message))
-
-            elif directive == "after-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                after_web_rules.append(Rule("after", pattern, message=message))
-
-            elif directive == "wrapper":
-                if not rest:
-                    raise ValueError("requires a command name")
+            elif directive == "alias":
                 parts = rest.split()
-                wrapper_name = parts[0]
-
-                if wrapper_name.startswith("-"):
-                    raise ValueError(
-                        f"wrapper name cannot start with '-': {wrapper_name}"
-                    )
-                if wrapper_name in wrappers:
+                if len(parts) != 2:
+                    raise ValueError("requires exactly two arguments: source target")
+                alias_source, alias_target = parts
+                expanded_source = _expand_pattern_tildes(alias_source)
+                if expanded_source in aliases:
                     logging.warning(
-                        f"{prefix}line {lineno}: duplicate wrapper definition: {wrapper_name}"
+                        f"{prefix}line {lineno}: alias '{alias_source}' redefined, "
+                        "overwriting"
                     )
-
-                # Parse optional flags: --cmd TRIGGER, --flag FLAG, --context FLAG, --context-first
-                # OR old positional syntax: wrapper NAME TRIGGER TARGET_FLAG
-                trigger = None
-                target_flag = None
-                context_flag = None
-                context_first = False
-                new_syntax_used = False
-                i = 1
-                while i < len(parts):
-                    if parts[i] == "--cmd" and i + 1 < len(parts):
-                        new_syntax_used = True
-                        trigger = parts[i + 1]
-                        i += 2
-                    elif parts[i] == "--flag" and i + 1 < len(parts):
-                        new_syntax_used = True
-                        target_flag = parts[i + 1]
-                        i += 2
-                    elif parts[i] == "--context" and i + 1 < len(parts):
-                        new_syntax_used = True
-                        context_flag = parts[i + 1]
-                        i += 2
-                    elif parts[i] == "--context-first":
-                        new_syntax_used = True
-                        context_first = True
-                        i += 1
-                    else:
-                        # Unknown/extra args are ignored (for future extensibility)
-                        i += 1
-
-                # Support old positional syntax for backward compat:
-                # wrapper NAME TRIGGER TARGET_FLAG
-                # If no --cmd/--flag flags were used, try positional parsing
-                if trigger is None and target_flag is None and len(parts) >= 2:
-                    # Check if we have the old syntax: wrapper NAME TRIGGER [TARGET_FLAG]
-                    # TRIGGER is a word that doesn't start with "-"
-                    # TARGET_FLAG starts with "-"
-                    j = 1
-                    if j < len(parts) and not parts[j].startswith("-"):
-                        trigger = parts[j]
-                        j += 1
-                    if j < len(parts) and parts[j].startswith("-"):
-                        target_flag = parts[j]
-
-                # Old syntax (no --cmd/--flag/--context/--context-first used)
-                # always includes destination in context for backward compat.
-                # Existing configs expect destination in wrapper_context.
-                if not new_syntax_used:
-                    context_first = True
-
-                wrappers[wrapper_name] = WrapperInfo(
-                    name=wrapper_name,
-                    trigger=trigger,
-                    target_flag=target_flag,
-                    context_flag=context_flag,
-                    context_first=context_first,
-                )
+                aliases[expanded_source] = alias_target
 
             elif directive == "set":
                 _apply_setting(settings, rest)
@@ -878,13 +720,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         after_rules=after_rules,
         mcp_rules=mcp_rules,
         after_mcp_rules=after_mcp_rules,
-        edit_rules=edit_rules,
-        read_rules=read_rules,
-        web_rules=web_rules,
-        after_web_rules=after_web_rules,
-        wrappers=wrappers,
-        python_allow_modules=python_allow_modules,
-        python_deny_modules=python_deny_modules,
+        aliases=aliases,
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
@@ -1284,27 +1120,24 @@ def _match_option_rule(rule: Rule, words: list[str]) -> bool:
     return bool(items_set.intersection(remaining_words))
 
 
-def _match_words(
-    words: list[str],
-    config: Config,
-    cwd: Path,
-    context_flags: frozenset[str] | None = None,
-    *,
-    remote: bool = False,
-) -> Match | None:
-    """Match command words against rules. Returns last matching rule.
+def _resolve_alias(word: str, config: Config, cwd: Path) -> str:
+    """Resolve command word through aliases."""
+    normalized_word = _normalize_token(word, cwd)
+    for alias_source, alias_target in config.aliases.items():
+        normalized_source = _normalize_token(alias_source, cwd)
+        if normalized_word == normalized_source:
+            return alias_target
+    return word
 
-    Args:
-        words: Command words to match.
-        config: Configuration with rules.
-        cwd: Current working directory for path resolution.
-        context_flags: Optional set of active context flags (e.g., {"@subshell"}).
-            Rules with required_flags only match if all flags are present.
-            Rules with negated_flags only match if NONE of those flags are present.
-        remote: If True, paths are NOT expanded against cwd (container/remote context).
-    """
-    # When remote, don't expand paths - match against literal words
-    normalized_cmd = " ".join(words) if remote else _normalize_words(words, cwd)
+
+def _match_words(words: list[str], config: Config, cwd: Path) -> Match | None:
+    """Match command words against rules. Returns last matching rule."""
+    if words:
+        resolved_first = _resolve_alias(words[0], config, cwd)
+        resolved_words = [resolved_first] + words[1:]
+    else:
+        resolved_words = words
+    normalized_cmd = _normalize_words(resolved_words, cwd)
     result: Match | None = None
     active_flags = context_flags or frozenset()
 
@@ -1534,7 +1367,12 @@ def match_after(words: list[str], config: Config, cwd: Path) -> str | None:
         Message string if a rule with message matches, empty string if silent
         rule matches, None if no rule matches.
     """
-    normalized_cmd = _normalize_words(words, cwd)
+    if words:
+        resolved_first = _resolve_alias(words[0], config, cwd)
+        resolved_words = [resolved_first] + words[1:]
+    else:
+        resolved_words = words
+    normalized_cmd = _normalize_words(resolved_words, cwd)
     result: str | None = None
     for rule in config.after_rules:
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
