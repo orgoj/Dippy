@@ -11,6 +11,89 @@
 
 Dippy's config system extends the built-in approval rules. Line-based, glob patterns, last-match-wins.
 
+## CLI Mode
+
+Dippy can validate commands from the command line without running as a hook. This is useful for scripting, testing rules, or integrating with other AI tools.
+
+### Usage
+
+```bash
+# Validate a command
+dippy --cmd 'rm -rf /'
+
+# JSON output
+dippy --cmd 'ls -la' --json
+
+# Read from stdin
+echo 'git status' | dippy --stdin
+
+# Specify working directory
+dippy --cmd 'make build' --cwd /path/to/project
+
+# Use custom config file
+dippy --cmd 'docker run nginx' --config ~/.dippy/strict.conf
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--cmd COMMAND` | Command to validate |
+| `--stdin` | Read command from stdin (plain text, not JSON) |
+| `--cwd PATH` | Working directory (default: current) |
+| `--json` | Output as JSON instead of text |
+| `--config PATH` | Config file override (highest priority) |
+
+### Exit Codes
+
+| Code | Decision | Meaning |
+|------|----------|---------|
+| `0` | allow | Command is safe |
+| `1` | deny | Blocked by rule |
+| `2` | ask | Needs user approval |
+
+### Output Formats
+
+**Text (default):**
+```
+allow: ls
+deny: rm: dangerous operation
+ask: docker run: needs approval
+```
+
+**JSON (`--json`):**
+```json
+{"decision": "allow", "reason": "ls"}
+{"decision": "deny", "reason": "rm: dangerous operation"}
+{"decision": "ask", "reason": "docker run: needs approval"}
+```
+
+### Examples
+
+**Scripting:**
+```bash
+if dippy --cmd "$cmd"; then
+    eval "$cmd"
+else
+    echo "Command blocked by Dippy"
+fi
+```
+
+**Batch validation:**
+```bash
+while read cmd; do
+    result=$(dippy --cmd "$cmd" --json)
+    echo "$cmd → $(echo "$result" | jq -r .decision)"
+done < commands.txt
+```
+
+**Testing config rules:**
+```bash
+# Test if a rule works as expected
+dippy --cmd 'docker run --privileged nginx' --config .dippy
+# → ask: docker run: needs approval
+```
+
 ## File Locations
 
 | Location          | Purpose          |
@@ -18,6 +101,7 @@ Dippy's config system extends the built-in approval rules. Line-based, glob patt
 | `~/.dippy/config` | User global      |
 | `.dippy`          | Project-specific |
 | `$DIPPY_CONFIG`   | Env override     |
+| `--config PATH`   | CLI mode only    |
 
 **Load order** (last match wins):
 1. `~/.dippy/config` - user defaults

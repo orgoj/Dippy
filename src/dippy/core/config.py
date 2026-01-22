@@ -190,7 +190,6 @@ def _expand_includes(
         ConfigError: On circular includes or I/O errors
     """
     import glob
-    import logging
 
     # Track this file
     included_files.add(current_file.resolve())
@@ -315,8 +314,13 @@ def _rotate_logs(config: Config) -> None:
                 old_log.unlink()
 
 
-def load_config(cwd: Path) -> Config:
+def load_config(cwd: Path, config_path: str | None = None) -> Config:
     """Load config from ~/.dippy/config, .dippy, and $DIPPY_CONFIG.
+
+    Args:
+        cwd: Current working directory (used to find project config).
+        config_path: Optional explicit config file path (highest priority,
+                     overrides $DIPPY_CONFIG).
 
     Raises ConfigError if any config file exists but cannot be read or parsed.
     Missing files are silently skipped.
@@ -339,18 +343,23 @@ def load_config(cwd: Path) -> Config:
         project_config = _tag_rules(project_config, str(project_path), SCOPE_PROJECT)
         config = _merge_configs(config, project_config)
 
-    # 3. Env override (highest priority)
-    env_path = os.environ.get(ENV_CONFIG)
-    if env_path:
-        env_config_path = Path(env_path).expanduser()
+    # 3. Env override or explicit config_path (highest priority)
+    override_path = config_path or os.environ.get(ENV_CONFIG)
+    if override_path:
+        override_config_path = Path(override_path).expanduser()
         try:
-            if env_config_path.is_file():
-                env_config = _load_config_file(env_config_path)
-                env_config = _tag_rules(env_config, str(env_config_path), SCOPE_ENV)
-                config = _merge_configs(config, env_config)
+            if override_config_path.is_file():
+                override_config = _load_config_file(override_config_path)
+                override_config = _tag_rules(
+                    override_config, str(override_config_path), SCOPE_ENV
+                )
+                config = _merge_configs(config, override_config)
+            elif config_path:
+                # Explicit --config path must exist
+                raise ConfigError(f"config file not found: {override_config_path}")
         except PermissionError:
             raise ConfigError(
-                f"permission denied accessing {env_config_path}"
+                f"permission denied accessing {override_config_path}"
             ) from None
 
     # Rotate logs at the end of config loading
@@ -441,7 +450,6 @@ def _parse_option_rule(decision: str, rest: str) -> Rule:
 
 def parse_config(text: str, source: str | None = None) -> Config:
     """Parse config text into Config object. Logs and skips invalid lines."""
-    import logging
 
     rules: list[Rule] = []
     redirect_rules: list[Rule] = []

@@ -5,13 +5,11 @@ import os
 import tempfile
 from pathlib import Path
 
-from dippy.core.config import parse_config, configure_logging, log_decision
+from dippy.core.config import configure_logging, log_decision
 
 
 def test_log_decision_with_context_flags():
     """Test that log_decision includes context_flags in audit log."""
-    config = parse_config("wrapper wrap")
-
     # Create temp file for logging
     with tempfile.NamedTemporaryFile(mode="w", delete=False, suffix=".log") as f:
         log_path = Path(f.name)

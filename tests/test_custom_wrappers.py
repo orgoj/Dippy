@@ -1,6 +1,5 @@
 """Tests for custom wrapper command system."""
 
-import pytest
 from pathlib import Path
 
 from dippy.core.config import parse_config, Config
@@ -76,7 +75,6 @@ class TestConfigParser:
 
     def test_duplicate_wrapper_warning(self, caplog):
         """Duplicate wrapper definition logs warning."""
-        import logging
 
         config = parse_config(
             """
@@ -227,7 +225,7 @@ class TestWrapperConfigMerge:
 
     def test_wrappers_merge_with_union(self):
         """Wrappers from multiple configs merge via set union."""
-        from dippy.core.config import Config, _merge_configs
+        from dippy.core.config import _merge_configs
 
         base = Config(wrappers={"wrap1"})
         overlay = Config(wrappers={"wrap2"})
@@ -237,7 +235,7 @@ class TestWrapperConfigMerge:
 
     def test_duplicate_wrappers_deduplicate(self):
         """Duplicate wrapper names are deduplicated in merge."""
-        from dippy.core.config import Config, _merge_configs
+        from dippy.core.config import _merge_configs
 
         base = Config(wrappers={"wrap"})
         overlay = Config(wrappers={"wrap"})
@@ -297,7 +295,7 @@ class TestLnavWrapperValidation:
             allow [run-on-server] lnav -n -c ;* -c :write-table-to -* /log/**log
         """
         )
-        cmd = 'run-on-server ferda7 \'lnav -n -c ";SELECT col" /log/file.log\''
+        cmd = "run-on-server ferda7 'lnav -n -c \";SELECT col\" /log/file.log'"
         result = analyze(cmd, config, Path.cwd())
         assert result.action == "deny"
 

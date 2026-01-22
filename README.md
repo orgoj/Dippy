@@ -22,6 +22,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
 - **82 more safe commands** — expanded allowlist from man page review
+- **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
 <!-- FORK ENHANCEMENTS END -->
 
 ---
@@ -79,6 +80,36 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively):
   }
 }
 ```
+
+---
+
+## CLI Mode
+
+Validate commands without running as a hook:
+
+```bash
+dippy --cmd 'rm -rf /'              # validate a command
+dippy --cmd 'ls -la' --json         # JSON output
+dippy --cmd 'git status' --cwd /path
+echo 'ls -la' | dippy --stdin       # read command from stdin
+```
+
+**Exit codes:**
+- `0` = allow (command is safe)
+- `1` = deny (blocked by rule)
+- `2` = ask (needs user approval)
+
+**Options:**
+- `--cmd COMMAND` — command to validate
+- `--stdin` — read command from stdin (plain text)
+- `--cwd PATH` — working directory (default: current)
+- `--json` — output as JSON
+- `--config PATH` — custom config file
+
+**Use cases:**
+- Scripting: `if dippy --cmd "$cmd"; then eval "$cmd"; fi`
+- Batch validation: `cat commands.txt | while read cmd; do dippy --cmd "$cmd"; done`
+- Integration with other AI tools
 
 ---
 

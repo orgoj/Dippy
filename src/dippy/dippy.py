@@ -6,12 +6,26 @@ A PreToolUse/BeforeTool/beforeShellExecution hook that auto-approves safe
 commands while prompting for anything destructive. Stay in the flow.
 
 Usage:
-    Claude Code: Add to ~/.claude/settings.json hooks configuration.
-    Gemini CLI:  Add to ~/.gemini/settings.json with --gemini flag.
-    Cursor:      Add to .cursor/hooks.json with --cursor flag.
+    Hook mode (stdin JSON):
+        Claude Code: Add to ~/.claude/settings.json hooks configuration.
+        Gemini CLI:  Add to ~/.gemini/settings.json with --gemini flag.
+        Cursor:      Add to .cursor/hooks.json with --cursor flag.
+
+    CLI mode (command validation):
+        dippy --cmd 'rm -rf /'              # validate a command
+        dippy --cmd 'ls -la' --json         # JSON output
+        dippy --cmd 'git status' --cwd /path
+        echo 'ls -la' | dippy --stdin       # read command from stdin
+
+    Exit codes (CLI mode):
+        0 = allow (command is safe)
+        1 = deny (blocked by rule)
+        2 = ask (needs user approval)
+
     See README.md for details.
 """
 
+import argparse
 import json
 import logging
 import os
@@ -358,10 +372,134 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
         return ask(reason)
 
 
+# === CLI Mode ===
+
+# Exit codes for CLI mode
+EXIT_ALLOW = 0
+EXIT_DENY = 1
+EXIT_ASK = 2
+
+
+def parse_cli_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        prog="dippy",
+        description="Validate shell commands against Dippy rules.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Exit codes (CLI mode):
+  0 = allow (command is safe)
+  1 = deny (blocked by rule)
+  2 = ask (needs user approval)
+
+Examples:
+  dippy --cmd 'rm -rf /'
+  dippy --cmd 'ls -la' --json
+  echo 'git status' | dippy --stdin --cwd /repo
+""",
+    )
+
+    # CLI mode arguments
+    input_group = parser.add_mutually_exclusive_group()
+    input_group.add_argument("--cmd", metavar="COMMAND", help="Command to validate")
+    input_group.add_argument(
+        "--stdin",
+        action="store_true",
+        help="Read command from stdin (plain text, not JSON)",
+    )
+
+    parser.add_argument(
+        "--cwd", metavar="PATH", help="Working directory (default: current)"
+    )
+    parser.add_argument(
+        "--json", action="store_true", dest="json_output", help="Output as JSON"
+    )
+    parser.add_argument("--config", metavar="PATH", help="Config file path override")
+
+    # Hook mode arguments (for backward compatibility)
+    parser.add_argument("--claude", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--gemini", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--cursor", action="store_true", help=argparse.SUPPRESS)
+
+    return parser.parse_args()
+
+
+def cli_mode(args: argparse.Namespace) -> int:
+    """
+    CLI mode: validate a single command and exit with appropriate code.
+
+    Returns exit code: 0=allow, 1=deny, 2=ask
+    """
+    # Get command from --cmd or --stdin
+    if args.cmd:
+        command = args.cmd
+    elif args.stdin:
+        command = sys.stdin.read().strip()
+    else:
+        # Should not happen due to argparse, but just in case
+        print("Error: --cmd or --stdin required", file=sys.stderr)
+        return EXIT_ASK  # Input error, not a deny
+
+    if not command:
+        print("Error: empty command", file=sys.stderr)
+        return EXIT_ASK  # Input error, not a deny
+
+    # Determine working directory
+    cwd = Path(args.cwd).resolve() if args.cwd else Path.cwd()
+
+    # Load config
+    try:
+        config = load_config(cwd, config_path=args.config)
+    except ConfigError as e:
+        if args.json_output:
+            print(json.dumps({"decision": "ask", "reason": f"config error: {e}"}))
+        else:
+            print(f"ask: config error: {e}")
+        return EXIT_ASK
+
+    # Analyze command
+    result = analyze(command, config, cwd)
+
+    # Log decision to audit log if configured
+    log_decision(
+        result.action,
+        message=result.reason,
+        command=command,
+        cwd=cwd,
+        context_flags=result.context_flags,
+    )
+
+    # Map 'pass' to 'ask' in CLI mode (pass means "let the AI decide" which
+    # doesn't make sense in CLI context)
+    action = result.action if result.action != "pass" else "ask"
+
+    # Output result
+    if args.json_output:
+        print(json.dumps({"decision": action, "reason": result.reason}))
+    else:
+        print(f"{action}: {result.reason}")
+
+    # Return exit code
+    if action == "allow":
+        return EXIT_ALLOW
+    elif action == "deny":
+        return EXIT_DENY
+    else:
+        return EXIT_ASK
+
+
 def main():
     """Main entry point for the hook."""
     global MODE
 
+    # Parse arguments first to detect CLI mode
+    args = parse_cli_args()
+
+    # CLI mode: --cmd or --stdin
+    if args.cmd or args.stdin:
+        sys.exit(cli_mode(args))
+
+    # Hook mode: continue with original behavior
     setup_logging()
 
     try:

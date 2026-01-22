@@ -2,6 +2,8 @@
 
 include .dippy-yolo
 
+allow ./bin/dippy-hook *
+
 #---- Python ----#
 allow rm -rf /**/__pycache__
 deny python3 * "Use `uv run python`"
@@ -27,3 +29,4 @@ allow just test *
 #allow git worktree add .worktrees/**
 
 allow git add *
+allow ruff *

@@ -1,6 +1,5 @@
 """Additional tests for wrapper rule matching acceptance criteria."""
 
-import pytest
 from pathlib import Path
 
 from dippy.core.config import parse_config
