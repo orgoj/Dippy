@@ -604,6 +604,28 @@ deny-redirect /etc/* "system files"
         # Default remains "ask" when invalid value is provided
         assert cfg.default == "ask"
 
+    def test_set_log_hook_approvals_on(self):
+        cfg = parse_config("set log-hook-approvals on")
+        assert cfg.log_hook_approvals is True
+
+    def test_set_log_hook_approvals_off(self):
+        cfg = parse_config("set log-hook-approvals off")
+        assert cfg.log_hook_approvals is False
+
+    def test_set_log_hook_approvals_default_true(self):
+        cfg = parse_config("allow ls")
+        assert cfg.log_hook_approvals is True  # Default value
+
+    def test_set_log_hook_approvals_invalid(self):
+        cfg = parse_config("set log-hook-approvals invalid")
+        # log_hook_approvals remains True (default) when invalid value is provided
+        assert cfg.log_hook_approvals is True
+
+    def test_set_log_hook_approvals_missing_value(self):
+        cfg = parse_config("set log-hook-approvals")
+        # log_hook_approvals remains True (default) when no value is provided
+        assert cfg.log_hook_approvals is True
+
 
 class TestParseOptionRules:
     """Test parsing of allow-opt/ask-opt/deny-opt directives."""

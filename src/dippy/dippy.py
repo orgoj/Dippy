@@ -80,7 +80,9 @@ def _detect_mode_from_input(input_data: dict) -> str:
         return "gemini"
 
     # Claude uses "Bash" and MCP tools use "mcp__*" prefix
-    if tool_name and tool_name != "Bash" and not tool_name.startswith("mcp__"):
+    # Known Claude Code tools (don't warn about these)
+    known_claude_tools = {"Bash", "Edit", "Write", "Read", "MultiEdit", "Glob", "Grep", "WebSearch", "WebFetch"}
+    if tool_name and tool_name not in known_claude_tools and not tool_name.startswith("mcp__"):
         logging.warning(f"Unknown tool_name '{tool_name}', defaulting to Claude mode")
     return "claude"
 

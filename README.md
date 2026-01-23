@@ -19,6 +19,7 @@
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **Bash test constructs** — support for `[ ]` and `[[ ]]` conditions
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
+- **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
 - **82 more safe commands** — expanded allowlist from man page review
@@ -51,6 +52,19 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 - **Hidden mutations**: `git stash drop`, `npm unpublish`, `brew unlink`
 - **Cloud danger**: `aws s3 rm s3://bucket --recursive`, `kubectl delete pod`
 - **Destructive chains**: `rm -rf node_modules && npm install` (blocks the whole thing)
+
+---
+
+## ⚠️ Known Limitations
+
+**Subagents ignore PreToolUse hook decisions** - Claude Code subagents (spawned via Task tool) do not respect `allow`/`deny` decisions from PreToolUse hooks. Even when Dippy returns `"permissionDecision": "allow"`, subagents will still prompt for approval.
+
+- **Cause:** Known bug in Claude Code ([#4740](https://github.com/anthropics/claude-code/issues/4740), [#4669](https://github.com/anthropics/claude-code/issues/4669))
+- **Status:** Closed as "not planned" by Anthropic (January 2026)
+- **Impact:** Hooks work correctly in main sessions but are ignored in subagents
+- **Workaround:** Use explicit config rules instead of relying on hook decisions
+
+See [docs/subagent-hook-issues.md](docs/subagent-hook-issues.md) for detailed analysis.
 
 ---
 
@@ -153,6 +167,7 @@ include .dippy-local-*                 # include project-specific overrides (glo
 set log ~/.dippy/audit.log             # write audit log to this path
 set log-full                           # include full command in audit log
 set log-rotate-max-days 30             # keep rotated logs for N days (0 = disable)
+set log-hook-approvals off             # disable hook-approvals.log
 
 # Default behavior for commands with no matching rule
 set default ask                        # prompt for approval (default)
