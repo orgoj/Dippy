@@ -55,6 +55,19 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 
 ---
 
+## ⚠️ Known Limitations
+
+**Subagents ignore PreToolUse hook decisions** - Claude Code subagents (spawned via Task tool) do not respect `allow`/`deny` decisions from PreToolUse hooks. Even when Dippy returns `"permissionDecision": "allow"`, subagents will still prompt for approval.
+
+- **Cause:** Known bug in Claude Code ([#4740](https://github.com/anthropics/claude-code/issues/4740), [#4669](https://github.com/anthropics/claude-code/issues/4669))
+- **Status:** Closed as "not planned" by Anthropic (January 2026)
+- **Impact:** Hooks work correctly in main sessions but are ignored in subagents
+- **Workaround:** Use explicit config rules instead of relying on hook decisions
+
+See [docs/subagent-hook-issues.md](docs/subagent-hook-issues.md) for detailed analysis.
+
+---
+
 ## Installation
 
 ```bash
