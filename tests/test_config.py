@@ -604,6 +604,28 @@ deny-redirect /etc/* "system files"
         # Default remains "ask" when invalid value is provided
         assert cfg.default == "ask"
 
+    def test_set_log_standard_on(self):
+        cfg = parse_config("set log-standard on")
+        assert cfg.log_standard is True
+
+    def test_set_log_standard_off(self):
+        cfg = parse_config("set log-standard off")
+        assert cfg.log_standard is False
+
+    def test_set_log_standard_default_true(self):
+        cfg = parse_config("allow ls")
+        assert cfg.log_standard is True  # Default value
+
+    def test_set_log_standard_invalid(self):
+        cfg = parse_config("set log-standard invalid")
+        # log_standard remains True (default) when invalid value is provided
+        assert cfg.log_standard is True
+
+    def test_set_log_standard_missing_value(self):
+        cfg = parse_config("set log-standard")
+        # log_standard remains True (default) when no value is provided
+        assert cfg.log_standard is True
+
 
 class TestParseOptionRules:
     """Test parsing of allow-opt/ask-opt/deny-opt directives."""

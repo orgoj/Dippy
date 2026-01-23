@@ -79,6 +79,7 @@ class Config:
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
+    log_standard: bool = True  # log to hook-approvals.log (standard logging)
 
 
 @dataclass
@@ -669,6 +670,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
         log_rotate_max_days=settings.get("log_rotate_max_days", 30),
+        log_standard=settings.get("log_standard", True),
     )
 
 
@@ -739,6 +741,18 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         if value is not None:
             raise ValueError(f"'{key}' takes no value")
         settings[key_normalized] = True
+
+    # Boolean settings with on/off value
+    elif key_normalized == "log_standard":
+        if value is None:
+            raise ValueError(f"'{key}' requires 'on' or 'off'")
+        value_lower = value.lower()
+        if value_lower == "on":
+            settings[key_normalized] = True
+        elif value_lower == "off":
+            settings[key_normalized] = False
+        else:
+            raise ValueError(f"'{key}' must be 'on' or 'off', got '{value}'")
 
     # Choice settings
     elif key_normalized == "default":
@@ -1314,6 +1328,13 @@ def configure_logging(config: Config) -> None:
     if os.environ.get("DIPPY_TEST_NO_LOG"):
         _log_config = None
         return
+
+    # Disable standard logging if log_standard is off
+    if not config.log_standard:
+        # Disable all logging by removing handlers and setting level to CRITICAL
+        root_logger = logging.getLogger()
+        root_logger.handlers.clear()
+        root_logger.setLevel(logging.CRITICAL + 1)
 
     if config.log is None:
         _log_config = None
