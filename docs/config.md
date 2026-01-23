@@ -585,7 +585,7 @@ set default allow        # Auto-approve everything without explicit rule
 # Logging
 set log ~/.dippy/audit.log  # enable logging to path
 set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
-set log-standard off        # disable hook-approvals.log (standard logging)
+set log-hook-approvals off  # disable hook-approvals.log
 ```
 
 Settings use kebab-case or snake_case interchangeably.
@@ -787,7 +787,7 @@ Or to enable both MCP and WebSearch:
 **Hook caching:** Claude Code caches hooks at session start. Changes to dippy code or config require restarting the session to take effect.
 
 **Two logging systems:** Dippy has two separate logs:
-- `~/.claude/hook-approvals.log` - written by Python's `logging` module (can be disabled with `set log-standard off`)
+- `~/.claude/hook-approvals.log` - written by Python's `logging` module (can be disabled with `set log-hook-approvals off`)
 - Audit log (configurable path) - written by `log_decision()`, requires `set log <path>`
 
 **Log path:** The `~/.dippy/` directory may have write issues when running as a Claude Code hook. Using `~/.claude/dippy-audit.log` is more reliable.

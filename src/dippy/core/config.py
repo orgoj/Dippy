@@ -79,7 +79,7 @@ class Config:
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
-    log_standard: bool = True  # log to hook-approvals.log (standard logging)
+    log_hook_approvals: bool = True  # log to hook-approvals.log
 
 
 @dataclass
@@ -670,7 +670,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
         log_rotate_max_days=settings.get("log_rotate_max_days", 30),
-        log_standard=settings.get("log_standard", True),
+        log_hook_approvals=settings.get("log_hook_approvals", True),
     )
 
 
@@ -743,7 +743,7 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         settings[key_normalized] = True
 
     # Boolean settings with on/off value
-    elif key_normalized == "log_standard":
+    elif key_normalized == "log_hook_approvals":
         if value is None:
             raise ValueError(f"'{key}' requires 'on' or 'off'")
         value_lower = value.lower()
@@ -1329,8 +1329,8 @@ def configure_logging(config: Config) -> None:
         _log_config = None
         return
 
-    # Disable standard logging if log_standard is off
-    if not config.log_standard:
+    # Disable hook-approvals.log if disabled
+    if not config.log_hook_approvals:
         # Disable all logging by removing handlers and setting level to CRITICAL
         root_logger = logging.getLogger()
         root_logger.handlers.clear()

@@ -19,7 +19,7 @@
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **Bash test constructs** — support for `[ ]` and `[[ ]]` conditions
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
-- **Standard logging control** — `set log-standard off` to disable hook-approvals.log
+- **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
 - **82 more safe commands** — expanded allowlist from man page review
@@ -154,7 +154,7 @@ include .dippy-local-*                 # include project-specific overrides (glo
 set log ~/.dippy/audit.log             # write audit log to this path
 set log-full                           # include full command in audit log
 set log-rotate-max-days 30             # keep rotated logs for N days (0 = disable)
-set log-standard off                   # disable hook-approvals.log (standard logging)
+set log-hook-approvals off             # disable hook-approvals.log
 
 # Default behavior for commands with no matching rule
 set default ask                        # prompt for approval (default)
