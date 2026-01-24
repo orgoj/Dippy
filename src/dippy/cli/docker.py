@@ -4,7 +4,10 @@ Docker command handler for Dippy.
 Handles docker, docker-compose, and podman commands.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
+from dippy.core.bash import bash_join
 
 COMMANDS = ["docker", "docker-compose", "podman", "podman-compose"]
 
@@ -178,6 +181,41 @@ GLOBAL_FLAGS_WITH_ARG = frozenset(
     }
 )
 
+# Exec flags that take an argument
+EXEC_FLAGS_WITH_ARG = frozenset(
+    {"-e", "--env", "-w", "--workdir", "-u", "--user", "--env-file"}
+)
+
+# Exec flags that don't take an argument
+EXEC_FLAGS_NO_ARG = frozenset(
+    {"-d", "--detach", "-i", "--interactive", "-t", "--tty", "--privileged"}
+)
+
+
+def _extract_exec_inner_command(tokens: list[str]) -> list[str] | None:
+    """Extract command from docker exec args (after container name)."""
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token == "--":
+            i += 1
+            break
+        if token in EXEC_FLAGS_WITH_ARG:
+            i += 2
+            continue
+        if token.startswith("-"):
+            # Check for --flag=value format
+            if "=" in token:
+                i += 1
+                continue
+            # Boolean flag or unknown flag with arg
+            i += 1
+            continue
+        # First non-flag is container name, skip it
+        i += 1
+        break
+    return tokens[i:] if i < len(tokens) else None
+
 
 def _get_description(tokens: list[str]) -> str:
     """Get description for docker command."""
@@ -196,8 +234,9 @@ def _get_description(tokens: list[str]) -> str:
     return f"{tokens[0]} {action}"
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify docker command."""
+    tokens = ctx.tokens
     base = tokens[0]  # "docker", "podman", "docker-compose", etc.
     desc = _get_description(tokens)
 
@@ -215,7 +254,7 @@ def classify(tokens: list[str]) -> Classification:
     # Handle docker-compose / docker compose
     if action == "compose" or tokens[0] in {"docker-compose", "podman-compose"}:
         safe = _check_compose(tokens, action_idx, base)
-        return Classification("approve" if safe else "ask", description=desc)
+        return Classification("allow" if safe else "ask", description=desc)
 
     # Check subcommands for multi-level commands
     if action in SAFE_SUBCOMMANDS or action in UNSAFE_SUBCOMMANDS:
@@ -228,7 +267,7 @@ def classify(tokens: list[str]) -> Classification:
                 )
                 imagetools_action = _find_subcommand(sub_rest)
                 safe = imagetools_action == "inspect"
-                return Classification("approve" if safe else "ask", description=desc)
+                return Classification("allow" if safe else "ask", description=desc)
 
             if subcommand in SAFE_SUBCOMMANDS.get(action, set()):
                 # Special case: image save -o writes to file
@@ -238,7 +277,7 @@ def classify(tokens: list[str]) -> Classification:
                     and _has_output_flag(rest)
                 ):
                     return Classification("ask", description=desc)
-                return Classification("approve", description=desc)
+                return Classification("allow", description=desc)
             if subcommand in UNSAFE_SUBCOMMANDS.get(action, set()):
                 return Classification("ask", description=desc)
 
@@ -247,7 +286,17 @@ def classify(tokens: list[str]) -> Classification:
         # export/save without -o writes to stdout (safe)
         if action in {"export", "save"} and _has_output_flag(rest):
             return Classification("ask", description=desc)
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
+
+    # Handle exec - delegate to inner command with remote mode
+    if action == "exec":
+        inner_tokens = _extract_exec_inner_command(rest)
+        if inner_tokens:
+            inner_cmd = bash_join(inner_tokens)
+            return Classification(
+                "delegate", inner_command=inner_cmd, description=desc, remote=True
+            )
+        return Classification("ask", description=desc)
 
     # Unsafe actions or unknown
     return Classification("ask", description=desc)

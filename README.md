@@ -32,9 +32,15 @@
 
 Dippy is a shell command hook that auto-approves safe commands while still prompting for anything destructive. When it blocks, your custom deny messages can steer Claude back on track—no wasted turns. Get up to **40% faster development** without disabling permissions entirely.
 
-Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bash parser—no external dependencies, just pure Python. 9,500+ tests.
+Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bash parser—no external dependencies, just pure Python. 14,000+ tests between the two.
 
-![Screenshot](images/screenshot.png)
+***Example: rejecting unsafe operation in a chain***
+
+![Screenshot](images/terraform-apply.png)
+
+***Example: rejecting a command with advice, so Claude can keep going***
+
+![Deny with message](images/deny-with-message.png)
 
 ## ✅ What gets approved
 
@@ -45,6 +51,8 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 - **Safe redirects**: `grep -r "TODO" src/ 2>/dev/null`, `ls &>/dev/null`
 - **Command substitution**: `ls $(pwd)`, `git diff foo-$(date).txt`
 
+![Safe command substitution](images/safe-cmd-sub.png)
+
 ## 🚫 What gets blocked
 
 - **Subshell injection**: `git $(echo rm) foo.txt`, `echo $(rm -rf /)`
@@ -52,6 +60,8 @@ Built on [Parable](https://github.com/ldayton/Parable), our own hand-written bas
 - **Hidden mutations**: `git stash drop`, `npm unpublish`, `brew unlink`
 - **Cloud danger**: `aws s3 rm s3://bucket --recursive`, `kubectl delete pod`
 - **Destructive chains**: `rm -rf node_modules && npm install` (blocks the whole thing)
+
+![Redirect blocked](images/redirect.png)
 
 ---
 
@@ -70,9 +80,20 @@ See [docs/subagent-hook-issues.md](docs/subagent-hook-issues.md) for detailed an
 
 ## Installation
 
+### Homebrew (recommended)
+
+```bash
+brew tap ldayton/dippy
+brew install dippy
+```
+
+### Manual
+
 ```bash
 git clone https://github.com/ldayton/Dippy.git
 ```
+
+### Configure
 
 Add to `~/.claude/settings.json` (or use `/hooks` interactively):
 
@@ -81,19 +102,15 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively):
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|mcp__.*",
-        "hooks": [{ "type": "command", "command": "/path/to/Dippy/bin/dippy-hook" }]
-      }
-    ],
-    "PostToolUse": [
-      {
-        "matcher": "Bash|mcp__.*",
-        "hooks": [{ "type": "command", "command": "/path/to/Dippy/bin/dippy-hook" }]
+        "matcher": "Bash",
+        "hooks": [{ "type": "command", "command": "dippy" }]
       }
     ]
   }
 }
 ```
+
+If you installed manually, use the full path instead: `/path/to/Dippy/bin/dippy-hook`
 
 ---
 
@@ -149,17 +166,8 @@ See [File Operation Rules](docs/config.md#file-operation-rules) for details.
 
 ## Configuration
 
-⚠️ Configuration is still evolving; syntax and behaviors may change.
+Dippy is highly customizable. Beyond simple allow/deny rules, you can attach messages that steer the AI back on track when it goes astray—no wasted turns.
 
-Dippy reads config from (lowest to highest priority):
-
-- `~/.dippy/config` (user global)
-- `.dippy` in the project tree (walks up from cwd)
-- `$DIPPY_CONFIG` (env override)
-
-Sample config:
-
-```
 # Include external config files
 include ~/.dippy/defaults/*            # include shared rules from home
 include .dippy-local-*                 # include project-specific overrides (glob pattern)
@@ -179,6 +187,7 @@ allow docker run nginx:*               # allow nginx runs
 deny docker run *--privileged*         # still ban privileged mode, last matching rule wins
 
 deny python "Use uv run python, which runs in project environment"  # remind Claude to use uv
+deny rm -rf "Use trash instead"
 
 allow-redirect /tmp/**                 # allow temp file writes
 deny-redirect **/.env* "Never write secrets, ask me to do it"       # block env writes
@@ -223,10 +232,24 @@ include <path-or-pattern>
 - **Recursive**: Included files can include other files
 - **Last-match-wins**: Later includes override earlier ones
 
-Configuration reference: [docs/config.md](docs/config.md)
+Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root.
+
+**Configuration reference:** [docs/config.md](docs/config.md)
+
+**Full documentation:** [Dippy Wiki](https://github.com/ldayton/Dippy/wiki)
+
+---
+
+## Extensions
+
+Dippy can do more than filter shell commands. See the [wiki](https://github.com/ldayton/Dippy/wiki) for additional capabilities.
 
 ---
 
 ## Uninstall
 
-Remove the hook entry from `~/.claude/settings.json`.
+Remove the hook entry from `~/.claude/settings.json`, then:
+
+```bash
+brew uninstall dippy  # if installed via Homebrew
+```

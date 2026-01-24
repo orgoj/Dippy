@@ -5,7 +5,9 @@ Handles unzip, 7z, 7za, 7zr, 7zz commands.
 Read-only operations (list, test, info) are safe, extraction/modification is not.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["unzip", "7z", "7za", "7zr", "7zz"]
 
@@ -62,8 +64,9 @@ def _check_7z(tokens: list[str]) -> bool:
     return tokens[1] in SAFE_7Z_COMMANDS
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify archive command."""
+    tokens = ctx.tokens
     if not tokens:
         return Classification("ask", description="archive")
 
@@ -81,4 +84,4 @@ def classify(tokens: list[str]) -> Classification:
         safe = False
         desc = f"{cmd} extract"
 
-    return Classification("approve" if safe else "ask", description=desc)
+    return Classification("allow" if safe else "ask", description=desc)

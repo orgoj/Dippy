@@ -5,7 +5,9 @@ The ip command is safe for viewing network info, but modification
 commands need confirmation.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["ip"]
 
@@ -71,8 +73,9 @@ GLOBAL_FLAGS_WITH_ARG = frozenset(
 )
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify ip command."""
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "ip"
     if len(tokens) < 2:
         return Classification("ask", description=base)
@@ -91,7 +94,7 @@ def classify(tokens: list[str]) -> Classification:
         i += 1
 
     if not parts:
-        return Classification("approve", description=base)  # Just "ip" or "ip -flags"
+        return Classification("allow", description=base)  # Just "ip" or "ip -flags"
 
     subcommand = parts[0]
     desc = f"{base} {subcommand}"
@@ -102,5 +105,5 @@ def classify(tokens: list[str]) -> Classification:
             return Classification("ask", description=f"{desc} {part}")
 
     if subcommand in SAFE_SUBCOMMANDS:
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
     return Classification("ask", description=desc)

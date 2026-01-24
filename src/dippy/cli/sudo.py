@@ -7,12 +7,12 @@ Delegates to inner command check with 'sudo' wrapper context.
 
 from pathlib import Path
 
-from dippy.cli import Classification
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["sudo", "doas", "pkexec"]
 
 
-def classify(tokens: list[str], cwd: Path | None = None) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify sudo command.
 
     Sudo command forms:
@@ -22,6 +22,7 @@ def classify(tokens: list[str], cwd: Path | None = None) -> Classification:
     - sudo -i                         # Interactive shell - ask
     - sudo -s                         # Shell - ask
     """
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "sudo"
     if len(tokens) < 2:
         return Classification("ask", description=f"{base} (no command)")

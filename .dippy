@@ -8,7 +8,7 @@ allow ./bin/dippy-hook *
 allow rm -rf /**/__pycache__
 deny python3 * "Use `uv run python`"
 deny python * "Use `uv run python`"
-#deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
+deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
 #allow uv run python -c *
 
 allow uv run python -m pytest *
@@ -24,9 +24,13 @@ allow just check *
 allow just fmt *
 allow just lint *
 allow just test *
+deny just -C "Don't use -C, use the target directly"
 
 #deny git worktree add * "Use relative path: git worktree add .worktrees/..."
 #allow git worktree add .worktrees/**
 
 allow git add *
 allow ruff *
+
+# for merge yolo
+allow git *

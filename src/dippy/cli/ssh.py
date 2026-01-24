@@ -7,12 +7,12 @@ Delegates to inner command check with 'ssh' wrapper context.
 
 from pathlib import Path
 
-from dippy.cli import Classification
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["ssh"]
 
 
-def classify(tokens: list[str], cwd: Path | None = None) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify ssh command.
 
     SSH command forms:

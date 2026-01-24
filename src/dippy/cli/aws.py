@@ -4,7 +4,24 @@ AWS CLI handler for Dippy.
 Handles aws, aws-vault, and similar AWS tools.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
+from dippy.core.sql import is_readonly_sql
+
+# Athena-specific write keywords
+_ATHENA_WRITE = frozenset({"MSCK", "VACUUM", "UNLOAD"})
+
+
+def _extract_athena_query_string(tokens: list[str]) -> str | None:
+    """Extract --query-string value from Athena command tokens."""
+    for i, token in enumerate(tokens):
+        if token == "--query-string" and i + 1 < len(tokens):
+            return tokens[i + 1]
+        if token.startswith("--query-string="):
+            return token[len("--query-string=") :]
+    return None
+
 
 COMMANDS = ["aws"]
 
@@ -176,6 +193,28 @@ SAFE_COMMANDS = {
     ("sns", "list-subscriptions"),
     ("dynamodb", "list-tables"),
     ("dynamodb", "describe-table"),
+    # Athena - query service for S3 data
+    ("athena", "list-databases"),
+    ("athena", "list-data-catalogs"),
+    ("athena", "list-engine-versions"),
+    ("athena", "list-named-queries"),
+    ("athena", "list-query-executions"),
+    ("athena", "list-prepared-statements"),
+    ("athena", "list-work-groups"),
+    ("athena", "list-table-metadata"),
+    ("athena", "list-tags-for-resource"),
+    ("athena", "get-database"),
+    ("athena", "get-data-catalog"),
+    ("athena", "get-named-query"),
+    ("athena", "get-prepared-statement"),
+    ("athena", "get-query-execution"),
+    ("athena", "get-query-results"),
+    ("athena", "get-query-runtime-statistics"),
+    ("athena", "get-table-metadata"),
+    ("athena", "get-work-group"),
+    ("athena", "batch-get-named-query"),
+    ("athena", "batch-get-query-execution"),
+    ("athena", "batch-get-prepared-statement"),
 }
 
 
@@ -224,8 +263,9 @@ def get_description(tokens: list[str]) -> str:
     return "aws"
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify AWS CLI command."""
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "aws"
     if len(tokens) < 2:
         return Classification("ask", description=base)
@@ -234,7 +274,7 @@ def classify(tokens: list[str]) -> Classification:
 
     # Check for --help anywhere (makes command safe)
     if "--help" in tokens or "-h" in tokens:
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
 
     # Find the service and action
     service = None
@@ -282,31 +322,43 @@ def classify(tokens: list[str]) -> Classification:
 
     # Help is always safe
     if service == "help" or action == "help":
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
 
     # Always-safe services
     if service in ALWAYS_SAFE_SERVICES:
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
 
     # STS special handling
     if service == "sts":
         if action in STS_SAFE_ACTIONS:
-            return Classification("approve", description=desc)
+            return Classification("allow", description=desc)
         return Classification("ask", description=desc)
 
     # Configure special handling
     if service == "configure":
         if action in {"list", "list-profiles", "get"}:
-            return Classification("approve", description=desc)
+            return Classification("allow", description=desc)
         return Classification("ask", description=desc)
 
     # SSM special handling - --with-decryption exposes sensitive data
     if service == "ssm" and "--with-decryption" in tokens:
         return Classification("ask", description=desc)
 
+    # Athena special handling - analyze SQL for read-only queries
+    if service == "athena" and action == "start-query-execution":
+        query_string = _extract_athena_query_string(tokens)
+        if query_string is not None:
+            readonly = is_readonly_sql(query_string, extra_write=_ATHENA_WRITE)
+            if readonly is True:
+                return Classification("allow", description=f"{desc} (read-only)")
+            if readonly is False:
+                return Classification("ask", description=f"{desc} (write)")
+        # Couldn't determine - ask
+        return Classification("ask", description=desc)
+
     # Check specific safe commands
     if action and (service, action) in SAFE_COMMANDS:
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
 
     # Check action patterns
     if action:
@@ -316,12 +368,12 @@ def classify(tokens: list[str]) -> Classification:
 
         # Exact safe actions
         if action in SAFE_ACTIONS_EXACT:
-            return Classification("approve", description=desc)
+            return Classification("allow", description=desc)
 
         # Safe prefixes
         for prefix in SAFE_ACTION_PREFIXES:
             if action.startswith(prefix):
-                return Classification("approve", description=desc)
+                return Classification("allow", description=desc)
 
         # Unsafe keywords
         for keyword in UNSAFE_ACTION_KEYWORDS:

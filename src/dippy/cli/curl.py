@@ -2,11 +2,17 @@
 Curl command handler for Dippy.
 
 Approves GET/HEAD requests, blocks data-sending operations.
+Output flags (-o, --output) return redirect_targets for config rule checking.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["curl"]
+
+# Output flags that write to files
+OUTPUT_FLAGS = frozenset({"-o", "--output"})
 
 # Flags that send data (always unsafe unless explicit GET)
 DATA_FLAGS = frozenset(
@@ -64,8 +70,27 @@ SAFE_FTP_COMMANDS = frozenset(
 )
 
 
-def classify(tokens: list[str]) -> Classification:
+def _extract_output_file(tokens: list[str]) -> str | None:
+    """Extract the output file from -o/--output flag."""
+    for i, t in enumerate(tokens):
+        # -o file
+        if t == "-o" and i + 1 < len(tokens):
+            return tokens[i + 1]
+        # -ofile (no space)
+        if t.startswith("-o") and len(t) > 2 and not t.startswith("-o="):
+            return t[2:]
+        # --output file
+        if t == "--output" and i + 1 < len(tokens):
+            return tokens[i + 1]
+        # --output=file
+        if t.startswith("--output="):
+            return t[9:]
+    return None
+
+
+def classify(ctx: HandlerContext) -> Classification:
     """Classify curl command (GET/HEAD without data flags is safe)."""
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "curl"
     for i, t in enumerate(tokens):
         # Block always-unsafe flags
@@ -105,4 +130,13 @@ def classify(tokens: list[str]) -> Classification:
                 if ftp_cmd not in SAFE_FTP_COMMANDS:
                     return Classification("ask", description=f"{base} {t}")
 
-    return Classification("approve", description=base)
+    # Check for output file - return redirect_targets for config rule checking
+    output_file = _extract_output_file(tokens)
+    if output_file and output_file not in ("-", "/dev/null"):
+        return Classification(
+            "allow",
+            description=base,
+            redirect_targets=(output_file,),
+        )
+
+    return Classification("allow", description=base)

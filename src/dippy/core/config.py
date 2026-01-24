@@ -75,6 +75,9 @@ class Config:
     wrappers: set[str] = field(default_factory=set)
     """Custom wrapper commands (e.g., 'wrap', 'tmux-cli')."""
 
+    aliases: dict[str, str] = field(default_factory=dict)
+    """Command aliases mapping source to target (e.g., ~/bin/gh -> gh)."""
+
     default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
@@ -415,6 +418,13 @@ def _extract_context_flags(
         frozenset(required) if required else None,
         frozenset(negated) if negated else None,
     )
+
+
+def _strip_exact_anchor(pattern: str) -> tuple[str, bool]:
+    """Strip | anchor from pattern, return (pattern, is_exact)."""
+    if pattern.endswith("|"):
+        return pattern[:-1].rstrip(), True
+    return pattern, False
 
 
 def _parse_option_rule(decision: str, rest: str) -> Rule:
@@ -1095,6 +1105,8 @@ def match_command(
     config: Config,
     cwd: Path,
     context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> Match | None:
     """Match command and its redirects against config rules.
 

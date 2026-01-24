@@ -4,7 +4,10 @@ Kubectl command handler for Dippy.
 Handles kubectl and similar Kubernetes CLI tools.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
+from dippy.core.bash import bash_join
 
 COMMANDS = ["kubectl", "k"]
 
@@ -95,8 +98,19 @@ UNSAFE_SUBCOMMANDS = {
 }
 
 
-def classify(tokens: list[str]) -> Classification:
+def _extract_exec_inner_command(tokens: list[str]) -> list[str] | None:
+    """Extract command from kubectl exec args (after -- separator)."""
+    try:
+        sep_idx = tokens.index("--")
+        result = tokens[sep_idx + 1 :]
+        return result if result else None
+    except ValueError:
+        return None  # No -- separator
+
+
+def classify(ctx: HandlerContext) -> Classification:
     """Classify kubectl command."""
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "kubectl"
     if len(tokens) < 2:
         return Classification("ask", description=base)
@@ -140,7 +154,7 @@ def classify(tokens: list[str]) -> Classification:
         for token in rest:
             if not token.startswith("-"):
                 if token in SAFE_SUBCOMMANDS[action]:
-                    return Classification("approve", description=f"{desc} {token}")
+                    return Classification("allow", description=f"{desc} {token}")
                 break
 
     if action in UNSAFE_SUBCOMMANDS and rest:
@@ -152,6 +166,16 @@ def classify(tokens: list[str]) -> Classification:
 
     # Simple safe actions
     if action in SAFE_ACTIONS:
-        return Classification("approve", description=desc)
+        return Classification("allow", description=desc)
+
+    # Handle exec - delegate to inner command with remote mode
+    if action == "exec":
+        inner_tokens = _extract_exec_inner_command(rest)
+        if inner_tokens:
+            inner_cmd = bash_join(inner_tokens)
+            return Classification(
+                "delegate", inner_command=inner_cmd, description=desc, remote=True
+            )
+        return Classification("ask", description=desc)
 
     return Classification("ask", description=desc)

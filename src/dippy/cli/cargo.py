@@ -2,7 +2,9 @@
 Cargo (Rust) CLI handler for Dippy.
 """
 
-from dippy.cli import Classification
+from __future__ import annotations
+
+from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["cargo"]
 
@@ -45,8 +47,9 @@ ACTION_ALIASES = {
 }
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify cargo command."""
+    tokens = ctx.tokens
     base = tokens[0] if tokens else "cargo"
     if len(tokens) < 2:
         return Classification("ask", description=base)
@@ -54,7 +57,7 @@ def classify(tokens: list[str]) -> Classification:
     action = tokens[1]
 
     if action in SAFE_ACTIONS:
-        return Classification("approve", description=f"{base} {action}")
+        return Classification("allow", description=f"{base} {action}")
 
     # Expand short aliases for clarity
     display_action = ACTION_ALIASES.get(action, action)

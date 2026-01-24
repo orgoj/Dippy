@@ -5,9 +5,10 @@ Xargs executes commands with arguments from stdin.
 Delegates to inner command check.
 """
 
-import shlex
+from __future__ import annotations
 
-from dippy.cli import Classification
+from dippy.cli import Classification, HandlerContext
+from dippy.core.bash import bash_quote
 
 COMMANDS = ["xargs"]
 
@@ -82,8 +83,9 @@ def _skip_flags(
     return i
 
 
-def classify(tokens: list[str]) -> Classification:
+def classify(ctx: HandlerContext) -> Classification:
     """Classify xargs command by extracting the inner command."""
+    tokens = ctx.tokens
     if len(tokens) < 2:
         return Classification("ask", description="xargs (no command)")
 
@@ -112,7 +114,5 @@ def classify(tokens: list[str]) -> Classification:
         return Classification("ask", description="xargs (no command)")
 
     # Delegate to inner command check
-    inner_cmd = " ".join(
-        shlex.quote(t) if " " in t or not t else t for t in inner_tokens
-    )
+    inner_cmd = " ".join(bash_quote(t) for t in inner_tokens)
     return Classification("delegate", inner_command=inner_cmd)

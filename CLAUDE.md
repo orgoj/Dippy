@@ -77,3 +77,9 @@ just check         # All of the above in parallel — MUST PASS before committin
 - commits: run `just test` BEFORE committing - NON-NEGOTIABLE, never commit failing tests or skip this step
 - commits: use conventional format (feat:, fix:, chore:, docs:) with Co-Authored-By trailer
 - commits: push immediately after commit when user requests
+
+## Upstream
+
+Read [README.md](README.md) for an overview.
+
+Configuration docs: [../Dippy.wiki/Configuration.md](../Dippy.wiki/Configuration.md)
