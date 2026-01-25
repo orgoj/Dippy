@@ -23,6 +23,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
+- **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/MarioZechner/pi-mono) AI assistant
 <!-- FORK ENHANCEMENTS END -->
 
 ---
@@ -236,6 +237,41 @@ Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project 
 **Configuration reference:** [docs/config.md](docs/config.md)
 
 **Full documentation:** [Dippy Wiki](https://github.com/ldayton/Dippy/wiki)
+
+---
+
+## pi-mono Extension
+
+[pi-mono](https://github.com/MarioZechner/pi-mono) is a local AI coding assistant (alternative to Claude Code). Dippy includes a TypeScript extension that integrates with pi-mono to provide the same command approval system.
+
+### Installation
+
+```bash
+# Link the extension to pi-mono's extensions directory
+ln -s /path/to/dippy-dev/pi-extension/dippy-extension.ts \
+      ~/.pi/agent/extensions/dippy-extension.ts
+```
+
+### How It Works
+
+The extension hooks into pi-mono's `tool_call` event for bash commands:
+
+1. Intercepts bash tool calls
+2. Spawns Python subprocess with `pi_wrapper.py`
+3. Calls dippy's `analyze()` function
+4. Handles decision: auto-allow, prompt user, or block
+
+**Safe commands** (`ls`, `git status`) → execute immediately
+**Destructive commands** (`rm`, `pip install`) → show confirmation dialog
+**Blocked commands** (`rm -rf /`) → prevent execution
+
+### Configuration
+
+Uses your existing dippy configuration:
+- **Global**: `~/.dippy/config`
+- **Project**: `.dippy` file in project root
+
+See [pi-extension/README.md](pi-extension/README.md) for details.
 
 ---
 
