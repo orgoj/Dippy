@@ -23,7 +23,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
-- **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/MarioZechner/pi-mono) AI assistant
+- **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 <!-- FORK ENHANCEMENTS END -->
 
 ---
@@ -242,7 +242,7 @@ Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project 
 
 ## pi-mono Extension
 
-[pi-mono](https://github.com/MarioZechner/pi-mono) is a local AI coding assistant (alternative to Claude Code). Dippy includes a TypeScript extension that integrates with pi-mono to provide the same command approval system.
+[pi-mono](https://github.com/badlogic/pi-mono) is a monorepo containing pi-agent, a local AI coding assistant (alternative to Claude Code). Dippy includes a TypeScript extension that integrates with pi-agent to provide the same command approval system.
 
 ### Installation
 

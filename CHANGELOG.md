@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **pi-mono extension** - TypeScript extension for [pi-mono](https://github.com/MarioZechner/pi-mono) AI assistant
+- **pi-mono extension** - TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant monorepo (pi-agent)
   - `pi-extension/dippy-extension.ts` - Main extension file
   - `src/dippy/pi_wrapper.py` - JSON wrapper for dippy's `analyze()` function
   - Hooks into pi-mono's `tool_call` event for bash commands
