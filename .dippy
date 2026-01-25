@@ -6,16 +6,16 @@ allow ./bin/dippy-hook *
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
-deny python3 * "Use `uv run python`"
-deny python * "Use `uv run python`"
-deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
-#allow uv run python -c *
+#deny python3 * "Use `uv run python`"
+#deny python * "Use `uv run python`"
+#deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
+allow uv run python -c *
 
 allow uv run python -m pytest *
 allow uv run python *
 allow uv run pytest *
-#allow pytest run *
-#allow pytest run
+allow pytest run *
+allow pytest run
 
 deny .venv/bin/*
 
@@ -34,3 +34,5 @@ allow ruff *
 
 # for merge yolo
 allow git *
+allow cc-find /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev *
+allow cc-find /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/** *

@@ -60,35 +60,35 @@ class TestSudoWrapperContext:
 
     def test_sudo_sets_wrapper_context(self):
         """Sudo handler returns wrapper_context=['sudo'] for delegate actions."""
-        from dippy.cli.sudo import classify
+        from dippy.cli.sudo import classify, HandlerContext
 
-        result = classify(["sudo", "rm", "/tmp/x"])
+        result = classify(HandlerContext(["sudo", "rm", "/tmp/x"]))
         assert result.action == "delegate"
         assert result.inner_command == "rm /tmp/x"
         assert result.wrapper_context == ["sudo"]
 
     def test_doas_sets_wrapper_context(self):
         """Doas handler returns wrapper_context=['sudo'] for delegate actions."""
-        from dippy.cli.sudo import classify
+        from dippy.cli.sudo import classify, HandlerContext
 
-        result = classify(["doas", "rm", "/tmp/x"])
+        result = classify(HandlerContext(["doas", "rm", "/tmp/x"]))
         assert result.action == "delegate"
         assert result.inner_command == "rm /tmp/x"
         assert result.wrapper_context == ["sudo"]
 
     def test_pkexec_sets_wrapper_context(self):
         """Pkexec handler returns wrapper_context=['sudo'] for delegate actions."""
-        from dippy.cli.sudo import classify
+        from dippy.cli.sudo import classify, HandlerContext
 
-        result = classify(["pkexec", "rm", "/tmp/x"])
+        result = classify(HandlerContext(["pkexec", "rm", "/tmp/x"]))
         assert result.action == "delegate"
         assert result.inner_command == "rm /tmp/x"
         assert result.wrapper_context == ["sudo"]
 
     def test_sudo_no_wrapper_context_for_interactive(self):
         """Sudo handler does not set wrapper_context for ask actions."""
-        from dippy.cli.sudo import classify
+        from dippy.cli.sudo import classify, HandlerContext
 
-        result = classify(["sudo", "-i"])
+        result = classify(HandlerContext(["sudo", "-i"]))
         assert result.action == "ask"
         assert result.wrapper_context is None

@@ -36,5 +36,5 @@ def classify(ctx: HandlerContext) -> Classification:
     if not inner_cmd:
         return Classification("ask", description=f"{base} -c (no command)")
 
-    # Delegate to inner command check
-    return Classification("delegate", inner_command=inner_cmd)
+    # Delegate to inner command check, preserving remote context
+    return Classification("delegate", inner_command=inner_cmd, remote=ctx.remote)

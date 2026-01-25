@@ -181,7 +181,7 @@ class TestUvRunDelegation:
         """Config allow rule for python should approve uv run python."""
         from dippy.core.config import Config, Rule
 
-        config = Config(rules=[Rule("allow", "python")])
+        config = Config(rules=[Rule("allow", "python *")])
         result = check("uv run python script.py", config=config)
         assert is_approved(result), "uv run should delegate to inner command config"
 
@@ -201,7 +201,7 @@ class TestUvRunDelegation:
         """Config allow rule for make should approve uv run make."""
         from dippy.core.config import Config, Rule
 
-        config = Config(rules=[Rule("allow", "make")])
+        config = Config(rules=[Rule("allow", "make *")])
         result = check("uv run make build", config=config)
         assert is_approved(result), "uv run make should delegate to config rules"
 
@@ -209,6 +209,6 @@ class TestUvRunDelegation:
         """uv run --with pkg python should delegate to python config."""
         from dippy.core.config import Config, Rule
 
-        config = Config(rules=[Rule("allow", "python")])
+        config = Config(rules=[Rule("allow", "python *")])
         result = check("uv run --with requests python script.py", config=config)
         assert is_approved(result), "uv run with flags should still delegate"

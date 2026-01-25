@@ -53,26 +53,26 @@ class TestScriptConfigIntegration:
 
     def test_config_allow_script_pattern_bypasses_handler(self, check):
         """Config rule for script pattern approves before handler runs."""
-        config = Config(rules=[Rule("allow", "script -q /dev/null")])
+        config = Config(rules=[Rule("allow", "script -q /dev/null *")])
         # This would normally be blocked (rm is unsafe), but config takes priority
         result = check("script -q /dev/null rm -rf /", config=config)
         assert is_approved(result)
 
     def test_config_deny_inner_command_blocks(self, check):
         """Config deny rule on inner command blocks delegation."""
-        config = Config(rules=[Rule("deny", "rm", message="use trash")])
+        config = Config(rules=[Rule("deny", "rm *", message="use trash")])
         result = check("script -q /dev/null rm foo.txt", config=config)
         assert not is_approved(result)
 
     def test_config_allow_inner_command_approves(self, check):
         """Config allow rule on inner command approves delegation."""
-        config = Config(rules=[Rule("allow", "python")])
+        config = Config(rules=[Rule("allow", "python *")])
         # python script.py normally needs confirmation, but config allows it
         result = check("script -q /dev/null python script.py", config=config)
         assert is_approved(result)
 
     def test_config_deny_script_blocks_all(self, check):
         """Config deny rule on script blocks everything."""
-        config = Config(rules=[Rule("deny", "script", message="no recording")])
+        config = Config(rules=[Rule("deny", "script *", message="no recording")])
         result = check("script -q /dev/null ls", config=config)
         assert not is_approved(result)

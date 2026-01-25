@@ -1010,6 +1010,8 @@ def _match_words(
     config: Config,
     cwd: Path,
     context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> Match | None:
     """Match command words against rules. Returns last matching rule.
 
@@ -1020,8 +1022,10 @@ def _match_words(
         context_flags: Optional set of active context flags (e.g., {"@subshell"}).
             Rules with required_flags only match if all flags are present.
             Rules with negated_flags only match if NONE of those flags are present.
+        remote: If True, paths are NOT expanded against cwd (container/remote context).
     """
-    normalized_cmd = _normalize_words(words, cwd)
+    # When remote, don't expand paths - match against literal words
+    normalized_cmd = " ".join(words) if remote else _normalize_words(words, cwd)
     result: Match | None = None
     active_flags = context_flags or frozenset()
 
@@ -1083,11 +1087,20 @@ def _normalize_redirect_pattern(pattern: str, cwd: Path) -> str:
     return pattern
 
 
-def _match_redirect(target: str, config: Config, cwd: Path) -> Match | None:
-    """Match redirect target against rules. Returns last matching rule."""
-    normalized_target = _normalize_path(target, cwd)
+def _match_redirect(target: str, config: Config, cwd: Path, *, remote: bool = False) -> Match | None:
+    """Match redirect target against rules. Returns last matching rule.
+
+    Args:
+        target: Redirect target to match.
+        config: Configuration with redirect rules.
+        cwd: Current working directory for path resolution.
+        remote: If True, paths are NOT expanded against cwd (container/remote context).
+    """
+    # When remote, don't expand paths - match against literal target
+    normalized_target = target if remote else _normalize_path(target, cwd)
     result: Match | None = None
     for rule in config.redirect_rules:
+        # Patterns are always normalized as host paths (user's intent)
         normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
         if _glob_match(normalized_target, normalized_pattern):
             result = Match(
@@ -1115,6 +1128,8 @@ def match_command(
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
         context_flags: Optional set of active context flags (e.g., {"@subshell"}).
+        remote: If True, command runs in remote context (container, ssh).
+                Paths are NOT expanded against host cwd.
 
     Returns:
         Match object for the deciding rule, or None if no rules matched.
@@ -1124,13 +1139,13 @@ def match_command(
     matches: list[Match] = []
 
     # Match command words
-    cmd_match = _match_words(cmd.words, config, cwd, context_flags)
+    cmd_match = _match_words(cmd.words, config, cwd, context_flags, remote=remote)
     if cmd_match:
         matches.append(cmd_match)
 
     # Match each redirect
     for target in cmd.redirects:
-        redirect_match = _match_redirect(target, config, cwd)
+        redirect_match = _match_redirect(target, config, cwd, remote=remote)
         if redirect_match:
             matches.append(redirect_match)
 
@@ -1147,7 +1162,7 @@ def match_command(
     return matches[0]
 
 
-def match_redirect(target: str, config: Config, cwd: Path) -> Match | None:
+def match_redirect(target: str, config: Config, cwd: Path, *, remote: bool = False) -> Match | None:
     """Match a redirect target against redirect rules.
 
     This is a convenience function for testing and for cases where you
@@ -1158,11 +1173,12 @@ def match_redirect(target: str, config: Config, cwd: Path) -> Match | None:
         target: Redirect target path.
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
+        remote: If True, paths are NOT expanded against cwd (container/remote context).
 
     Returns:
         Match object for the last matching rule, or None if no match.
     """
-    return _match_redirect(target, config, cwd)
+    return _match_redirect(target, config, cwd, remote=remote)
 
 
 def match_after(words: list[str], config: Config, cwd: Path) -> str | None:

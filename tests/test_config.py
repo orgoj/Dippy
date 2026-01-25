@@ -1882,6 +1882,7 @@ class TestMcpEndToEnd:
         # Reload and run
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -1921,6 +1922,7 @@ class TestMcpEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -1951,6 +1953,7 @@ class TestMcpEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -1985,6 +1988,7 @@ class TestMcpEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -2194,6 +2198,7 @@ class TestWebEndToEnd:
         # Reload and run
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -2233,6 +2238,7 @@ class TestWebEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -2263,6 +2269,7 @@ class TestWebEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)
@@ -2297,6 +2304,7 @@ class TestWebEndToEnd:
 
         import importlib
 
+        monkeypatch.setattr(sys, "argv", ["dippy"])
         import dippy.dippy
 
         importlib.reload(dippy.dippy)

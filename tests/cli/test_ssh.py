@@ -59,18 +59,18 @@ class TestSshWrapperContext:
 
     def test_ssh_sets_wrapper_context(self):
         """SSH handler returns wrapper_context=['ssh'] for delegate actions."""
-        from dippy.cli.ssh import classify
+        from dippy.cli.ssh import classify, HandlerContext
 
-        result = classify(["ssh", "host", "rm", "/tmp/x"])
+        result = classify(HandlerContext(["ssh", "host", "rm", "/tmp/x"]))
         assert result.action == "delegate"
         assert result.inner_command == "rm /tmp/x"
         assert result.wrapper_context == ["ssh"]
 
     def test_ssh_no_wrapper_context_for_interactive(self):
         """SSH handler does not set wrapper_context for ask actions."""
-        from dippy.cli.ssh import classify
+        from dippy.cli.ssh import classify, HandlerContext
 
-        result = classify(["ssh", "host"])
+        result = classify(HandlerContext(["ssh", "host"]))
         assert result.action == "ask"
         # wrapper_context is None or not present for non-delegate actions
         assert result.wrapper_context is None

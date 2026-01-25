@@ -20,6 +20,7 @@ class HandlerContext:
     """Context passed to handlers."""
 
     tokens: list[str]
+    remote: bool = False  # Whether command runs in remote context (container, ssh, etc.)
 
 
 @dataclass(frozen=True)

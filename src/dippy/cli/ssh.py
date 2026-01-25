@@ -21,6 +21,7 @@ def classify(ctx: HandlerContext) -> Classification:
     - ssh -t host command args...     # With options - delegate
     - ssh user@host "command"         # Quoted command - delegate
     """
+    tokens = ctx.tokens
     if len(tokens) < 2:
         return Classification("ask", description="ssh (no target)")
 
