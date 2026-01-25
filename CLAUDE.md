@@ -32,7 +32,9 @@ just check         # All of the above in parallel — MUST PASS before committin
 - testing: use fictional commands in config rule tests to avoid SIMPLE_SAFE allowlist interference
 - testing: always isolate tests from live config/system using tmp_path, monkeypatch, and explicit isolation verification tests
 - testing: TDD is mandatory for ALL changes including "small" bug fixes - write failing test FIRST, then implement fix
+- testing: run expensive commands once to /tmp/file.txt 2>&1, analyze with grep/wc/head/tail - never re-run for different views
 - verification: check actual running system (real files, real logs, real config) - never verify with synthetic examples when real system is accessible
+- verification: never assume systematic issues across multiple files - use grep/rg to find actual errors, fix ONLY confirmed bugs
 - documentation: always read README.md before making assumptions about config/log locations
 - documentation: README.md has priority for user-facing features - docs/ is for technical reference only
 - documentation: update docs/README when adding/changing features
@@ -40,7 +42,9 @@ just check         # All of the above in parallel — MUST PASS before committin
 - documentation: main docs in `docs/config.md`, README for overview only
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 - development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
+- development: if changing >5 files, you're probably wrong - verify with actual error data before making mass changes
 - development: don't simplify user's exact requirements without asking - implement literally
+- development: ask before acting when user requests explanation - don't make edits when user says "vysvetli mi" or "nic dalsiho nedelej"
 - development: use code review subagent for significant changes (>100 lines or new features)
 - development: avoid duplicate list maintenance - discover from code, never maintain separate constant lists (e.g., BUILTIN_COMMANDS)
 - development: avoid imports inside functions - ugly pattern that violates code cleanliness
@@ -59,6 +63,8 @@ just check         # All of the above in parallel — MUST PASS before committin
 
 - context_flags: when delegating analysis, preserve outer context by combining with inner context_flags
 - context_flags: when creating Decision objects, explicitly pass context_flags parameter (don't rely on defaults)
+- context_flags: when handlers delegate via Classification, preserve remote flag by returning Classification(..., remote=ctx.remote)
+- remote mode: container/ssh commands should NOT expand paths against host cwd - use literal paths when remote=True
 - type changes: when changing field types in dataclasses, update ALL consumers systematically (handlers, analyzer, tests)
 - optional sets: use truthiness (`if value`) not identity (`if value is not None`) for optional frozensets - empty set is falsy but not None
 
@@ -77,6 +83,13 @@ just check         # All of the above in parallel — MUST PASS before committin
 - commits: run `just test` BEFORE committing - NON-NEGOTIABLE, never commit failing tests or skip this step
 - commits: use conventional format (feat:, fix:, chore:, docs:) with Co-Authored-By trailer
 - commits: push immediately after commit when user requests
+
+## Merge Process
+
+- upstream merges: run tests IMMEDIATELY after merge to baseline - don't assume systematic issues
+- verification: create merge report with git hash/date in filename (docs/orgoj/merge_report_YYYY-MM-DD.md)
+- verification: verify README claims against actual code using git diff and grep - don't claim features without evidence
+- context: use git log --all --source to verify commit origins before attributing features
 
 ## Upstream
 

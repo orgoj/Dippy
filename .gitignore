@@ -45,5 +45,5 @@ Thumbs.db
 .ruff_cache/
 
 # Claude Code
-.claude/*
-!.claude/skills/
+# .claude/*
+# !.claude/skills/
