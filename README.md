@@ -17,12 +17,11 @@
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
-- **Bash test constructs** — support for `[ ]` and `[[ ]]` conditions
+- **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` field added for better context
-- **82 more safe commands** — expanded allowlist from man page review
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
 <!-- FORK ENHANCEMENTS END -->
 
