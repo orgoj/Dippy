@@ -21,7 +21,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 ## Project Context
 
 - **Config**: `~/.dippy/config` (global), `.dippy/` (project-local)
-- **Audit log**: `~/.dippy/audit.log` (JSONL format with cwd, decision, cmd, ts fields)
+- **Audit log**: `~/.dippy/audit.log` (JSONL format with cwd, decision, cmd, agent, ts fields)
 - **Entry point**: `log_decision()` in `src/dippy/core/config.py`
 - **Standard logging**: goes to `~/.claude/hook-approvals.log`
 
@@ -40,8 +40,11 @@ just check         # All of the above in parallel — MUST PASS before committin
 - documentation: update docs/README when adding/changing features
 - documentation: keep docs minimal and tool-specific - don't explain technologies users already know
 - documentation: main docs in `docs/config.md`, README for overview only
+- documentation: when adding tool support, update core docs, pi-extension/README.md, and docs/hook-systems/
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 - development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
+- development: prefer native Dippy tool matchers (match_read, match_edit) over synthetic bash command simulation
+- development: ensure pi_wrapper.py remains synchronized with dippy.py for logging, agent identification, and tool handling
 - development: if changing >5 files, you're probably wrong - verify with actual error data before making mass changes
 - development: don't simplify user's exact requirements without asking - implement literally
 - development: ask before acting when user requests explanation - don't make edits when user says "vysvetli mi" or "nic dalsiho nedelej"
@@ -58,6 +61,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - allowlists: SIMPLE_SAFE commands cannot be overridden by config rules
 - pattern matching: happens after quote stripping by Parable parser
 - directives: only `ask` and `deny` support messages, `allow` does not
+- tool directives: supports `allow-read`, `ask-read`, `deny-read` for file access and `allow-edit`, `ask-edit`, `deny-edit` for modifications
 
 ## Technical Patterns
 
@@ -67,6 +71,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - remote mode: container/ssh commands should NOT expand paths against host cwd - use literal paths when remote=True
 - type changes: when changing field types in dataclasses, update ALL consumers systematically (handlers, analyzer, tests)
 - optional sets: use truthiness (`if value`) not identity (`if value is not None`) for optional frozensets - empty set is falsy but not None
+- banned modules: avoid `shlex`; use `dippy.core.parser.tokenize` for bash-compatible tokenization
 
 ## Communication
 
