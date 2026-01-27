@@ -21,7 +21,7 @@
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
-- **Audit log** — `cwd` field added for better context
+- **Audit log** — `cwd` and `agent` fields added for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 <!-- FORK ENHANCEMENTS END -->

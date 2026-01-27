@@ -1,7 +1,5 @@
 """Tests for read rules matching."""
 
-
-
 from dippy.core.config import Config, Rule, match_read, parse_config
 
 

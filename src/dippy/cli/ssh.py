@@ -5,7 +5,6 @@ Handles ssh with remote command execution.
 Delegates to inner command check with 'ssh' wrapper context.
 """
 
-
 from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["ssh"]

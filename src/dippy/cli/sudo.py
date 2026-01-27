@@ -5,7 +5,6 @@ Handles sudo with command execution.
 Delegates to inner command check with 'sudo' wrapper context.
 """
 
-
 from dippy.cli import Classification, HandlerContext
 
 COMMANDS = ["sudo", "doas", "pkexec"]

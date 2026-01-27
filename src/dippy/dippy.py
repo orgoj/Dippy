@@ -234,6 +234,7 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
         command=command,
         cwd=cwd,
         context_flags=result.context_flags,
+        agent=MODE,
     )
 
     if result.action == "allow":
@@ -290,7 +291,7 @@ def check_mcp_tool(tool_name: str, config: Config) -> dict:
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
     reason = match.message if match.message else f"[{match.pattern}]"
-    log_decision(match.decision, reason, rule=match.pattern)
+    log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
         return approve(reason)
     elif match.decision == "deny":
@@ -324,7 +325,7 @@ def check_web_tool(query: str, config: Config) -> dict:
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
     reason = match.message if match.message else f"[{match.pattern}]"
-    log_decision(match.decision, reason, rule=match.pattern)
+    log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
         return approve(reason)
     elif match.decision == "deny":
@@ -385,6 +386,7 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
         tool=tool_name,
         file_path=file_path,
         cwd=cwd,
+        agent=MODE,
     )
 
     if match.decision == "allow":
@@ -490,6 +492,7 @@ def cli_mode(args: argparse.Namespace) -> int:
         command=command,
         cwd=cwd,
         context_flags=result.context_flags,
+        agent=MODE,
     )
 
     # Map 'pass' to 'ask' in CLI mode (pass means "let the AI decide" which
@@ -577,7 +580,7 @@ def main():
                     permission_mode = input_data.get("permission_mode", "default")
                     if permission_mode in ("bypassPermissions", "dontAsk"):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
-                        log_decision("allow", permission_mode)
+                        log_decision("allow", permission_mode, agent=MODE)
                         print(json.dumps(approve(permission_mode)))
                         return
                 # Handle MCP tool
@@ -598,7 +601,7 @@ def main():
                     permission_mode = input_data.get("permission_mode", "default")
                     if permission_mode in ("bypassPermissions", "dontAsk"):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
-                        log_decision("allow", permission_mode)
+                        log_decision("allow", permission_mode, agent=MODE)
                         print(json.dumps(approve(permission_mode)))
                         return
                 # Handle WebSearch tool
@@ -624,7 +627,11 @@ def main():
                     ):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
                         log_decision(
-                            "allow", tool=tool_name, file_path=file_path, cwd=cwd
+                            "allow",
+                            tool=tool_name,
+                            file_path=file_path,
+                            cwd=cwd,
+                            agent=MODE,
                         )
                         print(json.dumps(approve(permission_mode)))
                         return
@@ -649,7 +656,7 @@ def main():
             permission_mode = input_data.get("permission_mode", "default")
             if permission_mode in ("bypassPermissions", "dontAsk"):
                 logging.info(f"Bypass mode ({permission_mode}): {command}")
-                log_decision("allow", permission_mode, command=command)
+                log_decision("allow", permission_mode, command=command, agent=MODE)
                 print(json.dumps(approve(permission_mode)))
                 return
 

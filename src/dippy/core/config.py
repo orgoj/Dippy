@@ -8,6 +8,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from dippy.core.parser import tokenize
+
 # Cache home directory at module load - fails fast if HOME is unset
 _HOME = Path.home()
 
@@ -443,12 +445,9 @@ def _parse_option_rule(decision: str, rest: str) -> Rule:
 
     # Parse prefix and items
     # Prefix can be quoted or single word
-    import shlex
-
-    try:
-        parts = shlex.split(pattern)
-    except ValueError:
-        # Fallback to simple split if shlex fails
+    parts = tokenize(pattern)
+    if not parts:
+        # Fallback to simple split if tokenize fails
         parts = pattern.split()
 
     if not parts:
@@ -1448,6 +1447,7 @@ def log_decision(
     tool: str | None = None,
     file_path: str | None = None,
     context_flags: frozenset[str] | None = None,
+    agent: str | None = None,
 ) -> None:
     """Log a decision. No-op if logging not configured or disabled."""
     global _log_disabled
@@ -1474,6 +1474,8 @@ def log_decision(
         entry["file_path"] = file_path
     if context_flags is not None and context_flags:
         entry["context_flags"] = sorted(context_flags)
+    if agent is not None:
+        entry["agent"] = agent
     entry["ts"] = datetime.now(timezone.utc).isoformat()
 
     try:

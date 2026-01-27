@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Agent Identification** - Audit log now includes `agent` field (`claude`, `gemini`, `cursor`, `pi`, `cli`)
 - **File Read Approval** - `allow-read`, `ask-read`, `deny-read` rules
   - Added full support for `Read` tool in Claude Code and pi-mono
   - Native config directives for read operations (replaces synthetic cat checks)

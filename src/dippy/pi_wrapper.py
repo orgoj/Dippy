@@ -20,7 +20,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from dippy.core.analyzer import analyze, Decision
-from dippy.core.config import load_config, match_edit, match_read
+from dippy.core.config import (
+    load_config,
+    match_edit,
+    match_read,
+    configure_logging,
+    log_decision,
+)
 
 
 def main():
@@ -35,6 +41,7 @@ def main():
         # Load dippy config
         try:
             config = load_config(cwd)
+            configure_logging(config)
         except Exception as e:
             result = {
                 "action": "ask",
@@ -85,6 +92,35 @@ def main():
 
         else:
             decision = Decision("ask", f"Unknown request type: {req_type}")
+
+        # Log the decision
+        if req_type == "bash":
+            log_decision(
+                decision.action,
+                command=input_data.get("command", ""),
+                cwd=cwd,
+                message=decision.reason,
+                context_flags=getattr(decision, "context_flags", None),
+                agent="pi",
+            )
+        elif req_type == "edit":
+            log_decision(
+                decision.action,
+                tool="Edit",
+                file_path=input_data.get("path", ""),
+                cwd=cwd,
+                message=decision.reason,
+                agent="pi",
+            )
+        elif req_type == "read":
+            log_decision(
+                decision.action,
+                tool="Read",
+                file_path=input_data.get("path", ""),
+                cwd=cwd,
+                message=decision.reason,
+                agent="pi",
+            )
 
         # Output JSON
         result = {
