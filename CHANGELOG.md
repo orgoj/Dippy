@@ -9,13 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **pi-mono extension** - TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant monorepo (pi-agent)
-  - `pi-extension/dippy-extension.ts` - Main extension file
-  - `src/dippy/pi_wrapper.py` - JSON wrapper for dippy's `analyze()` function
-  - Hooks into pi-mono's `tool_call` event for bash commands
-  - Uses existing dippy configuration (`~/.dippy/config`, `.dippy`)
-  - Installation via symlink to `~/.pi/agent/extensions/`
-  - See [pi-extension/README.md](pi-extension/README.md) for details
+- **pi-mono extension enhancement** - Full tool validation for [pi-mono](https://github.com/badlogic/pi-mono)
+  - Added file access control for `read`, `write`, and `edit` tools
+  - Integrated native `allow-edit`, `ask-edit`, `deny-edit` rules for file modifications
+  - Added synthetic `cat` validation for file reads to reuse existing command safelists
+  - Updated `pi-extension/dippy-extension.ts` and `src/dippy/pi_wrapper.py` for multi-tool support
+  - Updated [pi-extension/README.md](pi-extension/README.md) with file-specific configuration examples
 
 ## [Previous Versions]
 

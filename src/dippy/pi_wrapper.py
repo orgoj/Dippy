@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
 """
-pi-mono wrapper for dippy command validation.
+pi-mono wrapper for dippy command and file access validation.
 
-Calls dippy's analyze() function and outputs JSON result.
-Input: JSON with {"command": "...", "cwd": "..."}
+Calls dippy's analysis functions and outputs JSON result.
+Input: JSON with {
+    "type": "bash" | "read" | "edit",
+    "command": "...", (for bash)
+    "path": "...",    (for read/edit)
+    "cwd": "..."
+}
 Output: JSON with {"action": "allow|ask|deny|pass", "reason": "...", "context_flags": [...]}
 """
 import json
@@ -13,35 +18,23 @@ from pathlib import Path
 # Add dippy src to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from dippy.core.analyzer import analyze
-from dippy.core.config import load_config
+from dippy.core.analyzer import analyze, Decision
+from dippy.core.config import load_config, match_edit
 
 
 def main():
-    """Read JSON from stdin, call analyze(), output JSON."""
+    """Read JSON from stdin, dispatch to appropriate validator, output JSON."""
     try:
         # Read input
         input_data = json.loads(sys.stdin.read())
-        command = input_data.get('command', '')
+        req_type = input_data.get('type', 'bash')
         cwd_str = input_data.get('cwd', '.')
-
-        if not command:
-            result = {
-                'action': 'ask',
-                'reason': 'Empty command',
-                'error': False
-            }
-            print(json.dumps(result))
-            sys.exit(0)
-
-        # Convert cwd to Path
         cwd = Path(cwd_str).resolve() if cwd_str else Path.cwd()
 
-        # Load dippy config (will use ~/.dippy/config or .dippy from cwd)
+        # Load dippy config
         try:
             config = load_config(cwd)
         except Exception as e:
-            # If config fails, conservatively ask for approval
             result = {
                 'action': 'ask',
                 'reason': f'Config error: {str(e)}',
@@ -50,21 +43,51 @@ def main():
             print(json.dumps(result))
             sys.exit(0)
 
-        # Analyze command using dippy's actual entry point
-        decision = analyze(command, config, cwd)
+        decision = None
 
-        # Output JSON (map dippy's Decision to pi-mono format)
+        if req_type == 'bash':
+            command = input_data.get('command', '')
+            if not command:
+                decision = Decision('ask', 'Empty command')
+            else:
+                decision = analyze(command, config, cwd)
+
+        elif req_type == 'edit':
+            path = input_data.get('path', '')
+            if not path:
+                decision = Decision('ask', 'Empty path for edit')
+            else:
+                # Use native Dippy match_edit rules
+                match = match_edit(path, config, cwd)
+                if match:
+                    decision = Decision(match.decision, f"edit {path}: {match.message or match.pattern}")
+                else:
+                    # Fallback to global default for edits
+                    decision = Decision(config.default, f"edit {path} (default)")
+
+        elif req_type == 'read':
+            path = input_data.get('path', '')
+            if not path:
+                decision = Decision('ask', 'Empty path for read')
+            else:
+                # For reads, we simulate a 'cat' command to reuse existing safelists/rules
+                # cat is in SIMPLE_SAFE, so it will be allowed unless explicitly denied
+                decision = analyze(f'cat "{path}"', config, cwd)
+
+        else:
+            decision = Decision('ask', f'Unknown request type: {req_type}')
+
+        # Output JSON
         result = {
             'action': decision.action,
             'reason': decision.reason,
-            'context_flags': sorted(decision.context_flags) if decision.context_flags else [],
+            'context_flags': sorted(decision.context_flags) if getattr(decision, 'context_flags', None) else [],
             'error': False
         }
         print(json.dumps(result))
         sys.exit(0)
 
     except json.JSONDecodeError as e:
-        # Invalid JSON input
         error_result = {
             'action': 'ask',
             'reason': f'Invalid JSON input: {str(e)}',
@@ -74,7 +97,6 @@ def main():
         sys.exit(1)
 
     except Exception as e:
-        # On error, conservatively ask for approval
         error_result = {
             'action': 'ask',
             'reason': f'Dippy error: {str(e)}',
