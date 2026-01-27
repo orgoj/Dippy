@@ -9,10 +9,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **File Read Approval** - `allow-read`, `ask-read`, `deny-read` rules
+  - Added full support for `Read` tool in Claude Code and pi-mono
+  - Native config directives for read operations (replaces synthetic cat checks)
+  - Consistent glob matching with file edit rules
 - **pi-mono extension enhancement** - Full tool validation for [pi-mono](https://github.com/badlogic/pi-mono)
   - Added file access control for `read`, `write`, and `edit` tools
-  - Integrated native `allow-edit`, `ask-edit`, `deny-edit` rules for file modifications
-  - Added synthetic `cat` validation for file reads to reuse existing command safelists
+  - Integrated native `allow-edit` and `allow-read` rules
   - Updated `pi-extension/dippy-extension.ts` and `src/dippy/pi_wrapper.py` for multi-tool support
   - Updated [pi-extension/README.md](pi-extension/README.md) with file-specific configuration examples
 
@@ -22,7 +25,7 @@ See upstream [ldayton/Dippy](https://github.com/ldayton/Dippy) for changes befor
 
 ### Fork Features (not in upstream)
 
-- File Edit Approval - `allow-edit`, `ask-edit`, `deny-edit` rules
+- File Edit/Read Approval - `allow-edit`, `allow-read` etc. rules
 - Include directive - `include <path-or-glob>` for composable configs
 - Context-aware rules - `[flags]` syntax with `@subshell`, `@compound`, negation
 - Custom wrappers - `wrapper <name>` for project-specific tools

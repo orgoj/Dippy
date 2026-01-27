@@ -854,7 +854,7 @@ Added v2.0.64 - allows correlation between PreToolUse and PostToolUse for same t
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Write|Edit|MultiEdit",
+        "matcher": "Write|Edit|MultiEdit|Read",
         "hooks": [
           {
             "type": "command",

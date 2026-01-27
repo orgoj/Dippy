@@ -10,7 +10,7 @@
 <!-- FORK ENHANCEMENTS START -->
 ### 🍴 Fork Enhancements (vs [upstream](https://github.com/ldayton/Dippy))
 
-- **File Edit Approval** — `allow-edit`, `ask-edit`, `deny-edit` rules for Write/Edit/MultiEdit tools
+- **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.)
@@ -144,17 +144,19 @@ echo 'ls -la' | dippy --stdin       # read command from stdin
 
 ---
 
-## File Edit Approval
+## File Operation Approval
 
-Dippy can also auto-approve file edits (`Write`, `Edit`, `MultiEdit` tools) using the same config system. To enable:
+Dippy can also auto-approve file operations (`Read`, `Write`, `Edit`, `MultiEdit` tools) using the same config system. To enable:
 
 ```json
-"matcher": "Bash|Write|Edit|MultiEdit"
+"matcher": "Bash|Read|Write|Edit|MultiEdit"
 ```
 
-Then use `allow-edit`, `ask-edit`, `deny-edit` rules in your config:
+Then use `allow-edit`, `allow-read`, etc. rules in your config:
 
 ```
+allow-read src/**        # auto-approve reading source files
+deny-read **/.env*       # block reading env files
 allow-edit src/**        # auto-approve source edits
 ask-edit **/config.*     # prompt for config changes
 deny-edit **/.env*       # block env file edits

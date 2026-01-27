@@ -43,6 +43,7 @@ from dippy.core.config import (
     match_after_mcp,
     match_after_web,
     match_edit,
+    match_read,
     match_mcp,
     match_web,
 )
@@ -83,8 +84,22 @@ def _detect_mode_from_input(input_data: dict) -> str:
 
     # Claude uses "Bash" and MCP tools use "mcp__*" prefix
     # Known Claude Code tools (don't warn about these)
-    known_claude_tools = {"Bash", "Edit", "Write", "Read", "MultiEdit", "Glob", "Grep", "WebSearch", "WebFetch"}
-    if tool_name and tool_name not in known_claude_tools and not tool_name.startswith("mcp__"):
+    known_claude_tools = {
+        "Bash",
+        "Edit",
+        "Write",
+        "Read",
+        "MultiEdit",
+        "Glob",
+        "Grep",
+        "WebSearch",
+        "WebFetch",
+    }
+    if (
+        tool_name
+        and tool_name not in known_claude_tools
+        and not tool_name.startswith("mcp__")
+    ):
         logging.warning(f"Unknown tool_name '{tool_name}', defaulting to Claude mode")
     return "claude"
 
@@ -340,22 +355,26 @@ SHELL_TOOL_NAMES = frozenset(
 )
 
 # Tool names that indicate file operations
-FILE_TOOL_NAMES = frozenset({"Write", "Edit", "MultiEdit"})
+FILE_TOOL_NAMES = frozenset({"Write", "Edit", "MultiEdit", "Read"})
 
 
 def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -> dict:
     """Check if a file operation should be approved based on edit rules.
 
     Args:
-        tool_name: Tool name (Write, Edit, MultiEdit).
-        file_path: Absolute path to the file being edited.
+        tool_name: Tool name (Write, Edit, MultiEdit, Read).
+        file_path: Absolute path to the file being edited/read.
         config: Loaded configuration.
         cwd: Current working directory.
 
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
-    match = match_edit(file_path, config, cwd)
+    if tool_name == "Read":
+        match = match_read(file_path, config, cwd)
+    else:
+        match = match_edit(file_path, config, cwd)
+
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
 
@@ -594,7 +613,7 @@ def main():
 
             # Check if this is a file operation tool
             if tool_name in FILE_TOOL_NAMES:
-                file_path = tool_input.get("file_path", "")
+                file_path = tool_input.get("file_path") or tool_input.get("path") or ""
                 if file_path and hook_event != "PostToolUse":
                     # Check for bypass permissions mode first
                     permission_mode = input_data.get("permission_mode", "default")

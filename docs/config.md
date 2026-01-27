@@ -125,6 +125,18 @@ ask-redirect <glob> "message"  # prompt with message shown to AI
 deny-redirect <glob>           # reject output redirects to matching paths
 deny-redirect <glob> "message" # reject with message shown to AI
 
+allow-edit <glob>            # allow file edits to matching paths
+ask-edit <glob>              # prompt for file edits
+ask-edit <glob> "message"    # prompt with message shown to AI
+deny-edit <glob>             # reject file edits
+deny-edit <glob> "message"   # reject with message shown to AI
+
+allow-read <glob>            # allow file reads to matching paths
+ask-read <glob>              # prompt for file reads
+ask-read <glob> "message"    # prompt with message shown to AI
+deny-read <glob>             # reject file reads
+deny-read <glob> "message"   # reject with message shown to AI
+
 after <glob>                   # post-action feedback (silent)
 after <glob> "message"         # post-action feedback with message to AI
 
@@ -808,7 +820,7 @@ Highlights `.dippy` files and files named `config` (for `~/.dippy/config`).
 
 ## File Operation Rules
 
-Claude Code hooks can match on `Write`, `Edit`, and `MultiEdit` tools, not just `Bash`. This lets Dippy control file modifications with per-project config.
+Claude Code hooks can match on `Read`, `Write`, `Edit`, and `MultiEdit` tools, not just `Bash`. This lets Dippy control file operations with per-project config.
 
 ### Syntax
 
@@ -818,20 +830,31 @@ ask-edit <glob>
 ask-edit <glob> "message"
 deny-edit <glob>
 deny-edit <glob> "message"
+
+allow-read <glob>
+ask-read <glob>
+ask-read <glob> "message"
+deny-read <glob>
+deny-read <glob> "message"
 ```
 
-Applies to Write, Edit, and MultiEdit operations. Globs match file paths using `**` for recursive directory matching (same as redirect rules).
+- `*-edit` applies to Write, Edit, and MultiEdit operations.
+- `*-read` applies to Read operations.
+
+Globs match file paths using `**` for recursive directory matching (same as redirect rules).
 
 ### Example
 
 ```
-# Allow editing source files
+# Allow reading and editing source files
+allow-read src/**
 allow-edit src/**
 
 # Prompt for config changes
 ask-edit **/config.* "Config changes need review"
 
 # Block sensitive files
+deny-read **/.env* "Do not read secrets from env files"
 deny-edit **/.env* "Use environment variables instead"
 deny-edit **/secrets/** "Secrets are managed externally"
 ```
@@ -850,7 +873,7 @@ If built-in permissions deny, Dippy never sees the request. If built-in allows, 
 To enable file operation rules, update your hook matcher in `settings.json`:
 
 ```json
-"matcher": "Bash|Write|Edit|MultiEdit"
+"matcher": "Bash|Read|Write|Edit|MultiEdit"
 ```
 
-**Trade-off:** This replaces Claude's "Allow editing this session" UI. There's no way for hooks to defer to Claude's native session memory.
+**Trade-off:** This replaces Claude's "Allow reading/editing this session" UI. There's no way for hooks to defer to Claude's native session memory.

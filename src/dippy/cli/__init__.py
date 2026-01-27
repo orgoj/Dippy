@@ -20,7 +20,9 @@ class HandlerContext:
     """Context passed to handlers."""
 
     tokens: list[str]
-    remote: bool = False  # Whether command runs in remote context (container, ssh, etc.)
+    remote: bool = (
+        False  # Whether command runs in remote context (container, ssh, etc.)
+    )
 
 
 @dataclass(frozen=True)
@@ -36,8 +38,12 @@ class Classification:
     action: Literal["allow", "ask", "delegate"]
     inner_command: str | None = None  # Required when action="delegate"
     description: str | None = None  # Optional, overrides default description
-    redirect_targets: tuple[str, ...] = ()  # File targets to check against redirect rules
-    wrapper_context: list[str] | None = None  # Context flags for wrapper commands (ssh, sudo)
+    redirect_targets: tuple[
+        str, ...
+    ] = ()  # File targets to check against redirect rules
+    wrapper_context: list[str] | None = (
+        None  # Context flags for wrapper commands (ssh, sudo)
+    )
     remote: bool = False  # Inner command runs in remote context (container, ssh, etc.)
 
 

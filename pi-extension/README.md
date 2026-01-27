@@ -7,7 +7,7 @@ Integrates dippy's bash command and file access approval system with pi-mono AI 
 This extension intercepts tool calls in pi-mono and validates them through [dippy](../README.md), providing:
 - **Bash Commands**: Validates `bash` tool calls using Dippy's AST analyzer.
 - **File Edits**: Validates `write` and `edit` tool calls using native `allow-edit` rules.
-- **File Reads**: Validates `read` tool calls (simulated as `cat` commands).
+- **File Reads**: Validates `read` tool calls using native `allow-read` rules.
 
 Benefits:
 - **Auto-approval** for safe operations (ls, cat, editing src files).
@@ -51,10 +51,10 @@ deny-edit .env           # block editing environment variables
 ```
 
 ### File Read Rules (for read tool)
-Reads are validated as `cat <path>` commands.
 ```bash
-deny cat .env            # block reading secrets
-# cat is in SIMPLE_SAFE, so most reads are allowed by default
+allow-read src/**        # auto-approve reading source code
+deny-read .env           # block reading secrets
+# default is 'ask' (or whatever global 'default' is set to)
 ```
 
 ## How It Works
@@ -85,7 +85,7 @@ echo '{"type":"bash","command":"ls","cwd":"."}' | python3 src/dippy/pi_wrapper.p
 # Test file edit (uses allow-edit rules)
 echo '{"type":"edit","path":"src/main.ts","cwd":"."}' | python3 src/dippy/pi_wrapper.py
 
-# Test file read (simulates cat)
+# Test file read (uses allow-read rules)
 echo '{"type":"read","path":"README.md","cwd":"."}' | python3 src/dippy/pi_wrapper.py
 ```
 

@@ -40,7 +40,7 @@ def analyze(
     cwd: Path,
     context_flags: frozenset[str] | None = None,
     *,
-    remote: bool = False
+    remote: bool = False,
 ) -> Decision:
     """
     Analyze a bash command string.
@@ -69,11 +69,20 @@ def analyze(
         return Decision("ask", "empty command")
 
     flags = context_flags or frozenset()
-    decisions = [_analyze_node(node, config, cwd, flags, remote=remote) for node in nodes]
+    decisions = [
+        _analyze_node(node, config, cwd, flags, remote=remote) for node in nodes
+    ]
     return _combine(decisions)
 
 
-def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str] = frozenset(), *, remote: bool = False) -> Decision:
+def _analyze_node(
+    node,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] = frozenset(),
+    *,
+    remote: bool = False,
+) -> Decision:
     """Recursively analyze a single AST node."""
     kind = getattr(node, "kind", None)
 
@@ -85,12 +94,18 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
         pipeline_flags = context_flags | frozenset({"@pipeline", "@compound"})
         # All commands in pipeline must be safe
         decisions = [
-            _analyze_node(cmd, config, cwd, pipeline_flags, remote=remote) for cmd in node.commands
+            _analyze_node(cmd, config, cwd, pipeline_flags, remote=remote)
+            for cmd in node.commands
         ]
         result = _combine(decisions)
         if result.action == "allow":
             reasons = [d.reason for d in decisions]
-            return Decision("allow", ", ".join(reasons), context_flags=pipeline_flags, children=decisions)
+            return Decision(
+                "allow",
+                ", ".join(reasons),
+                context_flags=pipeline_flags,
+                children=decisions,
+            )
         return result
 
     elif kind == "list":
@@ -115,26 +130,45 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
                 words = getattr(p, "words", [])
                 if words:
                     base = _get_word_value(words[0])
-                    is_cd = (base == "cd")
+                    is_cd = base == "cd"
 
             if remote and is_cd:
                 # Skip cd commands in remote mode
                 continue
-            decisions.append(_analyze_node(p, config, effective_cwd, list_flags, remote=remote))
+            decisions.append(
+                _analyze_node(p, config, effective_cwd, list_flags, remote=remote)
+            )
 
-        result = _combine(decisions) if decisions else Decision("allow", "empty list", context_flags=list_flags)
+        result = (
+            _combine(decisions)
+            if decisions
+            else Decision("allow", "empty list", context_flags=list_flags)
+        )
         if result.action == "allow":
             reasons = [d.reason for d in decisions]
-            return Decision("allow", ", ".join(reasons), context_flags=list_flags, children=decisions)
+            return Decision(
+                "allow",
+                ", ".join(reasons),
+                context_flags=list_flags,
+                children=decisions,
+            )
         return result
 
     elif kind == "if":
-        decisions = [_analyze_node(node.condition, config, cwd, context_flags, remote=remote)]
-        decisions.append(_analyze_node(node.then_body, config, cwd, context_flags, remote=remote))
+        decisions = [
+            _analyze_node(node.condition, config, cwd, context_flags, remote=remote)
+        ]
+        decisions.append(
+            _analyze_node(node.then_body, config, cwd, context_flags, remote=remote)
+        )
         if hasattr(node, "else_body") and node.else_body:
-            decisions.append(_analyze_node(node.else_body, config, cwd, context_flags, remote=remote))
+            decisions.append(
+                _analyze_node(node.else_body, config, cwd, context_flags, remote=remote)
+            )
         # Also check redirects on the if itself
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind in ("while", "until"):
@@ -142,47 +176,75 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
             _analyze_node(node.condition, config, cwd, context_flags, remote=remote),
             _analyze_node(node.body, config, cwd, context_flags, remote=remote),
         ]
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "for":
-        decisions = [_analyze_node(node.body, config, cwd, context_flags, remote=remote)]
+        decisions = [
+            _analyze_node(node.body, config, cwd, context_flags, remote=remote)
+        ]
         # Check iteration words for cmdsubs
         for word in getattr(node, "words", []):
-            decisions.extend(_analyze_word_parts(word, config, cwd, context_flags, remote=remote))
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+            decisions.extend(
+                _analyze_word_parts(word, config, cwd, context_flags, remote=remote)
+            )
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "for-arith":
-        decisions = [_analyze_node(node.body, config, cwd, context_flags, remote=remote)]
+        decisions = [
+            _analyze_node(node.body, config, cwd, context_flags, remote=remote)
+        ]
         # Check init/cond/incr expressions for cmdsubs (stored as raw strings)
         for expr in (node.init, node.cond, node.incr):
             if expr:
                 decisions.extend(
-                    _analyze_string_cmdsubs(expr, config, cwd, context_flags, remote=remote)
+                    _analyze_string_cmdsubs(
+                        expr, config, cwd, context_flags, remote=remote
+                    )
                 )
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "select":
-        decisions = [_analyze_node(node.body, config, cwd, context_flags, remote=remote)]
+        decisions = [
+            _analyze_node(node.body, config, cwd, context_flags, remote=remote)
+        ]
         # Check selection words for cmdsubs
         for word in getattr(node, "words", []):
-            decisions.extend(_analyze_word_parts(word, config, cwd, context_flags, remote=remote))
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+            decisions.extend(
+                _analyze_word_parts(word, config, cwd, context_flags, remote=remote)
+            )
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "case":
         decisions = []
         # Check case word for cmdsubs
         if hasattr(node, "word") and node.word:
-            decisions.extend(_analyze_word_parts(node.word, config, cwd, context_flags, remote=remote))
+            decisions.extend(
+                _analyze_word_parts(
+                    node.word, config, cwd, context_flags, remote=remote
+                )
+            )
         for pattern in node.patterns:
             if hasattr(pattern, "body") and pattern.body:
                 decisions.append(
-                    _analyze_node(pattern.body, config, cwd, context_flags, remote=remote)
+                    _analyze_node(
+                        pattern.body, config, cwd, context_flags, remote=remote
+                    )
                 )
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions) if decisions else Decision("allow", "empty case")
 
     elif kind == "function":
@@ -194,15 +256,23 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
     elif kind == "subshell":
         # Add @subshell and @compound context flags for commands in subshell
         subshell_flags = context_flags | frozenset({"@subshell", "@compound"})
-        decisions = [_analyze_node(node.body, config, cwd, subshell_flags, remote=remote)]
-        decisions.extend(_analyze_redirects(node, config, cwd, subshell_flags, remote=remote))
+        decisions = [
+            _analyze_node(node.body, config, cwd, subshell_flags, remote=remote)
+        ]
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, subshell_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "brace-group":
         # Add @bracegroup and @compound context flags for commands inside brace group
         bracegroup_flags = context_flags | frozenset({"@bracegroup", "@compound"})
-        decisions = [_analyze_node(node.body, config, cwd, bracegroup_flags, remote=remote)]
-        decisions.extend(_analyze_redirects(node, config, cwd, bracegroup_flags, remote=remote))
+        decisions = [
+            _analyze_node(node.body, config, cwd, bracegroup_flags, remote=remote)
+        ]
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, bracegroup_flags, remote=remote)
+        )
         return _combine(decisions)
 
     elif kind == "time":
@@ -221,15 +291,21 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
         # [[ expression ]] - check for command substitutions in operands
         decisions = []
         if hasattr(node, "body") and node.body:
-            decisions.extend(_analyze_cond_node(node.body, config, cwd, context_flags, remote=remote))
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+            decisions.extend(
+                _analyze_cond_node(node.body, config, cwd, context_flags, remote=remote)
+            )
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions) if decisions else Decision("allow", "conditional")
 
     elif kind == "arith-cmd":
         # (( expr )) - check for command substitutions in the expression
         decisions = []
         for cmdsub in _find_cmdsubs_in_arith(node.expression):
-            inner_decision = _analyze_node(cmdsub.command, config, cwd, context_flags, remote=remote)
+            inner_decision = _analyze_node(
+                cmdsub.command, config, cwd, context_flags, remote=remote
+            )
             if inner_decision.action != "allow":
                 decisions.append(
                     Decision(
@@ -240,7 +316,9 @@ def _analyze_node(node, config: Config, cwd: Path, context_flags: frozenset[str]
                 )
             else:
                 decisions.append(inner_decision)
-        decisions.extend(_analyze_redirects(node, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+        )
         return _combine(decisions) if decisions else Decision("allow", "arithmetic")
 
     elif kind == "comment":
@@ -334,9 +412,13 @@ def _extract_wrapper_args(
     return dest, inner_cmd
 
 
-
 def _analyze_command(
-    node, config: Config, cwd: Path, context_flags: frozenset[str] = frozenset(), *, remote: bool = False
+    node,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] = frozenset(),
+    *,
+    remote: bool = False,
 ) -> Decision:
     """Analyze a simple command node."""
     decisions = []
@@ -371,7 +453,9 @@ def _analyze_command(
             part_kind = getattr(part, "kind", None)
             if part_kind == "procsub":
                 # Process substitution: <(...) or >(...)
-                inner_decision = _analyze_node(part.command, config, cwd, context_flags, remote=remote)
+                inner_decision = _analyze_node(
+                    part.command, config, cwd, context_flags, remote=remote
+                )
                 if inner_decision.action != "allow":
                     direction = getattr(part, "direction", "?")
                     return Decision(
@@ -382,7 +466,9 @@ def _analyze_command(
                 decisions.append(inner_decision)
             elif part_kind == "cmdsub":
                 # Command substitution: $(...)
-                inner_decision = _analyze_node(part.command, config, cwd, context_flags, remote=remote)
+                inner_decision = _analyze_node(
+                    part.command, config, cwd, context_flags, remote=remote
+                )
                 if inner_decision.action != "allow":
                     return Decision(
                         inner_decision.action,
@@ -399,7 +485,9 @@ def _analyze_command(
                     and position > base_idx
                 ):
                     handler = get_handler(base)
-                    outer_result = handler.classify(HandlerContext(words[base_idx:], remote=remote))
+                    outer_result = handler.classify(
+                        HandlerContext(words[base_idx:], remote=remote)
+                    )
                     if outer_result.action != "allow":
                         inner_cmd = _get_word_value(word).strip("$()")
                         return Decision("ask", f"cmdsub injection risk: {inner_cmd}")
@@ -416,7 +504,9 @@ def _analyze_command(
                     decisions.extend(param_decisions)
 
     # 2. Check redirects
-    redirect_decisions = _analyze_redirects(node, config, cwd, context_flags, remote=remote)
+    redirect_decisions = _analyze_redirects(
+        node, config, cwd, context_flags, remote=remote
+    )
     for rd in redirect_decisions:
         if rd.action != "allow":
             return rd
@@ -431,14 +521,21 @@ def _analyze_command(
         decisions.append(Decision("allow", "conditional test"))
         return _combine(decisions)
 
-    cmd_decision = _analyze_simple_command(words, config, cwd, context_flags, remote=remote)
+    cmd_decision = _analyze_simple_command(
+        words, config, cwd, context_flags, remote=remote
+    )
     decisions.append(cmd_decision)
 
     return _combine(decisions)
 
 
 def _analyze_redirects(
-    node, config: Config, cwd: Path, context_flags: frozenset[str] | None = None, *, remote: bool = False
+    node,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> list[Decision]:
     """Analyze redirects on a node."""
     decisions = []
@@ -452,7 +549,9 @@ def _analyze_redirects(
                 content = getattr(r, "content", "")
                 if content:
                     decisions.extend(
-                        _analyze_string_cmdsubs(content, config, cwd, context_flags, remote=remote)
+                        _analyze_string_cmdsubs(
+                            content, config, cwd, context_flags, remote=remote
+                        )
                     )
             continue
 
@@ -494,7 +593,12 @@ def _analyze_redirects(
 
 
 def _analyze_simple_command(
-    words: list[str], config: Config, cwd: Path, context_flags: frozenset[str] = frozenset(), *, remote: bool = False
+    words: list[str],
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] = frozenset(),
+    *,
+    remote: bool = False,
 ) -> Decision:
     """Analyze a simple command (list of words)."""
     if not words:
@@ -552,7 +656,9 @@ def _analyze_simple_command(
             break
 
         if j < len(tokens):
-            return _analyze_simple_command(tokens[j:], config, cwd, context_flags, remote=remote)
+            return _analyze_simple_command(
+                tokens[j:], config, cwd, context_flags, remote=remote
+            )
         return Decision("ask", base, context_flags=context_flags)
 
     # 3. Simple safe commands
@@ -568,7 +674,9 @@ def _analyze_simple_command(
         dest, inner_cmd = _extract_wrapper_args(tokens)
         if dest is None:
             # No destination - can't extract inner command
-            return Decision("ask", f"{base} (no destination)", context_flags=context_flags)
+            return Decision(
+                "ask", f"{base} (no destination)", context_flags=context_flags
+            )
         if not inner_cmd:
             # No inner command (interactive ssh/wrapper)
             return Decision("ask", f"{base} {dest}", context_flags=context_flags)
@@ -594,10 +702,14 @@ def _analyze_simple_command(
                 if redirect_match:
                     if redirect_match.decision == "deny":
                         msg = redirect_match.message or redirect_match.pattern
-                        return Decision("deny", f"{desc}: {msg}", context_flags=context_flags)
+                        return Decision(
+                            "deny", f"{desc}: {msg}", context_flags=context_flags
+                        )
                     elif redirect_match.decision == "ask":
                         msg = redirect_match.message or redirect_match.pattern
-                        return Decision("ask", f"{desc}: {msg}", context_flags=context_flags)
+                        return Decision(
+                            "ask", f"{desc}: {msg}", context_flags=context_flags
+                        )
                     # allow - continue checking other targets
                 else:
                     # No matching rule - ask by default for file writes
@@ -685,7 +797,12 @@ def _find_cmdsubs_in_arith(node) -> list:
 
 
 def _analyze_cond_node(
-    node, config: Config, cwd: Path, context_flags: frozenset[str] = frozenset(), *, remote: bool = False
+    node,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] = frozenset(),
+    *,
+    remote: bool = False,
 ) -> list[Decision]:
     """Recursively analyze a conditional expression node for cmdsubs."""
     if node is None:
@@ -693,22 +810,34 @@ def _analyze_cond_node(
     kind = getattr(node, "kind", None)
     if kind == "unary-test":
         # -f file, -z string - check operand for cmdsubs
-        return _analyze_word_parts(node.operand, config, cwd, context_flags, remote=remote)
+        return _analyze_word_parts(
+            node.operand, config, cwd, context_flags, remote=remote
+        )
     elif kind == "binary-test":
         # $a == $b - check both operands for cmdsubs
         decisions = []
-        decisions.extend(_analyze_word_parts(node.left, config, cwd, context_flags, remote=remote))
-        decisions.extend(_analyze_word_parts(node.right, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_word_parts(node.left, config, cwd, context_flags, remote=remote)
+        )
+        decisions.extend(
+            _analyze_word_parts(node.right, config, cwd, context_flags, remote=remote)
+        )
         return decisions
     elif kind in ("cond-and", "cond-or"):
         # expr1 && expr2, expr1 || expr2 - recurse both sides
         decisions = []
-        decisions.extend(_analyze_cond_node(node.left, config, cwd, context_flags, remote=remote))
-        decisions.extend(_analyze_cond_node(node.right, config, cwd, context_flags, remote=remote))
+        decisions.extend(
+            _analyze_cond_node(node.left, config, cwd, context_flags, remote=remote)
+        )
+        decisions.extend(
+            _analyze_cond_node(node.right, config, cwd, context_flags, remote=remote)
+        )
         return decisions
     elif kind == "cond-not":
         # ! expr - recurse into operand
-        return _analyze_cond_node(node.operand, config, cwd, context_flags, remote=remote)
+        return _analyze_cond_node(
+            node.operand, config, cwd, context_flags, remote=remote
+        )
     elif kind == "cond-paren":
         # ( expr ) - recurse into inner
         return _analyze_cond_node(node.inner, config, cwd, context_flags, remote=remote)
@@ -716,7 +845,12 @@ def _analyze_cond_node(
 
 
 def _analyze_word_parts(
-    word, config: Config, cwd: Path, context_flags: frozenset[str] = frozenset(), *, remote: bool = False
+    word,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] = frozenset(),
+    *,
+    remote: bool = False,
 ) -> list[Decision]:
     """Analyze word parts for command/process substitutions, including nested ones."""
     decisions = []
@@ -724,7 +858,9 @@ def _analyze_word_parts(
     for part in parts:
         part_kind = getattr(part, "kind", None)
         if part_kind == "cmdsub":
-            inner_decision = _analyze_node(part.command, config, cwd, context_flags, remote=remote)
+            inner_decision = _analyze_node(
+                part.command, config, cwd, context_flags, remote=remote
+            )
             if inner_decision.action != "allow":
                 decisions.append(
                     Decision(
@@ -736,7 +872,9 @@ def _analyze_word_parts(
             else:
                 decisions.append(inner_decision)
         elif part_kind == "procsub":
-            inner_decision = _analyze_node(part.command, config, cwd, context_flags, remote=remote)
+            inner_decision = _analyze_node(
+                part.command, config, cwd, context_flags, remote=remote
+            )
             if inner_decision.action != "allow":
                 direction = getattr(part, "direction", "?")
                 decisions.append(
@@ -754,13 +892,20 @@ def _analyze_word_parts(
             arg = getattr(part, "arg", None)
             if arg and isinstance(arg, str):
                 decisions.extend(
-                    _analyze_string_cmdsubs(arg, config, cwd, context_flags, remote=remote)
+                    _analyze_string_cmdsubs(
+                        arg, config, cwd, context_flags, remote=remote
+                    )
                 )
     return decisions
 
 
 def _analyze_string_cmdsubs(
-    s: str, config: Config, cwd: Path, context_flags: frozenset[str] | None = None, *, remote: bool = False
+    s: str,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> list[Decision]:
     """Extract and analyze command substitutions from a raw string."""
     decisions = []
@@ -783,7 +928,9 @@ def _analyze_string_cmdsubs(
                     j += 1
             if depth == 0:
                 inner_cmd = s[start : j - 1]
-                inner_decision = analyze(inner_cmd, config, cwd, context_flags, remote=remote)
+                inner_decision = analyze(
+                    inner_cmd, config, cwd, context_flags, remote=remote
+                )
                 if inner_decision.action != "allow":
                     decisions.append(
                         Decision(
@@ -805,7 +952,9 @@ def _analyze_string_cmdsubs(
                 j += 1
             if j < len(s):
                 inner_cmd = s[i + 1 : j]
-                inner_decision = analyze(inner_cmd, config, cwd, context_flags, remote=remote)
+                inner_decision = analyze(
+                    inner_cmd, config, cwd, context_flags, remote=remote
+                )
                 if inner_decision.action != "allow":
                     decisions.append(
                         Decision(
@@ -900,10 +1049,25 @@ def _combine(decisions: list[Decision]) -> Decision:
 
     # deny > ask > allow
     if deny_reasons:
-        return Decision("deny", ", ".join(deny_reasons), context_flags=context_flags, children=decisions)
+        return Decision(
+            "deny",
+            ", ".join(deny_reasons),
+            context_flags=context_flags,
+            children=decisions,
+        )
 
     if ask_reasons:
-        return Decision("ask", ", ".join(ask_reasons), context_flags=context_flags, children=decisions)
+        return Decision(
+            "ask",
+            ", ".join(ask_reasons),
+            context_flags=context_flags,
+            children=decisions,
+        )
 
     # All allowed
-    return Decision("allow", ", ".join(allow_reasons), context_flags=context_flags, children=decisions)
+    return Decision(
+        "allow",
+        ", ".join(allow_reasons),
+        context_flags=context_flags,
+        children=decisions,
+    )

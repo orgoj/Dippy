@@ -121,12 +121,28 @@ class TestEndToEnd:
 
     def test_non_bash_tool_passthrough(self):
         """Non-Bash tools should pass through (allow)."""
+        # "Read" is now a supported tool, but without rules it matches nothing -> empty response
         input_data = {"tool_name": "Read", "tool_input": {"path": "/etc/passwd"}}
         result = run_hook(input_data)
         assert result.returncode == 0
         output = json.loads(result.stdout)
-        # Non-Bash tools return empty object (passthrough)
         assert output == {}
+
+    def test_read_tool_blocked(self):
+        """Read tool should be blocked if config denies it."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            (cwd / ".dippy").write_text("deny-read /etc/passwd")
+
+            input_data = {
+                "tool_name": "Read",
+                "tool_input": {"path": "/etc/passwd"},
+                "cwd": str(cwd),
+            }
+            result = run_hook(input_data)
+            assert result.returncode == 0
+            output = json.loads(result.stdout)
+            assert get_decision(output) == "deny"
 
 
 class TestErrorHandling:

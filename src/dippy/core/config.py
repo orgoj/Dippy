@@ -66,6 +66,9 @@ class Config:
     edit_rules: list[Rule] = field(default_factory=list)
     """Edit rules for Write/Edit/MultiEdit tools."""
 
+    read_rules: list[Rule] = field(default_factory=list)
+    """Read rules for Read tool."""
+
     web_rules: list[Rule] = field(default_factory=list)
     """WebSearch tool rules in load order."""
 
@@ -139,6 +142,7 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         mcp_rules=base.mcp_rules + overlay.mcp_rules,
         after_mcp_rules=base.after_mcp_rules + overlay.after_mcp_rules,
         edit_rules=base.edit_rules + overlay.edit_rules,
+        read_rules=base.read_rules + overlay.read_rules,
         web_rules=base.web_rules + overlay.web_rules,
         after_web_rules=base.after_web_rules + overlay.after_web_rules,
         # Wrappers accumulate (union of both)
@@ -166,6 +170,7 @@ def _tag_rules(config: Config, source: str, scope: str) -> Config:
             replace(r, source=source, scope=scope) for r in config.after_mcp_rules
         ],
         edit_rules=[replace(r, source=source, scope=scope) for r in config.edit_rules],
+        read_rules=[replace(r, source=source, scope=scope) for r in config.read_rules],
         web_rules=[replace(r, source=source, scope=scope) for r in config.web_rules],
         after_web_rules=[
             replace(r, source=source, scope=scope) for r in config.after_web_rules
@@ -468,6 +473,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     mcp_rules: list[Rule] = []
     after_mcp_rules: list[Rule] = []
     edit_rules: list[Rule] = []
+    read_rules: list[Rule] = []
     web_rules: list[Rule] = []
     after_web_rules: list[Rule] = []
     wrappers: set[str] = set()
@@ -619,6 +625,27 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     Rule("deny", _expand_pattern_tildes(pattern), message=message)
                 )
 
+            elif directive == "allow-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                read_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+
+            elif directive == "ask-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                read_rules.append(
+                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "deny-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                read_rules.append(
+                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                )
+
             elif directive == "allow-web":
                 pattern = rest if rest else "*"
                 web_rules.append(Rule("allow", pattern))
@@ -673,6 +700,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         mcp_rules=mcp_rules,
         after_mcp_rules=after_mcp_rules,
         edit_rules=edit_rules,
+        read_rules=read_rules,
         web_rules=web_rules,
         after_web_rules=after_web_rules,
         wrappers=wrappers,
@@ -1087,7 +1115,9 @@ def _normalize_redirect_pattern(pattern: str, cwd: Path) -> str:
     return pattern
 
 
-def _match_redirect(target: str, config: Config, cwd: Path, *, remote: bool = False) -> Match | None:
+def _match_redirect(
+    target: str, config: Config, cwd: Path, *, remote: bool = False
+) -> Match | None:
     """Match redirect target against rules. Returns last matching rule.
 
     Args:
@@ -1162,7 +1192,9 @@ def match_command(
     return matches[0]
 
 
-def match_redirect(target: str, config: Config, cwd: Path, *, remote: bool = False) -> Match | None:
+def match_redirect(
+    target: str, config: Config, cwd: Path, *, remote: bool = False
+) -> Match | None:
     """Match a redirect target against redirect rules.
 
     This is a convenience function for testing and for cases where you
@@ -1317,6 +1349,34 @@ def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
     normalized_path = _normalize_path(file_path, cwd)
     result: Match | None = None
     for rule in config.edit_rules:
+        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        if _glob_match(normalized_path, normalized_pattern):
+            result = Match(
+                decision=rule.decision,
+                pattern=rule.pattern,
+                message=rule.message,
+                source=rule.source,
+                scope=rule.scope,
+            )
+    return result
+
+
+def match_read(file_path: str, config: Config, cwd: Path) -> Match | None:
+    """Match file path against read rules for Read tool.
+
+    Uses same glob matching as redirect rules. Last matching rule wins.
+
+    Args:
+        file_path: Absolute path to the file being read.
+        config: Loaded configuration.
+        cwd: Current working directory for path resolution.
+
+    Returns:
+        Match object for the last matching rule, or None if no match.
+    """
+    normalized_path = _normalize_path(file_path, cwd)
+    result: Match | None = None
+    for rule in config.read_rules:
         normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
         if _glob_match(normalized_path, normalized_pattern):
             result = Match(
