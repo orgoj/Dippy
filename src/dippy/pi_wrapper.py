@@ -37,6 +37,7 @@ def main():
         req_type = input_data.get("type", "bash")
         cwd_str = input_data.get("cwd", ".")
         cwd = Path(cwd_str).resolve() if cwd_str else Path.cwd()
+        agent = input_data.get("agent", "pi")  # Agent ID for audit logging
 
         # Load dippy config
         try:
@@ -101,7 +102,7 @@ def main():
                 cwd=cwd,
                 message=decision.reason,
                 context_flags=getattr(decision, "context_flags", None),
-                agent="pi",
+                agent=agent,
             )
         elif req_type == "edit":
             log_decision(
@@ -110,7 +111,7 @@ def main():
                 file_path=input_data.get("path", ""),
                 cwd=cwd,
                 message=decision.reason,
-                agent="pi",
+                agent=agent,
             )
         elif req_type == "read":
             log_decision(
@@ -119,7 +120,7 @@ def main():
                 file_path=input_data.get("path", ""),
                 cwd=cwd,
                 message=decision.reason,
-                agent="pi",
+                agent=agent,
             )
 
         # Output JSON
