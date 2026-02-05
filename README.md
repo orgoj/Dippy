@@ -16,13 +16,15 @@
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.)
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
+- **Gemini CLI support** — integrated hook support for Gemini CLI tools
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` and `agent` fields added for better context
-- **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`
+- **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
+- **Multi-Agent Support** — dedicated modes for Claude, Gemini, Cursor, pi-mono, Moltbot, Codex, Windsurf, and PearAI
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 <!-- FORK ENHANCEMENTS END -->
 
@@ -112,6 +114,25 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively):
 
 If you installed manually, use the full path instead: `/path/to/Dippy/bin/dippy-hook`
 
+### Gemini CLI
+
+See [Gemini CLI Setup Guide](docs/hook-systems/gemini-cli-setup.md) for detailed instructions.
+
+Briefly, add to `~/.gemini/settings.json`:
+
+```json
+{
+  "hooks": {
+    "BeforeTool": [
+      {
+        "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
+        "hooks": [{ "type": "command", "command": "dippy-hook --gemini" }]
+      }
+    ]
+  }
+}
+```
+
 ---
 
 ## CLI Mode
@@ -136,11 +157,33 @@ echo 'ls -la' | dippy --stdin       # read command from stdin
 - `--cwd PATH` — working directory (default: current)
 - `--json` — output as JSON
 - `--config PATH` — custom config file
+- `--agent NAME` — force agent name in audit log
+- `--remote` — skip local path checks (useful for containers/SSH)
+- `--version` — show Dippy version
 
 **Use cases:**
 - Scripting: `if dippy --cmd "$cmd"; then eval "$cmd"; fi`
 - Batch validation: `cat commands.txt | while read cmd; do dippy --cmd "$cmd"; done`
 - Integration with other AI tools
+
+---
+
+## Supported Agents
+
+Dippy adapts its output format and behavior based on the agent it's serving. Use the corresponding flag or environment variable:
+
+| Agent | Flag | Env Var |
+|-------|------|---------|
+| Claude Code | `--claude` | `DIPPY_CLAUDE=1` |
+| Gemini CLI | `--gemini` | `DIPPY_GEMINI=1` |
+| Cursor IDE | `--cursor` | `DIPPY_CURSOR=1` |
+| pi-mono | `--pi` | `DIPPY_PI=1` |
+| Moltbot | `--moltbot` | `DIPPY_MOLTBOT=1` |
+| OpenAI Codex | `--codex` | `DIPPY_CODEX=1` |
+| Windsurf | `--windsurf` | `DIPPY_WINDSURF=1` |
+| PearAI | `--pearai` | `DIPPY_PEARAI=1` |
+
+Each agent mode maintains its own approval log (e.g., `~/.gemini/hook-approvals.log`).
 
 ---
 

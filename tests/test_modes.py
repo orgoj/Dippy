@@ -203,7 +203,6 @@ def test_claude_flag(monkeypatch):
     importlib.reload(dippy.dippy)
 
     assert dippy.dippy.MODE == "claude"
-    assert dippy.dippy._EXPLICIT_MODE == "claude"
 
 
 def test_claude_env_var(monkeypatch):
@@ -216,42 +215,21 @@ def test_claude_env_var(monkeypatch):
     importlib.reload(dippy.dippy)
 
     assert dippy.dippy.MODE == "claude"
-    assert dippy.dippy._EXPLICIT_MODE == "claude"
 
 
-# === Auto-Detection Tests ===
+def test_file_tool_names():
+    """Test that file tool names include Claude and Gemini variants."""
+    from dippy.dippy import FILE_TOOL_NAMES
+
+    assert "Read" in FILE_TOOL_NAMES  # Claude
+    assert "Write" in FILE_TOOL_NAMES  # Claude
+    assert "read_file" in FILE_TOOL_NAMES  # Gemini
+    assert "write_file" in FILE_TOOL_NAMES  # Gemini
+    assert "replace" in FILE_TOOL_NAMES  # Gemini
 
 
-def test_auto_detect_claude_from_input():
-    """Test auto-detection of Claude mode from input structure."""
-    from dippy.dippy import _detect_mode_from_input
-
-    # Claude sends Bash tool
-    input_data = {"tool_name": "Bash", "tool_input": {"command": "ls"}}
-    assert _detect_mode_from_input(input_data) == "claude"
-
-
-def test_auto_detect_gemini_from_input():
-    """Test auto-detection of Gemini mode from input structure."""
-    from dippy.dippy import _detect_mode_from_input
-
-    # Gemini sends shell tool (various names)
-    for tool_name in ["shell", "run_shell", "run_shell_command", "execute_shell"]:
-        input_data = {"tool_name": tool_name, "tool_input": {"command": "ls"}}
-        assert _detect_mode_from_input(input_data) == "gemini"
-
-
-def test_auto_detect_cursor_from_input():
-    """Test auto-detection of Cursor mode from input structure."""
-    from dippy.dippy import _detect_mode_from_input
-
-    # Cursor sends command directly without tool_name
-    input_data = {"command": "ls", "cwd": "/home/user"}
-    assert _detect_mode_from_input(input_data) == "cursor"
-
-
-def test_no_flag_defaults_to_auto_detect(monkeypatch):
-    """Test that no flag means auto-detection will be used."""
+def test_no_flag_defaults_to_claude(monkeypatch):
+    """Test that no flag defaults to Claude mode."""
     monkeypatch.setattr("sys.argv", ["dippy"])
     monkeypatch.delenv("DIPPY_GEMINI", raising=False)
     monkeypatch.delenv("DIPPY_CURSOR", raising=False)
@@ -261,5 +239,4 @@ def test_no_flag_defaults_to_auto_detect(monkeypatch):
 
     importlib.reload(dippy.dippy)
 
-    # No explicit mode set, auto-detect will kick in at main()
-    assert dippy.dippy._EXPLICIT_MODE is None
+    assert dippy.dippy.MODE == "claude"

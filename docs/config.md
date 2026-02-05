@@ -43,6 +43,9 @@ dippy --cmd 'docker run nginx' --config ~/.dippy/strict.conf
 | `--cwd PATH` | Working directory (default: current) |
 | `--json` | Output as JSON instead of text |
 | `--config PATH` | Config file override (highest priority) |
+| `--agent NAME` | Force agent name in audit log |
+| `--remote` | Skip local path checks (for containers/SSH) |
+| `--version` | Show Dippy version |
 
 ### Exit Codes
 

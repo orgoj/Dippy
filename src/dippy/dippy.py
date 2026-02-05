@@ -66,47 +66,21 @@ def _detect_mode_from_flags() -> str | None:
         return "gemini"
     if "--cursor" in sys.argv or _env_flag("DIPPY_CURSOR"):
         return "cursor"
+    if "--pi" in sys.argv or _env_flag("DIPPY_PI"):
+        return "pi"
+    if "--moltbot" in sys.argv or _env_flag("DIPPY_MOLTBOT"):
+        return "moltbot"
+    if "--codex" in sys.argv or _env_flag("DIPPY_CODEX"):
+        return "codex"
+    if "--windsurf" in sys.argv or _env_flag("DIPPY_WINDSURF"):
+        return "windsurf"
+    if "--pearai" in sys.argv or _env_flag("DIPPY_PEARAI"):
+        return "pearai"
     return None
 
 
-def _detect_mode_from_input(input_data: dict) -> str:
-    """Auto-detect mode from input JSON structure."""
-    # Cursor: {"command": "...", "cwd": "..."}
-    if "command" in input_data and "tool_name" not in input_data:
-        return "cursor"
-
-    # Claude/Gemini: {"tool_name": "...", "tool_input": {...}}
-    tool_name = input_data.get("tool_name", "")
-
-    # Gemini uses "shell", "run_shell_command", etc.
-    if tool_name in ("shell", "run_shell", "run_shell_command", "execute_shell"):
-        return "gemini"
-
-    # Claude uses "Bash" and MCP tools use "mcp__*" prefix
-    # Known Claude Code tools (don't warn about these)
-    known_claude_tools = {
-        "Bash",
-        "Edit",
-        "Write",
-        "Read",
-        "MultiEdit",
-        "Glob",
-        "Grep",
-        "WebSearch",
-        "WebFetch",
-    }
-    if (
-        tool_name
-        and tool_name not in known_claude_tools
-        and not tool_name.startswith("mcp__")
-    ):
-        logging.warning(f"Unknown tool_name '{tool_name}', defaulting to Claude mode")
-    return "claude"
-
-
-# Initial mode from flags/env (may be overridden by auto-detect)
-_EXPLICIT_MODE = _detect_mode_from_flags()
-MODE = _EXPLICIT_MODE or "claude"  # Default for logging setup
+# Initial mode from flags/env
+MODE = _detect_mode_from_flags() or "claude"
 
 # === Logging Setup ===
 
@@ -117,6 +91,16 @@ def _get_log_file() -> Path:
         return Path.home() / ".gemini" / "hook-approvals.log"
     if MODE == "cursor":
         return Path.home() / ".cursor" / "hook-approvals.log"
+    if MODE == "pi":
+        return Path.home() / ".pi" / "hook-approvals.log"
+    if MODE == "moltbot":
+        return Path.home() / ".moltbot" / "hook-approvals.log"
+    if MODE == "codex":
+        return Path.home() / ".codex" / "hook-approvals.log"
+    if MODE == "windsurf":
+        return Path.home() / ".windsurf" / "hook-approvals.log"
+    if MODE == "pearai":
+        return Path.home() / ".pearai" / "hook-approvals.log"
     return Path.home() / ".claude" / "hook-approvals.log"
 
 
@@ -142,7 +126,12 @@ def approve(reason: str = "all commands safe") -> dict:
     """Return approval response."""
     logging.info(f"APPROVED: {reason}")
     if MODE == "gemini":
-        return {"decision": "allow", "reason": f"🐤 {reason}"}
+        return {
+            "decision": "allow",
+            "reason": f"🐤 {reason}",
+            "systemMessage": f"🐤 {reason}",
+            "continue": True,
+        }
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
@@ -166,7 +155,12 @@ def ask(reason: str = "needs approval") -> dict:
     """Return ask response to prompt user for confirmation."""
     logging.info(f"ASK: {reason}")
     if MODE == "gemini":
-        return {"decision": "ask", "reason": f"🐤 {reason}"}
+        return {
+            "decision": "ask",
+            "reason": f"🐤 {reason}",
+            "systemMessage": f"🐤 {reason}",
+            "continue": True,
+        }
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
@@ -190,7 +184,11 @@ def deny(reason: str = "denied by config") -> dict:
     """Return deny response to block the command."""
     logging.info(f"DENY: {reason}")
     if MODE == "gemini":
-        return {"decision": "deny", "reason": f"🐤 {reason}"}
+        # Gemini CLI: Exit code 2 with stderr is the standard way to block a tool
+        # and provide feedback to the agent without stopping the loop or
+        # triggering a manual confirmation dialog (in v0.23+).
+        print(f"🐤 {reason}", file=sys.stderr)
+        sys.exit(2)
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
@@ -213,6 +211,8 @@ def deny(reason: str = "denied by config") -> dict:
 def pass_(reason: str = "passing through") -> dict:
     """Return empty response to let Claude handle permissions with its default behavior."""
     logging.info(f"PASS: {reason}")
+    if MODE == "gemini":
+        return {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
     return {}
 
 
@@ -348,6 +348,8 @@ def handle_web_post_tool_use(query: str, config: Config) -> None:
 SHELL_TOOL_NAMES = frozenset(
     {
         "Bash",  # Claude Code
+        "bash",  # pi-mono
+        "exec",  # moltbot
         "shell",  # Gemini CLI
         "run_shell",  # Gemini CLI alternate
         "run_shell_command",  # Gemini CLI official name
@@ -356,14 +358,28 @@ SHELL_TOOL_NAMES = frozenset(
 )
 
 # Tool names that indicate file operations
-FILE_TOOL_NAMES = frozenset({"Write", "Edit", "MultiEdit", "Read"})
+FILE_TOOL_NAMES = frozenset(
+    {
+        "Write",
+        "Edit",
+        "MultiEdit",
+        "Read",
+        "write",  # moltbot / pi-mono
+        "edit",   # moltbot / pi-mono
+        "read",   # moltbot / pi-mono
+        "write_file",
+        "replace",
+        "read_file",
+        "read_many_files",
+    }
+)
 
 
 def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -> dict:
     """Check if a file operation should be approved based on edit rules.
 
     Args:
-        tool_name: Tool name (Write, Edit, MultiEdit, Read).
+        tool_name: Tool name (Write, Edit, MultiEdit, Read, write_file, replace, read_file).
         file_path: Absolute path to the file being edited/read.
         config: Loaded configuration.
         cwd: Current working directory.
@@ -371,7 +387,7 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
-    if tool_name == "Read":
+    if tool_name in ("Read", "read_file"):
         match = match_read(file_path, config, cwd)
     else:
         match = match_edit(file_path, config, cwd)
@@ -440,11 +456,21 @@ Examples:
         "--json", action="store_true", dest="json_output", help="Output as JSON"
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
+    parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
+    parser.add_argument("--version", action="version", version="dippy 0.2.4")
+    parser.add_argument(
+        "--remote", action="store_true", help="Remote context (skip local path checks)"
+    )
 
     # Hook mode arguments (for backward compatibility)
     parser.add_argument("--claude", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--gemini", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--cursor", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--pi", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--moltbot", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--codex", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--windsurf", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--pearai", action="store_true", help=argparse.SUPPRESS)
 
     return parser.parse_args()
 
@@ -483,7 +509,7 @@ def cli_mode(args: argparse.Namespace) -> int:
         return EXIT_ASK
 
     # Analyze command
-    result = analyze(command, config, cwd)
+    result = analyze(command, config, cwd, remote=args.remote)
 
     # Log decision to audit log if configured
     log_decision(
@@ -523,19 +549,26 @@ def main():
 
     # CLI mode: --cmd or --stdin
     if args.cmd or args.stdin:
+        if args.agent:
+            MODE = args.agent
         sys.exit(cli_mode(args))
+
+    # Detect mode strictly from flags/env or default to claude
+    MODE = _detect_mode_from_flags() or "claude"
 
     # Hook mode: continue with original behavior
     setup_logging()
+    if MODE == "gemini":
+        logging.info("Gemini mode enforced by flag/env.")
+    else:
+        logging.info(f"Mode set to: {MODE}")
 
     try:
         # Read hook input from stdin
-        input_data = json.load(sys.stdin)
-
-        # Auto-detect mode from input if no explicit flag/env was set
-        if _EXPLICIT_MODE is None:
-            MODE = _detect_mode_from_input(input_data)
-            logging.info(f"Auto-detected mode: {MODE}")
+        input_raw = sys.stdin.read()
+        if not input_raw:
+            return
+        input_data = json.loads(input_raw)
 
         # Extract cwd from input
         # Cursor: top-level "cwd"
@@ -555,11 +588,20 @@ def main():
             configure_logging(config)
         except ConfigError as e:
             logging.error(f"Config error: {e}")
-            print(json.dumps(ask(f"config error: {e}")))
+            if MODE == "gemini":
+                print(json.dumps({"decision": "allow", "reason": f"config error: {e}"}))
+            else:
+                print(json.dumps(ask(f"config error: {e}")))
             return
 
-        # Detect hook event type (Claude Code only)
+        # Detect hook event type (Claude Code / Gemini CLI)
         hook_event = input_data.get("hook_event_name", "PreToolUse")
+
+        # Normalize Gemini events to Claude names for internal routing
+        if hook_event == "BeforeTool":
+            hook_event = "PreToolUse"
+        elif hook_event == "AfterTool":
+            hook_event = "PostToolUse"
 
         # Extract command based on mode
         # Cursor: {"command": "...", "cwd": "..."}
@@ -594,8 +636,8 @@ def main():
                 return
 
             # Check if this is a WebSearch tool
-            if tool_name == "WebSearch":
-                query = tool_input.get("query", "")
+            if tool_name in ("WebSearch", "google_web_search"):
+                query = tool_input.get("query") or tool_input.get("q") or ""
                 # Check for bypass permissions mode first
                 if hook_event != "PostToolUse":
                     permission_mode = input_data.get("permission_mode", "default")
@@ -616,7 +658,12 @@ def main():
 
             # Check if this is a file operation tool
             if tool_name in FILE_TOOL_NAMES:
-                file_path = tool_input.get("file_path") or tool_input.get("path") or ""
+                file_path = (
+                    tool_input.get("file_path")
+                    or tool_input.get("path")
+                    or tool_input.get("filepath")
+                    or ""
+                )
                 if file_path and hook_event != "PostToolUse":
                     # Check for bypass permissions mode first
                     permission_mode = input_data.get("permission_mode", "default")
@@ -637,19 +684,34 @@ def main():
                         return
 
                     logging.info(f"Checking file op: {tool_name} -> {file_path}")
-                    result = check_file_tool(tool_name, file_path, config, cwd)
-                    print(json.dumps(result))
+                    try:
+                        result = check_file_tool(tool_name, file_path, config, cwd)
+                        if not result and MODE == "gemini":
+                            result = approve("passing through (no match)")
+                        print(json.dumps(result))
+                    except Exception as e:
+                        logging.error(f"Error checking file tool: {e}")
+                        if MODE == "gemini":
+                            print(json.dumps(approve(f"error recovery: {e}")))
+                        else:
+                            print(json.dumps({}))
                     return
                 # No file_path or PostToolUse - fall through to default behavior
-                print(json.dumps({}))
+                if MODE == "gemini":
+                    print(json.dumps(approve("no file path provided")))
+                else:
+                    print(json.dumps({}))
                 return
 
             # Only handle shell/bash commands
             if tool_name not in SHELL_TOOL_NAMES:
-                print(json.dumps({}))
+                if MODE == "gemini":
+                    print(json.dumps(approve(f"unsupported tool: {tool_name}")))
+                else:
+                    print(json.dumps({}))
                 return
 
-            command = tool_input.get("command", "")
+            command = tool_input.get("command") or tool_input.get("cmd") or ""
 
         # Check for bypass permissions mode (Claude Code PreToolUse only)
         if hook_event != "PostToolUse":
@@ -671,10 +733,16 @@ def main():
 
     except json.JSONDecodeError:
         logging.error("Invalid JSON input")
-        print(json.dumps({}))
+        if MODE == "gemini":
+            print(json.dumps(approve("invalid json input")))
+        else:
+            print(json.dumps({}))
     except Exception as e:
         logging.error(f"Error: {e}")
-        print(json.dumps({}))
+        if MODE == "gemini":
+            print(json.dumps(approve(f"error recovery: {e}")))
+        else:
+            print(json.dumps({}))
 
 
 if __name__ == "__main__":

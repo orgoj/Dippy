@@ -9,6 +9,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Gemini CLI Support** - Full integration with Gemini CLI hooks
+  - Proper response format with `systemMessage` and `continue` fields
+  - Deny via stderr + exit code 2 (blocks tool without confirmation dialog)
+  - Normalized event names (BeforeTool→PreToolUse, AfterTool→PostToolUse)
+  - Support for `google_web_search`, `write_file`, `replace`, `read_file`, `read_many_files` tools
+  - See [Gemini CLI Setup Guide](docs/hook-systems/gemini-cli-setup.md)
+- **Multi-Agent Support** - Dedicated modes for Claude, Gemini, Cursor, pi-mono, Moltbot, Codex, Windsurf, PearAI
+  - Each agent has its own log file (e.g., `~/.gemini/hook-approvals.log`)
+  - CLI flags (`--gemini`, `--pi`, etc.) and env vars (`DIPPY_GEMINI=1`, etc.)
+- **CLI Mode Enhancements** - New options: `--agent`, `--remote`, `--version`
 - **Agent Identification** - Audit log now includes `agent` field (`claude`, `gemini`, `cursor`, `pi`, `cli`)
 - **File Read Approval** - `allow-read`, `ask-read`, `deny-read` rules
   - Added full support for `Read` tool in Claude Code and pi-mono
@@ -19,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Integrated native `allow-edit` and `allow-read` rules
   - Updated `pi-extension/dippy-extension.ts` and `src/dippy/pi_wrapper.py` for multi-tool support
   - Updated [pi-extension/README.md](pi-extension/README.md) with file-specific configuration examples
+
+### Changed
+
+- **Mode detection** - Removed auto-detection from input JSON; mode is now strictly from flags/env or defaults to Claude
 
 ## [Previous Versions]
 
