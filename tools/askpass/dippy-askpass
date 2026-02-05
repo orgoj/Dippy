@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""
+Dippy Askpass - GUI approval dialog for headless environments.
+
+Shows a tkinter dialog when Dippy needs user approval.
+Use with: set askpass /path/to/dippy-askpass
+
+Exit codes:
+  0 = Allow (approve the command)
+  1 = Deny (block the command)
+  2 = Ask (fall back to Claude's dialog)
+"""
+
+import os
+import sys
+import tkinter as tk
+from tkinter import ttk
+
+
+def create_dialog():
+    """Create and show the approval dialog."""
+    # Get context from environment
+    command = os.environ.get("DIPPY_COMMAND", "<unknown command>")
+    cwd = os.environ.get("DIPPY_CWD", "<unknown directory>")
+    rule = os.environ.get("DIPPY_RULE", "")
+    message = os.environ.get("DIPPY_MESSAGE", "")
+    tool = os.environ.get("DIPPY_TOOL", "Bash")
+
+    # Result variable (2 = Ask/fallback by default)
+    result = [2]
+
+    # Create window
+    root = tk.Tk()
+    root.title("Dippy - Command Approval")
+    root.resizable(False, False)
+
+    # Center on screen
+    root.eval("tk::PlaceWindow . center")
+
+    # Make it stay on top
+    root.attributes("-topmost", True)
+
+    # Style
+    style = ttk.Style()
+    style.configure("Allow.TButton", foreground="green")
+    style.configure("Deny.TButton", foreground="red")
+
+    # Main frame with padding
+    main_frame = ttk.Frame(root, padding="20")
+    main_frame.grid(row=0, column=0, sticky="nsew")
+
+    # Title
+    title_label = ttk.Label(
+        main_frame,
+        text=f"Approve {tool} operation?",
+        font=("TkDefaultFont", 14, "bold"),
+    )
+    title_label.grid(row=0, column=0, columnspan=3, pady=(0, 15))
+
+    # Command section
+    cmd_frame = ttk.LabelFrame(main_frame, text="Command", padding="10")
+    cmd_frame.grid(row=1, column=0, columnspan=3, sticky="ew", pady=5)
+
+    # Truncate very long commands for display
+    display_cmd = command if len(command) <= 100 else command[:97] + "..."
+    cmd_label = ttk.Label(
+        cmd_frame, text=display_cmd, font=("TkFixedFont", 10), wraplength=450
+    )
+    cmd_label.grid(row=0, column=0, sticky="w")
+
+    # Working directory
+    cwd_frame = ttk.LabelFrame(main_frame, text="Directory", padding="10")
+    cwd_frame.grid(row=2, column=0, columnspan=3, sticky="ew", pady=5)
+
+    cwd_label = ttk.Label(cwd_frame, text=cwd, font=("TkFixedFont", 10))
+    cwd_label.grid(row=0, column=0, sticky="w")
+
+    # Rule/Message (if present)
+    if rule or message:
+        info_frame = ttk.LabelFrame(main_frame, text="Rule Info", padding="10")
+        info_frame.grid(row=3, column=0, columnspan=3, sticky="ew", pady=5)
+
+        if rule:
+            rule_label = ttk.Label(
+                info_frame, text=f"Pattern: {rule}", font=("TkDefaultFont", 9)
+            )
+            rule_label.grid(row=0, column=0, sticky="w")
+
+        if message:
+            msg_label = ttk.Label(
+                info_frame,
+                text=f"Message: {message}",
+                font=("TkDefaultFont", 9, "italic"),
+                wraplength=450,
+            )
+            msg_label.grid(row=1, column=0, sticky="w", pady=(5, 0) if rule else 0)
+
+    # Button handlers
+    def on_allow():
+        result[0] = 0
+        root.destroy()
+
+    def on_deny():
+        result[0] = 1
+        root.destroy()
+
+    def on_ask():
+        result[0] = 2
+        root.destroy()
+
+    # Buttons frame
+    btn_frame = ttk.Frame(main_frame)
+    btn_frame.grid(row=4, column=0, columnspan=3, pady=(20, 0))
+
+    allow_btn = ttk.Button(
+        btn_frame, text="Allow", command=on_allow, width=12, style="Allow.TButton"
+    )
+    allow_btn.grid(row=0, column=0, padx=5)
+
+    deny_btn = ttk.Button(
+        btn_frame, text="Deny", command=on_deny, width=12, style="Deny.TButton"
+    )
+    deny_btn.grid(row=0, column=1, padx=5)
+
+    ask_btn = ttk.Button(btn_frame, text="Ask Claude", command=on_ask, width=12)
+    ask_btn.grid(row=0, column=2, padx=5)
+
+    # Keyboard shortcuts
+    root.bind("<Return>", lambda e: on_allow())
+    root.bind("<Escape>", lambda e: on_deny())
+    root.bind("<space>", lambda e: on_ask())
+
+    # Shortcut hints
+    hint_label = ttk.Label(
+        main_frame,
+        text="Shortcuts: Enter=Allow, Esc=Deny, Space=Ask Claude",
+        font=("TkDefaultFont", 8),
+        foreground="gray",
+    )
+    hint_label.grid(row=5, column=0, columnspan=3, pady=(10, 0))
+
+    # Focus the window
+    root.focus_force()
+    allow_btn.focus_set()
+
+    # Handle window close (X button)
+    root.protocol("WM_DELETE_WINDOW", on_ask)
+
+    # Run
+    root.mainloop()
+
+    return result[0]
+
+
+def main():
+    try:
+        exit_code = create_dialog()
+        sys.exit(exit_code)
+    except Exception as e:
+        # On any error, fall back to Ask
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(2)
+
+
+if __name__ == "__main__":
+    main()

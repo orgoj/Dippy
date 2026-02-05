@@ -216,6 +216,96 @@ def pass_(reason: str = "passing through") -> dict:
     return {}
 
 
+# === Askpass Support ===
+
+
+def _run_askpass(
+    config: Config,
+    command: str,
+    cwd: str,
+    rule: str | None,
+    message: str | None,
+    tool: str | None,
+    source: str | None = None,
+) -> str:
+    """Run external askpass program for GUI approval.
+
+    Args:
+        config: Loaded configuration with askpass settings.
+        command: The command being approved.
+        cwd: Current working directory.
+        rule: The rule pattern that matched (if any).
+        message: The rule message (if any).
+        tool: The tool name (Bash, Write, etc.).
+        source: The config file where the rule was defined.
+
+    Returns:
+        "allow" if exit 0, "deny" if exit 1, "ask" for any other case
+        (timeout, error, exit 2+, or no askpass configured).
+    """
+    import subprocess
+
+    # Check for askpass program (env var overrides config)
+    askpass = os.environ.get("DIPPY_ASKPASS")
+    if askpass:
+        askpass_path = Path(askpass)
+    elif config.askpass:
+        askpass_path = config.askpass
+    else:
+        return "ask"  # No askpass configured
+
+    # Set up environment variables
+    env = os.environ.copy()
+    env["DIPPY_COMMAND"] = command
+    env["DIPPY_CWD"] = cwd
+    if rule:
+        env["DIPPY_RULE"] = rule
+    if message:
+        env["DIPPY_MESSAGE"] = message
+    if tool:
+        env["DIPPY_TOOL"] = tool
+
+    # Prepare JSON input
+    stdin_data = json.dumps(
+        {
+            "command": command,
+            "cwd": cwd,
+            "rule": rule,
+            "message": message,
+            "tool": tool,
+            "source": source,
+        }
+    )
+
+    try:
+        result = subprocess.run(
+            [str(askpass_path)],
+            input=stdin_data,
+            env=env,
+            timeout=config.askpass_timeout,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode == 0:
+            return "allow"
+        elif result.returncode == 1:
+            return "deny"
+        else:
+            return "ask"  # Exit 2+ = fallback to Claude dialog
+    except subprocess.TimeoutExpired:
+        logging.warning(f"Askpass timeout after {config.askpass_timeout}s")
+        return "ask"
+    except FileNotFoundError:
+        logging.warning(f"Askpass program not found: {askpass_path}")
+        return "ask"
+    except PermissionError:
+        logging.warning(f"Askpass program not executable: {askpass_path}")
+        return "ask"
+    except OSError as e:
+        logging.warning(f"Askpass error: {e}")
+        return "ask"
+
+
 # === Main Logic ===
 
 
@@ -365,8 +455,8 @@ FILE_TOOL_NAMES = frozenset(
         "MultiEdit",
         "Read",
         "write",  # moltbot / pi-mono
-        "edit",   # moltbot / pi-mono
-        "read",   # moltbot / pi-mono
+        "edit",  # moltbot / pi-mono
+        "read",  # moltbot / pi-mono
         "write_file",
         "replace",
         "read_file",

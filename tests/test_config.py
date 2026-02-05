@@ -2690,7 +2690,9 @@ class TestFinalConfig:
         assert len(config.rules) == 1
         assert config.rules[0].pattern == "fictcmd789"
         # Warning logged
-        assert any("Final config not found" in record.message for record in caplog.records)
+        assert any(
+            "Final config not found" in record.message for record in caplog.records
+        )
 
     @pytest.mark.skipif(os.name == "nt", reason="Unix permissions only")
     def test_load_config_final_permission_error(self, tmp_path, monkeypatch):

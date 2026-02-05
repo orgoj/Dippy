@@ -607,6 +607,10 @@ set log-hook-approvals off  # disable hook-approvals.log
 
 # Final config (loaded after all other configs)
 set final ~/.dippy/emergency  # emergency overrides (loaded last)
+
+# GUI approval (SSH_ASKPASS style)
+set askpass /path/to/askpass  # external approval program
+set askpass-timeout 60        # seconds to wait (default: 60)
 ```
 
 Settings use kebab-case or snake_case interchangeably.
@@ -620,6 +624,117 @@ The `set default` directive controls what happens when a command doesn't match a
 | `ask` | Prompt user for approval | Safest - explicit approval for unknown commands |
 | `pass` | Return empty response; Claude handles it | Hybrid - Dippy only handles explicitly configured rules |
 | `allow` | Auto-approve | YOLO mode - trust everything not explicitly blocked |
+
+## Askpass (GUI Approval)
+
+When Dippy runs in headless environments (tmux, screen, background processes), the built-in terminal prompts won't be visible. The askpass feature lets you delegate approval to an external GUI program.
+
+### Configuration
+
+```
+# In ~/.dippy/config
+set askpass /usr/bin/zenity-dippy    # path to external program
+set askpass-timeout 60               # seconds to wait (default: 60)
+```
+
+Or via environment variable (overrides config):
+```bash
+export DIPPY_ASKPASS=/usr/bin/zenity-dippy
+```
+
+### How It Works
+
+When a rule returns `ask` and askpass is configured:
+
+1. Dippy calls the askpass program
+2. GUI shown to user (via zenity, kdialog, rofi, etc.)
+3. User approves or denies
+4. Dippy returns `allow` or `deny` to Claude Code
+
+Without askpass, `ask` would show Claude Code's built-in terminal dialog (invisible in headless environments).
+
+### Askpass Program Contract
+
+The askpass program receives context via environment variables:
+
+| Variable | Content |
+|----------|---------|
+| `DIPPY_COMMAND` | The command being approved |
+| `DIPPY_CWD` | Current working directory |
+| `DIPPY_RULE` | The rule pattern that matched (if any) |
+| `DIPPY_MESSAGE` | The rule message (if any) |
+| `DIPPY_TOOL` | Tool name (Bash, Write, Edit, etc.) |
+
+Additionally, JSON with full details is passed via stdin:
+```json
+{
+  "command": "git push origin main",
+  "cwd": "/home/user/project",
+  "rule": "ask git push *",
+  "message": "Pushing to remote",
+  "tool": "Bash",
+  "source": "/home/user/.dippy/config"
+}
+```
+
+**Exit codes:**
+- `0` = approve → Dippy returns `allow`
+- `1` = deny → Dippy returns `deny`
+- `2+` = fallback → Dippy returns `ask` (falls back to Claude dialog)
+
+Timeout or execution errors also fall back to `ask`.
+
+### Example Askpass Scripts
+
+**zenity (GTK):**
+```bash
+#!/bin/bash
+zenity --question \
+  --title="Dippy: Command Approval" \
+  --text="Approve command?\n\n$DIPPY_COMMAND\n\nIn: $DIPPY_CWD" \
+  --ok-label="Allow" \
+  --cancel-label="Deny"
+```
+
+**kdialog (KDE):**
+```bash
+#!/bin/bash
+kdialog --yesno "Approve command?\n\n$DIPPY_COMMAND" \
+  --title "Dippy" --yes-label "Allow" --no-label "Deny"
+```
+
+**rofi (tiling WM):**
+```bash
+#!/bin/bash
+echo -e "Allow\nDeny" | rofi -dmenu -p "Dippy: $DIPPY_COMMAND" | grep -q "Allow"
+```
+
+**Python (cross-platform):**
+```python
+#!/usr/bin/env python3
+import os
+import tkinter as tk
+from tkinter import messagebox
+
+root = tk.Tk()
+root.withdraw()
+
+cmd = os.environ.get("DIPPY_COMMAND", "unknown command")
+cwd = os.environ.get("DIPPY_CWD", "")
+
+result = messagebox.askyesno(
+    "Dippy Approval",
+    f"Allow command?\n\n{cmd}\n\nIn: {cwd}"
+)
+
+exit(0 if result else 1)
+```
+
+### Security Considerations
+
+- **Trust your askpass program** - it can approve any command
+- **Use absolute paths** - `set askpass /usr/local/bin/my-askpass`
+- **Timeout protection** - long-running or stuck programs fall back to `ask`
 
 ## Logging
 

@@ -90,6 +90,8 @@ class Config:
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
     log_hook_approvals: bool = True  # log to hook-approvals.log
     final: Path | None = None  # path to final config (loaded last)
+    askpass: Path | None = None  # external approval program (SSH_ASKPASS style)
+    askpass_timeout: int = 60  # seconds to wait for askpass response
 
 
 @dataclass
@@ -156,6 +158,12 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         log=overlay.log if overlay.log is not None else base.log,
         log_full=overlay.log_full if overlay.log_full else base.log_full,
         final=overlay.final if overlay.final is not None else base.final,
+        askpass=overlay.askpass if overlay.askpass is not None else base.askpass,
+        askpass_timeout=(
+            overlay.askpass_timeout
+            if overlay.askpass_timeout != 60
+            else base.askpass_timeout
+        ),
     )
 
 
@@ -724,6 +732,8 @@ def parse_config(text: str, source: str | None = None) -> Config:
         log_rotate_max_days=settings.get("log_rotate_max_days", 30),
         log_hook_approvals=settings.get("log_hook_approvals", True),
         final=settings.get("final"),
+        askpass=settings.get("askpass"),
+        askpass_timeout=settings.get("askpass_timeout", 60),
     )
 
 
@@ -826,6 +836,11 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             raise ValueError("'final' requires a path")
         settings[key_normalized] = Path(value).expanduser()
 
+    elif key_normalized == "askpass":
+        if value is None:
+            raise ValueError("'askpass' requires a path")
+        settings[key_normalized] = Path(value).expanduser()
+
     # Integer settings
     elif key_normalized == "log_rotate_max_days":
         if value is None:
@@ -834,6 +849,14 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             settings[key_normalized] = int(value)
         except ValueError:
             raise ValueError(f"'log-rotate-max-days' must be an integer, got '{value}'")
+
+    elif key_normalized == "askpass_timeout":
+        if value is None:
+            raise ValueError("'askpass-timeout' requires a number")
+        try:
+            settings[key_normalized] = int(value)
+        except ValueError:
+            raise ValueError(f"'askpass-timeout' must be an integer, got '{value}'")
 
     else:
         raise ValueError(f"unknown setting '{key}'")
