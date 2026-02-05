@@ -28,6 +28,7 @@ class ConfigError(Exception):
 SCOPE_USER = "user"
 SCOPE_PROJECT = "project"
 SCOPE_ENV = "env"
+SCOPE_FINAL = "final"
 
 
 @dataclass
@@ -88,6 +89,7 @@ class Config:
     log_full: bool = False  # log full command (requires log path)
     log_rotate_max_days: int = 30  # days to keep rotated logs (0 = disabled)
     log_hook_approvals: bool = True  # log to hook-approvals.log
+    final: Path | None = None  # path to final config (loaded last)
 
 
 @dataclass
@@ -153,6 +155,7 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
         log_full=overlay.log_full if overlay.log_full else base.log_full,
+        final=overlay.final if overlay.final is not None else base.final,
     )
 
 
@@ -372,6 +375,18 @@ def load_config(cwd: Path, config_path: str | None = None) -> Config:
             raise ConfigError(
                 f"permission denied accessing {override_config_path}"
             ) from None
+
+    # 4. Final config (if configured via 'set final')
+    if config.final:
+        try:
+            if config.final.is_file():
+                final_config = _load_config_file(config.final)
+                final_config = _tag_rules(final_config, str(config.final), SCOPE_FINAL)
+                config = _merge_configs(config, final_config)
+            else:
+                logging.warning(f"Final config not found: {config.final}")
+        except PermissionError:
+            raise ConfigError(f"permission denied accessing {config.final}") from None
 
     # Rotate logs at the end of config loading
     _rotate_logs(config)
@@ -708,6 +723,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         log_full=settings.get("log_full", False),
         log_rotate_max_days=settings.get("log_rotate_max_days", 30),
         log_hook_approvals=settings.get("log_hook_approvals", True),
+        final=settings.get("final"),
     )
 
 
@@ -803,6 +819,11 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
     elif key_normalized == "log":
         if value is None:
             raise ValueError("'log' requires a path")
+        settings[key_normalized] = Path(value).expanduser()
+
+    elif key_normalized == "final":
+        if value is None:
+            raise ValueError("'final' requires a path")
         settings[key_normalized] = Path(value).expanduser()
 
     # Integer settings

@@ -2610,3 +2610,119 @@ class TestIncludeDirective:
         # Verify real home config dir was not touched
         # Since we mocked HOME, check that only tmp_path was used
         assert str(tmp_path) == os.environ["HOME"]
+
+
+class TestFinalConfig:
+    """Tests for 'set final' config file support."""
+
+    def test_parse_set_final(self):
+        """set final ~/.dippy/final parses to Path."""
+        cfg = parse_config("set final ~/.dippy/final")
+        assert cfg.final == Path.home() / ".dippy" / "final"
+
+    def test_parse_set_final_missing_value(self):
+        """set final (no path) raises ValueError and is skipped."""
+        cfg = parse_config("set final")
+        assert cfg.final is None  # Invalid line skipped
+
+    def test_config_final_default_none(self):
+        """Config().final is None by default."""
+        cfg = Config()
+        assert cfg.final is None
+
+    def test_merge_configs_final_overlay_wins(self):
+        """overlay.final overrides base.final."""
+        base = Config(final=Path("/base/final"))
+        overlay = Config(final=Path("/overlay/final"))
+        merged = _merge_configs(base, overlay)
+        assert merged.final == Path("/overlay/final")
+
+    def test_merge_configs_final_base_preserved_if_overlay_none(self):
+        """Base final is preserved if overlay is None."""
+        base = Config(final=Path("/base/final"))
+        overlay = Config()
+        merged = _merge_configs(base, overlay)
+        assert merged.final == Path("/base/final")
+
+    def test_load_config_no_final(self, tmp_path, monkeypatch):
+        """Without 'set final', no final loaded."""
+        user_cfg = tmp_path / "user.cfg"
+        user_cfg.write_text("allow fictcmd123")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+
+        config = load_config(tmp_path)
+        assert config.final is None
+        assert len(config.rules) == 1
+        assert config.rules[0].pattern == "fictcmd123"
+
+    def test_load_config_final_loaded_last(self, tmp_path, monkeypatch):
+        """Final rules override all others (last match wins)."""
+        # Setup user config with 'set final'
+        user_cfg = tmp_path / "user.cfg"
+        final_cfg = tmp_path / "final.cfg"
+        user_cfg.write_text(f"allow fictcmd456\nset final {final_cfg}")
+        final_cfg.write_text("deny fictcmd456")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+
+        config = load_config(tmp_path)
+        # Final rules are loaded last
+        assert len(config.rules) == 2
+        assert config.rules[0].pattern == "fictcmd456"
+        assert config.rules[0].decision == "allow"
+        assert config.rules[1].pattern == "fictcmd456"
+        assert config.rules[1].decision == "deny"
+
+    def test_load_config_final_missing_warning(self, tmp_path, monkeypatch, caplog):
+        """Missing final file logs warning, continues."""
+        import logging
+
+        user_cfg = tmp_path / "user.cfg"
+        user_cfg.write_text(f"allow fictcmd789\nset final {tmp_path / 'nonexistent'}")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+
+        with caplog.at_level(logging.WARNING):
+            config = load_config(tmp_path)
+
+        # Config loaded successfully
+        assert len(config.rules) == 1
+        assert config.rules[0].pattern == "fictcmd789"
+        # Warning logged
+        assert any("Final config not found" in record.message for record in caplog.records)
+
+    @pytest.mark.skipif(os.name == "nt", reason="Unix permissions only")
+    def test_load_config_final_permission_error(self, tmp_path, monkeypatch):
+        """Permission error on final file raises ConfigError."""
+        user_cfg = tmp_path / "user.cfg"
+        final_cfg = tmp_path / "final.cfg"
+        final_cfg.write_text("deny *")
+        final_cfg.chmod(0o000)
+        user_cfg.write_text(f"allow fictcmderror\nset final {final_cfg}")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+
+        try:
+            with pytest.raises(ConfigError, match="permission denied"):
+                load_config(tmp_path)
+        finally:
+            final_cfg.chmod(stat.S_IRUSR | stat.S_IWUSR)
+
+    def test_load_config_final_scope_tagging(self, tmp_path, monkeypatch):
+        """Final config rules are tagged with SCOPE_FINAL."""
+        from dippy.core.config import SCOPE_FINAL
+
+        user_cfg = tmp_path / "user.cfg"
+        final_cfg = tmp_path / "final.cfg"
+        user_cfg.write_text(f"allow fictcmdscope\nset final {final_cfg}")
+        final_cfg.write_text("deny fictcmdscope")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+        monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+
+        config = load_config(tmp_path)
+        # First rule is from user config
+        assert config.rules[0].scope == SCOPE_USER
+        # Second rule is from final config
+        assert config.rules[1].scope == SCOPE_FINAL
+        assert config.rules[1].source == str(final_cfg)

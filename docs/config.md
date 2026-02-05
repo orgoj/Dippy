@@ -109,9 +109,12 @@ dippy --cmd 'docker run --privileged nginx' --config .dippy
 **Load order** (last match wins):
 1. `~/.dippy/config` - user defaults
 2. `.dippy` - project overrides
-3. `$DIPPY_CONFIG` - env override (highest precedence)
+3. `$DIPPY_CONFIG` - env override
+4. Final config via `set final <path>` (if configured, loaded last)
 
 Project config is found by walking up from cwd to filesystem root, stopping at the first `.dippy` found (like `.git` discovery).
+
+**Final config:** Use `set final ~/.dippy/emergency` in your user config for emergency overrides. The final file is only loaded when it exists - create it when needed (e.g., `deny *` during emergencies), delete when done.
 
 ## Syntax
 
@@ -601,6 +604,9 @@ set default allow        # Auto-approve everything without explicit rule
 set log ~/.dippy/audit.log  # enable logging to path
 set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
 set log-hook-approvals off  # disable hook-approvals.log
+
+# Final config (loaded after all other configs)
+set final ~/.dippy/emergency  # emergency overrides (loaded last)
 ```
 
 Settings use kebab-case or snake_case interchangeably.
