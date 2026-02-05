@@ -27,6 +27,8 @@ just check         # All of the above in parallel — MUST PASS before committin
 
 ## Process Rules
 
+- plan mode: wait for explicit user confirmation before calling ExitPlanMode - never assume readiness
+- sources: check local repositories (~/work/ai/) before web searches or GitHub API calls
 - research: ALWAYS web search for current best practices before implementing unfamiliar configs/patterns - user has no patience for trial-and-error experiments
 - testing: use existing test suite (`just test`), never write adhoc tests
 - testing: use fictional commands in config rule tests to avoid SIMPLE_SAFE allowlist interference
