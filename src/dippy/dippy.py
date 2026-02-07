@@ -454,6 +454,10 @@ FILE_TOOL_NAMES = frozenset(
         "Edit",
         "MultiEdit",
         "Read",
+        "LS",
+        "Glob",
+        "Grep",
+        "Search",
         "write",  # moltbot / pi-mono
         "edit",  # moltbot / pi-mono
         "read",  # moltbot / pi-mono
@@ -477,7 +481,7 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
-    if tool_name in ("Read", "read_file"):
+    if tool_name in ("Read", "read_file", "LS", "Glob", "Grep", "Search"):
         match = match_read(file_path, config, cwd)
     else:
         match = match_edit(file_path, config, cwd)
