@@ -51,6 +51,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 - development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
 - development: prefer native Dippy tool matchers (match_read, match_edit) over synthetic bash command simulation
+- development: prefer surgical edit over full write for configuration files to prevent accidental regressions (e.g., reverting user's manual changes)
 - development: ensure pi_wrapper.py remains synchronized with dippy.py for logging, agent identification, and tool handling
 - development: if changing >5 files, you're probably wrong - verify with actual error data before making mass changes
 - development: don't simplify user's exact requirements without asking - implement literally
@@ -68,7 +69,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - allowlists: SIMPLE_SAFE commands cannot be overridden by config rules
 - pattern matching: happens after quote stripping by Parable parser
 - directives: only `ask` and `deny` support messages, `allow` does not
-- tool directives: supports `allow-read`, `ask-read`, `deny-read` for file access and `allow-edit`, `ask-edit`, `deny-edit` for modifications
+- tool directives: `allow-edit` is the universal directive for all modification tools (Write, Edit, MultiEdit). Also supports `allow-read`, `ask-read`, `deny-read` for file access.
 
 ## Technical Patterns
 
@@ -82,6 +83,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 
 ## Communication
 
+- communication: ALWAYS explain the intended change and the reasoning behind it FIRST. Wait for user approval before modifying any files.
 - communication: Czech phrases signal STOP - "kurva" (fundamental error requiring correction), "musi byt" (non-negotiable requirement), "nemam cas na pokusy" (no experiments allowed, research first)
 
 ## Git
