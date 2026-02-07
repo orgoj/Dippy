@@ -195,6 +195,9 @@ Dippy can also auto-approve file operations (`Read`, `Write`, `Edit`, `MultiEdit
 "matcher": "Bash|Read|Write|Edit|MultiEdit"
 ```
 
+> [!IMPORTANT]
+> **Limited Search Support:** Currently, Dippy does not intercept `LS`, `Glob`, or `Grep` tools. Claude Code may still prompt for permission when using these tools outside the project root. Full support is planned (see TODO).
+
 Then use `allow-edit`, `allow-read`, etc. rules in your config:
 
 ```

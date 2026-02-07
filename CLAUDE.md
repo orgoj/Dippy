@@ -11,6 +11,11 @@ just test-py312    # Run tests (Python 3.12, explicit)
 just lint          # Lint (ruff check)
 just fmt           # Format (ruff format)
 just check         # All of the above in parallel — MUST PASS before committing
+
+## Debugging Tools
+
+- `scripts/debug/check-path.py` — Verifies a specific file path against the active Dippy configuration. Useful for diagnosing why a `Read` or `Edit` operation is being blocked or asked.
+  - **Usage:** Edit the `path` variable in the script and run: `export PYTHONPATH=$PYTHONPATH:$(pwd)/src && python3 scripts/debug/check-path.py`
 ```
 
 **Test output:**

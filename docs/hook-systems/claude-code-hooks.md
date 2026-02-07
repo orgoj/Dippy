@@ -816,6 +816,16 @@ Added v2.0.64 - allows correlation between PreToolUse and PostToolUse for same t
 
 ---
 
+## TODO / Roadmap
+
+### 1. Full Search Tool Support (LS, Glob, Grep)
+Currently, Dippy only handles `Read`, `Write`, `Edit`, and `MultiEdit`. 
+- **Goal:** Map `LS`, `Glob`, and `Grep` to `read` rules.
+- **Why:** Prevent Claude Code from prompting when listing "external" directories (like `SKILLS/`) that are already allowed in `.dippy/config`.
+- **Implementation:** Add these to `FILE_TOOL_NAMES` in `dippy.py` and ensure path extraction logic works for them.
+
+---
+
 ## Sources and References
 
 ### Official Documentation
