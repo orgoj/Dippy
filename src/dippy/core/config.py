@@ -92,6 +92,7 @@ class Config:
     final: Path | None = None  # path to final config (loaded last)
     askpass: Path | None = None  # external approval program (SSH_ASKPASS style)
     askpass_timeout: int = 60  # seconds to wait for askpass response
+    notifier_command: str | None = None  # external notification command
 
 
 @dataclass
@@ -734,6 +735,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         final=settings.get("final"),
         askpass=settings.get("askpass"),
         askpass_timeout=settings.get("askpass_timeout", 60),
+        notifier_command=settings.get("notifier_command"),
     )
 
 
@@ -857,6 +859,11 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             settings[key_normalized] = int(value)
         except ValueError:
             raise ValueError(f"'askpass-timeout' must be an integer, got '{value}'")
+
+    elif key_normalized == "notifier_command":
+        if value is None:
+            raise ValueError("'notifier-command' requires a command string")
+        settings[key_normalized] = value
 
     else:
         raise ValueError(f"unknown setting '{key}'")

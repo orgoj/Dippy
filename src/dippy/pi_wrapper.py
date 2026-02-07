@@ -4,12 +4,12 @@ pi-mono wrapper for dippy command and file access validation.
 
 Calls dippy's analysis functions and outputs JSON result.
 Input: JSON with {
-    "type": "bash" | "read" | "edit",
+    "type": "bash" | "read" | "edit" | "idle",
     "command": "...", (for bash)
     "path": "...",    (for read/edit)
     "cwd": "..."
 }
-Output: JSON with {"action": "allow|ask|deny|pass", "reason": "...", "context_flags": [...]}
+Output: JSON with {"action": "allow|ask|deny|pass", "reason": "...", "note": "...", "context_flags": [...]}
 """
 
 import json
@@ -27,6 +27,7 @@ from dippy.core.config import (
     configure_logging,
     log_decision,
 )
+from dippy.core.notifier import run_notifier
 
 
 def main():
@@ -60,6 +61,10 @@ def main():
                 decision = Decision("ask", "Empty command")
             else:
                 decision = analyze(command, config, cwd)
+
+        elif req_type == "idle":
+            # Idle mode: wait for notifications
+            decision = Decision("allow", "idle")
 
         elif req_type == "edit":
             path = input_data.get("path", "")
@@ -130,6 +135,9 @@ def main():
             "context_flags": sorted(decision.context_flags)
             if getattr(decision, "context_flags", None)
             else [],
+            "note": run_notifier(config, idle=(req_type == "idle"))
+            if config.notifier_command
+            else None,
             "error": False,
         }
         print(json.dumps(result))

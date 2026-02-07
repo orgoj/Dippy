@@ -9,6 +9,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Univerzální Notifikátor (Sidekick)** - Podpora pro externí upozorňovací příkazy
+  - Nová konfigurace `set notifier-command "CMD"` pro volání externích skriptů (např. mail check).
+  - Podpora pro **Idle režim** (`--idle`) v hooku `Stop`/`AfterAgent` pro long-polling notifikace.
+  - Integrace se všemi agenty: Claude Code, Gemini CLI, Cursor a pi-mono.
+  - Automatické balení zpráv do tagu `<notification_note>`.
+  - vynucení pokračování agenta (block stop) při doručení notifikace v idle režimu.
+
+## [0.2.4] - 2026-02-07
+
+### Added
+
 - **Gemini CLI Support** - Full integration with Gemini CLI hooks
   - Proper response format with `systemMessage` and `continue` fields
   - Deny via stderr + exit code 2 (blocks tool without confirmation dialog)
@@ -40,6 +51,7 @@ See upstream [ldayton/Dippy](https://github.com/ldayton/Dippy) for changes befor
 
 ### Fork Features (not in upstream)
 
+- **Notifier (Sidekick)** - `set notifier-command "CMD"` for external alerts (mail, status).
 - File Edit/Read Approval - `allow-edit`, `allow-read` etc. rules
 - Include directive - `include <path-or-glob>` for composable configs
 - Context-aware rules - `[flags]` syntax with `@subshell`, `@compound`, negation

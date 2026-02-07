@@ -48,6 +48,7 @@ from dippy.core.config import (
     match_web,
 )
 from dippy.core.analyzer import analyze
+from dippy.core.notifier import run_notifier
 
 
 # === Mode Detection ===
@@ -122,97 +123,146 @@ def setup_logging():
 # === Response Helpers ===
 
 
-def approve(reason: str = "all commands safe") -> dict:
+def approve(reason: str = "all commands safe", config: Config | None = None) -> dict:
     """Return approval response."""
     logging.info(f"APPROVED: {reason}")
+    note = run_notifier(config) if config and config.notifier_command else None
+
     if MODE == "gemini":
-        return {
+        res = {
             "decision": "allow",
             "reason": f"🐤 {reason}",
             "systemMessage": f"🐤 {reason}",
             "continue": True,
         }
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
-        return {
+        res = {
             "permission": "allow",
             "user_message": msg,
             "agent_message": msg,
             "userMessage": msg,
             "agentMessage": msg,
         }
-    return {
+        if note:
+            res["agent_message"] = f"{msg}\n\n{note}"
+            res["agentMessage"] = f"{msg}\n\n{note}"
+        return res
+
+    res = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "allow",
             "permissionDecisionReason": f"🐤 {reason}",
         }
     }
+    if note:
+        res["systemMessage"] = note
+    return res
 
 
-def ask(reason: str = "needs approval") -> dict:
+def ask(reason: str = "needs approval", config: Config | None = None) -> dict:
     """Return ask response to prompt user for confirmation."""
     logging.info(f"ASK: {reason}")
+    note = run_notifier(config) if config and config.notifier_command else None
+
     if MODE == "gemini":
-        return {
+        res = {
             "decision": "ask",
             "reason": f"🐤 {reason}",
             "systemMessage": f"🐤 {reason}",
             "continue": True,
         }
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
-        return {
+        res = {
             "permission": "ask",
             "user_message": msg,
             "agent_message": msg,
             "userMessage": msg,
             "agentMessage": msg,
         }
-    return {
+        if note:
+            res["agent_message"] = f"{msg}\n\n{note}"
+            res["agentMessage"] = f"{msg}\n\n{note}"
+        return res
+
+    res = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "ask",
             "permissionDecisionReason": f"🐤 {reason}",
         }
     }
+    if note:
+        res["systemMessage"] = note
+    return res
 
 
-def deny(reason: str = "denied by config") -> dict:
+def deny(reason: str = "denied by config", config: Config | None = None) -> dict:
     """Return deny response to block the command."""
     logging.info(f"DENY: {reason}")
+    note = run_notifier(config) if config and config.notifier_command else None
+
     if MODE == "gemini":
         # Gemini CLI: Exit code 2 with stderr is the standard way to block a tool
         # and provide feedback to the agent without stopping the loop or
         # triggering a manual confirmation dialog (in v0.23+).
-        print(f"🐤 {reason}", file=sys.stderr)
+        msg = f"🐤 {reason}"
+        if note:
+            msg = f"{msg}\n\n{note}"
+        print(msg, file=sys.stderr)
         sys.exit(2)
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
-        return {
+        res = {
             "permission": "deny",
             "user_message": msg,
             "agent_message": msg,
             "userMessage": msg,
             "agentMessage": msg,
         }
-    return {
+        if note:
+            res["agent_message"] = f"{msg}\n\n{note}"
+            res["agentMessage"] = f"{msg}\n\n{note}"
+        return res
+
+    res = {
         "hookSpecificOutput": {
             "hookEventName": "PreToolUse",
             "permissionDecision": "deny",
             "permissionDecisionReason": f"🐤 {reason}",
         }
     }
+    # For Claude deny, we can't easily inject context while denying in PreToolUse
+    # but we can show systemMessage to user.
+    if note:
+        res["systemMessage"] = note
+    return res
 
 
-def pass_(reason: str = "passing through") -> dict:
+def pass_(reason: str = "passing through", config: Config | None = None) -> dict:
     """Return empty response to let Claude handle permissions with its default behavior."""
     logging.info(f"PASS: {reason}")
+    note = run_notifier(config) if config and config.notifier_command else None
+
     if MODE == "gemini":
-        return {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
+        res = {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
+        if note:
+            res["additionalContext"] = note
+        return res
+
+    if note:
+        return {"systemMessage": note}
     return {}
 
 
@@ -328,21 +378,35 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
     )
 
     if result.action == "allow":
-        return approve(result.reason)
+        return approve(result.reason, config=config)
     elif result.action == "deny":
-        return deny(result.reason)
+        return deny(result.reason, config=config)
     elif result.action == "pass":
-        return pass_(result.reason)
+        return pass_(result.reason, config=config)
     else:
-        return ask(result.reason)
+        return ask(result.reason, config=config)
 
 
-def post_tool_response(message: str) -> dict:
+def post_tool_response(message: str, config: Config | None = None) -> dict:
     """Return PostToolUse response with feedback for Claude."""
+    note = run_notifier(config) if config and config.notifier_command else None
+
+    context = f"🐤 {message}"
+    if note:
+        context = f"{context}\n\n{note}"
+
+    if MODE == "gemini":
+        return {
+            "decision": "allow",
+            "reason": f"🐤 {message}",
+            "additionalContext": context,
+            "continue": True,
+        }
+
     return {
         "hookSpecificOutput": {
             "hookEventName": "PostToolUse",
-            "additionalContext": f"🐤 {message}",
+            "additionalContext": context,
         }
     }
 
@@ -354,9 +418,15 @@ def handle_post_tool_use(command: str, config: Config, cwd: Path) -> None:
 
     words = tokenize(command)
     message = match_after(words, config, cwd)
-    if message:  # non-empty string
-        print(json.dumps(post_tool_response(message)))
-    # empty string or None = silent (no output)
+    if message or config.notifier_command:
+        # If no message from rule, but notifier exists, still call it
+        resp = post_tool_response(message or "Notification", config=config)
+        # Only print if we actually have something to say (message or note)
+        if message or (
+            resp.get("hookSpecificOutput", {}).get("additionalContext")
+            or resp.get("additionalContext")
+        ):
+            print(json.dumps(resp))
 
 
 # === MCP Tool Handling ===
@@ -383,19 +453,19 @@ def check_mcp_tool(tool_name: str, config: Config) -> dict:
     reason = match.message if match.message else f"[{match.pattern}]"
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
-        return approve(reason)
+        return approve(reason, config=config)
     elif match.decision == "deny":
-        return deny(reason)
+        return deny(reason, config=config)
     else:
-        return ask(reason)
+        return ask(reason, config=config)
 
 
 def handle_mcp_post_tool_use(tool_name: str, config: Config) -> None:
     """Handle PostToolUse hook for MCP tools - output feedback if rule matches."""
     message = match_after_mcp(tool_name, config)
-    if message:  # non-empty string
-        print(json.dumps(post_tool_response(message)))
-    # empty string or None = silent (no output)
+    if message or config.notifier_command:
+        resp = post_tool_response(message or "Notification", config=config)
+        print(json.dumps(resp))
 
 
 # === WebSearch Tool Handling ===
@@ -417,19 +487,19 @@ def check_web_tool(query: str, config: Config) -> dict:
     reason = match.message if match.message else f"[{match.pattern}]"
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
-        return approve(reason)
+        return approve(reason, config=config)
     elif match.decision == "deny":
-        return deny(reason)
+        return deny(reason, config=config)
     else:
-        return ask(reason)
+        return ask(reason, config=config)
 
 
 def handle_web_post_tool_use(query: str, config: Config) -> None:
     """Handle PostToolUse hook for WebSearch - output feedback if rule matches."""
     message = match_after_web(query, config)
-    if message:  # non-empty string
-        print(json.dumps(post_tool_response(message)))
-    # empty string or None = silent (no output)
+    if message or config.notifier_command:
+        resp = post_tool_response(message or "Notification", config=config)
+        print(json.dumps(resp))
 
 
 # === Hook Entry Point ===
@@ -500,11 +570,11 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     )
 
     if match.decision == "allow":
-        return approve(reason)
+        return approve(reason, config=config)
     elif match.decision == "deny":
-        return deny(reason)
+        return deny(reason, config=config)
     else:
-        return ask(reason)
+        return ask(reason, config=config)
 
 
 # === CLI Mode ===
@@ -551,7 +621,7 @@ Examples:
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
-    parser.add_argument("--version", action="version", version="dippy 0.2.4")
+    parser.add_argument("--version", action="version", version="dippy 0.2.5")
     parser.add_argument(
         "--remote", action="store_true", help="Remote context (skip local path checks)"
     )
@@ -602,6 +672,9 @@ def cli_mode(args: argparse.Namespace) -> int:
             print(f"ask: config error: {e}")
         return EXIT_ASK
 
+    # Run notifier if configured
+    note = run_notifier(config) if config.notifier_command else None
+
     # Analyze command
     result = analyze(command, config, cwd, remote=args.remote)
 
@@ -621,9 +694,14 @@ def cli_mode(args: argparse.Namespace) -> int:
 
     # Output result
     if args.json_output:
-        print(json.dumps({"decision": action, "reason": result.reason}))
+        res = {"decision": action, "reason": result.reason}
+        if note:
+            res["note"] = note
+        print(json.dumps(res))
     else:
         print(f"{action}: {result.reason}")
+        if note:
+            print(f"\n{note}")
 
     # Return exit code
     if action == "allow":
@@ -690,6 +768,37 @@ def main():
 
         # Detect hook event type (Claude Code / Gemini CLI)
         hook_event = input_data.get("hook_event_name", "PreToolUse")
+
+        # Stop hook handling (Idle mode)
+        if hook_event in ("Stop", "SubagentStop", "AfterAgent"):
+            logging.info(f"Stop hook: {hook_event}")
+            note = run_notifier(config, idle=True)
+            if note:
+                if MODE == "gemini":
+                    print(
+                        json.dumps(
+                            {
+                                "decision": "allow",
+                                "reason": "New notification received",
+                                "additionalContext": note,
+                                "continue": True,
+                            }
+                        )
+                    )
+                else:
+                    # Claude Code: return decision "block" to force continuation
+                    print(
+                        json.dumps(
+                            {"decision": "block", "reason": note, "continue": True}
+                        )
+                    )
+            else:
+                # No notification, allow stop
+                if MODE == "gemini":
+                    print(json.dumps({"decision": "allow", "continue": False}))
+                else:
+                    print(json.dumps({"decision": "approve", "continue": True}))
+            return
 
         # Normalize Gemini events to Claude names for internal routing
         if hook_event == "BeforeTool":
