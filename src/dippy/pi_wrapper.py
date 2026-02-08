@@ -27,7 +27,7 @@ from dippy.core.config import (
     configure_logging,
     log_decision,
 )
-from dippy.core.notifier import run_notifier
+from dippy.core.notifier import run_notifier, should_run_notifier
 
 
 def main():
@@ -135,9 +135,18 @@ def main():
             "context_flags": sorted(decision.context_flags)
             if getattr(decision, "context_flags", None)
             else [],
-            "note": run_notifier(config, idle=(req_type == "idle"))
-            if config.notifier_command
-            else None,
+            "note": (
+                run_notifier(config, idle=(req_type == "idle"))
+                if (
+                    req_type == "idle"
+                    or should_run_notifier(
+                        config,
+                        tool_name=req_type if req_type in ("read", "edit") else None,
+                        command=input_data.get("command"),
+                    )
+                )
+                else None
+            ),
             "error": False,
         }
         print(json.dumps(result))

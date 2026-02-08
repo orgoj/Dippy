@@ -11,6 +11,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Univerzální Notifikátor (Sidekick)** - Podpora pro externí upozorňovací příkazy
   - Nová konfigurace `set notifier-command "CMD"` pro volání externích skriptů (např. mail check).
+  - Podpora pro `set notifier-include "list"` pro omezení volání na konkrétní nástroje nebo příkazy.
   - Podpora pro **Idle režim** (`--idle`) v hooku `Stop`/`AfterAgent` pro long-polling notifikace.
   - Integrace se všemi agenty: Claude Code, Gemini CLI, Cursor a pi-mono.
   - Automatické balení zpráv do tagu `<notification_note>`.

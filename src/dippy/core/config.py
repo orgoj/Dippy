@@ -93,6 +93,7 @@ class Config:
     askpass: Path | None = None  # external approval program (SSH_ASKPASS style)
     askpass_timeout: int = 60  # seconds to wait for askpass response
     notifier_command: str | None = None  # external notification command
+    notifier_include: frozenset[str] | None = None  # tools/commands to trigger notifier
 
 
 @dataclass
@@ -736,6 +737,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         askpass=settings.get("askpass"),
         askpass_timeout=settings.get("askpass_timeout", 60),
         notifier_command=settings.get("notifier_command"),
+        notifier_include=settings.get("notifier_include"),
     )
 
 
@@ -789,6 +791,16 @@ def _extract_message(s: str) -> tuple[str, str | None]:
         i -= 1
 
     return s, None  # No valid opening quote, treat as pattern
+
+
+def _strip_quotes(value: str) -> str:
+    """Strip surrounding quotes from a value."""
+    if len(value) >= 2:
+        if (value[0] == '"' and value[-1] == '"') or (
+            value[0] == "'" and value[-1] == "'"
+        ):
+            return value[1:-1]
+    return value
 
 
 def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> None:
@@ -863,7 +875,15 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
     elif key_normalized == "notifier_command":
         if value is None:
             raise ValueError("'notifier-command' requires a command string")
-        settings[key_normalized] = value
+        settings[key_normalized] = _strip_quotes(value)
+
+    elif key_normalized == "notifier_include":
+        if value is None:
+            raise ValueError("'notifier-include' requires a list of tools or commands")
+        # Split by comma and strip whitespace and quotes
+        stripped_value = _strip_quotes(value)
+        items = [i.strip() for i in stripped_value.split(",") if i.strip()]
+        settings[key_normalized] = frozenset(items)
 
     else:
         raise ValueError(f"unknown setting '{key}'")

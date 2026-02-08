@@ -48,7 +48,7 @@ from dippy.core.config import (
     match_web,
 )
 from dippy.core.analyzer import analyze
-from dippy.core.notifier import run_notifier
+from dippy.core.notifier import run_notifier, should_run_notifier
 
 
 # === Mode Detection ===
@@ -123,10 +123,19 @@ def setup_logging():
 # === Response Helpers ===
 
 
-def approve(reason: str = "all commands safe", config: Config | None = None) -> dict:
+def approve(
+    reason: str = "all commands safe",
+    config: Config | None = None,
+    tool_name: str | None = None,
+    command: str | None = None,
+) -> dict:
     """Return approval response."""
     logging.info(f"APPROVED: {reason}")
-    note = run_notifier(config) if config and config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config and should_run_notifier(config, tool_name=tool_name, command=command)
+        else None
+    )
 
     if MODE == "gemini":
         res = {
@@ -165,10 +174,19 @@ def approve(reason: str = "all commands safe", config: Config | None = None) -> 
     return res
 
 
-def ask(reason: str = "needs approval", config: Config | None = None) -> dict:
+def ask(
+    reason: str = "needs approval",
+    config: Config | None = None,
+    tool_name: str | None = None,
+    command: str | None = None,
+) -> dict:
     """Return ask response to prompt user for confirmation."""
     logging.info(f"ASK: {reason}")
-    note = run_notifier(config) if config and config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config and should_run_notifier(config, tool_name=tool_name, command=command)
+        else None
+    )
 
     if MODE == "gemini":
         res = {
@@ -207,10 +225,19 @@ def ask(reason: str = "needs approval", config: Config | None = None) -> dict:
     return res
 
 
-def deny(reason: str = "denied by config", config: Config | None = None) -> dict:
+def deny(
+    reason: str = "denied by config",
+    config: Config | None = None,
+    tool_name: str | None = None,
+    command: str | None = None,
+) -> dict:
     """Return deny response to block the command."""
     logging.info(f"DENY: {reason}")
-    note = run_notifier(config) if config and config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config and should_run_notifier(config, tool_name=tool_name, command=command)
+        else None
+    )
 
     if MODE == "gemini":
         # Gemini CLI: Exit code 2 with stderr is the standard way to block a tool
@@ -250,10 +277,19 @@ def deny(reason: str = "denied by config", config: Config | None = None) -> dict
     return res
 
 
-def pass_(reason: str = "passing through", config: Config | None = None) -> dict:
+def pass_(
+    reason: str = "passing through",
+    config: Config | None = None,
+    tool_name: str | None = None,
+    command: str | None = None,
+) -> dict:
     """Return empty response to let Claude handle permissions with its default behavior."""
     logging.info(f"PASS: {reason}")
-    note = run_notifier(config) if config and config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config and should_run_notifier(config, tool_name=tool_name, command=command)
+        else None
+    )
 
     if MODE == "gemini":
         res = {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
@@ -378,18 +414,27 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
     )
 
     if result.action == "allow":
-        return approve(result.reason, config=config)
+        return approve(result.reason, config=config, command=command)
     elif result.action == "deny":
-        return deny(result.reason, config=config)
+        return deny(result.reason, config=config, command=command)
     elif result.action == "pass":
-        return pass_(result.reason, config=config)
+        return pass_(result.reason, config=config, command=command)
     else:
-        return ask(result.reason, config=config)
+        return ask(result.reason, config=config, command=command)
 
 
-def post_tool_response(message: str, config: Config | None = None) -> dict:
+def post_tool_response(
+    message: str,
+    config: Config | None = None,
+    tool_name: str | None = None,
+    command: str | None = None,
+) -> dict:
     """Return PostToolUse response with feedback for Claude."""
-    note = run_notifier(config) if config and config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config and should_run_notifier(config, tool_name=tool_name, command=command)
+        else None
+    )
 
     context = f"🐤 {message}"
     if note:
@@ -420,7 +465,9 @@ def handle_post_tool_use(command: str, config: Config, cwd: Path) -> None:
     message = match_after(words, config, cwd)
     if message or config.notifier_command:
         # If no message from rule, but notifier exists, still call it
-        resp = post_tool_response(message or "Notification", config=config)
+        resp = post_tool_response(
+            message or "Notification", config=config, command=command
+        )
         # Only print if we actually have something to say (message or note)
         if message or (
             resp.get("hookSpecificOutput", {}).get("additionalContext")
@@ -453,18 +500,20 @@ def check_mcp_tool(tool_name: str, config: Config) -> dict:
     reason = match.message if match.message else f"[{match.pattern}]"
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
-        return approve(reason, config=config)
+        return approve(reason, config=config, tool_name=tool_name)
     elif match.decision == "deny":
-        return deny(reason, config=config)
+        return deny(reason, config=config, tool_name=tool_name)
     else:
-        return ask(reason, config=config)
+        return ask(reason, config=config, tool_name=tool_name)
 
 
 def handle_mcp_post_tool_use(tool_name: str, config: Config) -> None:
     """Handle PostToolUse hook for MCP tools - output feedback if rule matches."""
     message = match_after_mcp(tool_name, config)
     if message or config.notifier_command:
-        resp = post_tool_response(message or "Notification", config=config)
+        resp = post_tool_response(
+            message or "Notification", config=config, tool_name=tool_name
+        )
         print(json.dumps(resp))
 
 
@@ -487,18 +536,20 @@ def check_web_tool(query: str, config: Config) -> dict:
     reason = match.message if match.message else f"[{match.pattern}]"
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
-        return approve(reason, config=config)
+        return approve(reason, config=config, tool_name="WebSearch")
     elif match.decision == "deny":
-        return deny(reason, config=config)
+        return deny(reason, config=config, tool_name="WebSearch")
     else:
-        return ask(reason, config=config)
+        return ask(reason, config=config, tool_name="WebSearch")
 
 
 def handle_web_post_tool_use(query: str, config: Config) -> None:
     """Handle PostToolUse hook for WebSearch - output feedback if rule matches."""
     message = match_after_web(query, config)
     if message or config.notifier_command:
-        resp = post_tool_response(message or "Notification", config=config)
+        resp = post_tool_response(
+            message or "Notification", config=config, tool_name="WebSearch"
+        )
         print(json.dumps(resp))
 
 
@@ -570,11 +621,11 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     )
 
     if match.decision == "allow":
-        return approve(reason, config=config)
+        return approve(reason, config=config, tool_name=tool_name)
     elif match.decision == "deny":
-        return deny(reason, config=config)
+        return deny(reason, config=config, tool_name=tool_name)
     else:
-        return ask(reason, config=config)
+        return ask(reason, config=config, tool_name=tool_name)
 
 
 # === CLI Mode ===
@@ -673,7 +724,11 @@ def cli_mode(args: argparse.Namespace) -> int:
         return EXIT_ASK
 
     # Run notifier if configured
-    note = run_notifier(config) if config.notifier_command else None
+    note = (
+        run_notifier(config)
+        if config.notifier_command and should_run_notifier(config, command=command)
+        else None
+    )
 
     # Analyze command
     result = analyze(command, config, cwd, remote=args.remote)

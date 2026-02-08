@@ -3,6 +3,32 @@ import logging
 from dippy.core.config import Config
 
 
+def should_run_notifier(
+    config: Config, tool_name: str | None = None, command: str | None = None
+) -> bool:
+    """
+    Check if the notifier should run based on configuration filters.
+    If notifier_include is not set, it runs for everything.
+    """
+    if not config.notifier_command:
+        return False
+    if not config.notifier_include:
+        return True
+
+    # Check tool name (e.g., Read, Edit, Write, Bash)
+    if tool_name and tool_name in config.notifier_include:
+        return True
+
+    # Check command prefix (e.g., "git commit")
+    if command:
+        cmd_stripped = command.strip()
+        for item in config.notifier_include:
+            if cmd_stripped.startswith(item):
+                return True
+
+    return False
+
+
 def run_notifier(config: Config, idle: bool = False) -> str | None:
     """
     Execute the notifier-command and return its output wrapped in a tag.
