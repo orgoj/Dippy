@@ -47,6 +47,17 @@ class Rule:
     )
 
 
+@dataclass(frozen=True)
+class WrapperInfo:
+    """Configuration for a wrapper command."""
+
+    name: str
+    trigger: str | None = None
+    """Subcommand that triggers inner command analysis (e.g. 'run', 'exec')."""
+    target_flag: str | None = None
+    """Flag that specifies the destination/target (e.g. '-t', '-h')."""
+
+
 @dataclass
 class Config:
     """Parsed configuration."""
@@ -78,8 +89,8 @@ class Config:
     after_web_rules: list[Rule] = field(default_factory=list)
     """After-web rules for PostToolUse feedback on WebSearch."""
 
-    wrappers: set[str] = field(default_factory=set)
-    """Custom wrapper commands (e.g., 'wrap', 'tmux-cli')."""
+    wrappers: dict[str, WrapperInfo] = field(default_factory=dict)
+    """Custom wrapper commands mapping name to info."""
 
     aliases: dict[str, str] = field(default_factory=dict)
     """Command aliases mapping source to target (e.g., ~/bin/gh -> gh)."""
@@ -153,8 +164,8 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         read_rules=base.read_rules + overlay.read_rules,
         web_rules=base.web_rules + overlay.web_rules,
         after_web_rules=base.after_web_rules + overlay.after_web_rules,
-        # Wrappers accumulate (union of both)
-        wrappers=base.wrappers | overlay.wrappers,
+        # Wrappers accumulate (merge dicts)
+        wrappers={**base.wrappers, **overlay.wrappers},
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
@@ -500,7 +511,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     read_rules: list[Rule] = []
     web_rules: list[Rule] = []
     after_web_rules: list[Rule] = []
-    wrappers: set[str] = set()
+    wrappers: dict[str, WrapperInfo] = {}
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -695,9 +706,11 @@ def parse_config(text: str, source: str | None = None) -> Config:
             elif directive == "wrapper":
                 if not rest:
                     raise ValueError("requires a command name")
-                wrapper_name = rest.strip()
-                if not wrapper_name:
-                    raise ValueError("wrapper name cannot be empty")
+                parts = rest.split()
+                wrapper_name = parts[0]
+                trigger = parts[1] if len(parts) > 1 else None
+                target_flag = parts[2] if len(parts) > 2 else None
+
                 if wrapper_name.startswith("-"):
                     raise ValueError(
                         f"wrapper name cannot start with '-': {wrapper_name}"
@@ -706,7 +719,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     logging.warning(
                         f"{prefix}line {lineno}: duplicate wrapper definition: {wrapper_name}"
                     )
-                wrappers.add(wrapper_name)
+                wrappers[wrapper_name] = WrapperInfo(
+                    name=wrapper_name, trigger=trigger, target_flag=target_flag
+                )
 
             elif directive == "set":
                 _apply_setting(settings, rest)

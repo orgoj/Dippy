@@ -1,5 +1,3 @@
-
-import os
 from pathlib import Path
 from dippy.core.config import load_config, match_read
 
