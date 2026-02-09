@@ -369,8 +369,8 @@ FILE_TOOL_NAMES = frozenset(
         "Grep",
         "Search",
         "write",  # moltbot / pi-mono
-        "edit",   # moltbot / pi-mono
-        "read",   # moltbot / pi-mono
+        "edit",  # moltbot / pi-mono
+        "read",  # moltbot / pi-mono
         "write_file",
         "replace",
         "read_file",

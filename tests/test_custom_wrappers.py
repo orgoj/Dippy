@@ -60,7 +60,8 @@ class TestConfigParser:
     def test_parse_single_wrapper(self):
         """Parse a single wrapper directive."""
         config = parse_config("wrapper wrap")
-        assert config.wrappers == {"wrap"}
+        assert "wrap" in config.wrappers
+        assert config.wrappers["wrap"].name == "wrap"
 
     def test_parse_multiple_wrappers(self):
         """Parse multiple wrapper directives."""
@@ -71,7 +72,7 @@ class TestConfigParser:
             wrapper tmux-cli
         """
         )
-        assert config.wrappers == {"wrap", "ssh", "tmux-cli"}
+        assert set(config.wrappers.keys()) == {"wrap", "ssh", "tmux-cli"}
 
     def test_duplicate_wrapper_warning(self, caplog):
         """Duplicate wrapper definition logs warning."""
@@ -82,19 +83,19 @@ class TestConfigParser:
             wrapper wrap
         """
         )
-        assert config.wrappers == {"wrap"}
+        assert set(config.wrappers.keys()) == {"wrap"}
         assert "duplicate wrapper" in caplog.text.lower()
 
     def test_empty_wrapper_name_error(self, caplog):
         """Empty wrapper name logs error."""
         config = parse_config("wrapper")
-        assert config.wrappers == set()
+        assert config.wrappers == {}
         assert any("requires a command name" in rec.message for rec in caplog.records)
 
     def test_wrapper_name_starting_with_dash_error(self, caplog):
         """Wrapper name starting with - logs error."""
         config = parse_config("wrapper -bad")
-        assert config.wrappers == set()
+        assert config.wrappers == {}
         assert any("cannot start with '-'" in rec.message for rec in caplog.records)
 
 
@@ -186,6 +187,42 @@ class TestWrapperAnalysis:
         result = analyze("wrap -p 2222 server1 ls", config, Path.cwd())
         assert result.action == "allow"
 
+    def test_generic_wrapper_with_subcommand_and_target(self):
+        """Test wrapper with explicit trigger (run) and target flag (-t)."""
+        config_text = """
+            wrapper cca-tmux-cli run -t
+            allow [cca-tmux-cli,l2] ls *
+            deny [cca-tmux-cli,prod] ls * "No ls on prod!"
+        """
+        config = parse_config(config_text)
+        cwd = Path("/home/user")
+
+        # 1. Allowed command on l2
+        cmd_l2 = 'cca-tmux-cli -t l2 run "ls /data"'
+        decision_l2 = analyze(cmd_l2, config, cwd)
+        assert decision_l2.action == "allow"
+        assert "ls" in decision_l2.reason
+
+        # 2. Denied command on prod
+        cmd_prod = 'cca-tmux-cli -t prod run "ls /data"'
+        decision_prod = analyze(cmd_prod, config, cwd)
+        assert decision_prod.action == "deny"
+        assert "No ls on prod!" in decision_prod.reason
+
+    def test_generic_wrapper_no_target_flag(self):
+        """Test wrapper with trigger (exec) but no explicit target flag."""
+        config_text = """
+            wrapper mytool exec
+            allow [mytool,myserver] id
+        """
+        config = parse_config(config_text)
+        cwd = Path("/home/user")
+
+        cmd = 'mytool myserver exec "id"'
+        decision = analyze(cmd, config, cwd)
+        assert decision.action == "allow"
+        assert "id" in decision.reason
+
 
 class TestExistingWrappersStillWork:
     """Ensure existing ssh/sudo wrappers continue working."""
@@ -225,23 +262,24 @@ class TestWrapperConfigMerge:
 
     def test_wrappers_merge_with_union(self):
         """Wrappers from multiple configs merge via set union."""
-        from dippy.core.config import _merge_configs
+        from dippy.core.config import _merge_configs, WrapperInfo
 
-        base = Config(wrappers={"wrap1"})
-        overlay = Config(wrappers={"wrap2"})
+        base = Config(wrappers={"wrap1": WrapperInfo(name="wrap1")})
+        overlay = Config(wrappers={"wrap2": WrapperInfo(name="wrap2")})
         merged = _merge_configs(base, overlay)
 
-        assert merged.wrappers == {"wrap1", "wrap2"}
+        assert set(merged.wrappers.keys()) == {"wrap1", "wrap2"}
 
     def test_duplicate_wrappers_deduplicate(self):
         """Duplicate wrapper names are deduplicated in merge."""
-        from dippy.core.config import _merge_configs
+        from dippy.core.config import _merge_configs, WrapperInfo
 
-        base = Config(wrappers={"wrap"})
-        overlay = Config(wrappers={"wrap"})
+        base = Config(wrappers={"wrap": WrapperInfo(name="wrap", trigger="old")})
+        overlay = Config(wrappers={"wrap": WrapperInfo(name="wrap", trigger="new")})
         merged = _merge_configs(base, overlay)
 
-        assert merged.wrappers == {"wrap"}
+        assert set(merged.wrappers.keys()) == {"wrap"}
+        assert merged.wrappers["wrap"].trigger == "new"  # Overlay wins
 
 
 class TestLnavWrapperValidation:

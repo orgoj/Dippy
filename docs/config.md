@@ -219,65 +219,60 @@ ask [flags] <glob> "message"
 Define your own wrapper commands with the `wrapper` directive:
 
 ```
-wrapper <command_name>
+wrapper <command_name> [subcommand_trigger] [target_flag]
 ```
 
 **Example:**
 
 ```
-# Define custom wrapper
+# Basic wrapper (first non-option is destination)
 wrapper wrap
 
-# Allow free on server1 via wrap
-allow [wrap,server1] free *
+# Wrapper with subcommand (inner command starts after 'run')
+wrapper cca-tmux-cli run
 
-# Deny rm on server1 (any wrapper)
-deny [server1] rm *
+# Wrapper with subcommand and target flag (target follows '-t')
+wrapper cca-tmux-cli run -t
 ```
 
 **Usage:**
 
 ```bash
+# Basic
 wrap server1 free -h          # wrapper=wrap, dest=server1, cmd=free -h
-wrap server1 ls -la           # Allowed
-wrap server1 rm /tmp/x        # Denied
+
+# With trigger
+cca-tmux-cli l2 run "ls"      # wrapper=cca-tmux-cli, dest=l2, cmd=ls
+
+# With trigger and target flag
+cca-tmux-cli -t l2 run "ls"   # wrapper=cca-tmux-cli, dest=l2, cmd=ls
 ```
 
-**Wrapper syntax:**
+**Rules:**
 
 ```
-<wrapper> [options] <destination> [inner_command]
+# Allow free on server1 via wrap
+allow [wrap,server1] free *
+
+# Deny rm on server1 (any wrapper)
+deny [server1] rm *
+
+# Allow specific command via cca-tmux-cli
+allow [cca-tmux-cli,l2] ls *
 ```
 
-- `wrapper`: Command name defined in config
-- `options`: Optional flags (same as SSH: `-p`, `-i`, `-l`, etc.)
-- `destination`: First non-option token (becomes context flag)
-- `inner_command`: Everything after destination (can be empty for interactive)
+**How it works:**
 
-**Context flags from wrappers:**
+1. **Trigger search**: If `subcommand_trigger` is defined, Dippy looks for this word and treats everything after it as the `inner_command`.
+2. **Target extraction**: 
+   - If `target_flag` is defined, Dippy looks for it *before* the trigger and takes the next token as the destination.
+   - If no flag is defined or found, it takes the first non-option token *before* the trigger.
+3. **Context flags**: Sets both the wrapper name (`cca-tmux-cli`) and destination (`l2`) as flags.
+4. **Recursive analysis**: Analyzes the `inner_command` rekurzivně.
+5. **Remote mode**: Inner commands are automatically analyzed with `remote=True`, which skips local path checks (ideal for SSH/containers).
 
-Custom wrappers automatically set TWO context flags:
-1. Wrapper name: `["wrap"]`
-2. Destination: `["server1"]`
-
-Both flags are available for rule matching:
-
-```
-allow [wrap,server1] free *    # Both wrapper AND destination
-allow [server1] free *          # Destination only (any wrapper)
-allow [wrap] free *             # Wrapper only (any destination)
-deny [!wrap] rm *              # Negation: rm WITHOUT wrapper
-```
-
-**Multiple wrappers:**
-
-```
-wrapper wrap
-wrapper tmux-cli
-wrapper ssh-gateway
-```
-
-Wrappers merge via set union across config scopes (user + project).
+Custom wrappers merge via set union across config scopes (user + project).
+Later definitions of the same wrapper name override earlier ones.
 
 **Built-in wrappers vs custom:**
 

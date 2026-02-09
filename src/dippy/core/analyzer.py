@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from dippy.core.config import Config, match_redirect
+from dippy.core.config import Config, match_redirect, WrapperInfo
 from dippy.core.allowlists import SIMPLE_SAFE, WRAPPER_COMMANDS
 from dippy.cli import get_handler, get_description, HandlerContext
 from dippy.vendor.parable import parse, ParseError
@@ -334,25 +334,22 @@ def _analyze_node(
 
 def _extract_wrapper_args(
     tokens: list[str],
+    info: WrapperInfo | None = None,
 ) -> tuple[str | None, str]:
     """Extract wrapper destination and inner command from tokens.
 
     Args:
         tokens: Command tokens starting with wrapper name
+        info: Optional WrapperInfo from config
 
     Returns:
         (destination, inner_command) tuple
-        - destination: First non-option token, or None if not found
-        - inner_command: Everything after destination, empty string if no inner
-
-    Example:
-        ["wrap", "server1", "free", "-h"] -> ("server1", "free -h")
-        ["wrap", "-p", "2222", "server1", "ls"] -> ("server1", "ls")
-        ["wrap", "server1"] -> ("server1", "")
-        ["wrap"] -> (None, "")
     """
     if not tokens or len(tokens) < 2:
         return None, ""
+
+    trigger = info.trigger if info else None
+    target_flag = info.target_flag if info else None
 
     # Options that take an argument (same as ssh.py)
     opts_with_arg = {
@@ -376,8 +373,45 @@ def _extract_wrapper_args(
         "-S",
         "-W",
         "-w",
+        "-t",  # Added -t as it's common for target/tty
     }
 
+    # 1. If trigger is present, find it and split
+    if trigger:
+        try:
+            idx = tokens.index(trigger)
+            inner_cmd = " ".join(tokens[idx + 1 :]) if idx + 1 < len(tokens) else ""
+
+            # Find destination in tokens BEFORE the trigger
+            dest = None
+            if target_flag:
+                try:
+                    t_idx = tokens.index(target_flag, 0, idx)
+                    if t_idx + 1 < idx:
+                        dest = tokens[t_idx + 1]
+                except ValueError:
+                    pass
+
+            if dest is None:
+                # Fallback: find first non-option before trigger
+                i = 1
+                while i < idx:
+                    tok = tokens[i]
+                    if tok.startswith("-"):
+                        if tok in opts_with_arg:
+                            i += 2
+                        else:
+                            i += 1
+                    else:
+                        dest = tok
+                        break
+
+            return dest, inner_cmd
+        except ValueError:
+            # Trigger not found, fall back to standard logic
+            pass
+
+    # 2. Standard SSH-like logic (destination is first non-option)
     i = 1  # Skip wrapper name (tokens[0])
     dest = None
 
@@ -669,22 +703,26 @@ def _analyze_simple_command(
     if _is_version_or_help(tokens):
         return Decision("allow", f"{base} --help", context_flags=context_flags)
 
-    # 5. Custom wrapper commands (configured via 'wrapper wrap' directive)
+    # 5. Custom wrapper commands (configured via 'wrapper' directive)
     if base in config.wrappers:
-        dest, inner_cmd = _extract_wrapper_args(tokens)
+        info = config.wrappers[base]
+        dest, inner_cmd = _extract_wrapper_args(tokens, info)
+
         if dest is None:
-            # No destination - can't extract inner command
+            # No destination - can't extract inner command safely
             return Decision(
                 "ask", f"{base} (no destination)", context_flags=context_flags
             )
         if not inner_cmd:
-            # No inner command (interactive ssh/wrapper)
+            # No inner command (interactive session)
             return Decision("ask", f"{base} {dest}", context_flags=context_flags)
 
-        # Set wrapper_context to include both wrapper name and destination
+        # Set wrapper_context to include both wrapper name and destination (server)
         wrapper_context = [base, dest]
         inner_flags = context_flags | frozenset(wrapper_context)
-        inner_decision = analyze(inner_cmd, config, cwd, inner_flags, remote=remote)
+
+        # We assume custom wrappers execute commands REMOTELY
+        inner_decision = analyze(inner_cmd, config, cwd, inner_flags, remote=True)
         return inner_decision
 
     # 6. CLI-specific handlers

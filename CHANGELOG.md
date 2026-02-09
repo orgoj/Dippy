@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Generic Wrapper Enhancements** - Enhanced `wrapper` directive with subcommand and target flag support
+  - New syntax: `wrapper <name> [subcommand_trigger] [target_flag]`
+  - Automatically extracts target/destination (e.g., server name) and provides it as a context flag
+  - Automatically analyzes inner commands starting after the trigger word
+  - Support for custom target flags (e.g., `-t`, `-h`) with automatic fallback to first non-option token
+  - Enforces `remote=True` for inner commands, skipping local path checks for remote operations
 - **Gemini CLI Support** - Full integration with Gemini CLI hooks
   - Proper response format with `systemMessage` and `continue` fields
   - Deny via stderr + exit code 2 (blocks tool without confirmation dialog)
