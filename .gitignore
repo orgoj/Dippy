@@ -47,3 +47,6 @@ Thumbs.db
 # Claude Code
 # .claude/*
 # !.claude/skills/
+
+# pi (AI assistant)
+.pi/*
