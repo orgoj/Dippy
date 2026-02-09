@@ -8,21 +8,24 @@ allow-read /home/michael/work/ai/PI/pi-mono/**
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
-#deny python3 * "Use `uv run python`"
-#deny python * "Use `uv run python`"
-#deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
-allow uv run python -c *
 
-deny python3 -m pytest * "Use: uv run python -m pytest ..."
-deny uv run python *  "Use: uv run python -m pytest ..."
-deny uv run pytest *  "Use: uv run python -m pytest ..."
-deny pytest run *  "Use: uv run python -m pytest ..."
+#deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
+deny .venv/bin/*  "Use `uv`"
+deny .venv/bin/* *  "Use `uv`"
 deny pytest run  "Use: uv run python -m pytest ..."
+deny pytest run *  "Use: uv run python -m pytest ..."
+deny python * "Use `uv run python`"
+deny python3 * "Use `uv run python`"
+deny python3 -m pytest * "Use: uv run python -m pytest ..."
+deny uv run pytest *  "Use: uv run python -m pytest ..."
+deny uv run python *  "Use: uv run python -m pytest ..."
+
 allow uv run python -m pytest *
+# DANGER
+allow uv run python -c *
 
 allow DIPPY_CONFIG=$CONF PYTHONPATH=src python3 -m dippy.dippy *
 
-deny .venv/bin/*
 
 #---- Just ----#
 allow just check *
