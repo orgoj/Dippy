@@ -57,6 +57,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - testing: always isolate tests from live config/system using tmp_path, monkeypatch, and explicit isolation verification tests
 - testing: TDD is mandatory for ALL changes including "small" bug fixes - write failing test FIRST, then implement fix
 - testing: run expensive commands once to /tmp/file.txt 2>&1, analyze with grep/wc/head/tail - never re-run for different views
+- testing: prefer `uv run python -m pytest` over `just` in restricted environments for reliability
 - verification: check actual running system (real files, real logs, real config) - never verify with synthetic examples when real system is accessible
 - verification: never assume systematic issues across multiple files - use grep/rg to find actual errors, fix ONLY confirmed bugs
 - documentation: always read README.md before making assumptions about config/log locations
@@ -65,6 +66,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - documentation: keep docs minimal and tool-specific - don't explain technologies users already know
 - documentation: main docs in `docs/config.md`, README for overview only
 - documentation: when adding tool support, update core docs, pi-extension/README.md, and docs/hook-systems/
+- documentation: VSCode extension requires manual regex updates in `editors/vscode/syntaxes/dippy.tmLanguage.json` when adding new directives
 - backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
 - development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
 - development: prefer native Dippy tool matchers (match_read, match_edit) over synthetic bash command simulation
@@ -78,11 +80,13 @@ just check         # All of the above in parallel — MUST PASS before committin
 - development: avoid imports inside functions - ugly pattern that violates code cleanliness
 - background tasks: daily cleanup/rotation tasks should run once per relevant period, not on every startup/write
 - log rotation: use yesterday's date for rotated files (active file always has current name)
+- pi-mono: plan mode is a pi-mono feature, not Dippy (exit via `/plan` or Ctrl+Alt+P)
 
 ## Dippy Configuration
 
 - rules: follow "last match wins" behavior
-- allowlists: SIMPLE_SAFE commands cannot be overridden by config rules
+- allowlists: SIMPLE_SAFE commands cannot be overridden by `set` directive, but CAN be overridden by config rules (rules have higher priority)
+- notifier: `notifier-command` and `notifier-include` directives for sidekick context injection (v0.2.5+)
 - pattern matching: happens after quote stripping by Parable parser
 - directives: only `ask` and `deny` support messages, `allow` does not
 - tool directives: `allow-edit` is the universal directive for all modification tools (Write, Edit, MultiEdit). Also supports `allow-read`, `ask-read`, `deny-read` for file access.
@@ -96,6 +100,8 @@ just check         # All of the above in parallel — MUST PASS before committin
 - type changes: when changing field types in dataclasses, update ALL consumers systematically (handlers, analyzer, tests)
 - optional sets: use truthiness (`if value`) not identity (`if value is not None`) for optional frozensets - empty set is falsy but not None
 - banned modules: avoid `shlex`; use `dippy.core.parser.tokenize` for bash-compatible tokenization
+- pi-mono: use `deliverAs: "followUp"` for agent-initiated turns to prevent collisions with user input
+- notifier: `agent_end` hook enables long-polling idle behaviors with `--idle` flag
 
 ## Communication
 
