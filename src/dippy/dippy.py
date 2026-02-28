@@ -716,8 +716,8 @@ Subcommands:
     # hooks list
     hooks_subparsers.add_parser(
         "list",
-        help="List installed hooks",
-        description="List all installed Dippy hooks and their status.",
+        help="List hook status (shows both global and project)",
+        description="List Dippy hook status for all agents. Shows both global and project-local installation status.",
     )
 
     # hooks install
@@ -882,10 +882,7 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
     from dippy.cli.hooks import install as hooks_install, list_hooks, uninstall as hooks_uninstall
 
     if args.hooks_action == "list":
-        return list_hooks(
-            global_config=getattr(args, "global", False),
-            cwd=getattr(args, "cwd", None),
-        )
+        return list_hooks(cwd=getattr(args, "cwd", None))
     elif args.hooks_action == "install":
         return hooks_install(
             agent=args.agent,

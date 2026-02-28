@@ -26,7 +26,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` and `agent` fields added for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
-- **Multi-Agent Support** — dedicated modes for Claude, Gemini, Cursor, pi-mono, Moltbot, Codex, Windsurf, and PearAI
+- **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 <!-- FORK ENHANCEMENTS END -->
 
@@ -198,19 +198,21 @@ Dippy includes management commands for hook installation and diagnostics.
 ### Hooks Management
 
 ```bash
-dippy hooks list                    # List installed hooks
-dippy hooks list --global           # Check global configs
-dippy hooks install <agent>         # Install hooks for an agent
+dippy hooks list                    # List hook status (shows both global and project)
+dippy hooks install <agent>         # Install hooks for an agent (project-local)
 dippy hooks install <agent> --global  # Install to global config
-dippy hooks uninstall <agent>       # Remove hooks for an agent
+dippy hooks uninstall <agent>       # Remove hooks from project config
 dippy hooks uninstall <agent> --global  # Remove from global config
 ```
 
 **Supported agents:** `claude`, `gemini`, `cursor`, `windsurf`
 
-**Installation scope:**
-- **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`, etc.
-- **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`, etc.
+**Status indicators:**
+- `+` = installed, `?` = legacy (old dippy-hook), ` ` = not installed
+
+**Installation scopes:**
+- **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`
+- **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`
 
 ### Diagnostics
 
@@ -222,7 +224,7 @@ dippy doctor --verbose              # Show detailed diagnostics
 
 **Health checks:**
 - Installation (on PATH, version check)
-- Hook status (detected agents)
+- Hook status (installed vs detected)
 - Configuration validation (syntax errors)
 - Log health (writable directories, file size)
 - Agent-specific diagnostics (when `--agent` specified)
@@ -386,8 +388,7 @@ dippy doctor --agent claude         # Agent-specific checks
 
 1. **Verify hook installation:**
    ```bash
-   dippy hooks list                 # Check project-local hooks
-   dippy hooks list --global        # Check global hooks
+   dippy hooks list                 # Shows both global and project status
    ```
 
 2. **Reinstall hooks:**

@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Literal
 
 from dippy.cli.agents import AGENTS, detect_agents
+from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook
 
 
 class HealthStatus(Enum):
@@ -55,7 +56,7 @@ class CheckResult:
     def display(self, verbose: bool = False) -> None:
         """Display the check result to stdout."""
         print(f"{self.status.symbol} {self.name}: {self.message}")
-        if verbose and self.details:
+        if self.details:
             for line in self.details.split("\n"):
                 print(f"    {line}")
 
@@ -86,16 +87,13 @@ def run(
     checks.append(check_installation())
 
     # 2. Hook status check
-    if agent:
-        checks.append(check_agent_hook_status(agent))
-    else:
-        checks.append(check_hook_status())
+    checks.append(check_hook_status(cwd_path, verbose))
 
     # 3. Config validation
     checks.append(check_config_validation(cwd_path))
 
     # 4. Log health check
-    checks.append(check_log_health())
+    checks.append(check_log_health(verbose))
 
     # 5. Agent-specific check (if --agent specified)
     if agent:
@@ -122,7 +120,7 @@ def check_installation() -> CheckResult:
             "Installation",
             HealthStatus.CRITICAL,
             "dippy not found on PATH",
-            "Install Dippy or add it to your PATH",
+            "Install Dippy: uv tool install dippy or pip install dippy",
         )
 
     # Check if we can run it
@@ -157,11 +155,80 @@ def check_installation() -> CheckResult:
         )
 
 
-def check_hook_status() -> CheckResult:
+def check_hook_status(cwd_path: Path, verbose: bool) -> CheckResult:
     """Check status of hooks for all agents."""
-    installed = detect_agents()
+    import json
 
-    if not installed:
+    installed_hooks = []
+    detected_agents = []
+    legacy_hooks = []
+
+    # Check agents with hook support
+    for agent_id, hook_config in HOOK_COMMANDS.items():
+        agent_info = AGENTS.get(agent_id)
+        if not agent_info:
+            continue
+
+        # Check global config
+        global_path = Path(hook_config["config"]).expanduser()
+        has_global = False
+        has_legacy = False
+        if global_path.exists():
+            try:
+                with open(global_path) as f:
+                    config = json.load(f)
+                has_global = _has_dippy_hook(config, agent_id)
+                has_legacy = _has_legacy_dippy_hook(config)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        # Check project config
+        project_path = cwd_path / hook_config["project_config"]
+        has_project = False
+        if project_path.exists():
+            try:
+                with open(project_path) as f:
+                    config = json.load(f)
+                if not has_global:
+                    has_project = _has_dippy_hook(config, agent_id)
+                if not has_legacy:
+                    has_legacy = _has_legacy_dippy_hook(config)
+            except (json.JSONDecodeError, IOError):
+                pass
+
+        if has_global or has_project:
+            installed_hooks.append(agent_info.name)
+        if global_path.exists() or project_path.exists():
+            detected_agents.append(agent_info.name)
+        if has_legacy:
+            legacy_hooks.append(agent_info.name)
+
+    # Check pi-mono extension
+    pi_extension = Path.home() / ".pi" / "agent" / "extensions" / "dippy-extension.ts"
+    if pi_extension.exists():
+        installed_hooks.append("pi-mono (extension)")
+        detected_agents.append("pi-mono")
+
+    # Build message
+    if installed_hooks:
+        msg = f"Installed: {', '.join(installed_hooks)}"
+        details = None
+        if legacy_hooks:
+            details = f"Note: Legacy 'dippy-hook' found in: {', '.join(legacy_hooks)}\n       Run 'dippy hooks uninstall <agent>' to remove old hooks"
+        return CheckResult(
+            "Hooks",
+            HealthStatus.OK,
+            msg,
+            details,
+        )
+    elif detected_agents:
+        return CheckResult(
+            "Hooks",
+            HealthStatus.WARNING,
+            "Agents detected but hooks not installed",
+            f"Found: {', '.join(detected_agents)}\nInstall with: dippy hooks install <agent>",
+        )
+    else:
         return CheckResult(
             "Hooks",
             HealthStatus.WARNING,
@@ -169,73 +236,35 @@ def check_hook_status() -> CheckResult:
             "Install Claude Code, Cursor, or Gemini CLI to use Dippy hooks",
         )
 
-    agent_names = ", ".join(sorted(info.name for info in installed.values()))
-    return CheckResult(
-        "Hooks",
-        HealthStatus.OK,
-        f"Found {len(installed)} agent(s): {agent_names}",
-        None,
-    )
 
-
-def check_agent_hook_status(agent_id: str) -> CheckResult:
-    """Check hook status for a specific agent."""
-    agent = AGENTS.get(agent_id)
-    if not agent:
-        return CheckResult(
-            "Hooks",
-            HealthStatus.CRITICAL,
-            f"Unknown agent: {agent_id}",
-            f"Valid agents: {', '.join(AGENTS.keys())}",
-        )
-
-    if agent.is_installed():
-        return CheckResult(
-            "Hooks",
-            HealthStatus.OK,
-            f"{agent.name} is installed",
-            f"Config: {agent.global_config}",
-        )
-    else:
-        return CheckResult(
-            "Hooks",
-            HealthStatus.CRITICAL,
-            f"{agent.name} not found",
-            f"Expected config at: {agent.global_config}",
-        )
-
-
-def check_config_validation(cwd: Path) -> CheckResult:
+def check_config_validation(cwd_path: Path) -> CheckResult:
     """Validate Dippy configuration files."""
     from dippy.core.config import ConfigError, load_config
 
+    errors = []
+
     # Check global config
-    global_errors = []
-    try:
-        load_config(Path.cwd(), config_path=None)
-    except ConfigError as e:
-        global_errors.append(str(e))
+    global_config = Path.home() / ".dippy" / "config"
+    if global_config.exists():
+        try:
+            load_config(cwd_path, config_path=str(global_config))
+        except ConfigError as e:
+            errors.append(f"Global config: {_format_config_error(e, global_config)}")
 
     # Check project config
-    project_errors = []
-    if (cwd / ".dippy").exists():
+    project_config = cwd_path / ".dippy"
+    if project_config.exists():
         try:
-            load_config(cwd, config_path=None)
+            load_config(cwd_path, config_path=None)
         except ConfigError as e:
-            project_errors.append(str(e))
+            errors.append(f"Project config: {_format_config_error(e, project_config)}")
 
-    if global_errors or project_errors:
-        errors = []
-        if global_errors:
-            errors.append(f"Global: {'; '.join(global_errors)}")
-        if project_errors:
-            errors.append(f"Project: {'; '.join(project_errors)}")
-
+    if errors:
         return CheckResult(
             "Configuration",
             HealthStatus.CRITICAL,
-            "Config validation failed",
-            "; ".join(errors),
+            f"{len(errors)} error(s) found",
+            "\n".join(errors),
         )
 
     return CheckResult(
@@ -246,51 +275,71 @@ def check_config_validation(cwd: Path) -> CheckResult:
     )
 
 
-def check_log_health() -> CheckResult:
+def _format_config_error(error: Exception, config_path: Path) -> str:
+    """Format a config error with context."""
+    msg = str(error)
+    # Try to extract line number and provide context
+    if "line" in msg.lower():
+        # Error already has line info
+        return f"{config_path}: {msg}"
+    else:
+        return f"{config_path}: {msg}"
+
+
+def check_log_health(verbose: bool) -> CheckResult:
     """Check health of Dippy log files."""
     log_paths = [
-        Path.home() / ".claude" / "hook-approvals.log",
-        Path.home() / ".dippy" / "audit.log",
+        (Path.home() / ".claude" / "hook-approvals.log", "Claude Code"),
+        (Path.home() / ".gemini" / "hook-approvals.log", "Gemini CLI"),
+        (Path.home() / ".dippy" / "audit.log", "Dippy audit"),
     ]
 
     issues = []
     writable = []
+    sizes = []
 
-    for log_path in log_paths:
+    for log_path, name in log_paths:
         # Check if parent directory exists and is writable
         if log_path.parent.exists():
-            # Try to check if writable
             test_file = log_path.parent / ".dippy_write_test"
             try:
                 test_file.touch()
                 test_file.unlink()
-                writable.append(str(log_path.parent))
+                writable.append(name)
             except PermissionError:
-                issues.append(f"{log_path.parent}: not writable")
+                issues.append(f"{name}: log directory not writable ({log_path.parent})")
             except OSError:
-                issues.append(f"{log_path.parent}: cannot write")
+                issues.append(f"{name}: cannot write to log directory ({log_path.parent})")
 
-    # Check log file size (warn if > 10MB)
-    for log_path in log_paths:
+        # Check log file size
         if log_path.exists():
             size_mb = log_path.stat().st_size / (1024 * 1024)
             if size_mb > 10:
-                issues.append(f"{log_path}: {size_mb:.1f}MB (consider rotation)")
+                issues.append(f"{name}: log file is {size_mb:.1f}MB (consider rotation)")
+                sizes.append(f"{name}: {size_mb:.1f}MB")
+            elif verbose:
+                sizes.append(f"{name}: {size_mb:.2f}MB")
 
     if issues:
         return CheckResult(
             "Logs",
             HealthStatus.WARNING,
-            "Log issues detected",
-            "; ".join(issues),
+            f"{len(issues)} issue(s) detected",
+            "\n".join(issues),
         )
+
+    details = None
+    if verbose and writable:
+        details = f"Writable: {', '.join(writable)}"
+        if sizes:
+            details += f"\nSizes: {', '.join(sizes)}"
 
     if writable:
         return CheckResult(
             "Logs",
             HealthStatus.OK,
             "Log directories are writable",
-            f"Writable: {', '.join(writable)}",
+            details,
         )
 
     return CheckResult(
@@ -303,60 +352,91 @@ def check_log_health() -> CheckResult:
 
 def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult:
     """Run agent-specific diagnostic checks."""
+    import json
+
     agent = AGENTS.get(agent_id)
     if not agent:
         return CheckResult(
-            agent.name.capitalize(),
+            agent_id.capitalize(),
             HealthStatus.CRITICAL,
             f"Unknown agent: {agent_id}",
-            None,
+            f"Valid agents: {', '.join(AGENTS.keys())}",
         )
 
-    issues = []
     details = []
+    issues = []
 
-    # Check config exists
-    if agent.is_installed():
-        details.append(f"Config found: {agent.global_config}")
+    # Check if agent is installed (config exists)
+    global_config = Path(agent.global_config).expanduser()
+    if global_config.exists():
+        details.append(f"Global config: {global_config}")
 
-        # Check if project config exists
-        project_config = cwd / agent.project_config
-        if project_config.exists():
-            details.append(f"Project config: {project_config}")
-        else:
-            details.append(f"No project config at: {project_config}")
+        # Check if Dippy hook is installed
+        hook_config = HOOK_COMMANDS.get(agent_id)
+        if hook_config:
+            try:
+                with open(global_config) as f:
+                    config = json.load(f)
+                if _has_dippy_hook(config, agent_id):
+                    details.append("Dippy hook: installed")
+                elif _has_legacy_dippy_hook(config):
+                    details.append("Dippy hook: legacy (old 'dippy-hook')")
+                    issues.append("Legacy hook detected - consider updating")
+                else:
+                    details.append("Dippy hook: not installed")
+                    issues.append("Dippy hook not found in config")
+            except (json.JSONDecodeError, IOError):
+                details.append("Dippy hook: unable to check (config read error)")
     else:
-        issues.append(f"{agent.name} not installed")
+        issues.append(f"{agent.name} not installed (no config found)")
 
-    # Check hook format compatibility
-    hook_format_note = {
-        "claude": "Uses Claude Code hook format (PreToolUse/PostToolUse)",
-        "cursor": "Uses Cursor hook format (beforeShellExecution)",
-        "gemini": "Uses Gemini CLI hook format (BeforeTool/AfterTool)",
-        "pi": "Uses pi-mono extension format",
-        "none": "No hook system (notifications only)",
-    }.get(agent.hook_format, "")
+    # Check project config
+    project_config = cwd / agent.project_config
+    if project_config.exists():
+        details.append(f"Project config: {project_config}")
+        if hook_config:
+            try:
+                with open(project_config) as f:
+                    config = json.load(f)
+                if _has_dippy_hook(config, agent_id):
+                    details.append("Dippy hook in project: installed")
+            except (json.JSONDecodeError, IOError):
+                pass
 
-    if hook_format_note:
-        details.append(f"Hook format: {hook_format_note}")
+    # Hook format info
+    format_info = {
+        "claude": "PreToolUse/PostToolUse hooks",
+        "cursor": "beforeShellExecution hook",
+        "gemini": "BeforeTool/AfterTool hooks",
+        "windsurf": "beforeShellExecution hook",
+        "pi": "TypeScript extension",
+    }.get(agent_id, "Unknown")
 
-    # Config format
-    details.append(f"Config format: {agent.config_format.upper()}")
+    if format_info:
+        details.append(f"Hook format: {format_info}")
 
     if issues:
         return CheckResult(
-            agent.name.capitalize(),
-            HealthStatus.WARNING if agent.is_installed() else HealthStatus.CRITICAL,
-            f"Issues found: {'; '.join(issues)}",
+            agent.name,
+            HealthStatus.WARNING,
+            f"Issues: {'; '.join(issues)}",
             "\n".join(details) if verbose else None,
         )
 
     return CheckResult(
-        agent.name.capitalize(),
+        agent.name,
         HealthStatus.OK,
-        f"{agent.name} is configured correctly",
+        f"{agent.name} is configured",
         "\n".join(details) if verbose else None,
     )
+
+
+def _has_legacy_dippy_hook(config: dict) -> bool:
+    """Check if old-style 'dippy-hook' command is installed."""
+    import json
+
+    config_str = json.dumps(config)
+    return '"command": "dippy-hook' in config_str or '"command":"dippy-hook' in config_str
 
 
 # Import subprocess for installation check
