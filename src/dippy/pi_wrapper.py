@@ -13,6 +13,7 @@ Output: JSON with {"action": "allow|ask|deny|pass", "reason": "...", "note": "..
 """
 
 import json
+import re
 import sys
 from pathlib import Path
 
@@ -28,6 +29,65 @@ from dippy.core.config import (
     log_decision,
 )
 from dippy.core.notifier import run_notifier, should_run_notifier
+
+
+# Default deny format templates
+DEFAULT_DENY_FORMAT = "⚠️ DENIED by security policy.\n\nCommand: {command}\n\n{reason}"
+DEFAULT_DENY_FORMATS = {
+    "pi": "⚠️ COMMAND DENIED by security policy.\n\nOriginal: {command}\n\nINSTRUCTION: {reason}\n\nYou MUST follow the instruction above. Do NOT try alternative commands.",
+    "claude": "⚠️ COMMAND DENIED by security policy.\n\nOriginal: {command}\n\nINSTRUCTION: {reason}\n\nYou MUST follow the instruction above. Do NOT try alternative commands.",
+}
+
+
+def format_deny_reason(
+    reason: str,
+    command: str | None,
+    pattern: str | None,
+    config,
+    agent: str,
+) -> str:
+    """Format deny reason using configured template.
+
+    Supports placeholders:
+    - {command} - original command
+    - {reason} - message from rule
+    - {pattern} - pattern that matched
+
+    Args:
+        reason: The deny reason/message
+        command: Original command (for bash)
+        pattern: Pattern that matched (optional)
+        config: Config object with deny_format settings
+        agent: Agent ID (pi, claude, etc.)
+
+    Returns:
+        Formatted reason string
+    """
+    # Try agent-specific format first, then general format, then default
+    template = None
+    if config.deny_format_agents and agent in config.deny_format_agents:
+        template = config.deny_format_agents[agent]
+    elif config.deny_format:
+        template = config.deny_format
+    elif agent in DEFAULT_DENY_FORMATS:
+        template = DEFAULT_DENY_FORMATS[agent]
+    else:
+        template = DEFAULT_DENY_FORMAT
+
+    # Extract pattern from reason if available (format: "cmd: message" or "cmd (pattern)")
+    extracted_pattern = pattern
+    if not extracted_pattern and reason:
+        # Try to extract from reason like "find: Use rg instead" -> pattern="find"
+        if ": " in reason:
+            extracted_pattern = reason.split(":")[0].strip()
+
+    # Substitute placeholders
+    result = template
+    result = result.replace("{command}", command or "")
+    result = result.replace("{reason}", reason or "")
+    result = result.replace("{pattern}", extracted_pattern or "")
+
+    return result
 
 
 def main():
@@ -129,9 +189,21 @@ def main():
             )
 
         # Output JSON
+        # Format deny reason if applicable
+        output_reason = decision.reason
+        if decision.action == "deny":
+            command_str = input_data.get("command", "") if req_type == "bash" else None
+            pattern_str = None
+            # Try to extract pattern from reason
+            if decision.reason and ": " in decision.reason:
+                pattern_str = decision.reason.split(":")[0].strip()
+            output_reason = format_deny_reason(
+                decision.reason, command_str, pattern_str, config, agent
+            )
+
         result = {
             "action": decision.action,
-            "reason": decision.reason,
+            "reason": output_reason,
             "context_flags": sorted(decision.context_flags)
             if getattr(decision, "context_flags", None)
             else [],

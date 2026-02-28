@@ -89,6 +89,49 @@ echo '{"type":"edit","path":"src/main.ts","cwd":"."}' | python3 src/dippy/pi_wra
 echo '{"type":"read","path":"README.md","cwd":"."}' | python3 src/dippy/pi_wrapper.py
 ```
 
+## Deny Message Formatting
+
+When a command is denied, the extension can format the rejection message to be clearer for the AI agent. This helps agents understand they should follow the instruction rather than trying alternative commands.
+
+### Configuration
+
+Add to your `~/.dippy/config` or `.dippy`:
+
+```bash
+# Format for pi agent (default is already optimized)
+set deny-format-pi "⛔ DENIED: {command}\n\n📋 INSTRUCTION: {reason}\n\nDo NOT try alternatives."
+
+# Format for Claude agent
+set deny-format-claude "🚫 Blocked: {command}\n\n→ {reason}"
+
+# Fallback for other agents
+set deny-format "Command denied: {reason}"
+```
+
+### Placeholders
+
+- `{command}` - The original blocked command
+- `{reason}` - The deny message from the matching rule
+- `{pattern}` - The pattern that matched
+
+### Example
+
+With this rule:
+```bash
+deny find * "For file and string recursive search use only `rg` cli command."
+```
+
+The agent sees:
+```
+⛔ DENIED: find . -name test
+
+📋 INSTRUCTION: find: For file and string recursive search use only `rg` cli command.
+
+Do NOT try alternatives. Follow the instruction exactly.
+```
+
+This makes it clear to the agent that it should use `rg` instead of trying `grep -r`, `ls -R`, etc.
+
 ## License
 
 Same as dippy project.
