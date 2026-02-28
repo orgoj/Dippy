@@ -2,6 +2,23 @@
 
 Shell command approval hook for AI coding assistants.
 
+## **CRITICAL: ENGLISH-ONLY CODE (NON-NEGOTIABLE!)**
+
+**ALL source code, documentation, comments, test messages, and user-facing strings MUST be in English ONLY!**
+
+**FORBIDDEN:**
+- ❌ Czech text in ANY file (src/, tests/, docs/, *.md)
+- ❌ Czech words like "rekurzivně", "příkazy", "konfigurace", etc.
+- ❌ Czech comments in code
+- ❌ Czech diacritics: č, ř, ž, š, ň, ě, ť, ď, Ě, Š, Č, Ř, Ž, Ý, Á, Í, É
+
+**MANDATORY:**
+- ✅ Write EVERYTHING in English - code, docs, comments, tests, logs
+- ✅ If user speaks Czech, respond in Czech BUT write code in English
+- ✅ Check files for Czech text before committing: `rg "[čřžšňěťďĚŠČŘŽÝÁÍÉ]"`
+
+**This applies to:** .py files, .md files, test files, documentation, comments, EVERYTHING!
+
 ## Commands
 
 ```bash
@@ -59,7 +76,6 @@ just check         # All of the above in parallel — MUST PASS before committin
 - development: use code review subagent for significant changes (>100 lines or new features)
 - development: avoid duplicate list maintenance - discover from code, never maintain separate constant lists (e.g., BUILTIN_COMMANDS)
 - development: avoid imports inside functions - ugly pattern that violates code cleanliness
-- code: English-only in all code including comments, test messages, and user-facing strings
 - background tasks: daily cleanup/rotation tasks should run once per relevant period, not on every startup/write
 - log rotation: use yesterday's date for rotated files (active file always has current name)
 

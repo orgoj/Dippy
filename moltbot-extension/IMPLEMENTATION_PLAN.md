@@ -1,18 +1,18 @@
 # Dippy Moltbot Extension - Implementation Plan
 
-## Klíčový závěr
+## Key Takeaway
 
-**Moltbot nepotřebuje žádné úpravy.** Řešení je čistě v dippy-dev repo - vytvoříme `moltbot-extension/` obdobně jako existující `pi-extension/`.
+**Moltbot needs no modifications.** The solution is purely in dippy-dev repo - we create `moltbot-extension/` similar to existing `pi-extension/`.
 
-## Proč to funguje
+## Why This Works
 
-Moltbot používá **stejné nástroje z `@mariozechner/pi-coding-agent`** jako pi-mono:
-- `read` - čtení souborů
-- `write` - zápis souborů
-- `edit` - editace souborů
-- `exec` - bash příkazy (moltbot-specific název pro `bash`)
+Moltbot uses **the same tools from `@mariozechner/pi-coding-agent`** as pi-mono:
+- `read` - file reading
+- `write` - file writing
+- `edit` - file editing
+- `exec` - bash commands (moltbot-specific name for `bash`)
 
-Moltbot hook API (`before_tool_call`) je téměř identické s pi-mono:
+Moltbot hook API (`before_tool_call`) is nearly identical to pi-mono:
 
 | Aspect | pi-mono | moltbot |
 |--------|---------|---------|
@@ -22,7 +22,7 @@ Moltbot hook API (`before_tool_call`) je téměř identické s pi-mono:
 | Block | `{ block: true, reason }` | `{ block: true, blockReason }` |
 | UI confirm | `ctx.ui.confirm()` | TBD |
 
-## Mapování toolů
+## Tool Mapping
 
 | Moltbot Tool | Dippy Type | Dippy Config Rules |
 |--------------|------------|-------------------|
@@ -33,26 +33,26 @@ Moltbot hook API (`before_tool_call`) je téměř identické s pi-mono:
 
 ---
 
-## Implementace v dippy-dev repo
+## Implementation in dippy-dev Repo
 
-### Struktura souborů (v dippy-dev)
+### File Structure (in dippy-dev)
 
 ```
 dippy-dev/
-├── pi-extension/              # Existující pi-mono extension
+├── pi-extension/              # Existing pi-mono extension
 │   ├── dippy-extension.ts
 │   └── README.md
-├── moltbot-extension/         # NOVÁ - moltbot extension
-│   ├── dippy-extension.ts     # Hlavní extension soubor
-│   ├── README.md              # Instalační návod
-│   └── IMPLEMENTATION_PLAN.md # Tento soubor
+├── moltbot-extension/         # NEW - moltbot extension
+│   ├── dippy-extension.ts     # Main extension file
+│   ├── README.md              # Installation guide
+│   └── IMPLEMENTATION_PLAN.md # This file
 └── src/dippy/
-    └── pi_wrapper.py          # Existující - sdílený Python wrapper
+    └── pi_wrapper.py          # Existing - shared Python wrapper
 ```
 
 ### moltbot-extension/dippy-extension.ts
 
-Adaptace existujícího pi-extension pro moltbot API:
+Adaptation of existing pi-extension for moltbot API:
 
 ```typescript
 /**
@@ -240,22 +240,22 @@ export default function register(api: MoltbotPluginApi) {
 }
 ```
 
-### Změny v existujícím kódu
+### Changes to Existing Code
 
-**Žádné změny v moltbot repo!**
+**No changes in moltbot repo!**
 
-V dippy-dev pouze:
-1. Vytvořit `moltbot-extension/` adresář
-2. Vytvořit `moltbot-extension/dippy-extension.ts`
-3. Vytvořit `moltbot-extension/README.md`
+In dippy-dev only:
+1. Create `moltbot-extension/` directory
+2. Create `moltbot-extension/dippy-extension.ts`
+3. Create `moltbot-extension/README.md`
 
-### Instalace a použití
+### Installation and Usage
 
 ```bash
-# V dippy-dev repo
+# In dippy-dev repo
 cd /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev
 
-# Symlink do moltbot
+# Symlink to moltbot
 ln -s $(pwd)/moltbot-extension ~/.moltbot/extensions/dippy
 
 # Test
@@ -263,55 +263,55 @@ moltbot agent --message "run ls -la"     # → allow
 moltbot agent --message "run rm -rf /"   # → deny
 ```
 
-### Verifikace
+### Verification
 
-1. **Bash příkazy**: `allow git status`, `deny rm -rf **`
+1. **Bash commands**: `allow git status`, `deny rm -rf **`
 2. **File reads**: `allow-read ~/projects/**`, `deny-read ~/.ssh/**`
 3. **File edits**: `allow-edit ~/projects/**`, `deny-edit /etc/**`
 
 ---
 
-## Implementační kroky (po schválení)
+## Implementation Steps (after approval)
 
-1. **Vytvořit `moltbot-extension/` v dippy-dev repo**
-   - `dippy-extension.ts` - hlavní extension kód (viz výše)
-   - `README.md` - dokumentace (viz výše)
+1. **Create `moltbot-extension/` in dippy-dev repo**
+   - `dippy-extension.ts` - main extension code (see above)
+   - `README.md` - documentation (see above)
 
-2. **Test instalace**
+2. **Test installation**
    ```bash
    cd /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev
    mkdir -p moltbot-extension
-   # vytvořit soubory
+   # create files
 
    # symlink
    ln -s $(pwd)/moltbot-extension ~/.moltbot/extensions/dippy
    ```
 
-3. **Verifikace**
+3. **Verification**
    ```bash
    moltbot agent --message "run ls"          # allow
    moltbot agent --message "run rm -rf /"    # deny
    moltbot agent --message "read a file"     # test read rules
    ```
 
-## Soubory k vytvoření
+## Files to Create
 
-| Soubor | Repo | Obsah |
-|--------|------|-------|
-| `moltbot-extension/dippy-extension.ts` | dippy-dev | Extension kód (viz plán) |
-| `moltbot-extension/README.md` | dippy-dev | Instalační návod |
+| File | Repo | Content |
+|------|------|---------|
+| `moltbot-extension/dippy-extension.ts` | dippy-dev | Extension code (see plan) |
+| `moltbot-extension/README.md` | dippy-dev | Installation guide |
 
-**Moltbot repo**: Žádné změny
+**Moltbot repo**: No changes
 
-## Rozhodnutí
+## Decisions
 
-1. **Umístění**: Extension žije v **dippy-dev repo** (`moltbot-extension/`)
-   - Uživatel symlinkne nebo referencuje v moltbot config
-   - Sdílí `pi_wrapper.py` s pi-extension
+1. **Location**: Extension lives in **dippy-dev repo** (`moltbot-extension/`)
+   - User symlinks or references in moltbot config
+   - Shares `pi_wrapper.py` with pi-extension
 
-2. **"Ask" handling**: **Configurable** s třemi možnostmi:
-   - `askBehavior: "block"` - blokovat (default, nejbezpečnější)
-   - `askBehavior: "ask"` - promptnout user (až bude UI)
-   - `askBehavior: "allow"` - povolit bez promptu (rychlé, riskantní)
+2. **"Ask" handling**: **Configurable** with three options:
+   - `askBehavior: "block"` - block (default, most secure)
+   - `askBehavior: "ask"` - prompt user (when UI available)
+   - `askBehavior: "allow"` - allow without prompt (fast, risky)
 
-3. **Python dependency**: **OK** - Python 3 je běžně dostupný
+3. **Python dependency**: **OK** - Python 3 is commonly available
