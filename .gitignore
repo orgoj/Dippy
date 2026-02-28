@@ -50,3 +50,7 @@ Thumbs.db
 
 # pi (AI assistant)
 #.pi/*
+.cursor/rules/memorix.mdc
+.windsurf/rules/memorix.md
+.windsurf/hooks.json
+.cursor/hooks.json
