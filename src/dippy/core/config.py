@@ -105,6 +105,15 @@ class Config:
     askpass_timeout: int = 60  # seconds to wait for askpass response
     notifier_command: str | None = None  # external notification command
     notifier_include: frozenset[str] | None = None  # tools/commands to trigger notifier
+    # Idle notifier (for Notification/idle_prompt hooks)
+    idle_notifier_command: str | None = (
+        None  # command template for idle state notifications
+    )
+    # Deny message formatting (placeholders: {command}, {reason}, {pattern})
+    deny_format: str | None = None  # default deny format template
+    deny_format_agents: dict[str, str] = field(
+        default_factory=dict
+    )  # per-agent formats
 
 
 @dataclass
@@ -177,6 +186,19 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
             if overlay.askpass_timeout != 60
             else base.askpass_timeout
         ),
+        notifier_command=overlay.notifier_command
+        if overlay.notifier_command is not None
+        else base.notifier_command,
+        notifier_include=overlay.notifier_include
+        if overlay.notifier_include is not None
+        else base.notifier_include,
+        idle_notifier_command=overlay.idle_notifier_command
+        if overlay.idle_notifier_command is not None
+        else base.idle_notifier_command,
+        deny_format=overlay.deny_format
+        if overlay.deny_format is not None
+        else base.deny_format,
+        deny_format_agents={**base.deny_format_agents, **overlay.deny_format_agents},
     )
 
 
@@ -753,6 +775,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
         askpass_timeout=settings.get("askpass_timeout", 60),
         notifier_command=settings.get("notifier_command"),
         notifier_include=settings.get("notifier_include"),
+        idle_notifier_command=settings.get("idle_notifier_command"),
+        deny_format=settings.get("deny_format"),
+        deny_format_agents=settings.get("deny_format_agents", {}),
     )
 
 
@@ -899,6 +924,27 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         stripped_value = _strip_quotes(value)
         items = [i.strip() for i in stripped_value.split(",") if i.strip()]
         settings[key_normalized] = frozenset(items)
+
+    # Idle notifier settings (for Notification/idle_prompt hooks)
+    elif key_normalized == "idle_notifier_command":
+        if value is None:
+            raise ValueError("'idle-notifier-command' requires a command string")
+        settings[key_normalized] = _strip_quotes(value)
+
+    # Deny format settings (placeholders: {command}, {reason}, {pattern})
+    elif key_normalized == "deny_format":
+        if value is None:
+            raise ValueError("'deny-format' requires a format template")
+        settings[key_normalized] = _strip_quotes(value)
+
+    elif key_normalized.startswith("deny_format_"):
+        # Per-agent format: deny-format-pi, deny-format-claude, etc.
+        if value is None:
+            raise ValueError(f"'{key}' requires a format template")
+        agent_name = key_normalized[len("deny_format_") :]
+        if "deny_format_agents" not in settings:
+            settings["deny_format_agents"] = {}
+        settings["deny_format_agents"][agent_name] = _strip_quotes(value)
 
     else:
         raise ValueError(f"unknown setting '{key}'")

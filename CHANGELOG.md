@@ -9,13 +9,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **Univerzální Notifikátor (Sidekick)** - Podpora pro externí upozorňovací příkazy
-  - Nová konfigurace `set notifier-command "CMD"` pro volání externích skriptů (např. mail check).
-  - Podpora pro `set notifier-include "list"` pro omezení volání na konkrétní nástroje nebo příkazy.
-  - Podpora pro **Idle režim** (`--idle`) v hooku `Stop`/`AfterAgent` pro long-polling notifikace.
-  - Integrace se všemi agenty: Claude Code, Gemini CLI, Cursor a pi-mono.
-  - Automatické balení zpráv do tagu `<notification_note>`.
-  - vynucení pokračování agenta (block stop) při doručení notifikace v idle režimu.
+- **Idle Prompt Notifications** - Notification support for Claude Code idle state
+  - New configuration `set idle-notifier-command "CMD"` with template expansion
+  - Template placeholders: `{title}`, `{message}`, `{cwd}`, `{notification_type}`
+  - Shell-safe escaping for double-quoted context (backslashes, quotes, dollar signs, backticks)
+  - Example: `set idle-notifier-command notify-send "{title}" "{message}"`
+- **Universal Notifier (Sidekick)** - Support for external notification commands
+  - New configuration `set notifier-command "CMD"` for calling external scripts (e.g. mail check).
+  - Support for `set notifier-include "list"` to limit calls to specific tools or commands.
+  - Support for **Idle mode** (`--idle`) in `Stop`/`AfterAgent` hooks for long-polling notifications.
+  - Integration with all agents: Claude Code, Gemini CLI, Cursor, and pi-mono.
+  - Automatic wrapping of messages in `<notification_note>` tag.
+  - Agent continuation enforcement (block stop) when notification is delivered in idle mode.
 - **Generic Wrapper Enhancements** - Enhanced `wrapper` directive with subcommand and target flag support
   - New syntax: `wrapper <name> [subcommand_trigger] [target_flag]`
   - Automatically extracts target/destination (e.g., server name) and provides it as a context flag

@@ -21,6 +21,7 @@
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Notifier (Sidekick)** — `set notifier-command "CMD"` for external notifications (mail check). Supports long-polling via `--idle` in stop hooks. Use `set notifier-include "tool1, tool2"` to limit when it triggers.
+- **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input
 - **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd` and `agent` fields added for better context

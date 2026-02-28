@@ -49,6 +49,7 @@ from dippy.core.config import (
 )
 from dippy.core.analyzer import analyze
 from dippy.core.notifier import run_notifier, should_run_notifier
+from dippy.core.template import expand_template
 
 
 # === Mode Detection ===
@@ -823,6 +824,50 @@ def main():
 
         # Detect hook event type (Claude Code / Gemini CLI)
         hook_event = input_data.get("hook_event_name", "PreToolUse")
+
+        # Notification hook handling (idle_prompt, etc.)
+        if hook_event == "Notification":
+            import subprocess
+
+            notification_type = input_data.get("notification_type", "")
+
+            if notification_type == "idle_prompt" and config.idle_notifier_command:
+                # Get values from hook
+                title = input_data.get("title", "Claude Code")
+                message = input_data.get("message", "Claude is waiting for your input")
+                cwd = input_data.get("cwd", "")
+
+                # Expand the command template with all placeholders
+                expanded_command = expand_template(
+                    config.idle_notifier_command,
+                    title=title,
+                    message=message,
+                    cwd=cwd,
+                    notification_type=notification_type,
+                )
+
+                # Run expanded command via shell
+                try:
+                    subprocess.run(
+                        expanded_command,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    logging.info(f"Idle notification: {title}")
+                except subprocess.TimeoutExpired as e:
+                    stderr = e.stderr if e.stderr else ""
+                    logging.warning(
+                        f"Idle notifier timed out: {expanded_command[:100]}"
+                        + (f" | stderr: {stderr[:100]}" if stderr else "")
+                    )
+                except Exception as e:
+                    logging.warning(f"Idle notifier failed: {e}")
+
+            # Return empty response for Notification hooks
+            print(json.dumps({}))
+            return
 
         # Stop hook handling (Idle mode)
         if hook_event in ("Stop", "SubagentStop", "AfterAgent"):

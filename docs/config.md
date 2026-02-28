@@ -271,7 +271,7 @@ allow [cca-tmux-cli,l2] ls *
    - If `target_flag` is defined, Dippy looks for it *before* the trigger and takes the next token as the destination.
    - If no flag is defined or found, it takes the first non-option token *before* the trigger.
 3. **Context flags**: Sets both the wrapper name (`cca-tmux-cli`) and destination (`l2`) as flags.
-4. **Recursive analysis**: Analyzes the `inner_command` rekurzivně.
+4. **Recursive analysis**: Analyzes the `inner_command` recursively.
 5. **Remote mode**: Inner commands are automatically analyzed with `remote=True`, which skips local path checks (ideal for SSH/containers).
 
 Custom wrappers merge via set union across config scopes (user + project).
@@ -606,9 +606,54 @@ set final ~/.dippy/emergency  # emergency overrides (loaded last)
 # GUI approval (SSH_ASKPASS style)
 set askpass /path/to/askpass  # external approval program
 set askpass-timeout 60        # seconds to wait (default: 60)
+
+# Deny message formatting (for AI agents)
+set deny-format "Custom template: {command} -> {reason}"
+set deny-format-pi "PI-specific format: {reason}"
+set deny-format-claude "Claude-specific format: {reason}"
 ```
 
 Settings use kebab-case or snake_case interchangeably.
+
+### Deny Format
+
+When a command is denied, Dippy can format the rejection message to be clearer for AI agents. This helps agents understand they should follow the instruction rather than trying alternative commands.
+
+**Placeholders:**
+- `{command}` - The original blocked command
+- `{reason}` - The deny message from the matching rule
+- `{pattern}` - The pattern that matched (extracted from reason if not available)
+
+**Default formats:**
+- General: `⚠️ DENIED by security policy.\n\nCommand: {command}\n\n{reason}`
+- `pi`: Includes explicit instruction to not try alternatives
+- `claude`: Similar to pi format
+
+**Example configuration:**
+```
+# Clear format for pi agent
+set deny-format-pi "⛔ DENIED: {command}\n\n📋 INSTRUCTION: {reason}\n\nDo NOT try alternatives. Follow the instruction exactly."
+
+# Simpler format for Claude
+set deny-format-claude "🚫 Blocked: {command}\n\n→ {reason}"
+
+# Fallback for other agents
+set deny-format "Command denied: {reason}"
+```
+
+This is especially useful for rules that suggest alternatives:
+```
+deny find * "For file and string recursive search use only `rg` cli command."
+```
+
+With the default pi format, the agent sees:
+```
+⛔ DENIED: find . -name test
+
+📋 INSTRUCTION: find: For file and string recursive search use only `rg` cli command.
+
+Do NOT try alternatives. Follow the instruction exactly.
+```
 
 ### Default Behavior
 
@@ -911,6 +956,76 @@ Or to enable both MCP and WebSearch:
 
 ```json
 "matcher": "Bash|WebSearch|mcp__.*"
+```
+
+## Idle Prompt Notifications
+
+When Claude Code is waiting for input (idle state), Dippy can trigger notifications to alert you. This is useful for:
+- Long-running tasks that complete while you're away from your desk
+- Background processes that need your attention
+- Remote monitoring when working from another machine
+
+### Configuration
+
+```bash
+# Set the notification command template
+# Placeholders are expanded from hook data and executed via shell
+set idle-notifier-command notify-send "{title}" "{message}"
+```
+
+### Template Placeholders
+
+| Placeholder | Description | Example |
+|------------|-------------|---------|
+| `{title}` | Notification title from hook | "Claude Code" |
+| `{message}` | Message from hook | "Claude is waiting for your input" |
+| `{cwd}` | Current directory | "/home/user/project" |
+| `{notification_type}` | Notification type | "idle_prompt" |
+
+### Examples
+
+**Simple desktop notification:**
+```bash
+set idle-notifier-command notify-send "Claude" "Waiting for input"
+```
+
+**With placeholders:**
+```bash
+set idle-notifier-command notify-send "{title}" "{message}"
+```
+
+**Custom script with smart routing (desktop vs remote):**
+```bash
+set idle-notifier-command ~/.dippy/notify-idle.sh "{title}" "{message}" "{cwd}"
+```
+
+With `~/.dippy/notify-idle.sh`:
+```bash
+#!/bin/bash
+TITLE="$1"
+MESSAGE="$2"
+CWD="$3"
+
+# Desktop notification (always shown)
+if command -v notify-send &> /dev/null; then
+    notify-send "$TITLE" "$MESSAGE" -u normal -i terminal &
+fi
+
+# Remote notification: only if NOT at desktop
+# (create ~/.atdesktop when at your computer, remove when away)
+if [ ! -f "$HOME/.atdesktop" ]; then
+    if command -v ntf &> /dev/null; then
+        ntf send "$TITLE: $MESSAGE (in $CWD)" &
+    fi
+fi
+```
+
+### Opting In
+
+To enable idle prompt notifications, add `Notification` to your hook matcher in `settings.json`:
+
+```json
+"matcher": "Bash|Notification"
 ```
 
 ## Implementation Notes
