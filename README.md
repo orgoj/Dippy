@@ -84,17 +84,19 @@ See [docs/subagent-hook-issues.md](docs/subagent-hook-issues.md) for detailed an
 
 ## Installation
 
-### Homebrew (recommended)
+### Homebrew (recommended for users)
 
 ```bash
 brew tap ldayton/dippy
 brew install dippy
 ```
 
-### Manual
+### Development Installation
 
 ```bash
 git clone https://github.com/ldayton/Dippy.git
+cd Dippy
+pip install -e .
 ```
 
 ### Configure
@@ -186,6 +188,46 @@ Dippy adapts its output format and behavior based on the agent it's serving. Use
 | PearAI | `--pearai` | `DIPPY_PEARAI=1` |
 
 Each agent mode maintains its own approval log (e.g., `~/.gemini/hook-approvals.log`).
+
+---
+
+## CLI Commands
+
+Dippy includes management commands for hook installation and diagnostics.
+
+### Hooks Management
+
+```bash
+dippy hooks list                    # List installed hooks
+dippy hooks list --global           # Check global configs
+dippy hooks install <agent>         # Install hooks for an agent
+dippy hooks install <agent> --global  # Install to global config
+dippy hooks uninstall <agent>       # Remove hooks for an agent
+dippy hooks uninstall <agent> --global  # Remove from global config
+```
+
+**Supported agents:** `claude`, `gemini`, `cursor`, `windsurf`
+
+**Installation scope:**
+- **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`, etc.
+- **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`, etc.
+
+### Diagnostics
+
+```bash
+dippy doctor                        # Run all health checks
+dippy doctor --agent claude         # Check specific agent
+dippy doctor --verbose              # Show detailed diagnostics
+```
+
+**Health checks:**
+- Installation (on PATH, version check)
+- Hook status (detected agents)
+- Configuration validation (syntax errors)
+- Log health (writable directories, file size)
+- Agent-specific diagnostics (when `--agent` specified)
+
+**Exit codes:** `0` (OK), `1` (warnings), `2` (critical issues)
 
 ---
 
@@ -328,9 +370,62 @@ Dippy can do more than filter shell commands. See the [wiki](https://github.com/
 
 ---
 
+## Troubleshooting
+
+### Dippy not working?
+
+Run diagnostics to identify issues:
+
+```bash
+dippy doctor                        # Check installation and configuration
+dippy doctor --verbose              # Detailed diagnostic output
+dippy doctor --agent claude         # Agent-specific checks
+```
+
+### Hook not triggering?
+
+1. **Verify hook installation:**
+   ```bash
+   dippy hooks list                 # Check project-local hooks
+   dippy hooks list --global        # Check global hooks
+   ```
+
+2. **Reinstall hooks:**
+   ```bash
+   dippy hooks uninstall claude     # Remove existing
+   dippy hooks install claude       # Reinstall
+   ```
+
+3. **Check agent logs:**
+   - Claude Code: `~/.claude/hook-approvals.log`
+   - Gemini CLI: `~/.gemini/hook-approvals.log`
+   - Dippy audit: `~/.dippy/audit.log`
+
+### Configuration errors?
+
+Validate your config files:
+
+```bash
+dippy --cmd 'ls' --config ~/.dippy/config  # Test specific config
+```
+
+Common issues:
+- **JSON syntax errors** in settings.json
+- **Invalid rule patterns** in .dippy config
+- **Missing include files** (check paths)
+
+---
+
 ## Uninstall
 
-Remove the hook entry from `~/.claude/settings.json`, then:
+Remove hooks using the CLI:
+
+```bash
+dippy hooks uninstall claude         # Remove Claude Code hooks
+dippy hooks uninstall claude --global  # Remove from global config
+```
+
+Or manually remove the hook entry from `~/.claude/settings.json`, then:
 
 ```bash
 brew uninstall dippy  # if installed via Homebrew

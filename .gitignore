@@ -54,3 +54,6 @@ Thumbs.db
 .windsurf/rules/memorix.md
 .windsurf/hooks.json
 .cursor/hooks.json
+
+# bv (beads viewer) local config and caches
+.bv/

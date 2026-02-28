@@ -653,10 +653,22 @@ Examples:
   dippy --cmd 'rm -rf /'
   dippy --cmd 'ls -la' --json
   echo 'git status' | dippy --stdin --cwd /repo
+
+Subcommands:
+  dippy hooks list     List installed hooks
+  dippy doctor         Check installation and configuration
 """,
     )
 
-    # CLI mode arguments
+    # Add subparsers for subcommands
+    subparsers = parser.add_subparsers(
+        dest="subcommand",
+        title="Subcommands",
+        description="Available subcommands",
+        metavar="<subcommand>",
+    )
+
+    # CLI mode arguments (for backward compatibility with --cmd/--stdin)
     input_group = parser.add_mutually_exclusive_group()
     input_group.add_argument("--cmd", metavar="COMMAND", help="Command to validate")
     input_group.add_argument(
@@ -687,6 +699,78 @@ Examples:
     parser.add_argument("--codex", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--windsurf", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--pearai", action="store_true", help=argparse.SUPPRESS)
+
+    # === hooks subcommand ===
+    hooks_parser = subparsers.add_parser(
+        "hooks",
+        help="Manage Dippy hooks for AI coding assistants",
+        description="List, install, and manage Dippy hooks for Claude Code, Cursor, and other AI coding assistants.",
+    )
+    hooks_subparsers = hooks_parser.add_subparsers(
+        dest="hooks_action",
+        title="Hooks actions",
+        description="Available hooks actions",
+        metavar="<action>",
+    )
+
+    # hooks list
+    hooks_subparsers.add_parser(
+        "list",
+        help="List installed hooks",
+        description="List all installed Dippy hooks and their status.",
+    )
+
+    # hooks install
+    install_parser = hooks_subparsers.add_parser(
+        "install",
+        help="Install Dippy hooks for an agent",
+        description="Install Dippy hooks for a specific AI coding assistant.",
+    )
+    install_parser.add_argument(
+        "agent",
+        choices=["claude", "gemini", "cursor", "windsurf"],
+        help="Agent to install hooks for",
+    )
+    install_parser.add_argument(
+        "--global",
+        action="store_true",
+        help="Install to global config instead of project-local",
+    )
+
+    # hooks uninstall
+    uninstall_parser = hooks_subparsers.add_parser(
+        "uninstall",
+        help="Uninstall Dippy hooks for an agent",
+        description="Remove Dippy hooks for a specific AI coding assistant.",
+    )
+    uninstall_parser.add_argument(
+        "agent",
+        choices=["claude", "gemini", "cursor", "windsurf"],
+        help="Agent to uninstall hooks for",
+    )
+    uninstall_parser.add_argument(
+        "--global",
+        action="store_true",
+        help="Uninstall from global config instead of project-local",
+    )
+
+    # === doctor subcommand ===
+    doctor_parser = subparsers.add_parser(
+        "doctor",
+        help="Diagnose Dippy installation and configuration",
+        description="Check Dippy installation status, hook configurations, and common issues.",
+    )
+    doctor_parser.add_argument(
+        "--agent",
+        metavar="AGENT",
+        choices=["claude", "gemini", "cursor", "windsurf", "pi", "moltbot", "codex", "pearai"],
+        help="Show diagnostics for a specific agent",
+    )
+    doctor_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed diagnostic information",
+    )
 
     return parser.parse_args()
 
@@ -768,6 +852,76 @@ def cli_mode(args: argparse.Namespace) -> int:
         return EXIT_ASK
 
 
+def handle_subcommand(args: argparse.Namespace) -> int:
+    """Handle dippy subcommands.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code: 0 for success, 1 for errors
+    """
+    if args.subcommand == "hooks":
+        return handle_hooks_subcommand(args)
+    elif args.subcommand == "doctor":
+        return handle_doctor_subcommand(args)
+    else:
+        print(f"Unknown subcommand: {args.subcommand}", file=sys.stderr)
+        return 1
+
+
+def handle_hooks_subcommand(args: argparse.Namespace) -> int:
+    """Handle the 'hooks' subcommand.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code: 0 for success, 1 for errors
+    """
+    from dippy.cli.hooks import install as hooks_install, list_hooks, uninstall as hooks_uninstall
+
+    if args.hooks_action == "list":
+        return list_hooks(
+            global_config=getattr(args, "global", False),
+            cwd=getattr(args, "cwd", None),
+        )
+    elif args.hooks_action == "install":
+        return hooks_install(
+            agent=args.agent,
+            global_config=getattr(args, "global", False),
+            cwd=getattr(args, "cwd", None),
+        )
+    elif args.hooks_action == "uninstall":
+        return hooks_uninstall(
+            agent=args.agent,
+            global_config=getattr(args, "global", False),
+            cwd=getattr(args, "cwd", None),
+        )
+    else:
+        # No action specified, show help
+        print("Error: Please specify an action (list, install, uninstall)", file=sys.stderr)
+        return 1
+
+
+def handle_doctor_subcommand(args: argparse.Namespace) -> int:
+    """Handle the 'doctor' subcommand.
+
+    Args:
+        args: Parsed command-line arguments
+
+    Returns:
+        Exit code: 0 for success, 1 for errors
+    """
+    from dippy.cli.doctor import run as doctor_run
+
+    return doctor_run(
+        agent=getattr(args, "agent", None),
+        verbose=getattr(args, "verbose", False),
+        cwd=getattr(args, "cwd", None),
+    )
+
+
 def main():
     """Main entry point for the hook."""
     global MODE
@@ -775,7 +929,11 @@ def main():
     # Parse arguments first to detect CLI mode
     args = parse_cli_args()
 
-    # CLI mode: --cmd or --stdin
+    # Handle subcommands
+    if hasattr(args, "subcommand") and args.subcommand:
+        sys.exit(handle_subcommand(args))
+
+    # CLI mode: --cmd or --stdin (backward compatibility)
     if args.cmd or args.stdin:
         if args.agent:
             MODE = args.agent
