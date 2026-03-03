@@ -8,8 +8,10 @@ and agent-specific diagnostics.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 from enum import Enum
@@ -17,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from dippy.cli.agents import AGENTS, detect_agents
-from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook
+from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook, _has_legacy_dippy_hook
 
 
 class HealthStatus(Enum):
@@ -86,8 +88,8 @@ def run(
     # 1. Installation check
     checks.append(check_installation())
 
-    # 2. Hook status check
-    checks.append(check_hook_status(cwd_path, verbose))
+    # 2. Hook status check (returns list of results)
+    checks.extend(check_hook_status(cwd_path, verbose))
 
     # 3. Config validation
     checks.append(check_config_validation(cwd_path))
@@ -155,86 +157,135 @@ def check_installation() -> CheckResult:
         )
 
 
-def check_hook_status(cwd_path: Path, verbose: bool) -> CheckResult:
-    """Check status of hooks for all agents."""
-    import json
+def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
+    """Check status of hooks for all agents.
 
-    installed_hooks = []
-    detected_agents = []
-    legacy_hooks = []
+    Returns a CheckResult for each agent plus pi-mono extension.
+    """
+    results = []
 
-    # Check agents with hook support
-    for agent_id, hook_config in HOOK_COMMANDS.items():
+    # Check each agent with hook support
+    for agent_id in ("claude", "gemini", "cursor", "windsurf"):
+        hook_config = HOOK_COMMANDS.get(agent_id)
         agent_info = AGENTS.get(agent_id)
-        if not agent_info:
+        if not hook_config or not agent_info:
             continue
 
         # Check global config
         global_path = Path(hook_config["config"]).expanduser()
-        has_global = False
-        has_legacy = False
+        global_config = None
         if global_path.exists():
             try:
                 with open(global_path) as f:
-                    config = json.load(f)
-                has_global = _has_dippy_hook(config, agent_id)
-                has_legacy = _has_legacy_dippy_hook(config)
+                    global_config = json.load(f)
             except (json.JSONDecodeError, IOError):
                 pass
 
         # Check project config
         project_path = cwd_path / hook_config["project_config"]
-        has_project = False
+        project_config = None
         if project_path.exists():
             try:
                 with open(project_path) as f:
-                    config = json.load(f)
-                if not has_global:
-                    has_project = _has_dippy_hook(config, agent_id)
-                if not has_legacy:
-                    has_legacy = _has_legacy_dippy_hook(config)
+                    project_config = json.load(f)
             except (json.JSONDecodeError, IOError):
                 pass
 
-        if has_global or has_project:
-            installed_hooks.append(agent_info.name)
-        if global_path.exists() or project_path.exists():
-            detected_agents.append(agent_info.name)
-        if has_legacy:
-            legacy_hooks.append(agent_info.name)
+        # Determine agent status
+        agent_exists = global_config is not None or project_config is not None
+
+        if not agent_exists:
+            # Agent not installed
+            results.append(CheckResult(
+                f"Hook: {agent_info.name}",
+                HealthStatus.WARNING,
+                "Not installed",
+                f"Config not found at:\n  {global_path}\n  {project_path}",
+            ))
+            continue
+
+        # Check for dippy hook in configs
+        has_hook = False
+        hook_type = None
+        locations = []
+        legacy_path = None
+
+        for config, label in [(global_config, "global"), (project_config, "project")]:
+            if config is None:
+                continue
+            if _has_dippy_hook(config, agent_id):
+                has_hook = True
+                locations.append(label)
+                # Determine hook type (new vs legacy) and extract command path
+                config_str = json.dumps(config)
+                if 'dippy-hook' in config_str or '/dippy' in config_str:
+                    hook_type = "legacy (full path)"
+                    # Extract the actual command path from config
+                    import re
+                    match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
+                    if match:
+                        legacy_path = match.group(1)
+
+        if not has_hook:
+            results.append(CheckResult(
+                f"Hook: {agent_info.name}",
+                HealthStatus.WARNING,
+                "Agent present, hook not installed",
+                f"Install with: dippy hooks install {agent_id} --global",
+            ))
+        elif hook_type == "legacy (full path)":
+            details = f"Legacy command: {legacy_path}\nUpdate with: dippy hooks install {agent_id} --global" if legacy_path else f"Update with: dippy hooks install {agent_id} --global"
+            results.append(CheckResult(
+                f"Hook: {agent_info.name}",
+                HealthStatus.WARNING,
+                f"Legacy hook ({', '.join(locations)})",
+                details,
+            ))
+        else:
+            results.append(CheckResult(
+                f"Hook: {agent_info.name}",
+                HealthStatus.OK,
+                f"Installed ({', '.join(locations)})",
+                None,
+            ))
 
     # Check pi-mono extension
     pi_extension = Path.home() / ".pi" / "agent" / "extensions" / "dippy-extension.ts"
     if pi_extension.exists():
-        installed_hooks.append("pi-mono (extension)")
-        detected_agents.append("pi-mono")
+        # Check file type and symlink target
+        file_type = "file"
+        target_info = str(pi_extension)
 
-    # Build message
-    if installed_hooks:
-        msg = f"Installed: {', '.join(installed_hooks)}"
+        if pi_extension.is_symlink():
+            target = pi_extension.resolve()
+            file_type = "symlink"
+            target_info = f"{pi_extension} -> {target}"
+
+        # Add wrapper info only in verbose mode
         details = None
-        if legacy_hooks:
-            details = f"Note: Legacy 'dippy-hook' found in: {', '.join(legacy_hooks)}\n       Run 'dippy hooks uninstall <agent>' to remove old hooks"
-        return CheckResult(
-            "Hooks",
+        if verbose:
+            from dippy.cli.agents import _find_pi_wrapper
+            wrapper_path = _find_pi_wrapper()
+            if wrapper_path:
+                details = f"{target_info}\nBridge: {wrapper_path}"
+            else:
+                details = f"{target_info}\nBridge: not found (pi-mono may not work)"
+
+        results.append(CheckResult(
+            "Hook: pi-mono",
             HealthStatus.OK,
-            msg,
-            details,
-        )
-    elif detected_agents:
-        return CheckResult(
-            "Hooks",
-            HealthStatus.WARNING,
-            "Agents detected but hooks not installed",
-            f"Found: {', '.join(detected_agents)}\nInstall with: dippy hooks install <agent>",
-        )
+            f"Extension installed ({file_type})",
+            details if verbose else target_info,
+        ))
     else:
-        return CheckResult(
-            "Hooks",
+        results.append(CheckResult(
+            "Hook: pi-mono",
             HealthStatus.WARNING,
-            "No AI coding assistants detected",
-            "Install Claude Code, Cursor, or Gemini CLI to use Dippy hooks",
-        )
+            "Extension not found",
+            f"Expected: {pi_extension}",
+        ))
+
+    return results
 
 
 def check_config_validation(cwd_path: Path) -> CheckResult:
@@ -429,15 +480,3 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         f"{agent.name} is configured",
         "\n".join(details) if verbose else None,
     )
-
-
-def _has_legacy_dippy_hook(config: dict) -> bool:
-    """Check if old-style 'dippy-hook' command is installed."""
-    import json
-
-    config_str = json.dumps(config)
-    return '"command": "dippy-hook' in config_str or '"command":"dippy-hook' in config_str
-
-
-# Import subprocess for installation check
-import subprocess

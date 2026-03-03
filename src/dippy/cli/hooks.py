@@ -7,6 +7,7 @@ settings files while preserving existing hooks and proper JSON formatting.
 
 from __future__ import annotations
 
+import copy
 import json
 import sys
 from pathlib import Path
@@ -327,18 +328,25 @@ def list_hooks(
 
 
 def _has_dippy_hook(config: dict, agent: str) -> bool:
-    """Check if new-style Dippy hook is installed in the given config.
+    """Check if Dippy hook is installed in the given config.
+
+    Detects both new-style 'dippy --agent' and legacy 'dippy-hook' commands.
 
     Args:
         config: Parsed configuration dict
         agent: Agent ID
 
     Returns:
-        True if new-style Dippy hook is found, False otherwise
+        True if any Dippy hook is found, False otherwise
     """
     config_str = json.dumps(config)
-    # Check for dippy command (new style)
-    return '"command": "dippy' in config_str or '"command":"dippy' in config_str
+    # Check for dippy command (with or without flags, with or without path)
+    # Matches: "dippy", "dippy --claude", "/path/to/dippy", "dippy-hook", etc.
+    return (
+        '"command": "dippy' in config_str
+        or '"command":"dippy' in config_str
+        or '"command": "/' in config_str and 'dippy' in config_str
+    )
 
 
 def _has_legacy_dippy_hook(config: dict) -> bool:
@@ -366,8 +374,6 @@ def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
     Returns:
         Merged configuration dict
     """
-    import copy
-
     result = copy.deepcopy(config)
 
     # Special handling for different agent formats
@@ -407,8 +413,6 @@ def _remove_dippy_hook(config: dict, agent: str) -> dict:
     Returns:
         Configuration dict with Dippy hook removed
     """
-    import copy
-
     result = copy.deepcopy(config)
 
     if agent == "cursor":

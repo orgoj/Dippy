@@ -28,6 +28,7 @@
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
+- **CLI management** — `dippy hooks install/uninstall/list` and `dippy doctor` diagnostics
 <!-- FORK ENHANCEMENTS END -->
 
 ---
@@ -84,31 +85,73 @@ See [docs/subagent-hook-issues.md](docs/subagent-hook-issues.md) for detailed an
 
 ## Installation
 
-### Homebrew (recommended for users)
+### Quick Install (from source)
 
 ```bash
-brew tap ldayton/dippy
-brew install dippy
-```
-
-### Development Installation
-
-```bash
-git clone https://github.com/ldayton/Dippy.git
+# Clone the repository
+git clone https://github.com/orgoj/Dippy.git
 cd Dippy
-pip install -e .
+
+# Install via uv tool (recommended)
+uv tool install .
+
+# Verify installation
+dippy --version
 ```
 
-### Configure
+**Note:** Make sure `~/.local/bin` is on your PATH.
 
-Add to `~/.claude/settings.json` (or use `/hooks` interactively):
+### Development Mode
 
+```bash
+uv pip install -e .
+```
+
+---
+
+## Quick Start
+
+The easiest way to configure Dippy is using the CLI commands:
+
+### 1. Install Hooks
+
+```bash
+# Install for Claude Code (global)
+dippy hooks install claude --global
+
+# Install for Gemini CLI (global)
+dippy hooks install gemini --global
+
+# Install for Cursor IDE (global)
+dippy hooks install cursor --global
+
+# Install for Windsurf (global)
+dippy hooks install windsurf --global
+```
+
+### 2. Verify Installation
+
+```bash
+# Check hook status
+dippy hooks list
+
+# Run diagnostics
+dippy doctor
+```
+
+That's it! Dippy is now configured and will auto-approve safe commands.
+
+### Manual Configuration (Advanced)
+
+If you prefer manual configuration or need project-specific settings:
+
+**Claude Code** - add to `~/.claude/settings.json`:
 ```json
 {
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash",
+        "matcher": "Bash|Write|Edit|MultiEdit|Read",
         "hooks": [{ "type": "command", "command": "dippy" }]
       }
     ]
@@ -116,21 +159,14 @@ Add to `~/.claude/settings.json` (or use `/hooks` interactively):
 }
 ```
 
-If you installed manually, use the full path instead: `/path/to/Dippy/bin/dippy-hook`
-
-### Gemini CLI
-
-See [Gemini CLI Setup Guide](docs/hook-systems/gemini-cli-setup.md) for detailed instructions.
-
-Briefly, add to `~/.gemini/settings.json`:
-
+**Gemini CLI** - add to `~/.gemini/settings.json`:
 ```json
 {
   "hooks": {
     "BeforeTool": [
       {
         "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
-        "hooks": [{ "type": "command", "command": "dippy-hook --gemini" }]
+        "hooks": [{ "type": "command", "command": "dippy --gemini" }]
       }
     ]
   }
@@ -139,78 +175,26 @@ Briefly, add to `~/.gemini/settings.json`:
 
 ---
 
-## CLI Mode
-
-Validate commands without running as a hook:
-
-```bash
-dippy --cmd 'rm -rf /'              # validate a command
-dippy --cmd 'ls -la' --json         # JSON output
-dippy --cmd 'git status' --cwd /path
-echo 'ls -la' | dippy --stdin       # read command from stdin
-```
-
-**Exit codes:**
-- `0` = allow (command is safe)
-- `1` = deny (blocked by rule)
-- `2` = ask (needs user approval)
-
-**Options:**
-- `--cmd COMMAND` — command to validate
-- `--stdin` — read command from stdin (plain text)
-- `--cwd PATH` — working directory (default: current)
-- `--json` — output as JSON
-- `--config PATH` — custom config file
-- `--agent NAME` — force agent name in audit log
-- `--remote` — skip local path checks (useful for containers/SSH)
-- `--version` — show Dippy version
-
-**Use cases:**
-- Scripting: `if dippy --cmd "$cmd"; then eval "$cmd"; fi`
-- Batch validation: `cat commands.txt | while read cmd; do dippy --cmd "$cmd"; done`
-- Integration with other AI tools
-
----
-
-## Supported Agents
-
-Dippy adapts its output format and behavior based on the agent it's serving. Use the corresponding flag or environment variable:
-
-| Agent | Flag | Env Var |
-|-------|------|---------|
-| Claude Code | `--claude` | `DIPPY_CLAUDE=1` |
-| Gemini CLI | `--gemini` | `DIPPY_GEMINI=1` |
-| Cursor IDE | `--cursor` | `DIPPY_CURSOR=1` |
-| pi-mono | `--pi` | `DIPPY_PI=1` |
-| Moltbot | `--moltbot` | `DIPPY_MOLTBOT=1` |
-| OpenAI Codex | `--codex` | `DIPPY_CODEX=1` |
-| Windsurf | `--windsurf` | `DIPPY_WINDSURF=1` |
-| PearAI | `--pearai` | `DIPPY_PEARAI=1` |
-
-Each agent mode maintains its own approval log (e.g., `~/.gemini/hook-approvals.log`).
-
----
-
 ## CLI Commands
-
-Dippy includes management commands for hook installation and diagnostics.
 
 ### Hooks Management
 
 ```bash
-dippy hooks list                    # List hook status (shows both global and project)
-dippy hooks install <agent>         # Install hooks for an agent (project-local)
-dippy hooks install <agent> --global  # Install to global config
-dippy hooks uninstall <agent>       # Remove hooks from project config
-dippy hooks uninstall <agent> --global  # Remove from global config
+dippy hooks list                    # Show hook status for all agents
+dippy hooks install <agent>         # Install hooks (project-local)
+dippy hooks install <agent> --global  # Install hooks (global)
+dippy hooks uninstall <agent>       # Remove hooks (project-local)
+dippy hooks uninstall <agent> --global  # Remove hooks (global)
 ```
 
 **Supported agents:** `claude`, `gemini`, `cursor`, `windsurf`
 
 **Status indicators:**
-- `+` = installed, `?` = legacy (old dippy-hook), ` ` = not installed
+- `+` = installed
+- `?` = legacy (old `dippy-hook` detected)
+- ` ` = not installed
 
-**Installation scopes:**
+**Scopes:**
 - **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`
 - **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`
 
@@ -223,211 +207,203 @@ dippy doctor --verbose              # Show detailed diagnostics
 ```
 
 **Health checks:**
-- Installation (on PATH, version check)
-- Hook status (installed vs detected)
-- Configuration validation (syntax errors)
-- Log health (writable directories, file size)
-- Agent-specific diagnostics (when `--agent` specified)
+- ✓ Installation (on PATH, version check)
+- ✓ Hook status per agent (Claude, Gemini, Cursor, Windsurf, pi-mono)
+- ✓ Legacy hook detection with full path
+- ✓ pi_wrapper check for pi-mono/moltbot
+- ✓ Configuration validation (syntax errors)
+- ✓ Log health (writable directories, file size warnings)
 
 **Exit codes:** `0` (OK), `1` (warnings), `2` (critical issues)
 
+### CLI Mode
+
+Validate commands without running as a hook:
+
+```bash
+dippy --cmd 'rm -rf /'              # validate a command
+dippy --cmd 'ls -la' --json         # JSON output
+dippy --cmd 'git status' --cwd /path
+echo 'ls -la' | dippy --stdin       # read command from stdin
+```
+
+**Options:**
+- `--cmd COMMAND` — command to validate
+- `--stdin` — read command from stdin
+- `--cwd PATH` — working directory
+- `--json` — output as JSON
+- `--config PATH` — custom config file
+- `--agent NAME` — force agent name in audit log
+- `--remote` — skip local path checks
+- `--version` — show version
+
 ---
 
-## File Operation Approval
+## Supported Agents
 
-Dippy can also auto-approve file operations (`Read`, `Write`, `Edit`, `MultiEdit`, `LS`, `Glob`, `Grep`, `Search` tools) using the same config system. To enable:
+Dippy adapts its output format and behavior based on the agent:
 
-```json
-"matcher": "Bash|Read|Write|Edit|MultiEdit|LS|Glob|Grep|Search"
-```
+| Agent | Flag | Env Var | Hook Support |
+|-------|------|---------|--------------|
+| Claude Code | `--claude` | `DIPPY_CLAUDE=1` | ✅ |
+| Gemini CLI | `--gemini` | `DIPPY_GEMINI=1` | ✅ |
+| Cursor IDE | `--cursor` | `DIPPY_CURSOR=1` | ✅ |
+| Windsurf | `--windsurf` | `DIPPY_WINDSURF=1` | ✅ |
+| pi-mono | `--pi` | `DIPPY_PI=1` | extension |
+| Moltbot | `--moltbot` | `DIPPY_MOLTBOT=1` | extension |
+| OpenAI Codex | `--codex` | `DIPPY_CODEX=1` | partial |
+| PearAI | `--pearai` | `DIPPY_PEARAI=1` | partial |
 
-Then use `allow-edit`, `allow-read`, etc. rules in your config:
-
-```
-allow-read src/**        # auto-approve reading source files
-deny-read **/.env*       # block reading env files
-allow-edit src/**        # auto-approve source edits
-ask-edit **/config.*     # prompt for config changes
-deny-edit **/.env*       # block env file edits
-```
-
-See [File Operation Rules](docs/config.md#file-operation-rules) for details.
+Each agent mode maintains its own approval log (e.g., `~/.claude/hook-approvals.log`).
 
 ---
 
 ## Configuration
 
-Dippy is highly customizable. Beyond simple allow/deny rules, you can attach messages that steer the AI back on track when it goes astray—no wasted turns.
+Dippy reads config from `~/.dippy/config` (global) and `.dippy` (project).
 
-# Include external config files
-include ~/.dippy/defaults/*            # include shared rules from home
-include .dippy-local-*                 # include project-specific overrides (glob pattern)
-
-set log ~/.dippy/audit.log             # write audit log to this path
-set log-full                           # include full command in audit log
-set log-rotate-max-days 30             # keep rotated logs for N days (0 = disable)
-set log-hook-approvals off             # disable hook-approvals.log
-
-# Default behavior for commands with no matching rule
-set default ask                        # prompt for approval (default)
-# set default pass                    # don't intercept - let Claude decide
-# set default allow                   # auto-approve everything without explicit rule
-
-deny docker *                          # block all docker by default
-allow docker run nginx:*               # allow nginx runs
-deny docker run *--privileged*         # still ban privileged mode, last matching rule wins
-
-deny python "Use uv run python, which runs in project environment"  # remind Claude to use uv
-deny rm -rf "Use trash instead"
-
-allow-redirect /tmp/**                 # allow temp file writes
-deny-redirect **/.env* "Never write secrets, ask me to do it"       # block env writes
-
-# Context-aware rules (flags: @subshell, @compound, ssh, sudo, use ! to negate)
-deny [!@subshell] cd *                 # deny cd when NOT in subshell (equivalent below)
-deny cd *                              # block standalone cd
-allow [@subshell] cd *                 # but allow (cd /tmp && make)
-
-# Custom wrappers (define project-specific tools with context flags)
-wrapper wrap                           # define custom wrapper
-allow [wrap,server1] free *            # allow free on server1 via wrap
-deny [server1] rm *                    # deny rm on server1 (any wrapper)
-
-# Option-specific rules
-allow-opt git status fetch log diff     # allow these git subcommands
-deny-opt "git commit" --no-verify       # block commits skipping hooks
-ask-opt "git push" --force "Use --force-with-lease instead"  # prompt for force push
-
-# Bash test constructs ([ ] and [[ ]])
-allow [] [[] *                          # allow test commands: [ -f file ], [[ condition1 && condition2 ]]
-
-# MCP tool rules
-allow-mcp mcp__github__get_*           # allow read-only GitHub MCP tools
-allow-mcp mcp__github__list_*
-deny-mcp mcp__*__delete_* "No deletions"  # block destructive MCP operations
-
-after git commit * "Reread prompts/next-iteration.md"  # after hook keeps Claude on task
-```
-
-### Include Directive
-
-Split configuration across multiple files:
-
-```
-include <path-or-pattern>
-```
-
-- **Glob patterns**: `include .dippy-ok-*` includes all matching files
-- **Home expansion**: `include ~/.dippy/shared-rules` expands `~`
-- **Relative paths**: Resolved relative to the including file
-- **Recursive**: Included files can include other files
-- **Last-match-wins**: Later includes override earlier ones
-
-Dippy reads config from `~/.dippy/config` (global) and `.dippy` in your project root.
-
-**Configuration reference:** [docs/config.md](docs/config.md)
-
-**Full documentation:** [Dippy Wiki](https://github.com/ldayton/Dippy/wiki)
-
----
-
-## pi-mono Extension
-
-[pi-mono](https://github.com/badlogic/pi-mono) is a monorepo containing pi-agent, a local AI coding assistant (alternative to Claude Code). Dippy includes a TypeScript extension that integrates with pi-agent to provide the same command approval system.
-
-### Installation
+### Basic Rules
 
 ```bash
-# Link the extension to pi-mono's extensions directory
-ln -s /path/to/dippy-dev/pi-extension/dippy-extension.ts \
-      ~/.pi/agent/extensions/dippy-extension.ts
+# Allow safe commands
+allow git status
+allow ls *
+allow cat *
+
+# Block dangerous commands
+deny rm -rf *
+deny docker rm *
+
+# Prompt with message
+deny pip install "Use uv pip install instead"
+deny python "Use uv run python"
 ```
 
-### How It Works
+### File Operations
 
-The extension hooks into pi-mono's `tool_call` event for bash commands:
+Auto-approve file operations using the same config:
 
-1. Intercepts bash tool calls
-2. Spawns Python subprocess with `pi_wrapper.py`
-3. Calls dippy's `analyze()` function
-4. Handles decision: auto-allow, prompt user, or block
+```bash
+allow-read src/**
+allow-edit src/**
+deny-read **/.env*
+deny-edit **/.env*
+ask-edit **/config.*
+```
 
-**Safe commands** (`ls`, `git status`) → execute immediately
-**Destructive commands** (`rm`, `pip install`) → show confirmation dialog
-**Blocked commands** (`rm -rf /`) → prevent execution
+### Advanced Features
 
-### Configuration
+```bash
+# Include external config files
+include ~/.dippy/shared-rules
+include .dippy-local-*
 
-Uses your existing dippy configuration:
-- **Global**: `~/.dippy/config`
-- **Project**: `.dippy` file in project root
+# Log settings
+set log ~/.dippy/audit.log
+set log-full
+set log-rotate-max-days 30
+set log-hook-approvals off
 
-See [pi-extension/README.md](pi-extension/README.md) for details.
+# Default behavior
+set default ask                    # prompt (default)
+# set default pass                 # let Claude decide
+# set default allow                # auto-approve
 
----
+# Context-aware rules
+deny [!@subshell] cd *              # deny cd outside subshell
+allow [@subshell] cd *              # allow (cd x && y)
 
-## Extensions
+# Custom wrappers
+wrapper docker-exec
+allow [docker-exec,prod] read *
 
-Dippy can do more than filter shell commands. See the [wiki](https://github.com/ldayton/Dippy/wiki) for additional capabilities.
+# Option rules
+allow-opt git status fetch log diff
+deny-opt "git push" --force "Use --force-with-lease"
+
+# MCP tools
+allow-mcp mcp__github__get_*
+deny-mcp mcp__*__delete_*
+
+# After hook
+after git commit * "Check project-tasks.md"
+```
+
+**Full documentation:** [docs/config.md](docs/config.md)
 
 ---
 
 ## Troubleshooting
 
-### Dippy not working?
-
-Run diagnostics to identify issues:
+### Not working?
 
 ```bash
-dippy doctor                        # Check installation and configuration
-dippy doctor --verbose              # Detailed diagnostic output
-dippy doctor --agent claude         # Agent-specific checks
+# Run diagnostics
+dippy doctor
+
+# Check hook status
+dippy hooks list
+
+# Reinstall hooks
+dippy hooks uninstall claude --global
+dippy hooks install claude --global
 ```
 
-### Hook not triggering?
+### Check logs
 
-1. **Verify hook installation:**
-   ```bash
-   dippy hooks list                 # Shows both global and project status
-   ```
+- Claude Code: `~/.claude/hook-approvals.log`
+- Gemini CLI: `~/.gemini/hook-approvals.log`
+- Dippy audit: `~/.dippy/audit.log`
 
-2. **Reinstall hooks:**
-   ```bash
-   dippy hooks uninstall claude     # Remove existing
-   dippy hooks install claude       # Reinstall
-   ```
+### Common Issues
 
-3. **Check agent logs:**
-   - Claude Code: `~/.claude/hook-approvals.log`
-   - Gemini CLI: `~/.gemini/hook-approvals.log`
-   - Dippy audit: `~/.dippy/audit.log`
-
-### Configuration errors?
-
-Validate your config files:
-
-```bash
-dippy --cmd 'ls' --config ~/.dippy/config  # Test specific config
-```
-
-Common issues:
-- **JSON syntax errors** in settings.json
-- **Invalid rule patterns** in .dippy config
-- **Missing include files** (check paths)
+- **Hook not triggering** → Run `dippy doctor` to diagnose
+- **JSON syntax errors** → Check config with `dippy doctor`
+- **Legacy hook detected** → Run `dippy hooks install <agent> --global`
 
 ---
 
 ## Uninstall
 
-Remove hooks using the CLI:
-
 ```bash
-dippy hooks uninstall claude         # Remove Claude Code hooks
-dippy hooks uninstall claude --global  # Remove from global config
+# Remove hooks
+dippy hooks uninstall claude --global
+dippy hooks uninstall gemini --global
+
+# Uninstall tool
+uv tool uninstall dippy
 ```
 
-Or manually remove the hook entry from `~/.claude/settings.json`, then:
+---
+
+## pi-mono Extension
+
+Dippy includes a TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono):
 
 ```bash
-brew uninstall dippy  # if installed via Homebrew
+# Link the extension
+ln -s /path/to/dippy/pi-extension/dippy-extension.ts \
+      ~/.pi/agent/extensions/dippy-extension.ts
 ```
+
+Uses your existing `~/.dippy/config` and `.dippy` files.
+
+---
+
+## Development
+
+```bash
+# Install in development mode
+uv pip install -e .
+
+# Run tests
+uv run python -m pytest
+
+# Run specific test
+uv run python -m pytest tests/test_agents.py -v
+```
+
+---
+
+**Full documentation:** [docs/config.md](docs/config.md)
+**Upstream:** [ldayton/Dippy](https://github.com/ldayton/Dippy)
