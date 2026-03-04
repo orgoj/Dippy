@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import Literal
 
 from dippy.cli.agents import AGENTS, detect_agents
-from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook, _has_legacy_dippy_hook
+from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook
 
 
 class HealthStatus(Enum):
@@ -309,18 +309,24 @@ def check_config_validation(cwd_path: Path) -> CheckResult:
     from dippy.core.config import ConfigError, load_config
 
     errors = []
+    warnings = []
+    configs_found = []
 
     # Check global config
     global_config = Path.home() / ".dippy" / "config"
     if global_config.exists():
+        configs_found.append("global")
         try:
             load_config(cwd_path, config_path=str(global_config))
         except ConfigError as e:
             errors.append(f"Global config: {_format_config_error(e, global_config)}")
+    else:
+        warnings.append("Global config not found (~/.dippy/config)")
 
     # Check project config
     project_config = cwd_path / ".dippy"
     if project_config.exists():
+        configs_found.append("project")
         try:
             load_config(cwd_path, config_path=None)
         except ConfigError as e:
@@ -334,10 +340,29 @@ def check_config_validation(cwd_path: Path) -> CheckResult:
             "\n".join(errors),
         )
 
+    if warnings:
+        details = "\n".join(warnings)
+        if configs_found:
+            details += f"\nValid configs: {', '.join(configs_found)}"
+        return CheckResult(
+            "Configuration",
+            HealthStatus.WARNING,
+            f"{len(warnings)} warning(s)",
+            details,
+        )
+
+    if not configs_found:
+        return CheckResult(
+            "Configuration",
+            HealthStatus.WARNING,
+            "No config found",
+            "Create ~/.dippy/config or .dippy file to customize rules",
+        )
+
     return CheckResult(
         "Configuration",
         HealthStatus.OK,
-        "Configuration is valid",
+        f"Configuration valid ({', '.join(configs_found)})",
         None,
     )
 
@@ -445,10 +470,13 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
                 with open(global_config) as f:
                     config = json.load(f)
                 if _has_dippy_hook(config, agent_id):
-                    details.append("Dippy hook: installed")
-                elif _has_legacy_dippy_hook(config):
-                    details.append("Dippy hook: legacy (old 'dippy-hook')")
-                    issues.append("Legacy hook detected - consider updating")
+                    # Check if legacy by inspecting config
+                    config_str = json.dumps(config)
+                    if 'dippy-hook' in config_str or '/dippy' in config_str:
+                        details.append("Dippy hook: legacy (old 'dippy-hook')")
+                        issues.append("Legacy hook detected - consider updating")
+                    else:
+                        details.append("Dippy hook: installed")
                 else:
                     details.append("Dippy hook: not installed")
                     issues.append("Dippy hook not found in config")
@@ -458,7 +486,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         issues.append(f"{agent.name} not installed (no config found)")
 
     # Check project config
-    project_config = cwd / agent.project_config
+    project_config = cwd_path / agent.project_config
     if project_config.exists():
         details.append(f"Project config: {project_config}")
         if hook_config:
