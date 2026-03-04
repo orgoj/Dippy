@@ -163,6 +163,7 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
     Returns a CheckResult for each agent plus pi-mono extension.
     """
     results = []
+    home_dir = Path.home()
 
     # Check each agent with hook support
     for agent_id in ("claude", "gemini", "cursor", "windsurf"):
@@ -181,26 +182,32 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
             except (json.JSONDecodeError, IOError):
                 pass
 
-        # Check project config
-        project_path = cwd_path / hook_config["project_config"]
+        # Check project config (only if not in home directory)
+        project_path = None
         project_config = None
-        if project_path.exists():
-            try:
-                with open(project_path) as f:
-                    project_config = json.load(f)
-            except (json.JSONDecodeError, IOError):
-                pass
+        check_project = cwd_path != home_dir
+        if check_project:
+            project_path = cwd_path / hook_config["project_config"]
+            if project_path.exists():
+                try:
+                    with open(project_path) as f:
+                        project_config = json.load(f)
+                except (json.JSONDecodeError, IOError):
+                    pass
 
         # Determine agent status
         agent_exists = global_config is not None or project_config is not None
 
         if not agent_exists:
-            # Agent not installed
+            # Agent not installed - show relevant paths only
+            paths_list = [f"  {global_path}"]
+            if check_project and project_path:
+                paths_list.append(f"  {project_path}")
             results.append(CheckResult(
                 f"Hook: {agent_info.name}",
                 HealthStatus.WARNING,
                 "Not installed",
-                f"Config not found at:\n  {global_path}\n  {project_path}",
+                f"Config not found at:\n" + "\n".join(paths_list),
             ))
             continue
 
@@ -210,17 +217,26 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
         locations = []
         legacy_path = None
 
-        for config, label in [(global_config, "global"), (project_config, "project")]:
-            if config is None:
-                continue
-            if _has_dippy_hook(config, agent_id):
-                has_hook = True
-                locations.append(label)
-                # Determine hook type (new vs legacy) and extract command path
-                config_str = json.dumps(config)
+        # Check global config
+        if global_config and _has_dippy_hook(global_config, agent_id):
+            has_hook = True
+            locations.append("global")
+            config_str = json.dumps(global_config)
+            if 'dippy-hook' in config_str or '/dippy' in config_str:
+                hook_type = "legacy (full path)"
+                import re
+                match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
+                if match:
+                    legacy_path = match.group(1)
+
+        # Check project config (only if not in home directory)
+        if check_project and project_config and _has_dippy_hook(project_config, agent_id):
+            has_hook = True
+            locations.append("project")
+            if not legacy_path:
+                config_str = json.dumps(project_config)
                 if 'dippy-hook' in config_str or '/dippy' in config_str:
                     hook_type = "legacy (full path)"
-                    # Extract the actual command path from config
                     import re
                     match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
                     if match:
