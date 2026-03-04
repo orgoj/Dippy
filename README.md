@@ -151,7 +151,13 @@ If you prefer manual configuration or need project-specific settings:
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|MultiEdit|Read",
+        "matcher": "Bash|Write|Edit|MultiEdit|Read|LS|Glob|Grep|Search|WebSearch|mcp__.*",
+        "hooks": [{ "type": "command", "command": "dippy" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash|WebSearch|mcp__.*",
         "hooks": [{ "type": "command", "command": "dippy" }]
       }
     ]
@@ -168,10 +174,20 @@ If you prefer manual configuration or need project-specific settings:
         "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
         "hooks": [{ "type": "command", "command": "dippy --gemini" }]
       }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "run_shell_command|google_web_search",
+        "hooks": [{ "type": "command", "command": "dippy --gemini" }]
+      }
     ]
   }
 }
 ```
+
+**Hooks installed:**
+- **PreToolUse**: Validates tools BEFORE execution (Bash, file ops, WebSearch, MCP)
+- **PostToolUse**: Shows feedback messages AFTER execution (for `after` directive)
 
 ---
 

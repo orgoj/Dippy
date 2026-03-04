@@ -25,7 +25,7 @@ HOOK_COMMANDS = {
             "hooks": {
                 "PreToolUse": [
                     {
-                        "matcher": "Bash|Read|Write|Edit|MultiEdit",
+                        "matcher": "Bash|Write|Edit|MultiEdit|Read|LS|Glob|Grep|Search|WebSearch|mcp__.*",
                         "hooks": [
                             {
                                 "type": "command",
@@ -33,7 +33,18 @@ HOOK_COMMANDS = {
                             }
                         ],
                     }
-                ]
+                ],
+                "PostToolUse": [
+                    {
+                        "matcher": "Bash|WebSearch|mcp__.*",
+                        "hooks": [
+                            {
+                                "type": "command",
+                                "command": "dippy --claude",
+                            }
+                        ],
+                    }
+                ],
             }
         },
     },
@@ -44,7 +55,7 @@ HOOK_COMMANDS = {
             "hooks": {
                 "BeforeTool": [
                     {
-                        "matcher": "run_shell_command",
+                        "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
                         "hooks": [
                             {
                                 "name": "dippy-approval",
@@ -53,7 +64,19 @@ HOOK_COMMANDS = {
                             }
                         ],
                     }
-                ]
+                ],
+                "AfterTool": [
+                    {
+                        "matcher": "run_shell_command|google_web_search",
+                        "hooks": [
+                            {
+                                "name": "dippy-after",
+                                "type": "command",
+                                "command": "dippy --gemini",
+                            }
+                        ],
+                    }
+                ],
             }
         },
     },
@@ -64,6 +87,9 @@ HOOK_COMMANDS = {
             "version": 1,
             "hooks": {
                 "beforeShellExecution": [
+                    {"command": "dippy --cursor"}
+                ],
+                "afterShellExecution": [
                     {"command": "dippy --cursor"}
                 ]
             }
@@ -76,6 +102,9 @@ HOOK_COMMANDS = {
             "version": 1,
             "hooks": {
                 "beforeShellExecution": [
+                    {"command": "dippy --windsurf"}
+                ],
+                "afterShellExecution": [
                     {"command": "dippy --windsurf"}
                 ]
             }
