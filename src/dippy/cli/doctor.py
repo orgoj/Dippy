@@ -9,25 +9,23 @@ and agent-specific diagnostics.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Literal
 
-from dippy.cli.agents import AGENTS, detect_agents
-from dippy.cli.hooks import HOOK_COMMANDS, _has_dippy_hook
+from dippy.cli.agents import AGENTS
+from dippy.cli.hooks import HOOK_COMMANDS, _get_hook_command_for_agent, _has_dippy_hook
 
 
 class HealthStatus(Enum):
     """Health status levels with corresponding indicators and exit codes."""
 
-    OK = ("ok", 0, "✓", "OK")
-    WARNING = ("warning", 1, "⚠", "WARNING")
-    CRITICAL = ("critical", 2, "✗", "CRITICAL")
+    OK = ("ok", 0, "+", "OK")
+    WARNING = ("warning", 1, "?", "WARNING")
+    CRITICAL = ("critical", 2, "!", "CRITICAL")
 
     @property
     def level(self) -> str:
@@ -54,19 +52,42 @@ class CheckResult:
     status: HealthStatus
     message: str
     details: str | None = None
+    fix_command: str | None = None
+    matchers: dict[str, list[str]] = field(default_factory=dict)
+
+    def to_dict(self) -> dict:
+        """Convert to dictionary for JSON output."""
+        return {
+            "name": self.name,
+            "status": self.status.level,
+            "message": self.message,
+            "details": self.details,
+            "fix_command": self.fix_command,
+            "matchers": self.matchers,
+        }
 
     def display(self, verbose: bool = False) -> None:
         """Display the check result to stdout."""
-        print(f"{self.status.symbol} {self.name}: {self.message}")
-        if self.details:
+        print(f"[{self.status.symbol}] {self.name}: {self.message}")
+        if self.details and verbose:
             for line in self.details.split("\n"):
                 print(f"    {line}")
+        if self.fix_command:
+            print(f"    Fix: {self.fix_command}")
+        if self.matchers and verbose:
+            for hook_type, patterns in self.matchers.items():
+                print(f"    {hook_type}:")
+                for pattern in patterns:
+                    print(f"      - {pattern}")
 
 
 def run(
     agent: str | None = None,
     verbose: bool = False,
     cwd: str | None = None,
+    json_output: bool = False,
+    quiet: bool = False,
+    fix: bool = False,
 ) -> int:
     """Run diagnostic checks and return overall exit code.
 
@@ -74,6 +95,9 @@ def run(
         agent: Optional agent ID to filter checks for a specific agent
         verbose: Show detailed diagnostic information
         cwd: Current working directory
+        json_output: Output as structured JSON
+        quiet: Minimal output, exit code only
+        fix: Auto-repair common issues
 
     Returns:
         Exit code: 0 (all OK), 1 (warnings), 2 (critical issues)
@@ -89,7 +113,8 @@ def run(
     checks.append(check_installation())
 
     # 2. Hook status check (returns list of results)
-    checks.extend(check_hook_status(cwd_path, verbose))
+    hook_checks = check_hook_status(cwd_path, verbose)
+    checks.extend(hook_checks)
 
     # 3. Config validation
     checks.append(check_config_validation(cwd_path))
@@ -101,16 +126,129 @@ def run(
     if agent:
         checks.append(check_agent_specific(agent, cwd_path, verbose))
 
-    # Display results
-    print("Dippy Installation Check")
-    print("=" * 40)
+    # Auto-fix if requested
+    if fix:
+        fixed = apply_auto_fixes(checks, cwd_path)
+        if fixed:
+            # Re-run checks after fixing
+            checks = []
+            checks.append(check_installation())
+            checks.extend(check_hook_status(cwd_path, verbose))
+            checks.append(check_config_validation(cwd_path))
+            checks.append(check_log_health(verbose))
+            if agent:
+                checks.append(check_agent_specific(agent, cwd_path, verbose))
 
-    for check in checks:
-        check.display(verbose)
+    # Calculate summary
+    summary = {
+        "ok": sum(1 for c in checks if c.status == HealthStatus.OK),
+        "warnings": sum(1 for c in checks if c.status == HealthStatus.WARNING),
+        "critical": sum(1 for c in checks if c.status == HealthStatus.CRITICAL),
+    }
+
+    # Output based on format
+    if quiet:
+        return max((c.status.exit_code for c in checks), default=0)
+
+    if json_output:
+        print(_format_json_output(checks, summary))
+    else:
+        _format_text_output(checks, verbose, summary)
 
     # Return highest severity exit code
     max_status = max((check.status for check in checks), key=lambda s: s.exit_code)
     return max_status.exit_code
+
+
+def _format_text_output(checks: list[CheckResult], verbose: bool, summary: dict) -> None:
+    """Format checks as text output.
+
+    Args:
+        checks: List of check results
+        verbose: Show detailed information
+        summary: Summary counts
+    """
+    print("Dippy Installation Check")
+    print("=" * 40)
+    print()
+
+    for check in checks:
+        check.display(verbose)
+        print()
+
+    # Print summary
+    parts = []
+    if summary["ok"]:
+        parts.append(f"{summary['ok']} OK")
+    if summary["warnings"]:
+        parts.append(f"{summary['warnings']} warnings")
+    if summary["critical"]:
+        parts.append(f"{summary['critical']} critical")
+    print(f"Summary: {', '.join(parts) if parts else 'No checks'}")
+
+
+def _format_json_output(checks: list[CheckResult], summary: dict) -> str:
+    """Format checks as JSON output.
+
+    Args:
+        checks: List of check results
+        summary: Summary counts
+
+    Returns:
+        JSON string
+    """
+    output = {
+        "summary": summary,
+        "checks": [c.to_dict() for c in checks],
+        "overall_status": "ok" if summary["critical"] == 0 and summary["warnings"] == 0 else (
+            "warning" if summary["critical"] == 0 else "critical"
+        ),
+    }
+    return json.dumps(output, indent=2)
+
+
+def apply_auto_fixes(checks: list[CheckResult], cwd_path: Path) -> bool:
+    """Apply automatic fixes to common issues.
+
+    Args:
+        checks: List of check results
+        cwd_path: Current working directory
+
+    Returns:
+        True if any fixes were applied
+    """
+    from dippy.cli.hooks import install as hooks_install
+
+    fixed = False
+
+    for check in checks:
+        if check.fix_command and check.status == HealthStatus.WARNING:
+            # Parse the fix command to extract agent and scope
+            if "dippy hooks install" in check.fix_command:
+                parts = check.fix_command.split()
+                try:
+                    agent_idx = parts.index("install") + 1
+                    if agent_idx < len(parts):
+                        agent = parts[agent_idx]
+                        global_flag = "--global" in parts
+
+                        print(f"Auto-fixing: {check.name}")
+                        result = hooks_install(
+                            agent=agent,
+                            global_config=global_flag,
+                            cwd=str(cwd_path),
+                            force=True,
+                            dry_run=False,
+                        )
+                        if result == 0:
+                            fixed = True
+                            print(f"  Fixed: {check.name}")
+                        else:
+                            print(f"  Failed to fix: {check.name}", file=sys.stderr)
+                except (ValueError, IndexError):
+                    pass
+
+    return fixed
 
 
 def check_installation() -> CheckResult:
@@ -123,6 +261,7 @@ def check_installation() -> CheckResult:
             HealthStatus.CRITICAL,
             "dippy not found on PATH",
             "Install Dippy: uv tool install dippy or pip install dippy",
+            fix_command="uv tool install dippy",
         )
 
     # Check if we can run it
@@ -207,7 +346,8 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                 f"Hook: {agent_info.name}",
                 HealthStatus.WARNING,
                 "Not installed",
-                f"Config not found at:\n" + "\n".join(paths_list),
+                "Config not found at:\n" + "\n".join(paths_list),
+                fix_command=f"dippy hooks install {agent_id} --global",
             ))
             continue
 
@@ -216,6 +356,7 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
         hook_type = None
         locations = []
         legacy_path = None
+        matchers = {}
 
         # Check global config
         if global_config and _has_dippy_hook(global_config, agent_id):
@@ -228,6 +369,10 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                 match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
                 if match:
                     legacy_path = match.group(1)
+
+            # Extract matchers for verbose output
+            if verbose:
+                matchers = _extract_matchers_from_config(global_config, agent_id)
 
         # Check project config (only if not in home directory)
         if check_project and project_config and _has_dippy_hook(project_config, agent_id):
@@ -242,27 +387,39 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                     if match:
                         legacy_path = match.group(1)
 
+            # Extract matchers for verbose output
+            if verbose and not matchers:
+                matchers = _extract_matchers_from_config(project_config, agent_id)
+
         if not has_hook:
             results.append(CheckResult(
                 f"Hook: {agent_info.name}",
                 HealthStatus.WARNING,
                 "Agent present, hook not installed",
                 f"Install with: dippy hooks install {agent_id} --global",
+                fix_command=f"dippy hooks install {agent_id} --global",
             ))
         elif hook_type == "legacy (full path)":
-            details = f"Legacy command: {legacy_path}\nUpdate with: dippy hooks install {agent_id} --global" if legacy_path else f"Update with: dippy hooks install {agent_id} --global"
+            expected_command = _get_hook_command_for_agent(agent_id)
+            details = f"Legacy command: {legacy_path}\nExpected command: {expected_command}" if legacy_path else f"Update with: dippy hooks install {agent_id} --global"
             results.append(CheckResult(
                 f"Hook: {agent_info.name}",
                 HealthStatus.WARNING,
                 f"Legacy hook ({', '.join(locations)})",
                 details,
+                fix_command=f"dippy hooks install {agent_id} --global --force",
+                matchers=matchers,
             ))
         else:
+            details = None
+            if verbose:
+                details = f"Location: {', '.join(locations)}\nConfig: {global_path if 'global' in locations else project_path}"
             results.append(CheckResult(
                 f"Hook: {agent_info.name}",
                 HealthStatus.OK,
                 f"Installed ({', '.join(locations)})",
-                None,
+                details,
+                matchers=matchers,
             ))
 
     # Check pi-mono extension
@@ -302,6 +459,40 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
         ))
 
     return results
+
+
+def _extract_matchers_from_config(config: dict, agent_id: str) -> dict[str, list[str]]:
+    """Extract matcher patterns from an agent's config.
+
+    Args:
+        config: Parsed configuration dict
+        agent_id: Agent ID
+
+    Returns:
+        Dictionary mapping hook types to matcher lists
+    """
+    matchers = {}
+
+    # Get hooks section
+    hooks = config.get("hooks", {})
+
+    # Different agents use different hook names
+    if agent_id == "claude":
+        hook_names = [("PreToolUse", "PreToolUse"), ("PostToolUse", "PostToolUse")]
+    elif agent_id == "gemini":
+        hook_names = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
+    else:
+        return matchers
+
+    for config_key, display_name in hook_names:
+        if config_key in hooks:
+            for hook_entry in hooks[config_key]:
+                if "matcher" in hook_entry:
+                    if display_name not in matchers:
+                        matchers[display_name] = []
+                    matchers[display_name].append(hook_entry["matcher"])
+
+    return matchers
 
 
 def check_config_validation(cwd_path: Path) -> CheckResult:
@@ -457,6 +648,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
 
     details = []
     issues = []
+    matchers = {}
 
     # Check if agent is installed (config exists)
     global_config = Path(agent.global_config).expanduser()
@@ -477,6 +669,9 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
                         issues.append("Legacy hook detected - consider updating")
                     else:
                         details.append("Dippy hook: installed")
+                        # Extract matchers for verbose output
+                        if verbose:
+                            matchers = _extract_matchers_from_config(config, agent_id)
                 else:
                     details.append("Dippy hook: not installed")
                     issues.append("Dippy hook not found in config")
@@ -486,7 +681,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         issues.append(f"{agent.name} not installed (no config found)")
 
     # Check project config
-    project_config = cwd_path / agent.project_config
+    project_config = cwd / agent.project_config
     if project_config.exists():
         details.append(f"Project config: {project_config}")
         if hook_config:
@@ -516,6 +711,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
             HealthStatus.WARNING,
             f"Issues: {'; '.join(issues)}",
             "\n".join(details) if verbose else None,
+            matchers=matchers if verbose else {},
         )
 
     return CheckResult(
@@ -523,4 +719,5 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         HealthStatus.OK,
         f"{agent.name} is configured",
         "\n".join(details) if verbose else None,
+        matchers=matchers if verbose else {},
     )

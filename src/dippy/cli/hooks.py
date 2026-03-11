@@ -9,9 +9,13 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+import shutil
 import sys
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
 from pathlib import Path
-from typing import Literal
 
 from dippy.cli.agents import AGENTS
 
@@ -113,10 +117,214 @@ HOOK_COMMANDS = {
 }
 
 
+# Maximum number of backups to keep
+MAX_BACKUPS = 5
+
+
+class HookStatus(Enum):
+    """Hook installation status."""
+
+    INSTALLED = "installed"
+    LEGACY = "legacy"
+    NOT_INSTALLED = "not_installed"
+    NO_CONFIG = "no_config"
+    ERROR = "error"
+
+
+@dataclass
+class HookInfo:
+    """Information about a hook's status."""
+
+    agent_id: str
+    agent_name: str
+    global_status: HookStatus
+    global_path: Path
+    global_matchers: list[str] = field(default_factory=list)
+    global_command: str = ""
+    global_legacy_command: str = ""
+    project_status: HookStatus = HookStatus.NOT_INSTALLED
+    project_path: Path | None = None
+    project_matchers: list[str] = field(default_factory=list)
+    project_command: str = ""
+    project_legacy_command: str = ""
+    pi_extension: bool = False
+
+    def has_any_hook(self) -> bool:
+        """Check if any hook is installed (global or project)."""
+        return self.global_status in (HookStatus.INSTALLED, HookStatus.LEGACY) or (
+            self.project_status in (HookStatus.INSTALLED, HookStatus.LEGACY)
+        )
+
+    def has_legacy(self) -> bool:
+        """Check if any legacy hook exists."""
+        return self.global_status == HookStatus.LEGACY or (
+            self.project_status == HookStatus.LEGACY
+        )
+
+
+def _get_matchers_for_agent(agent: str, hook_type: str | None = None) -> list[str]:
+    """Get matcher patterns for an agent's hook configuration.
+
+    Args:
+        agent: Agent ID (claude, gemini, cursor, windsurf)
+        hook_type: Optional hook type filter (e.g., "PreToolUse", "beforeShellExecution")
+
+    Returns:
+        List of matcher patterns
+    """
+    hook_config = HOOK_COMMANDS.get(agent)
+    if not hook_config:
+        return []
+
+    matchers = []
+    hooks_data = hook_config["hook_entry"].get("hooks", {})
+
+    for hook_name, hook_list in hooks_data.items():
+        if hook_type and hook_name != hook_type:
+            continue
+
+        for hook_entry in hook_list:
+            if "matcher" in hook_entry:
+                matchers.append(hook_entry["matcher"])
+
+    return matchers
+
+
+def _get_hook_command_for_agent(agent: str) -> str:
+    """Get the hook command for an agent.
+
+    Args:
+        agent: Agent ID (claude, gemini, cursor, windsurf)
+
+    Returns:
+        The hook command (e.g., "dippy --claude")
+    """
+    hook_config = HOOK_COMMANDS.get(agent)
+    if not hook_config:
+        return "dippy"
+
+    hooks_data = hook_config["hook_entry"].get("hooks", {})
+
+    # Check different hook formats
+    for hook_list in hooks_data.values():
+        for hook_entry in hook_list:
+            if "command" in hook_entry:
+                return hook_entry["command"]
+            if "hooks" in hook_entry:
+                for sub_hook in hook_entry["hooks"]:
+                    if "command" in sub_hook:
+                        return sub_hook["command"]
+
+    return f"dippy --{agent}"
+
+
+def _detect_legacy_hook_command(config: dict) -> str | None:
+    """Detect legacy dippy-hook command in configuration.
+
+    Args:
+        config: Parsed configuration dict
+
+    Returns:
+        The legacy command if found, None otherwise
+    """
+    config_str = json.dumps(config)
+
+    # Look for various legacy patterns
+    patterns = [
+        r'"command":\s*"/[^"]*dippy[^"]*"',  # Full path to dippy
+        r'"command":\s*"[^"]*dippy-hook[^"]*"',  # dippy-hook command
+    ]
+
+    for pattern in patterns:
+        match = re.search(pattern, config_str)
+        if match:
+            # Extract the command value
+            cmd_match = re.search(r'"command":\s*"([^"]+)"', match.group(0))
+            if cmd_match:
+                return cmd_match.group(1)
+
+    return None
+
+
+def _create_backup(config_path: Path) -> Path | None:
+    """Create a backup of the config file.
+
+    Args:
+        config_path: Path to the config file
+
+    Returns:
+        Path to the backup file, or None if backup failed
+    """
+    if not config_path.exists():
+        return None
+
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_path = config_path.parent / f"{config_path.name}.dippy-backup-{timestamp}"
+
+    try:
+        shutil.copy2(config_path, backup_path)
+        _cleanup_old_backups(config_path)
+        return backup_path
+    except (IOError, OSError) as e:
+        print(f"Warning: Could not create backup: {e}", file=sys.stderr)
+        return None
+
+
+def _cleanup_old_backups(config_path: Path) -> None:
+    """Clean up old backups, keeping only the most recent MAX_BACKUPS.
+
+    Args:
+        config_path: Path to the config file (used to find backups)
+    """
+    backup_pattern = f"{config_path.name}.dippy-backup-*"
+    backups = sorted(
+        config_path.parent.glob(backup_pattern),
+        key=lambda p: p.stat().st_mtime,
+        reverse=True,
+    )
+
+    # Remove old backups beyond MAX_BACKUPS
+    for old_backup in backups[MAX_BACKUPS:]:
+        try:
+            old_backup.unlink()
+        except OSError:
+            pass  # Ignore cleanup failures
+
+
+def _diff_configs(old_config: dict, new_config: dict, config_path: Path) -> str:
+    """Generate a unified diff between old and new config.
+
+    Args:
+        old_config: Original configuration
+        new_config: New configuration
+        config_path: Path to config file (for display)
+
+    Returns:
+        Unified diff string
+    """
+    import difflib
+
+    old_json = json.dumps(old_config, indent=2, sort_keys=True).splitlines(keepends=True)
+    new_json = json.dumps(new_config, indent=2, sort_keys=True).splitlines(keepends=True)
+
+    diff = difflib.unified_diff(
+        old_json,
+        new_json,
+        fromfile=f"a/{config_path}",
+        tofile=f"b/{config_path}",
+        lineterm="",
+    )
+
+    return "".join(diff)
+
+
 def install(
     agent: str,
     global_config: bool = False,
     cwd: str | None = None,
+    force: bool = False,
+    dry_run: bool = False,
+    no_backup: bool = False,
 ) -> int:
     """Install Dippy hooks for the specified agent.
 
@@ -124,6 +332,9 @@ def install(
         agent: Agent ID (claude, gemini, cursor, windsurf)
         global_config: Install to global config (default: project-local)
         cwd: Current working directory (for project-local installs)
+        force: Replace existing/legacy hooks
+        dry_run: Show what would be done without making changes
+        no_backup: Skip config backup before install
 
     Returns:
         Exit code: 0 for success, 1 for errors
@@ -144,7 +355,7 @@ def install(
         config_path = Path(hook_config["config"]).expanduser()
     else:
         if cwd is None:
-            cwd = Path.cwd()
+            cwd = str(Path.cwd())
         config_path = Path(cwd) / hook_config["project_config"]
 
     # Check if agent's config directory exists
@@ -152,6 +363,7 @@ def install(
         if global_config:
             print(f"Error: Agent config directory not found: {config_path.parent}")
             print(f"  {agent_info.name} may not be installed.")
+            print(f"  Run: dippy hooks install {agent} --global")
             return 1
         else:
             # Create project config directory
@@ -170,31 +382,129 @@ def install(
         return 1
 
     # Check for existing Dippy hook
-    if _has_dippy_hook(existing_config, agent):
-        print(f"Dippy hook already installed for {agent_info.name}")
-        print(f"Config: {config_path}")
+    has_hook = _has_dippy_hook(existing_config, agent)
+    legacy_command = _detect_legacy_hook_command(existing_config) if has_hook else None
+
+    if has_hook and not force:
+        if legacy_command:
+            print(f"Legacy Dippy hook detected for {agent_info.name}")
+            print(f"Config: {config_path}")
+            print(f"Current command: {legacy_command}")
+            print(f"Expected command: {_get_hook_command_for_agent(agent)}")
+            print(f"To upgrade, run: dippy hooks install {agent} {'--global' if global_config else ''} --force")
+        else:
+            print(f"Dippy hook already installed for {agent_info.name}")
+            print(f"Config: {config_path}")
         return 0
 
     # Merge hook entry into config
     updated_config = _merge_hook_entry(existing_config, hook_config["hook_entry"], agent)
 
+    # Dry run: show diff and exit
+    if dry_run:
+        print(f"Would update: {config_path}")
+        if legacy_command:
+            print("\nRemoving legacy hook:")
+            print(f"  - {legacy_command}")
+        print("\nAdding hooks:")
+        _print_hook_summary(agent, updated_config)
+        print()
+        diff = _diff_configs(existing_config, updated_config, config_path)
+        if diff:
+            print("Diff:")
+            print("=" * 60)
+            print(diff)
+        else:
+            print("(no changes)")
+        return 0
+
+    # Create backup unless --no-backup
+    backup_path = None
+    if not no_backup and config_path.exists():
+        backup_path = _create_backup(config_path)
+
     # Write updated config
     try:
         with open(config_path, "w") as f:
-            json.dump(updated_config, f, indent=2)
+            json.dump(updated_config, f, indent=2, sort_keys=True)
     except IOError as e:
         print(f"Error: Could not write to {config_path}: {e}", file=sys.stderr)
         return 1
 
-    print(f"Installed Dippy hook for {agent_info.name}")
+    # Print success message
+    if legacy_command:
+        print(f"Upgraded Dippy hook for {agent_info.name}")
+    else:
+        print(f"Installed Dippy hook for {agent_info.name}")
     print(f"Config: {config_path}")
+    if backup_path:
+        print(f"Backup: {backup_path}")
+    print()
+    _print_hook_summary(agent, updated_config)
     return 0
+
+
+def _print_hook_summary(agent: str, config: dict) -> None:
+    """Print a summary of installed hooks.
+
+    Args:
+        agent: Agent ID
+        config: The configuration dict
+    """
+    hook_config = HOOK_COMMANDS.get(agent)
+    if not hook_config:
+        return
+
+    hooks_data = config.get("hooks", {})
+
+    # Determine which hook types to show based on agent
+    if agent == "claude":
+        hook_types = [("PreToolUse", "PreToolUse"), ("PostToolUse", "PostToolUse")]
+    elif agent == "gemini":
+        hook_types = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
+    elif agent in ("cursor", "windsurf"):
+        hook_types = [("beforeShellExecution", "beforeShellExecution"),
+                      ("afterShellExecution", "afterShellExecution")]
+    else:
+        return
+
+    for config_key, display_name in hook_types:
+        if config_key in hooks_data:
+            hook_list = hooks_data[config_key]
+            for hook_entry in hook_list:
+                if "matcher" in hook_entry:
+                    # Claude/Gemini format
+                    tools = _count_tools_in_matcher(hook_entry["matcher"])
+                    print(f"  + {display_name}: {hook_entry['matcher'][:60]}... ({tools} tools)")
+                elif "command" in hook_entry:
+                    # Cursor/Windsurf format
+                    print(f"  + {display_name}: {hook_entry['command']}")
+
+    print(f"\nCommand: {_get_hook_command_for_agent(agent)}")
+
+
+def _count_tools_in_matcher(matcher: str) -> str:
+    """Count the number of tools in a matcher pattern.
+
+    Args:
+        matcher: Matcher pattern string
+
+    Returns:
+        Approximate number of tools as string (e.g., "10", "10+MCP")
+    """
+    # Split by | and count
+    parts = matcher.split("|")
+    # Subtract 1 for the mcp__.* pattern (covers many tools)
+    mcp_count = sum(1 for p in parts if "mcp__" in p)
+    non_mcp = len(parts) - mcp_count
+    return f"{non_mcp}+MCP" if mcp_count else str(non_mcp)
 
 
 def uninstall(
     agent: str,
     global_config: bool = False,
     cwd: str | None = None,
+    dry_run: bool = False,
 ) -> int:
     """Uninstall Dippy hooks for the specified agent.
 
@@ -202,6 +512,7 @@ def uninstall(
         agent: Agent ID (claude, gemini, cursor, windsurf)
         global_config: Uninstall from global config (default: project-local)
         cwd: Current working directory (for project-local installs)
+        dry_run: Show what would be done without making changes
 
     Returns:
         Exit code: 0 for success, 1 for errors
@@ -222,13 +533,13 @@ def uninstall(
         config_path = Path(hook_config["config"]).expanduser()
     else:
         if cwd is None:
-            cwd = Path.cwd()
+            cwd = str(Path.cwd())
         config_path = Path(cwd) / hook_config["project_config"]
 
     # Check if config exists
     if not config_path.exists():
-        print(f"Error: Config file not found: {config_path}")
-        return 1
+        print(f"Config file not found: {config_path}")
+        return 0  # Not an error, just nothing to do
 
     # Read existing config
     try:
@@ -246,10 +557,22 @@ def uninstall(
     # Remove Dippy hook from config
     updated_config = _remove_dippy_hook(existing_config, agent)
 
+    # Dry run: show what would change
+    if dry_run:
+        print(f"Would update: {config_path}")
+        diff = _diff_configs(existing_config, updated_config, config_path)
+        if diff:
+            print("\nDiff:")
+            print("=" * 60)
+            print(diff)
+        else:
+            print("(no changes)")
+        return 0
+
     # Write updated config
     try:
         with open(config_path, "w") as f:
-            json.dump(updated_config, f, indent=2)
+            json.dump(updated_config, f, indent=2, sort_keys=True)
     except IOError as e:
         print(f"Error: Could not write to {config_path}: {e}", file=sys.stderr)
         return 1
@@ -262,6 +585,9 @@ def uninstall(
 def list_hooks(
     global_config: bool = False,
     cwd: str | None = None,
+    verbose: bool = False,
+    json_output: bool = False,
+    quiet: bool = False,
 ) -> int:
     """List Dippy hook status for all agents.
 
@@ -270,90 +596,291 @@ def list_hooks(
     Args:
         global_config: Ignored (both scopes are shown)
         cwd: Current working directory (for project-local checks)
+        verbose: Show detailed information (matchers, commands, paths)
+        json_output: Output as structured JSON
+        quiet: Minimal output, exit code only
 
     Returns:
         Exit code: 0 for success, 1 for errors
     """
+    if quiet:
+        return 0  # Exit silently with success code
+
     if cwd is None:
         cwd_path = Path.cwd()
     else:
         cwd_path = Path(cwd)
 
-    print("Dippy Hook Status")
-    print("=" * 60)
-    print()
-
-    # Only show agents that have hook support defined
+    # Gather hook information for all agents
+    hook_infos = []
     for agent_id, hook_config in HOOK_COMMANDS.items():
         agent_info = AGENTS.get(agent_id)
         if not agent_info:
             continue
 
-        # Check global config
-        global_path = Path(hook_config["config"]).expanduser()
-        global_installed = False
-        global_legacy = False
-        if global_path.exists():
-            try:
-                with open(global_path) as f:
-                    config = json.load(f)
-                global_installed = _has_dippy_hook(config, agent_id)
-                global_legacy = _has_legacy_dippy_hook(config)
-            except (json.JSONDecodeError, IOError):
-                pass
-
-        # Check project config
-        project_path = cwd_path / hook_config["project_config"]
-        project_installed = False
-        project_legacy = False
-        if project_path.exists():
-            try:
-                with open(project_path) as f:
-                    config = json.load(f)
-                project_installed = _has_dippy_hook(config, agent_id)
-                project_legacy = _has_legacy_dippy_hook(config)
-            except (json.JSONDecodeError, IOError):
-                pass
-
-        # Build status string
-        global_status = ""
-        if global_legacy and not global_installed:
-            global_status = "legacy"
-        elif global_installed:
-            global_status = "installed"
-        else:
-            global_status = "-"
-
-        project_status = ""
-        if project_legacy and not project_installed:
-            project_status = "legacy"
-        elif project_installed:
-            project_status = "installed"
-        else:
-            project_status = "-"
-
-        # Format output
-        status_indicator = " "
-        if global_installed or project_installed:
-            status_indicator = "+"
-        elif global_legacy or project_legacy:
-            status_indicator = "?"
-
-        print(f"[{status_indicator}] {agent_info.name}")
-        print(f"       global:   {global_status:12} {global_path}")
-        print(f"       project:  {project_status:12} {project_path}")
-        print()
+        hook_info = _get_hook_info(agent_id, agent_info, hook_config, cwd_path)
+        hook_infos.append(hook_info)
 
     # Check pi-mono extension
     pi_extension = Path.home() / ".pi" / "agent" / "extensions" / "dippy-extension.ts"
-    if pi_extension.exists():
-        print(f"[+] pi-mono: extension installed")
-        print(f"       {pi_extension}")
+    pi_exists = pi_extension.exists()
+
+    # Output based on format
+    if json_output:
+        print(_format_json_output(hook_infos, pi_exists, pi_extension))
     else:
-        print(f"[ ] pi-mono: extension not found")
-        print(f"       Expected: {pi_extension}")
+        _format_text_output(hook_infos, pi_exists, pi_extension, verbose)
 
     return 0
+
+
+def _get_hook_info(
+    agent_id: str,
+    agent_info,
+    hook_config: dict,
+    cwd_path: Path,
+) -> HookInfo:
+    """Get detailed hook information for an agent.
+
+    Args:
+        agent_id: Agent ID
+        agent_info: AgentInfo object
+        hook_config: Hook configuration dict
+        cwd_path: Current working directory path
+
+    Returns:
+        HookInfo with status details
+    """
+    # Check global config
+    global_path = Path(hook_config["config"]).expanduser()
+    global_status = HookStatus.NOT_INSTALLED
+    global_matchers = []
+    global_command = ""
+    global_legacy_command = ""
+
+    if global_path.exists():
+        try:
+            with open(global_path) as f:
+                config = json.load(f)
+            if _has_dippy_hook(config, agent_id):
+                global_legacy_command = _detect_legacy_hook_command(config)
+                if global_legacy_command:
+                    global_status = HookStatus.LEGACY
+                    global_command = global_legacy_command
+                else:
+                    global_status = HookStatus.INSTALLED
+                    global_command = _get_hook_command_for_agent(agent_id)
+                global_matchers = _extract_matchers_from_config(config, agent_id)
+        except (json.JSONDecodeError, IOError):
+            global_status = HookStatus.ERROR
+    else:
+        global_status = HookStatus.NO_CONFIG
+
+    # Check project config
+    project_path = cwd_path / hook_config["project_config"]
+    project_status = HookStatus.NOT_INSTALLED
+    project_matchers = []
+    project_command = ""
+    project_legacy_command = ""
+
+    if project_path.exists():
+        try:
+            with open(project_path) as f:
+                config = json.load(f)
+            if _has_dippy_hook(config, agent_id):
+                project_legacy_command = _detect_legacy_hook_command(config)
+                if project_legacy_command:
+                    project_status = HookStatus.LEGACY
+                    project_command = project_legacy_command
+                else:
+                    project_status = HookStatus.INSTALLED
+                    project_command = _get_hook_command_for_agent(agent_id)
+                project_matchers = _extract_matchers_from_config(config, agent_id)
+        except (json.JSONDecodeError, IOError):
+            project_status = HookStatus.ERROR
+
+    return HookInfo(
+        agent_id=agent_id,
+        agent_name=agent_info.name,
+        global_status=global_status,
+        global_path=global_path,
+        global_matchers=global_matchers,
+        global_command=global_command,
+        global_legacy_command=global_legacy_command,
+        project_status=project_status,
+        project_path=project_path,
+        project_matchers=project_matchers,
+        project_command=project_command,
+        project_legacy_command=project_legacy_command,
+    )
+
+
+def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
+    """Extract matcher patterns from an agent's config.
+
+    Args:
+        config: Parsed configuration dict
+        agent_id: Agent ID
+
+    Returns:
+        List of matcher patterns
+    """
+    matchers = []
+
+    # Get hooks section
+    hooks = config.get("hooks", {})
+
+    # Different agents use different hook names
+    if agent_id == "claude":
+        hook_names = ["PreToolUse", "PostToolUse"]
+    elif agent_id == "gemini":
+        hook_names = ["BeforeTool", "AfterTool"]
+    elif agent_id in ("cursor", "windsurf"):
+        # These don't use matchers in the same way
+        return ["(all shell commands)"]
+    else:
+        return []
+
+    for hook_name in hook_names:
+        if hook_name in hooks:
+            for hook_entry in hooks[hook_name]:
+                if "matcher" in hook_entry:
+                    matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+
+    return matchers
+
+
+def _format_text_output(
+    hook_infos: list[HookInfo],
+    pi_exists: bool,
+    pi_extension: Path,
+    verbose: bool,
+) -> None:
+    """Format hook status as text output.
+
+    Args:
+        hook_infos: List of HookInfo objects
+        pi_exists: Whether pi-mono extension exists
+        pi_extension: Path to pi-mono extension
+        verbose: Show detailed information
+    """
+    print("Dippy Hook Status")
+    print("=" * 60)
+    print()
+
+    for info in hook_infos:
+        # Determine status indicator
+        if info.has_any_hook() and not info.has_legacy():
+            status_indicator = "+"
+        elif info.has_legacy():
+            status_indicator = "?"
+        else:
+            status_indicator = " "
+
+        # Format global status
+        global_status_str = _format_status(info.global_status)
+        if verbose and info.global_command:
+            global_status_str += f" ({info.global_command})"
+
+        # Format project status
+        project_status_str = _format_status(info.project_status)
+        if verbose and info.project_command:
+            project_status_str += f" ({info.project_command})"
+
+        # Print basic info
+        print(f"[{status_indicator}] {info.agent_name}")
+        print(f"    global:  {global_status_str:20} {info.global_path}")
+        print(f"    project: {project_status_str:20} {info.project_path}")
+
+        # Print actionable message if needed
+        if info.global_status == HookStatus.LEGACY:
+            print(f"    Run: dippy hooks install {info.agent_id} --global --force")
+        elif info.global_status == HookStatus.NO_CONFIG:
+            print(f"    Run: dippy hooks install {info.agent_id} --global")
+
+        # Verbose details
+        if verbose:
+            if info.global_matchers:
+                print("    Matchers:")
+                for m in info.global_matchers:
+                    print(f"      - {m}")
+            if info.global_legacy_command:
+                print(f"    Legacy command: {info.global_legacy_command}")
+
+        print()
+
+    # pi-mono extension
+    if pi_exists:
+        print("[+] pi-mono: extension installed")
+        print(f"    {pi_extension}")
+    else:
+        print("[ ] pi-mono: extension not found")
+        print(f"    Expected: {pi_extension}")
+
+
+def _format_status(status: HookStatus) -> str:
+    """Format a HookStatus for display.
+
+    Args:
+        status: HookStatus enum
+
+    Returns:
+        Formatted status string
+    """
+    return {
+        HookStatus.INSTALLED: "installed",
+        HookStatus.LEGACY: "legacy",
+        HookStatus.NOT_INSTALLED: "-",
+        HookStatus.NO_CONFIG: "-",
+        HookStatus.ERROR: "error",
+    }.get(status, "-")
+
+
+def _format_json_output(
+    hook_infos: list[HookInfo],
+    pi_exists: bool,
+    pi_extension: Path,
+) -> str:
+    """Format hook status as JSON output.
+
+    Args:
+        hook_infos: List of HookInfo objects
+        pi_exists: Whether pi-mono extension exists
+        pi_extension: Path to pi-mono extension
+
+    Returns:
+        JSON string
+    """
+    output = {
+        "agents": [],
+        "pi_mono": {
+            "installed": pi_exists,
+            "path": str(pi_extension),
+        },
+    }
+
+    for info in hook_infos:
+        agent_data = {
+            "id": info.agent_id,
+            "name": info.agent_name,
+            "global": {
+                "status": info.global_status.value,
+                "path": str(info.global_path),
+                "command": info.global_command if info.global_command else None,
+                "legacy_command": info.global_legacy_command if info.global_legacy_command else None,
+                "matchers": info.global_matchers,
+            },
+            "project": {
+                "status": info.project_status.value,
+                "path": str(info.project_path) if info.project_path else None,
+                "command": info.project_command if info.project_command else None,
+                "legacy_command": info.project_legacy_command if info.project_legacy_command else None,
+                "matchers": info.project_matchers,
+            },
+        }
+        output["agents"].append(agent_data)
+
+    return json.dumps(output, indent=2)
 
 
 def _has_dippy_hook(config: dict, agent: str) -> bool:
@@ -374,7 +901,7 @@ def _has_dippy_hook(config: dict, agent: str) -> bool:
     return (
         '"command": "dippy' in config_str
         or '"command":"dippy' in config_str
-        or '"command": "/' in config_str and 'dippy' in config_str
+        or ('"command": "/~' in config_str and 'dippy' in config_str)
     )
 
 
@@ -395,6 +922,8 @@ def _has_legacy_dippy_hook(config: dict) -> bool:
 def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
     """Merge Dippy hook entry into existing config.
 
+    First removes any existing Dippy hooks, then adds the new ones.
+
     Args:
         config: Existing configuration dict
         hook_entry: Hook entry to insert
@@ -405,7 +934,10 @@ def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
     """
     result = copy.deepcopy(config)
 
-    # Special handling for different agent formats
+    # First, remove any existing Dippy hooks
+    result = _remove_dippy_hook(result, agent)
+
+    # Then add the new hooks
     if agent == "cursor":
         # Cursor uses simple format - append to hooks list
         if "hooks" not in result:

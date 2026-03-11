@@ -714,10 +714,25 @@ Subcommands:
     )
 
     # hooks list
-    hooks_subparsers.add_parser(
+    list_parser = hooks_subparsers.add_parser(
         "list",
         help="List hook status (shows both global and project)",
         description="List Dippy hook status for all agents. Shows both global and project-local installation status.",
+    )
+    list_parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Show detailed information (matchers, commands, paths)",
+    )
+    list_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as structured JSON",
+    )
+    list_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Minimal output, exit code only",
     )
 
     # hooks install
@@ -736,6 +751,21 @@ Subcommands:
         action="store_true",
         help="Install to global config instead of project-local",
     )
+    install_parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Replace existing/legacy hooks",
+    )
+    install_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+    install_parser.add_argument(
+        "--no-backup",
+        action="store_true",
+        help="Skip config backup before install",
+    )
 
     # hooks uninstall
     uninstall_parser = hooks_subparsers.add_parser(
@@ -752,6 +782,11 @@ Subcommands:
         "--global",
         action="store_true",
         help="Uninstall from global config instead of project-local",
+    )
+    uninstall_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
     )
 
     # === doctor subcommand ===
@@ -770,6 +805,21 @@ Subcommands:
         "--verbose",
         action="store_true",
         help="Show detailed diagnostic information",
+    )
+    doctor_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output as structured JSON",
+    )
+    doctor_parser.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Minimal output, exit code only",
+    )
+    doctor_parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Auto-repair common issues",
     )
 
     return parser.parse_args()
@@ -882,18 +932,27 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
     from dippy.cli.hooks import install as hooks_install, list_hooks, uninstall as hooks_uninstall
 
     if args.hooks_action == "list":
-        return list_hooks(cwd=getattr(args, "cwd", None))
+        return list_hooks(
+            cwd=getattr(args, "cwd", None),
+            verbose=getattr(args, "verbose", False),
+            json_output=getattr(args, "json", False),
+            quiet=getattr(args, "quiet", False),
+        )
     elif args.hooks_action == "install":
         return hooks_install(
             agent=args.agent,
             global_config=getattr(args, "global", False),
             cwd=getattr(args, "cwd", None),
+            force=getattr(args, "force", False),
+            dry_run=getattr(args, "dry_run", False),
+            no_backup=getattr(args, "no_backup", False),
         )
     elif args.hooks_action == "uninstall":
         return hooks_uninstall(
             agent=args.agent,
             global_config=getattr(args, "global", False),
             cwd=getattr(args, "cwd", None),
+            dry_run=getattr(args, "dry_run", False),
         )
     else:
         # No action specified, show help
@@ -916,6 +975,9 @@ def handle_doctor_subcommand(args: argparse.Namespace) -> int:
         agent=getattr(args, "agent", None),
         verbose=getattr(args, "verbose", False),
         cwd=getattr(args, "cwd", None),
+        json_output=getattr(args, "json", False),
+        quiet=getattr(args, "quiet", False),
+        fix=getattr(args, "fix", False),
     )
 
 
