@@ -1,19 +1,16 @@
 # Dippy - orgoj-dev
 
-- instalace je uv tool install .
-- readme hooku opravit je to pro kazdy jinak
+- toto ma delat denny a vratit to automaticky. Pritom to udelalo ask a musel jem mu to prepsat
+  - `parse error: Expected ) to close subshell`
+  - `parse error: Unterminated double quote`
 
-- hooks
-  - list
-    - musi ukazovat i global a projekct zvlast
-    - pi-mono mame reseni to je extension to musi taky detekovat
-    - a ty co nemame reseni nema zobrazovat
-    - a v user config mam stary dippy hoook  to musi poznat!!!
+- spatna detekde scriptu
+```
+(cd ide && python3 migrate-badges.py)
+Run shell command
 
-- doctor
-  - WARNING:root:/home/michael/.dippy/config: line 77: unknown directive 'denny' (skipped) to neumi pocitat radky ten error byl na radku 60!
-  - ⚠ Logs: Log issues detected ??? WTF co z tohoto ewrror mam poznat??? to musi byt vysvetlujici!!!
-  - ✓ Hooks: Found 3 agent(s): Claude Code, Gemini CLI, OpenAI Codex CLI ??? a toto znamena co mam ty hooky nainstalovane a nebo ne?
-
-
-- claude code subagents ignores allow
+Hook PreToolUse:Bash requires confirmation for this command:
+🐤 python3 migrate-badges.py: file not found: /home/michael/projects/jat/migrate-badges.py
+ ```
+ 
+- claude code subagents ignores allow - jak toto resit?
