@@ -21,68 +21,175 @@ from dippy.cli.agents import AGENTS
 
 
 # Hook entry point for different agents
+# Minimal hooks: PreToolUse/BeforeTool + PostToolUse/AfterTool (default)
+# Full hooks: Adds Notification, Stop, SubagentStop, AfterAgent (with --all flag)
+
+MINIMAL_HOOKS = {
+    "claude": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash|Write|Edit|MultiEdit|Read|LS|Glob|Grep|Search|WebSearch|mcp__.*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "Bash|WebSearch|mcp__.*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
+    "gemini": {
+        "hooks": {
+            "BeforeTool": [
+                {
+                    "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
+                    "hooks": [
+                        {
+                            "name": "dippy-approval",
+                            "type": "command",
+                            "command": "dippy --gemini",
+                        }
+                    ],
+                }
+            ],
+            "AfterTool": [
+                {
+                    "matcher": "run_shell_command|google_web_search",
+                    "hooks": [
+                        {
+                            "name": "dippy-after",
+                            "type": "command",
+                            "command": "dippy --gemini",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
+}
+
+ALL_HOOKS = {
+    "claude": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "Bash|Write|Edit|MultiEdit|Read|LS|Glob|Grep|Search|WebSearch|mcp__.*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "Bash|WebSearch|mcp__.*",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "Notification": [
+                {
+                    "matcher": "notification_type==idle_prompt",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "SubagentStop": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+            "AfterAgent": [
+                {
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --claude",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
+    "gemini": {
+        "hooks": {
+            "BeforeTool": [
+                {
+                    "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
+                    "hooks": [
+                        {
+                            "name": "dippy-approval",
+                            "type": "command",
+                            "command": "dippy --gemini",
+                        }
+                    ],
+                }
+            ],
+            "AfterTool": [
+                {
+                    "matcher": "run_shell_command|google_web_search",
+                    "hooks": [
+                        {
+                            "name": "dippy-after",
+                            "type": "command",
+                            "command": "dippy --gemini",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
+}
+
+# Legacy HOOK_COMMANDS for backward compatibility (Cursor/Windsurf use this format)
 HOOK_COMMANDS = {
     "claude": {
         "config": "~/.claude/settings.json",
         "project_config": ".claude/settings.json",
-        "hook_entry": {
-            "hooks": {
-                "PreToolUse": [
-                    {
-                        "matcher": "Bash|Write|Edit|MultiEdit|Read|LS|Glob|Grep|Search|WebSearch|mcp__.*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "dippy --claude",
-                            }
-                        ],
-                    }
-                ],
-                "PostToolUse": [
-                    {
-                        "matcher": "Bash|WebSearch|mcp__.*",
-                        "hooks": [
-                            {
-                                "type": "command",
-                                "command": "dippy --claude",
-                            }
-                        ],
-                    }
-                ],
-            }
-        },
+        "hook_entry": MINIMAL_HOOKS["claude"],
     },
     "gemini": {
         "config": "~/.gemini/settings.json",
         "project_config": ".gemini/settings.json",
-        "hook_entry": {
-            "hooks": {
-                "BeforeTool": [
-                    {
-                        "matcher": "run_shell_command|write_file|replace|read_file|google_web_search",
-                        "hooks": [
-                            {
-                                "name": "dippy-approval",
-                                "type": "command",
-                                "command": "dippy --gemini",
-                            }
-                        ],
-                    }
-                ],
-                "AfterTool": [
-                    {
-                        "matcher": "run_shell_command|google_web_search",
-                        "hooks": [
-                            {
-                                "name": "dippy-after",
-                                "type": "command",
-                                "command": "dippy --gemini",
-                            }
-                        ],
-                    }
-                ],
-            }
-        },
+        "hook_entry": MINIMAL_HOOKS["gemini"],
     },
     "cursor": {
         "config": "~/.cursor/hooks.json",
@@ -90,13 +197,9 @@ HOOK_COMMANDS = {
         "hook_entry": {
             "version": 1,
             "hooks": {
-                "beforeShellExecution": [
-                    {"command": "dippy --cursor"}
-                ],
-                "afterShellExecution": [
-                    {"command": "dippy --cursor"}
-                ]
-            }
+                "beforeShellExecution": [{"command": "dippy --cursor"}],
+                "afterShellExecution": [{"command": "dippy --cursor"}],
+            },
         },
     },
     "windsurf": {
@@ -105,13 +208,9 @@ HOOK_COMMANDS = {
         "hook_entry": {
             "version": 1,
             "hooks": {
-                "beforeShellExecution": [
-                    {"command": "dippy --windsurf"}
-                ],
-                "afterShellExecution": [
-                    {"command": "dippy --windsurf"}
-                ]
-            }
+                "beforeShellExecution": [{"command": "dippy --windsurf"}],
+                "afterShellExecution": [{"command": "dippy --windsurf"}],
+            },
         },
     },
 }
@@ -304,8 +403,12 @@ def _diff_configs(old_config: dict, new_config: dict, config_path: Path) -> str:
     """
     import difflib
 
-    old_json = json.dumps(old_config, indent=2, sort_keys=True).splitlines(keepends=True)
-    new_json = json.dumps(new_config, indent=2, sort_keys=True).splitlines(keepends=True)
+    old_json = json.dumps(old_config, indent=2, sort_keys=True).splitlines(
+        keepends=True
+    )
+    new_json = json.dumps(new_config, indent=2, sort_keys=True).splitlines(
+        keepends=True
+    )
 
     diff = difflib.unified_diff(
         old_json,
@@ -325,6 +428,7 @@ def install(
     force: bool = False,
     dry_run: bool = False,
     no_backup: bool = False,
+    all_hooks: bool = False,
 ) -> int:
     """Install Dippy hooks for the specified agent.
 
@@ -335,6 +439,8 @@ def install(
         force: Replace existing/legacy hooks
         dry_run: Show what would be done without making changes
         no_backup: Skip config backup before install
+        all_hooks: If True, install ALL supported hooks (PreToolUse, PostToolUse,
+                   Notification, Stop, etc.). If False, install minimal set only.
 
     Returns:
         Exit code: 0 for success, 1 for errors
@@ -347,7 +453,9 @@ def install(
 
     hook_config = HOOK_COMMANDS.get(agent)
     if not hook_config:
-        print(f"Error: Hook installation not yet supported for '{agent}'", file=sys.stderr)
+        print(
+            f"Error: Hook installation not yet supported for '{agent}'", file=sys.stderr
+        )
         return 1
 
     # Determine config path
@@ -381,9 +489,19 @@ def install(
         print(f"Error: Invalid JSON in {config_path}: {e}", file=sys.stderr)
         return 1
 
+    # Select hook entry based on --all flag
+    if all_hooks and agent in ALL_HOOKS:
+        hook_entry = ALL_HOOKS[agent]
+    else:
+        hook_entry = hook_config["hook_entry"]
+
     # Check for existing Dippy hook
     has_hook = _has_dippy_hook(existing_config, agent)
     legacy_command = _detect_legacy_hook_command(existing_config) if has_hook else None
+
+    # Determine if the requested hook set is already installed
+    requested_hook_types = set(hook_entry.get("hooks", {}).keys())
+    installed_hook_types = _get_installed_dippy_hook_types(existing_config, agent)
 
     if has_hook and not force:
         if legacy_command:
@@ -391,14 +509,27 @@ def install(
             print(f"Config: {config_path}")
             print(f"Current command: {legacy_command}")
             print(f"Expected command: {_get_hook_command_for_agent(agent)}")
-            print(f"To upgrade, run: dippy hooks install {agent} {'--global' if global_config else ''} --force")
-        else:
+            print(
+                f"To upgrade, run: dippy hooks install {agent} {'--global' if global_config else ''} --force"
+            )
+            return 0
+        # Allow upgrade if user is requesting more hooks than currently installed
+        if not requested_hook_types.issubset(installed_hook_types):
+            # Requesting hooks that aren't installed - proceed with upgrade
+            pass
+        elif requested_hook_types == installed_hook_types:
+            # Same hooks already installed
             print(f"Dippy hook already installed for {agent_info.name}")
             print(f"Config: {config_path}")
+            return 0
+        # else: requesting subset of installed hooks (downgrade) - require --force
+        print(f"Dippy hook already installed for {agent_info.name}")
+        print(f"Config: {config_path}")
+        print("Use --force to replace existing hooks")
         return 0
 
     # Merge hook entry into config
-    updated_config = _merge_hook_entry(existing_config, hook_config["hook_entry"], agent)
+    updated_config = _merge_hook_entry(existing_config, hook_entry, agent)
 
     # Dry run: show diff and exit
     if dry_run:
@@ -458,13 +589,24 @@ def _print_hook_summary(agent: str, config: dict) -> None:
     hooks_data = config.get("hooks", {})
 
     # Determine which hook types to show based on agent
+    # Show ALL hook types that are present, not just the minimal set
     if agent == "claude":
-        hook_types = [("PreToolUse", "PreToolUse"), ("PostToolUse", "PostToolUse")]
+        # All possible Claude hook types
+        hook_types = [
+            ("PreToolUse", "PreToolUse"),
+            ("PostToolUse", "PostToolUse"),
+            ("Notification", "Notification"),
+            ("Stop", "Stop"),
+            ("SubagentStop", "SubagentStop"),
+            ("AfterAgent", "AfterAgent"),
+        ]
     elif agent == "gemini":
         hook_types = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
     elif agent in ("cursor", "windsurf"):
-        hook_types = [("beforeShellExecution", "beforeShellExecution"),
-                      ("afterShellExecution", "afterShellExecution")]
+        hook_types = [
+            ("beforeShellExecution", "beforeShellExecution"),
+            ("afterShellExecution", "afterShellExecution"),
+        ]
     else:
         return
 
@@ -472,13 +614,31 @@ def _print_hook_summary(agent: str, config: dict) -> None:
         if config_key in hooks_data:
             hook_list = hooks_data[config_key]
             for hook_entry in hook_list:
+                # Only show Dippy hooks
+                has_dippy_hook = False
+                if "hooks" in hook_entry:
+                    for h in hook_entry["hooks"]:
+                        if _is_dippy_hook(h):
+                            has_dippy_hook = True
+                            break
+                elif _is_dippy_hook(hook_entry):
+                    has_dippy_hook = True
+
+                if not has_dippy_hook:
+                    continue
+
                 if "matcher" in hook_entry:
                     # Claude/Gemini format
                     tools = _count_tools_in_matcher(hook_entry["matcher"])
-                    print(f"  + {display_name}: {hook_entry['matcher'][:60]}... ({tools} tools)")
+                    print(
+                        f"  + {display_name}: {hook_entry['matcher'][:60]}... ({tools} tools)"
+                    )
                 elif "command" in hook_entry:
                     # Cursor/Windsurf format
                     print(f"  + {display_name}: {hook_entry['command']}")
+                else:
+                    # Hook without matcher or command (e.g., Stop, SubagentStop)
+                    print(f"  + {display_name}: (all)")
 
     print(f"\nCommand: {_get_hook_command_for_agent(agent)}")
 
@@ -525,7 +685,10 @@ def uninstall(
 
     hook_config = HOOK_COMMANDS.get(agent)
     if not hook_config:
-        print(f"Error: Hook uninstallation not yet supported for '{agent}'", file=sys.stderr)
+        print(
+            f"Error: Hook uninstallation not yet supported for '{agent}'",
+            file=sys.stderr,
+        )
         return 1
 
     # Determine config path
@@ -718,6 +881,8 @@ def _get_hook_info(
 def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
     """Extract matcher patterns from an agent's config.
 
+    Only extracts matchers from Dippy hooks, filtering out memorix and other hooks.
+
     Args:
         config: Parsed configuration dict
         agent_id: Agent ID
@@ -732,7 +897,15 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
 
     # Different agents use different hook names
     if agent_id == "claude":
-        hook_names = ["PreToolUse", "PostToolUse"]
+        # All possible Claude hook types
+        hook_names = [
+            "PreToolUse",
+            "PostToolUse",
+            "Notification",
+            "Stop",
+            "SubagentStop",
+            "AfterAgent",
+        ]
     elif agent_id == "gemini":
         hook_names = ["BeforeTool", "AfterTool"]
     elif agent_id in ("cursor", "windsurf"):
@@ -744,8 +917,22 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
     for hook_name in hook_names:
         if hook_name in hooks:
             for hook_entry in hooks[hook_name]:
+                # Only extract from entries that contain Dippy hooks
+                has_dippy = False
+                if "hooks" in hook_entry:
+                    for h in hook_entry["hooks"]:
+                        if _is_dippy_hook(h):
+                            has_dippy = True
+                            break
+
+                if not has_dippy:
+                    continue
+
                 if "matcher" in hook_entry:
                     matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+                else:
+                    # Hook without matcher (e.g., Stop, SubagentStop, AfterAgent)
+                    matchers.append(f"{hook_name}: (all)")
 
     return matchers
 
@@ -867,20 +1054,57 @@ def _format_json_output(
                 "status": info.global_status.value,
                 "path": str(info.global_path),
                 "command": info.global_command if info.global_command else None,
-                "legacy_command": info.global_legacy_command if info.global_legacy_command else None,
+                "legacy_command": info.global_legacy_command
+                if info.global_legacy_command
+                else None,
                 "matchers": info.global_matchers,
             },
             "project": {
                 "status": info.project_status.value,
                 "path": str(info.project_path) if info.project_path else None,
                 "command": info.project_command if info.project_command else None,
-                "legacy_command": info.project_legacy_command if info.project_legacy_command else None,
+                "legacy_command": info.project_legacy_command
+                if info.project_legacy_command
+                else None,
                 "matchers": info.project_matchers,
             },
         }
         output["agents"].append(agent_data)
 
     return json.dumps(output, indent=2)
+
+
+def _get_installed_dippy_hook_types(config: dict, agent: str) -> set[str]:
+    """Get the set of hook types that have Dippy hooks installed.
+
+    Args:
+        config: Parsed configuration dict
+        agent: Agent ID
+
+    Returns:
+        Set of hook type names (e.g., {"PreToolUse", "PostToolUse"})
+    """
+    hook_types = set()
+
+    if agent in ("cursor", "windsurf"):
+        # Cursor/Windsurf format
+        hooks = config.get("hooks", {})
+        for hook_type, hooks_list in hooks.items():
+            for h in hooks_list:
+                if _is_dippy_hook(h):
+                    hook_types.add(hook_type)
+    else:
+        # Claude/Gemini format
+        hooks = config.get("hooks", {})
+        for hook_type, hook_list in hooks.items():
+            for entry in hook_list:
+                if "hooks" in entry:
+                    for h in entry["hooks"]:
+                        if _is_dippy_hook(h):
+                            hook_types.add(hook_type)
+                            break
+
+    return hook_types
 
 
 def _has_dippy_hook(config: dict, agent: str) -> bool:
@@ -901,7 +1125,7 @@ def _has_dippy_hook(config: dict, agent: str) -> bool:
     return (
         '"command": "dippy' in config_str
         or '"command":"dippy' in config_str
-        or ('"command": "/~' in config_str and 'dippy' in config_str)
+        or ('"command": "/~' in config_str and "dippy" in config_str)
     )
 
 
@@ -916,7 +1140,9 @@ def _has_legacy_dippy_hook(config: dict) -> bool:
     """
     config_str = json.dumps(config)
     # Check for old dippy-hook command
-    return '"command": "dippy-hook' in config_str or '"command":"dippy-hook' in config_str
+    return (
+        '"command": "dippy-hook' in config_str or '"command":"dippy-hook' in config_str
+    )
 
 
 def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
@@ -964,43 +1190,107 @@ def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
     return result
 
 
+def _is_dippy_hook(hook_obj: dict) -> bool:
+    """Check if a hook object is a Dippy hook.
+
+    Must distinguish between:
+    - New style: dippy --claude, dippy --gemini, etc.
+    - Legacy: /path/to/dippy-hook, /path/to/dippy
+    - NOT a match: random command with "dippy" in path like /home/user/adippy-workspace/script.sh
+
+    Args:
+        hook_obj: Hook dictionary to check
+
+    Returns:
+        True if this is a Dippy hook, False otherwise
+    """
+    if not isinstance(hook_obj, dict):
+        return False
+
+    command = hook_obj.get("command", "")
+    if not command:
+        return False
+
+    cmd_lower = command.lower()
+
+    # Match specific patterns:
+    # 1. Starts with "dippy " (with space) or "dippy" alone (e.g., "dippy --claude")
+    # 2. Ends with "dippy-hook" (legacy full path)
+    # 3. Contains "/dippy" or "\\dippy" (legacy in path, including /my-dippy-scripts)
+    # NOT: random command with "dippy" buried in middle without / or \
+    #     (like "adippy-workspace" or "dippyxx")
+
+    return (
+        # New style: "dippy --claude", "dippy --gemini", "dippy" alone
+        cmd_lower.startswith("dippy ")
+        or cmd_lower == "dippy"
+        # Legacy: any path ending with dippy-hook
+        or cmd_lower.endswith("dippy-hook")
+        # Legacy in path: /path/to/dippy, /my-dippy-scripts/hook, /path/to/dippy-hook
+        # The "/" or "\\" before "dippy" ensures we match path components, not random strings
+        or "/dippy" in cmd_lower
+        or "\\dippy" in cmd_lower
+    )
+
+
 def _remove_dippy_hook(config: dict, agent: str) -> dict:
     """Remove Dippy hook from configuration.
 
+    Removes ALL Dippy hooks from ALL supported hook types, while preserving
+    non-Dippy hooks like memorix.
+
     Args:
         config: Existing configuration dict
-        agent: Agent ID
+        agent: Agent ID (claude, gemini, cursor, windsurf)
 
     Returns:
         Configuration dict with Dippy hook removed
     """
     result = copy.deepcopy(config)
 
-    if agent == "cursor":
-        # Cursor: remove from hooks list
+    if agent in ("cursor", "windsurf"):
+        # Cursor/Windsurf format: simple list of hook dicts with "command" key
         if "hooks" in result:
+            empty_hook_types = []
             for hook_type, hooks_list in result["hooks"].items():
-                # Filter out hooks that contain "dippy"
                 result["hooks"][hook_type] = [
-                    h for h in hooks_list
-                    if isinstance(h, dict) and "dippy" not in str(h).lower()
+                    h for h in hooks_list if not _is_dippy_hook(h)
                 ]
                 if not result["hooks"][hook_type]:
-                    del result["hooks"][hook_type]
+                    empty_hook_types.append(hook_type)
+            # Remove empty hook types after iteration
+            for hook_type in empty_hook_types:
+                del result["hooks"][hook_type]
     else:
-        # Claude/Gemini: remove from hooks structure
+        # Claude/Gemini/Windsurf format - check ALL supported hook types
+        hook_types = [
+            "PreToolUse",
+            "PostToolUse",
+            "Notification",
+            "Stop",
+            "SubagentStop",
+            "AfterAgent",
+        ]
+
         if "hooks" in result:
-            for hook_type, hooks_list in result["hooks"].items():
-                # Filter out hooks that contain "dippy" in command
-                result["hooks"][hook_type] = [
-                    h for h in hooks_list
-                    if not (
-                        isinstance(h, dict)
-                        and h.get("command", "").lower().startswith("dippy")
-                    )
-                ]
-                if not result["hooks"][hook_type]:
-                    del result["hooks"][hook_type]
+            for hook_type in hook_types:
+                if hook_type in result["hooks"]:
+                    for entry in result["hooks"][hook_type]:
+                        if "hooks" in entry:
+                            entry["hooks"] = [
+                                h for h in entry["hooks"] if not _is_dippy_hook(h)
+                            ]
+
+            # Clean up empty hook entries
+            for hook_type in hook_types:
+                if hook_type in result["hooks"]:
+                    result["hooks"][hook_type] = [
+                        entry
+                        for entry in result["hooks"][hook_type]
+                        if entry.get("hooks")  # Keep only entries with non-empty hooks
+                    ]
+                    if not result["hooks"][hook_type]:
+                        del result["hooks"][hook_type]
 
     # Clean up empty hooks dict
     if "hooks" in result and not result["hooks"]:

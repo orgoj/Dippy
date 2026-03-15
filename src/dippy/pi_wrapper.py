@@ -13,7 +13,6 @@ Output: JSON with {"action": "allow|ask|deny|pass", "reason": "...", "note": "..
 """
 
 import json
-import re
 import sys
 from pathlib import Path
 

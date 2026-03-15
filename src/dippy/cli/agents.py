@@ -189,7 +189,7 @@ def resolve_dippy_command(agent_id: str, cwd: Path | None = None) -> str:
     if agent_id in ("pi", "moltbot"):
         wrapper_path = _find_pi_wrapper()
         if wrapper_path:
-            return f'python3 {wrapper_path}'
+            return f"python3 {wrapper_path}"
         return dippy_path
 
     # All other agents use the dippy command with their specific flag

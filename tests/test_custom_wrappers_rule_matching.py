@@ -10,7 +10,7 @@ def test_wrapper_both_flags_match():
     """allow [wrap,server1] free * matches wrap server1 free -h"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         allow [wrap,server1] free *
     """
     )
@@ -22,7 +22,7 @@ def test_wrapper_dest_flag_only():
     """allow [server1] free * matches (dest flag only)"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         allow [server1] free *
     """
     )
@@ -34,7 +34,7 @@ def test_wrapper_name_flag_only():
     """allow [wrap] free * matches (wrapper flag only)"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         allow [wrap] free *
     """
     )
@@ -46,7 +46,7 @@ def test_wrapper_deny_blocks_command():
     """deny [server1] rm * blocks wrap server1 rm /tmp/x"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         deny [server1] rm *
     """
     )
@@ -74,7 +74,7 @@ def test_wrapper_negation_custom():
     """Flag matching works with negation: [!server1]"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         deny [!server1] rm *
     """
     )
@@ -91,7 +91,7 @@ def test_wrapper_last_match_wins():
     """Last matching rule wins for wrapper commands"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         deny [server1] free *
         allow [server1] free *
     """
@@ -104,7 +104,7 @@ def test_wrapper_last_match_wins_with_flags():
     """Last matching rule wins, even with different flag specificity"""
     config = parse_config(
         """
-        wrapper wrap
+        wrapper wrap --context-first
         deny [wrap,server1] rm *
         allow [wrap] rm *
     """

@@ -335,21 +335,38 @@ def _analyze_node(
 def _extract_wrapper_args(
     tokens: list[str],
     info: WrapperInfo | None = None,
-) -> tuple[str | None, str]:
-    """Extract wrapper destination and inner command from tokens.
+) -> tuple[str | None, str, str | None]:
+    """Extract wrapper destination, inner command, and context from tokens.
 
     Args:
         tokens: Command tokens starting with wrapper name
         info: Optional WrapperInfo from config
 
     Returns:
-        (destination, inner_command) tuple
+        (destination, inner_command, context_value) tuple
+        - destination: None for trigger-only wrappers, server/host otherwise
+        - inner_command: The command to analyze
+        - context_value: Value of --context flag if defined (e.g. session name)
+
+    Trigger-only wrappers (no destination):
+        wrapper rtk                    -> everything after 'rtk' is the command
+        wrapper tokf --cmd run         -> find 'run', everything after is the command
+        wrapper cca --cmd run --context "-t"
+                                     -> 'cca -t SESSION run CMD' -> SESSION in context
+
+    Destination-based wrappers (ssh-style):
+        wrapper docker --cmd exec --flag -t
+        -> 'docker -t CONTAINER exec CMD' extracts 'CONTAINER' and 'CMD'
+
+    Note: When info is None, defaults to SSH-style destination-based behavior
+    for backward compatibility with existing tests.
     """
     if not tokens or len(tokens) < 2:
-        return None, ""
+        return None, "", None
 
     trigger = info.trigger if info else None
     target_flag = info.target_flag if info else None
+    context_flag = info.context_flag if info else None
 
     # Options that take an argument (same as ssh.py)
     opts_with_arg = {
@@ -382,7 +399,18 @@ def _extract_wrapper_args(
             idx = tokens.index(trigger)
             inner_cmd = " ".join(tokens[idx + 1 :]) if idx + 1 < len(tokens) else ""
 
-            # Find destination in tokens BEFORE the trigger
+            # Extract context value if context_flag is defined
+            context_value = None
+            if context_flag:
+                try:
+                    c_idx = tokens.index(context_flag, 0, idx)
+                    if c_idx + 1 < idx:
+                        context_value = tokens[c_idx + 1]
+                except ValueError:
+                    pass
+
+            # If target_flag is specified, look for destination BEFORE trigger
+            # Otherwise, this is a trigger-only wrapper (no destination)
             dest = None
             if target_flag:
                 try:
@@ -392,26 +420,29 @@ def _extract_wrapper_args(
                 except ValueError:
                     pass
 
-            if dest is None:
-                # Fallback: find first non-option before trigger
-                i = 1
-                while i < idx:
-                    tok = tokens[i]
-                    if tok.startswith("-"):
-                        if tok in opts_with_arg:
-                            i += 2
+                if dest is None:
+                    # Fallback: find first non-option before trigger
+                    i = 1
+                    while i < idx:
+                        tok = tokens[i]
+                        if tok.startswith("-"):
+                            if tok in opts_with_arg:
+                                i += 2
+                            else:
+                                i += 1
                         else:
-                            i += 1
-                    else:
-                        dest = tok
-                        break
+                            dest = tok
+                            break
 
-            return dest, inner_cmd
+            # For trigger-only (no target_flag), dest stays None
+            return dest, inner_cmd, context_value
         except ValueError:
-            # Trigger not found, fall back to standard logic
-            pass
+            # Trigger not found in command - no inner command to analyze
+            return None, "", None
 
-    # 2. Standard SSH-like logic (destination is first non-option)
+    # 2. SSH-style destination-based behavior (default, no --cmd)
+    # Standard SSH-like logic (destination is first non-option)
+    # Also extracts context_value if context_flag is defined
     i = 1  # Skip wrapper name (tokens[0])
     dest = None
 
@@ -438,12 +469,22 @@ def _extract_wrapper_args(
             break
 
     if dest is None:
-        return None, ""
+        return None, "", None
 
     # Everything after destination is the inner command
     inner_cmd = " ".join(tokens[i:]) if i < len(tokens) else ""
 
-    return dest, inner_cmd
+    # Extract context value if context_flag is defined
+    context_value = None
+    if context_flag:
+        try:
+            c_idx = tokens.index(context_flag)
+            if c_idx + 1 < len(tokens):
+                context_value = tokens[c_idx + 1]
+        except ValueError:
+            pass
+
+    return dest, inner_cmd, context_value
 
 
 def _analyze_command(
@@ -706,19 +747,19 @@ def _analyze_simple_command(
     # 5. Custom wrapper commands (configured via 'wrapper' directive)
     if base in config.wrappers:
         info = config.wrappers[base]
-        dest, inner_cmd = _extract_wrapper_args(tokens, info)
+        dest, inner_cmd, context_value = _extract_wrapper_args(tokens, info)
 
-        if dest is None:
-            # No destination - can't extract inner command safely
-            return Decision(
-                "ask", f"{base} (no destination)", context_flags=context_flags
-            )
         if not inner_cmd:
-            # No inner command (interactive session)
-            return Decision("ask", f"{base} {dest}", context_flags=context_flags)
+            # No inner command (interactive session or trigger not found)
+            reason = f"{base} {dest}" if dest else base
+            return Decision("ask", reason, context_flags=context_flags)
 
-        # Set wrapper_context to include both wrapper name and destination (server)
-        wrapper_context = [base, dest]
+        # Build wrapper_context: wrapper name, destination if context_first, context_value if present
+        wrapper_context = [base]
+        if dest and info.context_first:
+            wrapper_context.append(dest)
+        if context_value:
+            wrapper_context.append(context_value)
         inner_flags = context_flags | frozenset(wrapper_context)
 
         # We assume custom wrappers execute commands REMOTELY

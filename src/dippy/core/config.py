@@ -49,13 +49,32 @@ class Rule:
 
 @dataclass(frozen=True)
 class WrapperInfo:
-    """Configuration for a wrapper command."""
+    """Configuration for a wrapper command.
+
+    For trigger-only wrappers (no destination):
+    - wrapper rtk            -> everything after 'rtk' is the inner command
+    - wrapper tokf --cmd run -> find 'run', ignore everything before it
+
+    For destination-based wrappers (ssh-style):
+    - wrapper docker --cmd exec --flag -t
+      -> 'docker -t CONTAINER exec CMD' extracts 'CONTAINER' and 'CMD'
+
+    Context flags:
+    - wrapper cca-tmux-cli --cmd run --context "-t"
+      -> 'cca-tmux-cli -t SESSION run CMD' includes SESSION in context
+    - wrapper ssh --context-first
+      -> 'ssh SERVER CMD' includes first positional arg in context [ssh, SERVER]
+    """
 
     name: str
     trigger: str | None = None
     """Subcommand that triggers inner command analysis (e.g. 'run', 'exec')."""
     target_flag: str | None = None
     """Flag that specifies the destination/target (e.g. '-t', '-h')."""
+    context_flag: str | None = None
+    """Flag whose value should be included in context (e.g. '-t' for session)."""
+    context_first: bool = False
+    """If True, first positional arg (destination) is included in context flags."""
 
 
 @dataclass
@@ -730,8 +749,6 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     raise ValueError("requires a command name")
                 parts = rest.split()
                 wrapper_name = parts[0]
-                trigger = parts[1] if len(parts) > 1 else None
-                target_flag = parts[2] if len(parts) > 2 else None
 
                 if wrapper_name.startswith("-"):
                     raise ValueError(
@@ -741,8 +758,51 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     logging.warning(
                         f"{prefix}line {lineno}: duplicate wrapper definition: {wrapper_name}"
                     )
+
+                # Parse optional flags: --cmd TRIGGER, --flag FLAG, --context FLAG, --context-first
+                # OR old positional syntax: wrapper NAME TRIGGER TARGET_FLAG
+                trigger = None
+                target_flag = None
+                context_flag = None
+                context_first = False
+                i = 1
+                while i < len(parts):
+                    if parts[i] == "--cmd" and i + 1 < len(parts):
+                        trigger = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--flag" and i + 1 < len(parts):
+                        target_flag = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--context" and i + 1 < len(parts):
+                        context_flag = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--context-first":
+                        context_first = True
+                        i += 1
+                    else:
+                        # Unknown/extra args are ignored (for future extensibility)
+                        i += 1
+
+                # Support old positional syntax for backward compat:
+                # wrapper NAME TRIGGER TARGET_FLAG
+                # If no --cmd/--flag flags were used, try positional parsing
+                if trigger is None and target_flag is None and len(parts) >= 2:
+                    # Check if we have the old syntax: wrapper NAME TRIGGER [TARGET_FLAG]
+                    # TRIGGER is a word that doesn't start with "-"
+                    # TARGET_FLAG starts with "-"
+                    j = 1
+                    if j < len(parts) and not parts[j].startswith("-"):
+                        trigger = parts[j]
+                        j += 1
+                    if j < len(parts) and parts[j].startswith("-"):
+                        target_flag = parts[j]
+
                 wrappers[wrapper_name] = WrapperInfo(
-                    name=wrapper_name, trigger=trigger, target_flag=target_flag
+                    name=wrapper_name,
+                    trigger=trigger,
+                    target_flag=target_flag,
+                    context_flag=context_flag,
+                    context_first=context_first,
                 )
 
             elif directive == "set":

@@ -11,19 +11,19 @@ class TestWrapperExtraction:
 
     def test_wrapper_extraction_basic(self):
         """Basic wrapper with destination and command."""
-        dest, inner = _extract_wrapper_args(["wrap", "server1", "free", "-h"])
+        dest, inner, _ = _extract_wrapper_args(["wrap", "server1", "free", "-h"])
         assert dest == "server1"
         assert inner == "free -h"
 
     def test_wrapper_extraction_quoted_command(self):
         """Wrapper with quoted command."""
-        dest, inner = _extract_wrapper_args(["wrap", "server1", '"free -h"'])
+        dest, inner, _ = _extract_wrapper_args(["wrap", "server1", '"free -h"'])
         assert dest == "server1"
         assert inner == '"free -h"'
 
     def test_wrapper_extraction_with_options(self):
         """Wrapper with options before destination."""
-        dest, inner = _extract_wrapper_args(
+        dest, inner, _ = _extract_wrapper_args(
             ["wrap", "-p", "2222", "-l", "user", "server1", "ls"]
         )
         assert dest == "server1"
@@ -31,25 +31,25 @@ class TestWrapperExtraction:
 
     def test_wrapper_extraction_double_dash(self):
         """Wrapper with -- ending option parsing."""
-        dest, inner = _extract_wrapper_args(["wrap", "--", "server1", "ls"])
+        dest, inner, _ = _extract_wrapper_args(["wrap", "--", "server1", "ls"])
         assert dest == "server1"
         assert inner == "ls"
 
     def test_wrapper_extraction_no_inner_command(self):
         """Wrapper with destination but no inner command (interactive)."""
-        dest, inner = _extract_wrapper_args(["wrap", "server1"])
+        dest, inner, _ = _extract_wrapper_args(["wrap", "server1"])
         assert dest == "server1"
         assert inner == ""
 
     def test_wrapper_extraction_no_destination(self):
         """Wrapper with no destination."""
-        dest, inner = _extract_wrapper_args(["wrap"])
+        dest, inner, _ = _extract_wrapper_args(["wrap"])
         assert dest is None
         assert inner == ""
 
     def test_wrapper_extraction_only_options(self):
         """Wrapper with only options, no destination."""
-        dest, inner = _extract_wrapper_args(["wrap", "-p", "2222"])
+        dest, inner, _ = _extract_wrapper_args(["wrap", "-p", "2222"])
         assert dest is None
         assert inner == ""
 
@@ -106,7 +106,7 @@ class TestWrapperAnalysis:
         """Wrapper with inner command delegates to inner analysis."""
         config = parse_config(
             """
-            wrapper wrap
+            wrapper wrap --context-first
             allow [wrap,server1] free *
         """
         )
@@ -117,7 +117,7 @@ class TestWrapperAnalysis:
         """Context flags include both wrapper name and destination."""
         config = parse_config(
             """
-            wrapper wrap
+            wrapper wrap --context-first
             deny [wrap,server1] rm *
         """
         )
@@ -129,7 +129,7 @@ class TestWrapperAnalysis:
         """Rule with only destination flag matches."""
         config = parse_config(
             """
-            wrapper wrap
+            wrapper wrap --context-first
             allow [server1] free *
         """
         )
@@ -180,7 +180,7 @@ class TestWrapperAnalysis:
         """Wrapper with options skips them and extracts destination."""
         config = parse_config(
             """
-            wrapper wrap
+            wrapper wrap --context-first
             allow [wrap,server1] ls *
         """
         )
@@ -190,7 +190,7 @@ class TestWrapperAnalysis:
     def test_generic_wrapper_with_subcommand_and_target(self):
         """Test wrapper with explicit trigger (run) and target flag (-t)."""
         config_text = """
-            wrapper cca-tmux-cli run -t
+            wrapper cca-tmux-cli --cmd run --flag -t --context-first
             allow [cca-tmux-cli,l2] ls *
             deny [cca-tmux-cli,prod] ls * "No ls on prod!"
         """
@@ -212,7 +212,7 @@ class TestWrapperAnalysis:
     def test_generic_wrapper_no_target_flag(self):
         """Test wrapper with trigger (exec) but no explicit target flag."""
         config_text = """
-            wrapper mytool exec
+            wrapper mytool --cmd exec --context-first
             allow [mytool,myserver] id
         """
         config = parse_config(config_text)
@@ -243,7 +243,7 @@ class TestExistingWrappersStillWork:
         """SSH and custom wrappers can both be defined."""
         config = parse_config(
             """
-            wrapper wrap
+            wrapper wrap --context-first
             allow [ssh] free *
             allow [wrap,server1] ls *
         """

@@ -685,7 +685,7 @@ Subcommands:
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
-    parser.add_argument("--version", action="version", version="dippy 0.2.5")
+    parser.add_argument("--version", action="version", version="dippy 0.2.6")
     parser.add_argument(
         "--remote", action="store_true", help="Remote context (skip local path checks)"
     )
@@ -766,6 +766,11 @@ Subcommands:
         action="store_true",
         help="Skip config backup before install",
     )
+    install_parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Install ALL supported hooks (PreToolUse, PostToolUse, Notification, Stop, etc.)",
+    )
 
     # hooks uninstall
     uninstall_parser = hooks_subparsers.add_parser(
@@ -798,7 +803,16 @@ Subcommands:
     doctor_parser.add_argument(
         "--agent",
         metavar="AGENT",
-        choices=["claude", "gemini", "cursor", "windsurf", "pi", "moltbot", "codex", "pearai"],
+        choices=[
+            "claude",
+            "gemini",
+            "cursor",
+            "windsurf",
+            "pi",
+            "moltbot",
+            "codex",
+            "pearai",
+        ],
         help="Show diagnostics for a specific agent",
     )
     doctor_parser.add_argument(
@@ -929,7 +943,11 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
     Returns:
         Exit code: 0 for success, 1 for errors
     """
-    from dippy.cli.hooks import install as hooks_install, list_hooks, uninstall as hooks_uninstall
+    from dippy.cli.hooks import (
+        install as hooks_install,
+        list_hooks,
+        uninstall as hooks_uninstall,
+    )
 
     if args.hooks_action == "list":
         return list_hooks(
@@ -946,6 +964,7 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
             force=getattr(args, "force", False),
             dry_run=getattr(args, "dry_run", False),
             no_backup=getattr(args, "no_backup", False),
+            all_hooks=getattr(args, "all", False),
         )
     elif args.hooks_action == "uninstall":
         return hooks_uninstall(
@@ -956,7 +975,10 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
         )
     else:
         # No action specified, show help
-        print("Error: Please specify an action (list, install, uninstall)", file=sys.stderr)
+        print(
+            "Error: Please specify an action (list, install, uninstall)",
+            file=sys.stderr,
+        )
         return 1
 
 

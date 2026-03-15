@@ -1,11 +1,14 @@
 """Tests for deny-format configuration and formatting."""
 
 import json
-import tempfile
 from pathlib import Path
 
-from dippy.core.config import load_config, parse_config
-from dippy.pi_wrapper import format_deny_reason, DEFAULT_DENY_FORMAT, DEFAULT_DENY_FORMATS
+from dippy.core.config import parse_config
+from dippy.pi_wrapper import (
+    format_deny_reason,
+    DEFAULT_DENY_FORMAT,
+    DEFAULT_DENY_FORMATS,
+)
 
 
 class TestDenyFormatConfig:
@@ -45,6 +48,7 @@ set deny-format-claude "Claude: {reason}"
     def test_merge_configs_deny_format(self):
         """Test that deny_format merges correctly (overlay wins)."""
         from dippy.core.config import _merge_configs, Config
+
         base = Config(deny_format="Base format")
         overlay = Config(deny_format="Overlay format")
         merged = _merge_configs(base, overlay)
@@ -53,6 +57,7 @@ set deny-format-claude "Claude: {reason}"
     def test_merge_configs_deny_format_agents(self):
         """Test that deny_format_agents merges correctly."""
         from dippy.core.config import _merge_configs
+
         base = parse_config('set deny-format-pi "Base pi format"')
         overlay = parse_config('set deny-format-claude "Claude format"')
         merged = _merge_configs(base, overlay)
@@ -66,6 +71,7 @@ class TestFormatDenyReason:
     def test_format_with_default_template(self):
         """Test formatting with default template."""
         from dippy.core.config import Config
+
         config = Config()
 
         result = format_deny_reason(
@@ -73,7 +79,7 @@ class TestFormatDenyReason:
             command="find . -name test",
             pattern="find",
             config=config,
-            agent="unknown"
+            agent="unknown",
         )
 
         assert "find . -name test" in result
@@ -82,6 +88,7 @@ class TestFormatDenyReason:
     def test_format_with_agent_specific_template(self):
         """Test formatting with agent-specific template."""
         from dippy.core.config import Config
+
         config = Config()
 
         result = format_deny_reason(
@@ -89,7 +96,7 @@ class TestFormatDenyReason:
             command="find . -name test",
             pattern="find",
             config=config,
-            agent="pi"
+            agent="pi",
         )
 
         assert "find . -name test" in result
@@ -99,6 +106,7 @@ class TestFormatDenyReason:
     def test_format_with_custom_template(self):
         """Test formatting with custom template from config."""
         from dippy.core.config import Config
+
         config = Config(deny_format="CUSTOM: {command} says {reason}")
 
         result = format_deny_reason(
@@ -106,7 +114,7 @@ class TestFormatDenyReason:
             command="find . -name test",
             pattern="find",
             config=config,
-            agent="pi"
+            agent="pi",
         )
 
         assert result == "CUSTOM: find . -name test says find: Use rg instead"
@@ -114,17 +122,14 @@ class TestFormatDenyReason:
     def test_format_with_custom_agent_template(self):
         """Test that agent-specific template takes precedence."""
         from dippy.core.config import Config
+
         config = Config(
             deny_format="General: {reason}",
-            deny_format_agents={"pi": "PI-specific: {reason}"}
+            deny_format_agents={"pi": "PI-specific: {reason}"},
         )
 
         result = format_deny_reason(
-            reason="blocked",
-            command="cmd",
-            pattern="cmd",
-            config=config,
-            agent="pi"
+            reason="blocked", command="cmd", pattern="cmd", config=config, agent="pi"
         )
 
         assert result == "PI-specific: blocked"
@@ -132,14 +137,11 @@ class TestFormatDenyReason:
     def test_format_with_none_command(self):
         """Test formatting when command is None."""
         from dippy.core.config import Config
+
         config = Config()
 
         result = format_deny_reason(
-            reason="edit blocked",
-            command=None,
-            pattern=None,
-            config=config,
-            agent="pi"
+            reason="edit blocked", command=None, pattern=None, config=config, agent="pi"
         )
 
         # Should not crash, empty string for command
@@ -148,6 +150,7 @@ class TestFormatDenyReason:
     def test_format_extracts_pattern_from_reason(self):
         """Test pattern extraction from reason when not provided."""
         from dippy.core.config import Config
+
         config = Config(deny_format="Pattern: {pattern}, Reason: {reason}")
 
         result = format_deny_reason(
@@ -155,7 +158,7 @@ class TestFormatDenyReason:
             command="find .",
             pattern=None,
             config=config,
-            agent="pi"
+            agent="pi",
         )
 
         # Should extract "find" from "find: Use rg instead"
@@ -179,7 +182,12 @@ set deny-format-pi "TEST_DENY: {command}|{reason}"
 """)
 
         # Run pi_wrapper
-        input_data = {"type": "bash", "command": "find .", "cwd": str(tmp_path), "agent": "pi"}
+        input_data = {
+            "type": "bash",
+            "command": "find .",
+            "cwd": str(tmp_path),
+            "agent": "pi",
+        }
         result = subprocess.run(
             ["python3", "src/dippy/pi_wrapper.py"],
             input=json.dumps(input_data),

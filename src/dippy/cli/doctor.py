@@ -160,7 +160,9 @@ def run(
     return max_status.exit_code
 
 
-def _format_text_output(checks: list[CheckResult], verbose: bool, summary: dict) -> None:
+def _format_text_output(
+    checks: list[CheckResult], verbose: bool, summary: dict
+) -> None:
     """Format checks as text output.
 
     Args:
@@ -200,9 +202,9 @@ def _format_json_output(checks: list[CheckResult], summary: dict) -> str:
     output = {
         "summary": summary,
         "checks": [c.to_dict() for c in checks],
-        "overall_status": "ok" if summary["critical"] == 0 and summary["warnings"] == 0 else (
-            "warning" if summary["critical"] == 0 else "critical"
-        ),
+        "overall_status": "ok"
+        if summary["critical"] == 0 and summary["warnings"] == 0
+        else ("warning" if summary["critical"] == 0 else "critical"),
     }
     return json.dumps(output, indent=2)
 
@@ -342,13 +344,15 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
             paths_list = [f"  {global_path}"]
             if check_project and project_path:
                 paths_list.append(f"  {project_path}")
-            results.append(CheckResult(
-                f"Hook: {agent_info.name}",
-                HealthStatus.WARNING,
-                "Not installed",
-                "Config not found at:\n" + "\n".join(paths_list),
-                fix_command=f"dippy hooks install {agent_id} --global",
-            ))
+            results.append(
+                CheckResult(
+                    f"Hook: {agent_info.name}",
+                    HealthStatus.WARNING,
+                    "Not installed",
+                    "Config not found at:\n" + "\n".join(paths_list),
+                    fix_command=f"dippy hooks install {agent_id} --global",
+                )
+            )
             continue
 
         # Check for dippy hook in configs
@@ -363,9 +367,10 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
             has_hook = True
             locations.append("global")
             config_str = json.dumps(global_config)
-            if 'dippy-hook' in config_str or '/dippy' in config_str:
+            if "dippy-hook" in config_str or "/dippy" in config_str:
                 hook_type = "legacy (full path)"
                 import re
+
                 match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
                 if match:
                     legacy_path = match.group(1)
@@ -375,14 +380,19 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                 matchers = _extract_matchers_from_config(global_config, agent_id)
 
         # Check project config (only if not in home directory)
-        if check_project and project_config and _has_dippy_hook(project_config, agent_id):
+        if (
+            check_project
+            and project_config
+            and _has_dippy_hook(project_config, agent_id)
+        ):
             has_hook = True
             locations.append("project")
             if not legacy_path:
                 config_str = json.dumps(project_config)
-                if 'dippy-hook' in config_str or '/dippy' in config_str:
+                if "dippy-hook" in config_str or "/dippy" in config_str:
                     hook_type = "legacy (full path)"
                     import re
+
                     match = re.search(r'"command":\s*"([^"]*dippy[^"]*)"', config_str)
                     if match:
                         legacy_path = match.group(1)
@@ -392,35 +402,45 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                 matchers = _extract_matchers_from_config(project_config, agent_id)
 
         if not has_hook:
-            results.append(CheckResult(
-                f"Hook: {agent_info.name}",
-                HealthStatus.WARNING,
-                "Agent present, hook not installed",
-                f"Install with: dippy hooks install {agent_id} --global",
-                fix_command=f"dippy hooks install {agent_id} --global",
-            ))
+            results.append(
+                CheckResult(
+                    f"Hook: {agent_info.name}",
+                    HealthStatus.WARNING,
+                    "Agent present, hook not installed",
+                    f"Install with: dippy hooks install {agent_id} --global",
+                    fix_command=f"dippy hooks install {agent_id} --global",
+                )
+            )
         elif hook_type == "legacy (full path)":
             expected_command = _get_hook_command_for_agent(agent_id)
-            details = f"Legacy command: {legacy_path}\nExpected command: {expected_command}" if legacy_path else f"Update with: dippy hooks install {agent_id} --global"
-            results.append(CheckResult(
-                f"Hook: {agent_info.name}",
-                HealthStatus.WARNING,
-                f"Legacy hook ({', '.join(locations)})",
-                details,
-                fix_command=f"dippy hooks install {agent_id} --global --force",
-                matchers=matchers,
-            ))
+            details = (
+                f"Legacy command: {legacy_path}\nExpected command: {expected_command}"
+                if legacy_path
+                else f"Update with: dippy hooks install {agent_id} --global"
+            )
+            results.append(
+                CheckResult(
+                    f"Hook: {agent_info.name}",
+                    HealthStatus.WARNING,
+                    f"Legacy hook ({', '.join(locations)})",
+                    details,
+                    fix_command=f"dippy hooks install {agent_id} --global --force",
+                    matchers=matchers,
+                )
+            )
         else:
             details = None
             if verbose:
                 details = f"Location: {', '.join(locations)}\nConfig: {global_path if 'global' in locations else project_path}"
-            results.append(CheckResult(
-                f"Hook: {agent_info.name}",
-                HealthStatus.OK,
-                f"Installed ({', '.join(locations)})",
-                details,
-                matchers=matchers,
-            ))
+            results.append(
+                CheckResult(
+                    f"Hook: {agent_info.name}",
+                    HealthStatus.OK,
+                    f"Installed ({', '.join(locations)})",
+                    details,
+                    matchers=matchers,
+                )
+            )
 
     # Check pi-mono extension
     pi_extension = Path.home() / ".pi" / "agent" / "extensions" / "dippy-extension.ts"
@@ -438,25 +458,30 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
         details = None
         if verbose:
             from dippy.cli.agents import _find_pi_wrapper
+
             wrapper_path = _find_pi_wrapper()
             if wrapper_path:
                 details = f"{target_info}\nBridge: {wrapper_path}"
             else:
                 details = f"{target_info}\nBridge: not found (pi-mono may not work)"
 
-        results.append(CheckResult(
-            "Hook: pi-mono",
-            HealthStatus.OK,
-            f"Extension installed ({file_type})",
-            details if verbose else target_info,
-        ))
+        results.append(
+            CheckResult(
+                "Hook: pi-mono",
+                HealthStatus.OK,
+                f"Extension installed ({file_type})",
+                details if verbose else target_info,
+            )
+        )
     else:
-        results.append(CheckResult(
-            "Hook: pi-mono",
-            HealthStatus.WARNING,
-            "Extension not found",
-            f"Expected: {pi_extension}",
-        ))
+        results.append(
+            CheckResult(
+                "Hook: pi-mono",
+                HealthStatus.WARNING,
+                "Extension not found",
+                f"Expected: {pi_extension}",
+            )
+        )
 
     return results
 
@@ -592,13 +617,17 @@ def check_log_health(verbose: bool) -> CheckResult:
             except PermissionError:
                 issues.append(f"{name}: log directory not writable ({log_path.parent})")
             except OSError:
-                issues.append(f"{name}: cannot write to log directory ({log_path.parent})")
+                issues.append(
+                    f"{name}: cannot write to log directory ({log_path.parent})"
+                )
 
         # Check log file size
         if log_path.exists():
             size_mb = log_path.stat().st_size / (1024 * 1024)
             if size_mb > 10:
-                issues.append(f"{name}: log file is {size_mb:.1f}MB (consider rotation)")
+                issues.append(
+                    f"{name}: log file is {size_mb:.1f}MB (consider rotation)"
+                )
                 sizes.append(f"{name}: {size_mb:.1f}MB")
             elif verbose:
                 sizes.append(f"{name}: {size_mb:.2f}MB")
@@ -664,7 +693,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
                 if _has_dippy_hook(config, agent_id):
                     # Check if legacy by inspecting config
                     config_str = json.dumps(config)
-                    if 'dippy-hook' in config_str or '/dippy' in config_str:
+                    if "dippy-hook" in config_str or "/dippy" in config_str:
                         details.append("Dippy hook: legacy (old 'dippy-hook')")
                         issues.append("Legacy hook detected - consider updating")
                     else:

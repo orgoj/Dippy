@@ -9,15 +9,13 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
-import pytest
 
 from dippy.cli.agents import (
     AGENTS,
     AgentInfo,
     _find_dippy_executable,
-    _find_pi_wrapper,
     detect_agents,
     get_agent_info,
     list_all_agents,
@@ -176,9 +174,19 @@ class TestDetectAgents:
         """detect_agents returns empty dict when nothing installed."""
         # Clear env flags and sys.argv
         import sys
+
         original_argv = sys.argv
         original_env = {}
-        for flag in ("DIPPY_CLAUDE", "DIPPY_GEMINI", "DIPPY_CURSOR", "DIPPY_WINDSURF", "DIPPY_PI", "DIPPY_MOLTBOT", "DIPPY_CODEX", "DIPPY_PEARAI"):
+        for flag in (
+            "DIPPY_CLAUDE",
+            "DIPPY_GEMINI",
+            "DIPPY_CURSOR",
+            "DIPPY_WINDSURF",
+            "DIPPY_PI",
+            "DIPPY_MOLTBOT",
+            "DIPPY_CODEX",
+            "DIPPY_PEARAI",
+        ):
             if flag in os.environ:
                 original_env[flag] = os.environ.pop(flag)
 
@@ -196,9 +204,19 @@ class TestDetectAgents:
     def test_detect_agents_finds_claude(self, tmp_path):
         """detect_agents finds Claude when config exists."""
         import sys
+
         original_argv = sys.argv
         original_env = {}
-        for flag in ("DIPPY_CLAUDE", "DIPPY_GEMINI", "DIPPY_CURSOR", "DIPPY_WINDSURF", "DIPPY_PI", "DIPPY_MOLTBOT", "DIPPY_CODEX", "DIPPY_PEARAI"):
+        for flag in (
+            "DIPPY_CLAUDE",
+            "DIPPY_GEMINI",
+            "DIPPY_CURSOR",
+            "DIPPY_WINDSURF",
+            "DIPPY_PI",
+            "DIPPY_MOLTBOT",
+            "DIPPY_CODEX",
+            "DIPPY_PEARAI",
+        ):
             if flag in os.environ:
                 original_env[flag] = os.environ.pop(flag)
 
@@ -221,9 +239,19 @@ class TestDetectAgents:
     def test_detect_agents_multiple(self, tmp_path):
         """detect_agents finds multiple installed agents."""
         import sys
+
         original_argv = sys.argv
         original_env = {}
-        for flag in ("DIPPY_CLAUDE", "DIPPY_GEMINI", "DIPPY_CURSOR", "DIPPY_WINDSURF", "DIPPY_PI", "DIPPY_MOLTBOT", "DIPPY_CODEX", "DIPPY_PEARAI"):
+        for flag in (
+            "DIPPY_CLAUDE",
+            "DIPPY_GEMINI",
+            "DIPPY_CURSOR",
+            "DIPPY_WINDSURF",
+            "DIPPY_PI",
+            "DIPPY_MOLTBOT",
+            "DIPPY_CODEX",
+            "DIPPY_PEARAI",
+        ):
             if flag in os.environ:
                 original_env[flag] = os.environ.pop(flag)
 
@@ -246,9 +274,19 @@ class TestDetectAgents:
     def test_detect_agents_env_flag(self):
         """detect_agents detects agent via environment variable."""
         import sys
+
         original_argv = sys.argv
         original_env = {}
-        for flag in ("DIPPY_CLAUDE", "DIPPY_GEMINI", "DIPPY_CURSOR", "DIPPY_WINDSURF", "DIPPY_PI", "DIPPY_MOLTBOT", "DIPPY_CODEX", "DIPPY_PEARAI"):
+        for flag in (
+            "DIPPY_CLAUDE",
+            "DIPPY_GEMINI",
+            "DIPPY_CURSOR",
+            "DIPPY_WINDSURF",
+            "DIPPY_PI",
+            "DIPPY_MOLTBOT",
+            "DIPPY_CODEX",
+            "DIPPY_PEARAI",
+        ):
             if flag == "DIPPY_CLAUDE":
                 if flag in os.environ:
                     original_env[flag] = os.environ.pop(flag)
@@ -274,7 +312,16 @@ class TestDetectAgents:
 
         original_argv = sys.argv
         original_env = {}
-        for flag in ("DIPPY_CLAUDE", "DIPPY_GEMINI", "DIPPY_CURSOR", "DIPPY_WINDSURF", "DIPPY_PI", "DIPPY_MOLTBOT", "DIPPY_CODEX", "DIPPY_PEARAI"):
+        for flag in (
+            "DIPPY_CLAUDE",
+            "DIPPY_GEMINI",
+            "DIPPY_CURSOR",
+            "DIPPY_WINDSURF",
+            "DIPPY_PI",
+            "DIPPY_MOLTBOT",
+            "DIPPY_CODEX",
+            "DIPPY_PEARAI",
+        ):
             if flag in os.environ:
                 original_env[flag] = os.environ.pop(flag)
 
@@ -408,7 +455,8 @@ class TestHelperFunctions:
         mock_agents.__file__ = __file__
         mock_agents.Path = Path
 
-        exec("""
+        exec(
+            """
 from pathlib import Path
 
 def _find_pi_wrapper():
@@ -423,7 +471,9 @@ def _find_pi_wrapper():
         if candidate.exists():
             return str(candidate)
     return None
-""", mock_agents.__dict__)
+""",
+            mock_agents.__dict__,
+        )
 
         # Mock sys.path to not contain the wrapper
         original_path = sys.path.copy()
