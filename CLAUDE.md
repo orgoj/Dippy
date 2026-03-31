@@ -100,6 +100,7 @@ just check         # All of the above in parallel — MUST PASS before committin
 - type changes: when changing field types in dataclasses, update ALL consumers systematically (handlers, analyzer, tests)
 - optional sets: use truthiness (`if value`) not identity (`if value is not None`) for optional frozensets - empty set is falsy but not None
 - banned modules: avoid `shlex`; use `dippy.core.parser.tokenize` for bash-compatible tokenization
+- suggestion field: use `" ".join(tokens)` for output formatting (not `shlex.join` — shlex is banned; space-join is sufficient for allow-rule suggestions where fnmatch handles patterns)
 - pi-mono: use `deliverAs: "followUp"` for agent-initiated turns to prevent collisions with user input
 - notifier: `agent_end` hook enables long-polling idle behaviors with `--idle` flag
 

@@ -167,6 +167,7 @@ def main():
                 message=decision.reason,
                 context_flags=getattr(decision, "context_flags", None),
                 agent=agent,
+                suggestion=getattr(decision, "suggestion", None),
             )
         elif req_type == "edit":
             log_decision(

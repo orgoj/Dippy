@@ -153,7 +153,10 @@ def _classify_uv_run(tokens: list[str]) -> Classification:
         # Delegate to inner command check
         inner_cmd = " ".join(inner_tokens)
         return Classification(
-            "delegate", inner_command=inner_cmd, description=f"uv run {inner_cmd_name}"
+            "delegate",
+            inner_command=inner_cmd,
+            description=f"uv run {inner_cmd_name}",
+            replace_suggestion=True,
         )
 
     return Classification("ask", description="uv run")

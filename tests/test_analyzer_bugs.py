@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from dippy.core.analyzer import analyze
-from dippy.core.config import Config
+from dippy.core.config import Config, parse_config
 
 
 class TestEnvVarPrefixHandling:
@@ -733,3 +733,133 @@ class TestReasonFormatNoRedundantBase:
         assert result.action == "allow"
         # Pattern "git --help" starts with "git", so just pattern
         assert result.reason == "git --help"
+
+
+class TestEnvStrippedRuleMatching:
+    """Config rules should match commands with env var prefixes.
+
+    Bug: env var prefixes like UV_PROJECT_ENVIRONMENT=.venv-3.12 break
+    config rule matching because _match_words includes env vars in the
+    normalized command string, so 'allow uv run *' can't match
+    'UV_PROJECT_ENVIRONMENT=.venv-3.12 uv run ...'.
+    """
+
+    def test_env_prefix_matches_generic_rule(self, tmp_path):
+        """ENV=VAL uv run pytest should match 'allow uv run *'."""
+        config = parse_config("allow uv run *")
+        result = analyze(
+            "UV_PROJECT_ENVIRONMENT=.venv-3.12 uv run pytest -q", config, tmp_path
+        )
+        assert result.action == "allow"
+
+    def test_env_prefix_matches_without_wildcard(self, tmp_path):
+        """ENV=VAL git status should match 'allow git status'."""
+        config = parse_config("allow git status")
+        result = analyze("FOO=bar git status", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_env_prefix_multiple_vars(self, tmp_path):
+        """A=1 B=2 uv run pytest should match 'allow uv run *'."""
+        config = parse_config("allow uv run *")
+        result = analyze("A=1 B=2 uv run pytest -q", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_env_sensitive_rule_still_works(self, tmp_path):
+        """Env-sensitive rules like 'deny SECRET=* uv run *' still match via raw pass."""
+        config = parse_config("deny SECRET=* uv run *")
+        result = analyze("SECRET=key uv run pytest -q", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_last_match_wins_env_stripped(self, tmp_path):
+        """Last-match-wins preserved: 'allow SECRET=* uv run *' then 'deny uv run *' → deny wins."""
+        config = parse_config("allow SECRET=* uv run *\ndeny uv run *")
+        result = analyze("SECRET=key uv run pytest -q", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_env_prefix_option_rule(self, tmp_path):
+        """Option rules should also match env-stripped commands."""
+        config = parse_config("deny-opt uv run --dangerous")
+        result = analyze("FOO=bar uv run --dangerous script.py", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_no_env_prefix_unchanged(self, tmp_path):
+        """Commands without env prefix should work exactly as before."""
+        config = parse_config("allow uv run *")
+        result = analyze("uv run pytest -q", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_pipeline_with_env_prefix(self, tmp_path):
+        """Pipeline with env prefix should match rules on stripped commands."""
+        config = parse_config("allow uv run *\nallow tail *")
+        result = analyze("UV=.venv uv run pytest -q 2>&1 | tail -5", config, tmp_path)
+        assert result.action == "allow"
+
+
+class TestSuggestionField:
+    """Decision should carry a suggestion field for ask outcomes.
+
+    The suggestion shows the env-stripped command that the user can
+    copy as an 'allow' rule. Only for ask decisions, never deny/allow.
+    """
+
+    def test_suggestion_on_env_prefix_ask(self, tmp_path):
+        """Ask with env prefix should have suggestion with stripped command."""
+        config = Config()  # no rules
+        result = analyze(
+            "UV_PROJECT_ENVIRONMENT=.venv uv run pytest -q", config, tmp_path
+        )
+        assert result.action == "ask"
+        assert result.suggestion is not None
+        assert "UV_PROJECT_ENVIRONMENT" not in result.suggestion
+        assert "uv run pytest -q" in result.suggestion
+
+    def test_no_suggestion_on_allow(self, tmp_path):
+        """Allow decisions should not have suggestion."""
+        config = parse_config("allow uv run *")
+        result = analyze("uv run pytest -q", config, tmp_path)
+        assert result.action == "allow"
+        assert result.suggestion is None
+
+    def test_no_suggestion_on_deny(self, tmp_path):
+        """Deny decisions should not have suggestion."""
+        config = parse_config("deny uv run *")
+        result = analyze("uv run pytest -q", config, tmp_path)
+        assert result.action == "deny"
+        assert result.suggestion is None
+
+    def test_suggestion_no_env_prefix(self, tmp_path):
+        """Ask without env prefix should still have suggestion."""
+        config = Config()
+        result = analyze("someunknowncmd --flag", config, tmp_path)
+        assert result.action == "ask"
+        assert result.suggestion is not None
+        assert "someunknowncmd" in result.suggestion
+
+    def test_suggestion_preserves_through_uv_delegation(self, tmp_path):
+        """UV handler delegation should preserve outer command in suggestion."""
+        config = Config()
+        result = analyze("UV=foo uv run --python 3.12 pytest -q", config, tmp_path)
+        assert result.action == "ask"
+        assert result.suggestion is not None
+        # Should show outer command, not just inner 'pytest'
+        assert "uv run" in result.suggestion
+
+    def test_suggestion_shell_safe_quoting(self, tmp_path):
+        """Suggestion should handle quoted values correctly."""
+        config = Config()
+        result = analyze(
+            "FOO='val with spaces' someunknowncmd --flag", config, tmp_path
+        )
+        assert result.action == "ask"
+        assert result.suggestion is not None
+        # Should preserve quoting semantics
+        assert "someunknowncmd" in result.suggestion
+
+    def test_no_suggestion_from_redirect_ask(self, tmp_path):
+        """Ask from redirect check should not have suggestion."""
+        config = Config()
+        # Redirect to file triggers ask in _analyze_command, not _analyze_simple_command
+        result = analyze("ls > /tmp/outfile.txt", config, tmp_path)
+        assert result.action == "ask"
+        # This ask comes from redirect, not command matching
+        assert result.suggestion is None

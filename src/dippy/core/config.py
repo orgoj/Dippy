@@ -1248,6 +1248,22 @@ def _match_words(
     result: Match | None = None
     active_flags = context_flags or frozenset()
 
+    # Pre-compute env-stripped form for fallback matching.
+    # This allows rules like 'allow uv run *' to match 'ENV=val uv run ...'.
+    # Single pass preserves last-match-wins semantics.
+    stripped_words = None
+    normalized_stripped = None
+    i = 0
+    while i < len(words) and "=" in words[i] and not words[i].startswith("-"):
+        i += 1
+    if i > 0:
+        stripped_words = words[i:]
+        normalized_stripped = (
+            " ".join(stripped_words)
+            if remote
+            else _normalize_words(stripped_words, cwd)
+        )
+
     for rule in config.rules:
         # Check context flags first - rule only applies if all required flags are present
         if rule.required_flags is not None:
@@ -1270,12 +1286,29 @@ def _match_words(
                     scope=rule.scope,
                 )
                 continue
+            # Try env-stripped words for option rules too
+            if stripped_words and _match_option_rule(rule, stripped_words):
+                result = Match(
+                    decision=rule.decision,
+                    pattern=rule.pattern,
+                    message=rule.message,
+                    source=rule.source,
+                    scope=rule.scope,
+                )
+                continue
+            continue  # option rules don't use fnmatch
 
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
         matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
+        # If raw didn't match, try env-stripped form
+        if not matched and normalized_stripped:
+            matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)
         if not matched and normalized_pattern.endswith(" *"):
-            matched = normalized_cmd == normalized_pattern[:-2]
+            if normalized_cmd == normalized_pattern[:-2]:
+                matched = True
+            elif normalized_stripped and normalized_stripped == normalized_pattern[:-2]:
+                matched = True
         if matched:
             result = Match(
                 decision=rule.decision,
@@ -1640,6 +1673,7 @@ def log_decision(
     file_path: str | None = None,
     context_flags: frozenset[str] | None = None,
     agent: str | None = None,
+    suggestion: str | None = None,
 ) -> None:
     """Log a decision. No-op if logging not configured or disabled."""
     global _log_disabled
@@ -1668,6 +1702,8 @@ def log_decision(
         entry["context_flags"] = sorted(context_flags)
     if agent is not None:
         entry["agent"] = agent
+    if _log_config.full and suggestion is not None:
+        entry["suggestion"] = suggestion
     entry["ts"] = datetime.now(timezone.utc).isoformat()
 
     try:

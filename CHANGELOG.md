@@ -28,6 +28,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for custom target flags (e.g., `-t`, `-h`) with automatic fallback to first non-option token
   - Enforces `remote=True` for inner commands, skipping local path checks for remote operations
 
+## [0.2.7] - 2026-03-31
+
+### Fixed
+
+- **Env-stripped rule matching** - Commands with environment variable prefixes (e.g., `UV_PROJECT_ENVIRONMENT=.venv-3.12 uv run pytest`) now correctly match config rules like `allow uv run *`. Both raw and env-stripped forms are tried in a single pass, preserving last-match-wins semantics.
+- **SSH remote flag** - SSH handler now sets `remote=True` on delegated inner commands, preventing incorrect local path expansion for remotely executed commands.
+
+### Added
+
+- **Audit log suggestion field** - Ask decisions in the audit log now include a `suggestion` field (gated behind `set log_full`) showing the env-stripped command pattern. Copy-paste ready for `allow` rules. Only set for command-matching asks (not redirect/substitution asks).
+
 ## [0.2.4] - 2026-02-07
 
 ### Added

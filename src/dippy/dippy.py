@@ -412,6 +412,7 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
         cwd=cwd,
         context_flags=result.context_flags,
         agent=MODE,
+        suggestion=result.suggestion,
     )
 
     if result.action == "allow":
@@ -685,7 +686,7 @@ Subcommands:
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
-    parser.add_argument("--version", action="version", version="dippy 0.2.6")
+    parser.add_argument("--version", action="version", version="dippy 0.2.7")
     parser.add_argument(
         "--remote", action="store_true", help="Remote context (skip local path checks)"
     )
@@ -890,6 +891,7 @@ def cli_mode(args: argparse.Namespace) -> int:
         cwd=cwd,
         context_flags=result.context_flags,
         agent=MODE,
+        suggestion=result.suggestion,
     )
 
     # Map 'pass' to 'ask' in CLI mode (pass means "let the AI decide" which
@@ -1171,7 +1173,9 @@ def main():
                     permission_mode = input_data.get("permission_mode", "default")
                     if permission_mode in ("bypassPermissions", "dontAsk"):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
-                        log_decision("allow", message=permission_mode, tool=tool_name, agent=MODE)
+                        log_decision(
+                            "allow", message=permission_mode, tool=tool_name, agent=MODE
+                        )
                         print(json.dumps(approve(permission_mode)))
                         return
                 # Handle MCP tool
@@ -1182,7 +1186,12 @@ def main():
                     logging.info(f"Checking MCP: {tool_name}")
                     result = check_mcp_tool(tool_name, config)
                     if not result:
-                        log_decision("pass", message="no matching rule", tool=tool_name, agent=MODE)
+                        log_decision(
+                            "pass",
+                            message="no matching rule",
+                            tool=tool_name,
+                            agent=MODE,
+                        )
                     print(json.dumps(result))
                 return
 
@@ -1194,7 +1203,13 @@ def main():
                     permission_mode = input_data.get("permission_mode", "default")
                     if permission_mode in ("bypassPermissions", "dontAsk"):
                         logging.info(f"Bypass mode ({permission_mode}): {tool_name}")
-                        log_decision("allow", message=permission_mode, tool=tool_name, command=query, agent=MODE)
+                        log_decision(
+                            "allow",
+                            message=permission_mode,
+                            tool=tool_name,
+                            command=query,
+                            agent=MODE,
+                        )
                         print(json.dumps(approve(permission_mode)))
                         return
                 # Handle WebSearch tool
@@ -1205,7 +1220,13 @@ def main():
                     logging.info(f"Checking WebSearch: {query}")
                     result = check_web_tool(query, config)
                     if not result:
-                        log_decision("pass", message="no matching rule", tool="WebSearch", command=query, agent=MODE)
+                        log_decision(
+                            "pass",
+                            message="no matching rule",
+                            tool="WebSearch",
+                            command=query,
+                            agent=MODE,
+                        )
                     print(json.dumps(result))
                 return
 
@@ -1224,12 +1245,40 @@ def main():
                         # Evaluate each path, take strictest result
                         strictest = None
                         for p in paths:
-                            m = match_read(p, config, cwd) if tool_name in ("Read", "read_file", "read", "read_many_files", "LS", "Glob", "Grep", "Search") else match_edit(p, config, cwd)
+                            m = (
+                                match_read(p, config, cwd)
+                                if tool_name
+                                in (
+                                    "Read",
+                                    "read_file",
+                                    "read",
+                                    "read_many_files",
+                                    "LS",
+                                    "Glob",
+                                    "Grep",
+                                    "Search",
+                                )
+                                else match_edit(p, config, cwd)
+                            )
                             if m is not None:
-                                if strictest is None or ("deny", "ask", "allow", "pass").index(m.decision) < ("deny", "ask", "allow", "pass").index(strictest.decision):
+                                if strictest is None or (
+                                    "deny",
+                                    "ask",
+                                    "allow",
+                                    "pass",
+                                ).index(m.decision) < (
+                                    "deny",
+                                    "ask",
+                                    "allow",
+                                    "pass",
+                                ).index(strictest.decision):
                                     strictest = m
                         if strictest is not None:
-                            reason = strictest.message if strictest.message else f"[{strictest.pattern}]"
+                            reason = (
+                                strictest.message
+                                if strictest.message
+                                else f"[{strictest.pattern}]"
+                            )
                             log_decision(
                                 strictest.decision,
                                 rule=strictest.pattern,
@@ -1241,18 +1290,48 @@ def main():
                                 agent=MODE,
                             )
                             if strictest.decision == "allow":
-                                print(json.dumps(approve(reason, config=config, tool_name=tool_name)))
+                                print(
+                                    json.dumps(
+                                        approve(
+                                            reason, config=config, tool_name=tool_name
+                                        )
+                                    )
+                                )
                             elif strictest.decision == "deny":
-                                print(json.dumps(deny(reason, config=config, tool_name=tool_name)))
+                                print(
+                                    json.dumps(
+                                        deny(reason, config=config, tool_name=tool_name)
+                                    )
+                                )
                             else:
-                                print(json.dumps(ask(reason, config=config, tool_name=tool_name)))
+                                print(
+                                    json.dumps(
+                                        ask(reason, config=config, tool_name=tool_name)
+                                    )
+                                )
                         else:
                             # No rules matched any path — apply mode-specific fallback
                             if MODE == "gemini":
-                                log_decision("allow", message=f"multi-file ({len(paths)} paths): no matching rule (Gemini fallback)", tool=tool_name, file_path=paths[0], command=json.dumps(paths), cwd=cwd, agent=MODE)
+                                log_decision(
+                                    "allow",
+                                    message=f"multi-file ({len(paths)} paths): no matching rule (Gemini fallback)",
+                                    tool=tool_name,
+                                    file_path=paths[0],
+                                    command=json.dumps(paths),
+                                    cwd=cwd,
+                                    agent=MODE,
+                                )
                                 print(json.dumps(approve("passing through (no match)")))
                             else:
-                                log_decision("pass", message=f"multi-file ({len(paths)} paths): no matching rule", tool=tool_name, file_path=paths[0], command=json.dumps(paths), cwd=cwd, agent=MODE)
+                                log_decision(
+                                    "pass",
+                                    message=f"multi-file ({len(paths)} paths): no matching rule",
+                                    tool=tool_name,
+                                    file_path=paths[0],
+                                    command=json.dumps(paths),
+                                    cwd=cwd,
+                                    agent=MODE,
+                                )
                                 print(json.dumps({}))
                         return
 
@@ -1281,27 +1360,65 @@ def main():
                         result = check_file_tool(tool_name, file_path, config, cwd)
                         if not result:
                             if MODE == "gemini":
-                                log_decision("allow", message="no matching rule (Gemini fallback)", tool=tool_name, file_path=file_path, cwd=cwd, agent=MODE)
+                                log_decision(
+                                    "allow",
+                                    message="no matching rule (Gemini fallback)",
+                                    tool=tool_name,
+                                    file_path=file_path,
+                                    cwd=cwd,
+                                    agent=MODE,
+                                )
                                 result = approve("passing through (no match)")
                             else:
-                                log_decision("pass", message="no matching rule", tool=tool_name, file_path=file_path, cwd=cwd, agent=MODE)
+                                log_decision(
+                                    "pass",
+                                    message="no matching rule",
+                                    tool=tool_name,
+                                    file_path=file_path,
+                                    cwd=cwd,
+                                    agent=MODE,
+                                )
                         print(json.dumps(result))
                     except Exception as e:
                         logging.error(f"Error checking file tool: {e}")
                         if MODE == "gemini":
-                            log_decision("allow", message="file-check-error", tool=tool_name, file_path=file_path, cwd=cwd, agent=MODE)
+                            log_decision(
+                                "allow",
+                                message="file-check-error",
+                                tool=tool_name,
+                                file_path=file_path,
+                                cwd=cwd,
+                                agent=MODE,
+                            )
                             print(json.dumps(approve(f"error recovery: {e}")))
                         else:
-                            log_decision("pass", message="file-check-error", tool=tool_name, file_path=file_path, cwd=cwd, agent=MODE)
+                            log_decision(
+                                "pass",
+                                message="file-check-error",
+                                tool=tool_name,
+                                file_path=file_path,
+                                cwd=cwd,
+                                agent=MODE,
+                            )
                             print(json.dumps({}))
                     return
                 # No file_path or PostToolUse - fall through to default behavior
                 if hook_event != "PostToolUse":
                     if MODE == "gemini":
-                        log_decision("allow", message=f"no file path for {tool_name}", tool=tool_name, agent=MODE)
+                        log_decision(
+                            "allow",
+                            message=f"no file path for {tool_name}",
+                            tool=tool_name,
+                            agent=MODE,
+                        )
                         print(json.dumps(approve("no file path provided")))
                     else:
-                        log_decision("pass", message=f"no file path for {tool_name}", tool=tool_name, agent=MODE)
+                        log_decision(
+                            "pass",
+                            message=f"no file path for {tool_name}",
+                            tool=tool_name,
+                            agent=MODE,
+                        )
                         print(json.dumps({}))
                 else:
                     if MODE == "gemini":
@@ -1313,10 +1430,20 @@ def main():
             # Only handle shell/bash commands
             if tool_name not in SHELL_TOOL_NAMES:
                 if MODE == "gemini":
-                    log_decision("allow", message=f"unsupported tool: {tool_name}", tool=tool_name, agent=MODE)
+                    log_decision(
+                        "allow",
+                        message=f"unsupported tool: {tool_name}",
+                        tool=tool_name,
+                        agent=MODE,
+                    )
                     print(json.dumps(approve(f"unsupported tool: {tool_name}")))
                 else:
-                    log_decision("pass", message=f"unsupported tool: {tool_name}", tool=tool_name, agent=MODE)
+                    log_decision(
+                        "pass",
+                        message=f"unsupported tool: {tool_name}",
+                        tool=tool_name,
+                        agent=MODE,
+                    )
                     print(json.dumps({}))
                 return
 
@@ -1327,7 +1454,13 @@ def main():
             permission_mode = input_data.get("permission_mode", "default")
             if permission_mode in ("bypassPermissions", "dontAsk"):
                 logging.info(f"Bypass mode ({permission_mode}): {command}")
-                log_decision("allow", message=permission_mode, command=command, cwd=cwd, agent=MODE)
+                log_decision(
+                    "allow",
+                    message=permission_mode,
+                    command=command,
+                    cwd=cwd,
+                    agent=MODE,
+                )
                 print(json.dumps(approve(permission_mode)))
                 return
 

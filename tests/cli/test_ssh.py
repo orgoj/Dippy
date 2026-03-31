@@ -74,3 +74,24 @@ class TestSshWrapperContext:
         assert result.action == "ask"
         # wrapper_context is None or not present for non-delegate actions
         assert result.wrapper_context is None
+
+    def test_ssh_delegates_with_remote_flag(self):
+        """SSH handler sets remote=True on delegate Classification.
+
+        Regression test: SSH commands execute remotely, so inner commands
+        must be analyzed with remote=True to avoid expanding paths against
+        the local host cwd.
+        """
+        from dippy.cli.ssh import classify, HandlerContext
+
+        result = classify(HandlerContext(["ssh", "host", "ls", "/tmp"]))
+        assert result.action == "delegate"
+        assert result.remote is True
+
+    def test_ssh_interactive_no_remote_flag(self):
+        """SSH interactive sessions (no command) don't need remote flag."""
+        from dippy.cli.ssh import classify, HandlerContext
+
+        result = classify(HandlerContext(["ssh", "host"]))
+        assert result.action == "ask"
+        assert result.remote is False

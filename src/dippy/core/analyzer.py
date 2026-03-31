@@ -29,6 +29,8 @@ class Decision:
     context_flags: frozenset[str] | None = None
     # For tracing: child decisions that contributed to this one
     children: list["Decision"] = field(default_factory=list)
+    # Env-stripped command for audit log suggestion (ask decisions only)
+    suggestion: str | None = None
 
     def __repr__(self) -> str:
         return f"Decision({self.action!r}, {self.reason!r})"
@@ -690,6 +692,12 @@ def _analyze_simple_command(
     base = words[i]
     tokens = words[i:]
 
+    # Compute suggestion for ask decisions: env-stripped command.
+    # Always set — _analyze_simple_command is ONLY reached from command-matching.
+    # Redirect/substitution asks come from _analyze_command and skip this function.
+    # So suggestion is not None iff ask came from command matching.
+    suggestion = " ".join(tokens)
+
     # 1. Check config rules first (highest priority)
     from dippy.core.config import SimpleCommand, match_command
 
@@ -709,7 +717,12 @@ def _analyze_simple_command(
             return Decision("deny", f"{base}: {msg}", context_flags=context_flags)
         else:  # ask
             msg = config_match.message or config_match.pattern
-            return Decision("ask", f"{base}: {msg}", context_flags=context_flags)
+            return Decision(
+                "ask",
+                f"{base}: {msg}",
+                context_flags=context_flags,
+                suggestion=suggestion,
+            )
 
     # 2. Handle wrapper commands (time, timeout, etc.) - analyze inner command
     if base in WRAPPER_COMMANDS and len(tokens) > 1:
@@ -734,7 +747,7 @@ def _analyze_simple_command(
             return _analyze_simple_command(
                 tokens[j:], config, cwd, context_flags, remote=remote
             )
-        return Decision("ask", base, context_flags=context_flags)
+        return Decision("ask", base, context_flags=context_flags, suggestion=suggestion)
 
     # 3. Simple safe commands
     if base in SIMPLE_SAFE:
@@ -752,7 +765,9 @@ def _analyze_simple_command(
         if not inner_cmd:
             # No inner command (interactive session or trigger not found)
             reason = f"{base} {dest}" if dest else base
-            return Decision("ask", reason, context_flags=context_flags)
+            return Decision(
+                "ask", reason, context_flags=context_flags, suggestion=suggestion
+            )
 
         # Build wrapper_context: wrapper name, destination if context_first, context_value if present
         wrapper_context = [base]
@@ -792,7 +807,9 @@ def _analyze_simple_command(
                     # allow - continue checking other targets
                 else:
                     # No matching rule - ask by default for file writes
-                    return Decision("ask", desc, context_flags=context_flags)
+                    return Decision(
+                        "ask", desc, context_flags=context_flags, suggestion=suggestion
+                    )
         if result.action == "allow":
             return Decision("allow", desc, context_flags=context_flags)
         elif result.action == "delegate" and result.inner_command:
@@ -803,11 +820,26 @@ def _analyze_simple_command(
                 inner_flags = context_flags | frozenset(result.wrapper_context)
 
             inner_decision = analyze(
-                result.inner_command, config, cwd, inner_flags, remote=result.remote
+                result.inner_command,
+                config,
+                cwd,
+                inner_flags,
+                remote=remote or result.remote,
             )
+            # For opt-in handlers (UV), apply outer suggestion on delegated ask
+            # Only when inner ask came from command matching (has suggestion set)
+            if (
+                suggestion
+                and inner_decision.action == "ask"
+                and inner_decision.suggestion is not None
+                and result.replace_suggestion
+            ):
+                inner_decision.suggestion = suggestion
             return inner_decision
         else:
-            return Decision("ask", desc, context_flags=context_flags)
+            return Decision(
+                "ask", desc, context_flags=context_flags, suggestion=suggestion
+            )
 
     # 7. Special handling for sh/bash -c (delegate to analyzing the script string)
     if base in ("sh", "bash", "zsh") and len(tokens) >= 3 and tokens[1] == "-c":
@@ -819,7 +851,12 @@ def _analyze_simple_command(
         return analyze(script, config, cwd, context_flags, remote=remote)
 
     # 8. Unknown command - default ask
-    return Decision("ask", get_description(tokens, base), context_flags=context_flags)
+    return Decision(
+        "ask",
+        get_description(tokens, base),
+        context_flags=context_flags,
+        suggestion=suggestion,
+    )
 
 
 def _is_version_or_help(tokens: list[str]) -> bool:
@@ -1126,6 +1163,13 @@ def _combine(decisions: list[Decision]) -> Decision:
         if d.context_flags:
             context_flags = context_flags | d.context_flags
 
+    # Propagate suggestion from ask decisions (only the command-matching one has it)
+    ask_suggestion = None
+    for d in decisions:
+        if d.action == "ask" and d.suggestion is not None:
+            ask_suggestion = d.suggestion
+            break
+
     # deny > ask > allow
     if deny_reasons:
         return Decision(
@@ -1141,6 +1185,7 @@ def _combine(decisions: list[Decision]) -> Decision:
             ", ".join(ask_reasons),
             context_flags=context_flags,
             children=decisions,
+            suggestion=ask_suggestion,
         )
 
     # All allowed

@@ -97,4 +97,5 @@ def classify(ctx: HandlerContext) -> Classification:
         inner_command=remote_cmd,
         description=f"ssh {host}",
         wrapper_context=["ssh"],
+        remote=True,
     )

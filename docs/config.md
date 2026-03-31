@@ -1042,6 +1042,8 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 
 **Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
 
+**Suggestion field:** When `set log_full` is enabled, ask decisions include a `suggestion` field in the audit log. This shows the env-stripped command (without `VAR=val` prefixes) that you can copy directly as an `allow` rule. Only command-matching asks have suggestions; redirect and substitution asks do not.
+
 **System Python:** The hook runs with `#!/usr/bin/env python3` (system Python), not the uv virtualenv. System Python may be older and lack dependencies like `structlog`. Dippy must use only stdlib imports, or fail gracefully when optional dependencies are missing.
 
 **VS Code syntax highlighting:** Install the extension from `editors/vscode/`:
