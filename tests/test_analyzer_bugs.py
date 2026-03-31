@@ -863,3 +863,114 @@ class TestSuggestionField:
         assert result.action == "ask"
         # This ask comes from redirect, not command matching
         assert result.suggestion is None
+
+
+class TestEnvStrippedPolicyRegression:
+    """Regression: stripped-form matches must NOT override raw-form deny.
+
+    When _match_words evaluates both raw and env-stripped forms in a single
+    last-match-wins pass, a later generic allow can override an earlier
+    env-specific deny. This is a security regression: configs that use
+    env-aware deny rules to block commands when sensitive vars are present
+    would be silently bypassed.
+    """
+
+    def test_env_deny_not_overridden_by_later_allow(self, tmp_path):
+        """deny SECRET=* uv run * + allow uv run * → SECRET=key uv run ... must deny."""
+        config = parse_config(
+            "deny SECRET=* uv run *\nallow uv run *"
+        )
+        result = analyze("SECRET=key uv run pytest -q", config, tmp_path)
+        assert result.action == "deny", (
+            "Stripped-form allow must not override raw-form deny"
+        )
+
+    def test_env_deny_not_overridden_by_later_allow_complex(self, tmp_path):
+        """deny *SECRET* ... + later allow should still deny env-prefixed command."""
+        config = parse_config(
+            "deny AWS_* uv run *\nallow uv run *"
+        )
+        result = analyze(
+            "AWS_SECRET_KEY=abc123 uv run deploy --prod", config, tmp_path
+        )
+        assert result.action == "deny"
+
+    def test_env_allow_can_match_when_no_raw_deny(self, tmp_path):
+        """allow uv run * should still match env-prefixed command when no deny exists."""
+        config = parse_config("allow uv run *")
+        result = analyze("MY_VAR=1 uv run pytest -q", config, tmp_path)
+        assert result.action == "allow"
+
+    def test_raw_match_wins_over_stripped_match(self, tmp_path):
+        """If raw matches deny and stripped matches allow, deny must win."""
+        config = parse_config(
+            "deny DEBUG=1 python *\nallow python *"
+        )
+        result = analyze("DEBUG=1 python script.py", config, tmp_path)
+        assert result.action == "deny"
+
+    def test_option_rule_last_match_wins_env_stripped(self, tmp_path):
+        """Option rules matching via stripped form follow normal last-match-wins."""
+        config = parse_config(
+            "deny-opt uv run --dangerous\nallow-opt uv run"
+        )
+        # Both rules match stripped form only → last-match-wins → allow
+        result = analyze(
+            "FOO=bar uv run --dangerous script.py", config, tmp_path
+        )
+        assert result.action == "allow"
+
+    def test_option_rule_raw_deny_blocks_stripped_allow(self, tmp_path):
+        """Raw deny-opt must not be overridden by stripped allow-opt."""
+        config = parse_config(
+            "deny-opt uv run --dangerous\nallow-opt uv run"
+        )
+        # No env prefix, both match raw → last-match-wins → allow
+        result = analyze("uv run --dangerous script.py", config, tmp_path)
+        assert result.action == "allow"
+
+
+class TestWrapperContextFirstCompat:
+    """Backward compat: old positional wrapper syntax must include destination.
+
+    wrapper NAME TRIGGER TARGET_FLAG (old syntax) should behave as if
+    --context-first was set, so destination is included in wrapper_context.
+    This prevents existing configs from silently losing host-specific rule
+    enforcement.
+    """
+
+    def test_old_syntax_includes_destination_in_context(self, tmp_path):
+        """Old wrapper syntax should include destination in context flags."""
+        config = parse_config(
+            "wrapper myssh run -t\n"
+            "allow rm *\n"
+            "deny [prod] rm *"
+        )
+        result = analyze("myssh prod run rm -rf /", config, tmp_path)
+        # Old syntax auto-enables context_first → dest "prod" in wrapper_context
+        # deny [prod] rm * matches (and is last) → deny
+        assert result.action == "deny", (
+            "Old wrapper syntax must include destination in context"
+        )
+
+    def test_new_flag_syntax_without_context_first(self, tmp_path):
+        """New flag syntax without --context-first should NOT include destination."""
+        config = parse_config(
+            "wrapper myssh --cmd run --flag -t\n"
+            "allow rm *\n"
+            "deny [prod] rm *"
+        )
+        result = analyze("myssh prod run rm -rf /", config, tmp_path)
+        # Without --context-first, prod is NOT in context → deny [prod] doesn't match → allow
+        assert result.action == "allow"
+
+    def test_new_flag_syntax_with_context_first(self, tmp_path):
+        """New flag syntax with --context-first should include destination."""
+        config = parse_config(
+            "wrapper myssh --cmd run --flag -t --context-first\n"
+            "allow rm *\n"
+            "deny [prod] rm *"
+        )
+        result = analyze("myssh prod run rm -rf /", config, tmp_path)
+        # With --context-first, prod IS in context → deny [prod] matches → deny
+        assert result.action == "deny"

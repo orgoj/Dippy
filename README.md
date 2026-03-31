@@ -13,7 +13,7 @@
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
-- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.)
+- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), with `--cmd`, `--flag`, `--context`, `--context-first` flags for flexible configuration
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
@@ -24,7 +24,7 @@
 - **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input
 - **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
-- **Audit log** — `cwd` and `agent` fields added for better context
+- **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant

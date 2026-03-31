@@ -765,18 +765,23 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 target_flag = None
                 context_flag = None
                 context_first = False
+                new_syntax_used = False
                 i = 1
                 while i < len(parts):
                     if parts[i] == "--cmd" and i + 1 < len(parts):
+                        new_syntax_used = True
                         trigger = parts[i + 1]
                         i += 2
                     elif parts[i] == "--flag" and i + 1 < len(parts):
+                        new_syntax_used = True
                         target_flag = parts[i + 1]
                         i += 2
                     elif parts[i] == "--context" and i + 1 < len(parts):
+                        new_syntax_used = True
                         context_flag = parts[i + 1]
                         i += 2
                     elif parts[i] == "--context-first":
+                        new_syntax_used = True
                         context_first = True
                         i += 1
                     else:
@@ -796,6 +801,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         j += 1
                     if j < len(parts) and parts[j].startswith("-"):
                         target_flag = parts[j]
+
+                # Old syntax (no --cmd/--flag/--context/--context-first used)
+                # always includes destination in context for backward compat.
+                # Existing configs expect destination in wrapper_context.
+                if not new_syntax_used:
+                    context_first = True
 
                 wrappers[wrapper_name] = WrapperInfo(
                     name=wrapper_name,
@@ -1250,7 +1261,9 @@ def _match_words(
 
     # Pre-compute env-stripped form for fallback matching.
     # This allows rules like 'allow uv run *' to match 'ENV=val uv run ...'.
-    # Single pass preserves last-match-wins semantics.
+    # Security: raw matches take priority over stripped matches.
+    # Once a raw deny is set, stripped matches are blocked to prevent
+    # a later generic allow from overriding an env-specific deny.
     stripped_words = None
     normalized_stripped = None
     i = 0
@@ -1263,6 +1276,8 @@ def _match_words(
             if remote
             else _normalize_words(stripped_words, cwd)
         )
+
+    raw_deny_set = False  # Track whether a raw-form deny has matched
 
     for rule in config.rules:
         # Check context flags first - rule only applies if all required flags are present
@@ -1285,9 +1300,10 @@ def _match_words(
                     source=rule.source,
                     scope=rule.scope,
                 )
+                raw_deny_set = rule.decision == "deny"
                 continue
             # Try env-stripped words for option rules too
-            if stripped_words and _match_option_rule(rule, stripped_words):
+            if stripped_words and not raw_deny_set and _match_option_rule(rule, stripped_words):
                 result = Match(
                     decision=rule.decision,
                     pattern=rule.pattern,
@@ -1299,17 +1315,27 @@ def _match_words(
             continue  # option rules don't use fnmatch
 
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
-        matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
-        # If raw didn't match, try env-stripped form
-        if not matched and normalized_stripped:
-            matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
+        raw_matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
+        stripped_matched = False
+        if not raw_matched and normalized_stripped:
+            stripped_matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)
-        if not matched and normalized_pattern.endswith(" *"):
+        if not raw_matched and not stripped_matched and normalized_pattern.endswith(" *"):
             if normalized_cmd == normalized_pattern[:-2]:
-                matched = True
+                raw_matched = True
             elif normalized_stripped and normalized_stripped == normalized_pattern[:-2]:
-                matched = True
-        if matched:
+                stripped_matched = True
+
+        if raw_matched:
+            result = Match(
+                decision=rule.decision,
+                pattern=rule.pattern,
+                message=rule.message,
+                source=rule.source,
+                scope=rule.scope,
+            )
+            raw_deny_set = rule.decision == "deny"
+        elif stripped_matched and not raw_deny_set:
             result = Match(
                 decision=rule.decision,
                 pattern=rule.pattern,
