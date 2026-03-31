@@ -12,16 +12,17 @@ allow rm -rf /**/__pycache__
 #deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
 deny .venv/bin/*  "Use `uv`"
 deny .venv/bin/* *  "Use `uv`"
-deny pytest run  "Use: uv run python -m pytest ..."
-deny pytest run *  "Use: uv run python -m pytest ..."
+# deny pytest run  "Use: uv run python -m pytest ..."
+# deny pytest run *  "Use: uv run python -m pytest ..."
 deny python * "Use `uv run python`"
 deny python3 * "Use `uv run python`"
 deny python3 -m pytest * "Use: uv run python -m pytest ..."
-deny uv run pytest *  "Use: uv run python -m pytest ..."
-#deny uv run python *  "Use: uv run python -m pytest ..."
+# deny uv run pytest *  "Use: uv run python -m pytest ..."
+# deny uv run python *  "Use: uv run python -m pytest ..."
 
 allow uv run python -m pytest *
 allow uv run python ./*
+allow pytest run *
 
 # DANGER
 allow uv run python -c *
