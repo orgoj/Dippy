@@ -776,8 +776,9 @@ Subcommands:
     )
     install_parser.add_argument(
         "agent",
+        nargs="?",
         choices=["claude", "gemini", "cursor", "windsurf", "codex"],
-        help="Agent to install hooks for",
+        help="Agent to install hooks for; omit with --all to install for all agents",
     )
     install_parser.add_argument(
         "--global",

@@ -535,7 +535,7 @@ def _diff_configs(old_config: dict, new_config: dict, config_path: Path) -> str:
 
 
 def install(
-    agent: str,
+    agent: str | None,
     global_config: bool = False,
     cwd: str | None = None,
     force: bool = False,
@@ -546,7 +546,8 @@ def install(
     """Install Dippy hooks for the specified agent.
 
     Args:
-        agent: Agent ID (claude, gemini, cursor, windsurf)
+        agent: Agent ID (claude, gemini, cursor, windsurf, codex). If omitted,
+               --all must be set and hooks will be installed for every agent.
         global_config: Install to global config (default: project-local)
         cwd: Current working directory (for project-local installs)
         force: Replace existing/legacy hooks
@@ -558,6 +559,29 @@ def install(
     Returns:
         Exit code: 0 for success, 1 for errors
     """
+    if agent is None:
+        if not all_hooks:
+            print(
+                "Error: agent is required unless --all is specified",
+                file=sys.stderr,
+            )
+            return 1
+
+        exit_code = 0
+        for agent_id in HOOK_COMMANDS:
+            result = install(
+                agent=agent_id,
+                global_config=global_config,
+                cwd=cwd,
+                force=force,
+                dry_run=dry_run,
+                no_backup=no_backup,
+                all_hooks=True,
+            )
+            if result != 0:
+                exit_code = result
+        return exit_code
+
     agent_info = AGENTS.get(agent)
     if not agent_info:
         print(f"Error: Unknown agent '{agent}'", file=sys.stderr)

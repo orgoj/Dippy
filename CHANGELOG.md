@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.12] - 2026-04-11
+
+### Fixed
+
+- **Bulk hook install CLI** - `dippy hooks install --all` now installs the full Dippy hook set for every supported agent instead of failing on the positional `agent` argument
+  - `hooks install` now accepts an omitted agent only when `--all` is provided
+  - Bulk install traverses Claude, Gemini, Cursor, Windsurf, and Codex
+  - `dippy hooks install <agent> --all` keeps its existing meaning of installing the full hook set for a single agent
+  - Added regression tests for parser behavior, missing-agent validation, and bulk project-local installs
+
 ## [0.2.11] - 2026-04-11
 
 ### Fixed

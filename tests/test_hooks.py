@@ -1,6 +1,7 @@
 """Tests for dippy hooks installation functionality."""
 
 import json
+import sys
 
 from dippy.cli.hooks import _is_dippy_hook, _remove_dippy_hook
 
@@ -304,6 +305,27 @@ class TestRemoveDippyHook:
 class TestHooksInstallUninstall:
     """Integration-level tests for install/uninstall flows."""
 
+    def test_install_all_requires_flag_when_agent_missing(self, capsys):
+        from dippy.cli.hooks import install
+
+        result = install(agent=None)
+
+        assert result == 1
+        assert "agent is required unless --all is specified" in capsys.readouterr().err
+
+    def test_install_all_agents_creates_all_project_configs(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        result = install(agent=None, all_hooks=True, global_config=False, cwd=str(tmp_path))
+
+        assert result == 0
+        assert (tmp_path / ".claude" / "settings.json").exists()
+        assert (tmp_path / ".gemini" / "settings.json").exists()
+        assert (tmp_path / ".cursor" / "hooks.json").exists()
+        assert (tmp_path / ".windsurf" / "hooks.json").exists()
+        assert (tmp_path / ".codex" / "hooks.json").exists()
+        assert (tmp_path / ".codex" / "config.toml").exists()
+
     def test_install_claude_creates_hooks_config(self, tmp_path):
         from dippy.cli.hooks import install
 
@@ -361,6 +383,27 @@ class TestHooksInstallUninstall:
         config = json.loads(config_path.read_text())
         assert "hooks" in config
         assert "PreToolUse" in config["hooks"]
+
+
+class TestHooksCliParsing:
+    """CLI parsing for hooks subcommand."""
+
+    def test_hooks_install_all_allows_missing_agent(self, monkeypatch):
+        from dippy.dippy import parse_cli_args
+
+        monkeypatch.setattr(
+            sys,
+            "argv",
+            ["dippy", "hooks", "install", "--global", "--all"],
+        )
+
+        args = parse_cli_args()
+
+        assert args.subcommand == "hooks"
+        assert args.hooks_action == "install"
+        assert args.agent is None
+        assert getattr(args, "global") is True
+        assert args.all is True
 
 
 class TestCodexHooksFormat:
