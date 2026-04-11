@@ -8,6 +8,7 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import traceback
 from datetime import datetime, timezone
@@ -216,6 +217,71 @@ def get_local_mcp_servers() -> list[str]:
     return []
 
 
+def _format_mcp_servers_output(
+    text: str,
+    conn_r: int,
+    conn_g: int,
+    conn_b: int,
+    disc_r: int,
+    disc_g: int,
+    disc_b: int,
+) -> str:
+    """Format raw `claude mcp list` output into a styled comma-separated string."""
+    styled = []
+    for line in text.splitlines():
+        if ":" not in line:
+            continue
+        name, _, rest = line.partition(":")
+        name = name.strip()
+        if not name:
+            continue
+        if "Connected" in rest:
+            styled.append(f"\033[38;2;{conn_r};{conn_g};{conn_b}m{name}\033[0m")
+        else:
+            styled.append(f"\033[38;2;{disc_r};{disc_g};{disc_b}m!{name}\033[0m")
+    return ", ".join(styled)
+
+
+def _write_mcp_cache(cache_path: str, content: str) -> None:
+    """Write content to cache_path atomically via a tmp file."""
+    tmp = f"{cache_path}.tmp.{os.getpid()}"
+    try:
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(content)
+        os.replace(tmp, cache_path)
+    except Exception:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        raise
+
+
+def _refresh_mcp_cache_worker(
+    cache_path: str,
+    conn_r: int,
+    conn_g: int,
+    conn_b: int,
+    disc_r: int,
+    disc_g: int,
+    disc_b: int,
+) -> None:
+    """Background worker: run `claude mcp list`, format output, write cache."""
+    try:
+        result = subprocess.run(
+            ["claude", "mcp", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        content = _format_mcp_servers_output(
+            result.stdout, conn_r, conn_g, conn_b, disc_r, disc_g, disc_b
+        )
+        _write_mcp_cache(cache_path, content)
+    except Exception:
+        pass
+
+
 def get_mcp_servers() -> str | None:
     """Read MCP servers from local config and cached global list."""
     local_servers = get_local_mcp_servers()
@@ -240,17 +306,13 @@ def get_mcp_servers() -> str | None:
     if age >= MCP_CACHE_TTL:
         try:
             os.makedirs(CACHE_DIR, exist_ok=True)
-            tmp = f"{MCP_CACHE_PATH}.tmp.{os.getpid()}"
             disc_r, disc_g, disc_b = hex_to_rgb(MOLOKAI[STYLES["mcp_disconnected"][0]])
-            cmd = f'timeout 10 claude mcp list 2>/dev/null | awk -F: \'NF>1 {{if (/Connected/) print "\\033[38;2;{conn_r};{conn_g};{conn_b}m" $1 "\\033[0m"; else print "\\033[38;2;{disc_r};{disc_g};{disc_b}m!" $1 "\\033[0m"}}\' | paste -sd, | sed \'s/,/, /g\' > {tmp} && mv {tmp} {MCP_CACHE_PATH}'
-            subprocess.Popen(
-                cmd,
-                shell=True,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                start_new_session=True,
+            t = threading.Thread(
+                target=_refresh_mcp_cache_worker,
+                args=(MCP_CACHE_PATH, conn_r, conn_g, conn_b, disc_r, disc_g, disc_b),
+                daemon=True,
             )
+            t.start()
             log.debug("mcp_cache_refresh_spawned", age=age, ttl=MCP_CACHE_TTL)
         except Exception:
             log.error("mcp_cache_refresh_failed")

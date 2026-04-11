@@ -174,6 +174,7 @@ class TestIsDippyConfigured:
     def test_returns_false_when_settings_missing(self, tmp_path, monkeypatch):
         monkeypatch.setenv("HOME", str(tmp_path))
         from dippy.dippy_statusline import is_dippy_configured
+
         assert is_dippy_configured() is False
 
     def test_returns_false_when_no_hooks(self, tmp_path, monkeypatch):
@@ -182,6 +183,7 @@ class TestIsDippyConfigured:
         claude_dir.mkdir()
         (claude_dir / "settings.json").write_text('{"hooks": {}}')
         from dippy.dippy_statusline import is_dippy_configured
+
         assert is_dippy_configured() is False
 
     def test_returns_true_when_dippy_executable_configured(self, tmp_path, monkeypatch):
@@ -203,6 +205,7 @@ class TestIsDippyConfigured:
         claude_dir.mkdir()
         (claude_dir / "settings.json").write_text(json.dumps(settings))
         from dippy.dippy_statusline import is_dippy_configured
+
         assert is_dippy_configured() is True
 
     def test_returns_false_when_command_not_executable(self, tmp_path, monkeypatch):
@@ -221,6 +224,7 @@ class TestIsDippyConfigured:
         claude_dir.mkdir()
         (claude_dir / "settings.json").write_text(json.dumps(settings))
         from dippy.dippy_statusline import is_dippy_configured
+
         assert is_dippy_configured() is False
 
 
@@ -252,3 +256,55 @@ class TestOutputFormat:
         output = result.stdout.decode()
         # Strip trailing newline, then check no newlines remain
         assert "\n" not in output.rstrip("\n")
+
+
+class TestMcpCacheNoShellInjection:
+    """Tests for bd-a56: no shell=True in MCP cache refresh."""
+
+    def test_no_shell_true_in_source(self):
+        """get_mcp_servers must not use shell=True in subprocess calls."""
+        source_path = REPO_ROOT / "src" / "dippy" / "dippy_statusline.py"
+        source = source_path.read_text()
+        assert "shell=True" not in source, (
+            "dippy_statusline.py must not use shell=True (shell injection risk)"
+        )
+
+    def test_format_mcp_servers_output_connected(self):
+        """_format_mcp_servers_output formats connected servers with color."""
+        from dippy.dippy_statusline import _format_mcp_servers_output
+
+        mcp_output = "filesystem: Connected\ngithub: Disconnected\n"
+        result = _format_mcp_servers_output(mcp_output, 0, 255, 0, 255, 0, 0)
+        assert "filesystem" in result
+        assert "!filesystem" not in result
+        assert "!github" in result
+        assert ", " in result
+
+    def test_format_mcp_servers_output_skips_lines_without_colon(self):
+        """_format_mcp_servers_output ignores lines with no colon."""
+        from dippy.dippy_statusline import _format_mcp_servers_output
+
+        mcp_output = "header line\nfilesystem: Connected\n"
+        result = _format_mcp_servers_output(mcp_output, 0, 255, 0, 255, 0, 0)
+        assert "filesystem" in result
+        assert "header" not in result
+
+    def test_write_mcp_cache_handles_spaces_in_path(self, tmp_path):
+        """_write_mcp_cache writes atomically to paths containing spaces."""
+        from dippy.dippy_statusline import _write_mcp_cache
+
+        cache_dir = tmp_path / "path with spaces in name"
+        cache_dir.mkdir()
+        cache_path = cache_dir / "mcp.cache"
+        _write_mcp_cache(str(cache_path), "server1, server2")
+        assert cache_path.read_text() == "server1, server2"
+
+    def test_write_mcp_cache_atomic(self, tmp_path):
+        """_write_mcp_cache uses atomic write (tmp + rename)."""
+        from dippy.dippy_statusline import _write_mcp_cache
+
+        cache_path = tmp_path / "mcp.cache"
+        _write_mcp_cache(str(cache_path), "myserver")
+        assert cache_path.read_text() == "myserver"
+        tmp_files = list(tmp_path.glob("*.tmp.*"))
+        assert not tmp_files, f"Leftover tmp files: {tmp_files}"
