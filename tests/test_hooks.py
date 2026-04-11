@@ -1,5 +1,7 @@
 """Tests for dippy hooks installation functionality."""
 
+import json
+
 from dippy.cli.hooks import _is_dippy_hook, _remove_dippy_hook
 
 
@@ -277,3 +279,65 @@ class TestRemoveDippyHook:
         # hooks dict should be removed if empty
         assert "hooks" not in result
         assert result["other"] == "value"
+
+
+class TestHooksInstallUninstall:
+    """Integration-level tests for install/uninstall flows."""
+
+    def test_install_claude_creates_hooks_config(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        result = install(agent="claude", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+        config_path = tmp_path / ".claude" / "settings.json"
+        assert config_path.exists()
+        config = json.loads(config_path.read_text())
+        assert "hooks" in config
+        assert "PreToolUse" in config["hooks"]
+
+    def test_install_gemini_creates_hooks_config(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        result = install(agent="gemini", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+        config_path = tmp_path / ".gemini" / "settings.json"
+        assert config_path.exists()
+
+    def test_install_idempotent(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        install(agent="claude", global_config=False, cwd=str(tmp_path))
+        result = install(agent="claude", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+
+    def test_install_then_uninstall_removes_hooks(self, tmp_path):
+        from dippy.cli.hooks import _has_dippy_hook, install, uninstall
+
+        install(agent="claude", global_config=False, cwd=str(tmp_path))
+        result = uninstall(agent="claude", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+        config_path = tmp_path / ".claude" / "settings.json"
+        if config_path.exists():
+            config = json.loads(config_path.read_text())
+            assert not _has_dippy_hook(config, "claude")
+
+    def test_install_dry_run_does_not_create_file(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        result = install(
+            agent="claude", global_config=False, cwd=str(tmp_path), dry_run=True
+        )
+        assert result == 0
+        config_path = tmp_path / ".claude" / "settings.json"
+        assert not config_path.exists()
+
+    def test_install_codex_creates_hooks_json_with_correct_format(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        result = install(agent="codex", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+        config_path = tmp_path / ".codex" / "hooks.json"
+        assert config_path.exists()
+        config = json.loads(config_path.read_text())
+        assert "hooks" in config
+        assert "PreToolUse" in config["hooks"]

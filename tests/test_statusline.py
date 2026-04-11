@@ -168,6 +168,62 @@ class TestGitEdgeCases:
         assert result.returncode == 0
 
 
+class TestIsDippyConfigured:
+    """Tests for is_dippy_configured() — reads settings at call time, no reload needed."""
+
+    def test_returns_false_when_settings_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        from dippy.dippy_statusline import is_dippy_configured
+        assert is_dippy_configured() is False
+
+    def test_returns_false_when_no_hooks(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.json").write_text('{"hooks": {}}')
+        from dippy.dippy_statusline import is_dippy_configured
+        assert is_dippy_configured() is False
+
+    def test_returns_true_when_dippy_executable_configured(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        fake_dippy = tmp_path / "dippy"
+        fake_dippy.write_text("#!/bin/sh\necho test")
+        fake_dippy.chmod(0o755)
+        settings = {
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "Bash",
+                        "hooks": [{"command": str(fake_dippy)}],
+                    }
+                ]
+            }
+        }
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.json").write_text(json.dumps(settings))
+        from dippy.dippy_statusline import is_dippy_configured
+        assert is_dippy_configured() is True
+
+    def test_returns_false_when_command_not_executable(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        settings = {
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "Bash",
+                        "hooks": [{"command": "/nonexistent/dippy"}],
+                    }
+                ]
+            }
+        }
+        claude_dir = tmp_path / ".claude"
+        claude_dir.mkdir()
+        (claude_dir / "settings.json").write_text(json.dumps(settings))
+        from dippy.dippy_statusline import is_dippy_configured
+        assert is_dippy_configured() is False
+
+
 class TestOutputFormat:
     """Tests for output format validation."""
 
