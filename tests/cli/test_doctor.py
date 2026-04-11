@@ -10,6 +10,7 @@ from dippy.cli.doctor import (
     _format_json_output,
     apply_auto_fixes,
     check_config_validation,
+    check_hook_status,
     check_installation,
     check_log_health,
     run,
@@ -283,6 +284,52 @@ class TestGeminiErrorBranches:
         (gemini_dir / "settings.json").write_text("{}")
         results = check_hook_status(tmp_path, verbose=False)
         assert isinstance(results, list)
+
+
+class TestCodexDoctor:
+    def test_check_hook_status_includes_codex_when_feature_flag_exists(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "config.toml").write_text("[features]\ncodex_hooks = true\n")
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+
+        results = check_hook_status(workspace, verbose=False)
+
+        codex_result = next((r for r in results if r.name == "Hook: OpenAI Codex CLI"), None)
+        assert codex_result is not None
+        assert codex_result.status == HealthStatus.WARNING
+        assert "hook not installed" in codex_result.message.lower()
+
+    def test_check_hook_status_warns_when_codex_feature_flag_missing(
+        self, tmp_path, monkeypatch
+    ):
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        codex_dir = workspace / ".codex"
+        codex_dir.mkdir()
+        (codex_dir / "hooks.json").write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "PreToolUse": [
+                            {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]}
+                        ]
+                    }
+                }
+            )
+        )
+
+        results = check_hook_status(workspace, verbose=False)
+
+        codex_result = next((r for r in results if r.name == "Hook: OpenAI Codex CLI"), None)
+        assert codex_result is not None
+        assert codex_result.status == HealthStatus.WARNING
+        assert "feature flag missing" in codex_result.message.lower()
 
 
 class TestRun:

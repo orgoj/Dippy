@@ -95,8 +95,8 @@ codex logout         # Remove credentials
 | -------- | -------- | ----------- |
 | 1 | CLI flags | Highest priority |
 | 2 | Profile-specific values | `[profiles.<name>]` in config.toml |
-| 3 | Project config | `.codex/config.toml` in project root |
-| 4 | User config | `~/.codex/config.toml` |
+| 3 | Project config | `.codex/config.toml` plus `.codex/hooks.json` in project root |
+| 4 | User config | `~/.codex/config.toml` plus `~/.codex/hooks.json` |
 | 5 | Built-in defaults | Lowest priority |
 
 ### Configuration Format
@@ -934,9 +934,9 @@ Requires feature flag in some versions; login flow may have edge cases.
 
 | Aspect | Codex CLI | Claude Code | Cursor | Gemini CLI |
 | ------ | --------- | ----------- | ------ | ---------- |
-| Config format | TOML | JSON | JSON | JSON |
-| Config location | `~/.codex/config.toml` | `~/.claude/settings.json` | `~/.cursor/hooks.json` | `~/.gemini/settings.json` |
-| Project config | `.codex/config.toml` | `.claude/settings.json` | `.cursor/hooks.json` | `.gemini/settings.json` |
+| Config format | TOML + JSON | JSON | JSON | JSON |
+| Config location | `~/.codex/config.toml` + `~/.codex/hooks.json` | `~/.claude/settings.json` | `~/.cursor/hooks.json` | `~/.gemini/settings.json` |
+| Project config | `.codex/config.toml` + `.codex/hooks.json` | `.claude/settings.json` | `.cursor/hooks.json` | `.gemini/settings.json` |
 | Tool matchers | N/A | Regex patterns | N/A (global) | Regex patterns |
 
 ### Sandbox/Approval Comparison

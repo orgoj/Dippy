@@ -352,6 +352,10 @@ class HookInfo:
     project_matchers: list[str] = field(default_factory=list)
     project_command: str = ""
     project_legacy_command: str = ""
+    global_feature_flag: bool | None = None
+    global_feature_flag_path: Path | None = None
+    project_feature_flag: bool | None = None
+    project_feature_flag_path: Path | None = None
     pi_extension: bool = False
 
     def has_any_hook(self) -> bool:
@@ -811,6 +815,19 @@ def _codex_config_toml_path(global_config: bool, cwd: str | None = None) -> Path
     return Path(cwd) / ".codex" / "config.toml"
 
 
+def _codex_feature_flag_enabled(config_path: Path) -> bool:
+    """Check whether Codex hooks feature flag is enabled in config.toml."""
+    if not config_path.exists():
+        return False
+
+    try:
+        content = config_path.read_text()
+    except OSError:
+        return False
+
+    return "codex_hooks = true" in content
+
+
 def uninstall(
     agent: str,
     global_config: bool = False,
@@ -996,6 +1013,10 @@ def _get_hook_info(
     project_matchers = []
     project_command = ""
     project_legacy_command = ""
+    global_feature_flag = None
+    global_feature_flag_path = None
+    project_feature_flag = None
+    project_feature_flag_path = None
 
     if project_path.exists():
         try:
@@ -1013,6 +1034,14 @@ def _get_hook_info(
         except (json.JSONDecodeError, IOError):
             project_status = HookStatus.ERROR
 
+    if agent_id == "codex":
+        global_feature_flag_path = _codex_config_toml_path(global_config=True)
+        project_feature_flag_path = _codex_config_toml_path(
+            global_config=False, cwd=str(cwd_path)
+        )
+        global_feature_flag = _codex_feature_flag_enabled(global_feature_flag_path)
+        project_feature_flag = _codex_feature_flag_enabled(project_feature_flag_path)
+
     return HookInfo(
         agent_id=agent_id,
         agent_name=agent_info.name,
@@ -1026,6 +1055,10 @@ def _get_hook_info(
         project_matchers=project_matchers,
         project_command=project_command,
         project_legacy_command=project_legacy_command,
+        global_feature_flag=global_feature_flag,
+        global_feature_flag_path=global_feature_flag_path,
+        project_feature_flag=project_feature_flag,
+        project_feature_flag_path=project_feature_flag_path,
     )
 
 
@@ -1119,9 +1152,13 @@ def _format_text_output(
 
     for info in hook_infos:
         # Determine status indicator
-        if info.has_any_hook() and not info.has_legacy():
+        codex_flag_missing = info.agent_id == "codex" and (
+            (info.has_any_hook() and info.global_feature_flag is False)
+            or (info.project_status == HookStatus.INSTALLED and info.project_feature_flag is False)
+        )
+        if info.has_any_hook() and not info.has_legacy() and not codex_flag_missing:
             status_indicator = "+"
-        elif info.has_legacy():
+        elif info.has_legacy() or codex_flag_missing:
             status_indicator = "?"
         else:
             status_indicator = " "
@@ -1146,6 +1183,8 @@ def _format_text_output(
             print(f"    Run: dippy hooks install {info.agent_id} --global --force")
         elif info.global_status == HookStatus.NO_CONFIG:
             print(f"    Run: dippy hooks install {info.agent_id} --global")
+        elif info.agent_id == "codex" and info.global_feature_flag is False:
+            print(f"    Run: dippy hooks install {info.agent_id} --global --force")
 
         # Verbose details
         if verbose:
@@ -1155,6 +1194,24 @@ def _format_text_output(
                     print(f"      - {m}")
             if info.global_legacy_command:
                 print(f"    Legacy command: {info.global_legacy_command}")
+
+        if info.agent_id == "codex":
+            global_flag_status = (
+                "enabled"
+                if info.global_feature_flag
+                else ("missing" if info.global_feature_flag is False else "-")
+            )
+            project_flag_status = (
+                "enabled"
+                if info.project_feature_flag
+                else ("missing" if info.project_feature_flag is False else "-")
+            )
+            print(
+                f"    global feature:  {global_flag_status:20} {info.global_feature_flag_path}"
+            )
+            print(
+                f"    project feature: {project_flag_status:20} {info.project_feature_flag_path}"
+            )
 
         print()
 
@@ -1220,6 +1277,10 @@ def _format_json_output(
                 if info.global_legacy_command
                 else None,
                 "matchers": info.global_matchers,
+                "feature_flag_enabled": info.global_feature_flag,
+                "feature_flag_path": str(info.global_feature_flag_path)
+                if info.global_feature_flag_path
+                else None,
             },
             "project": {
                 "status": info.project_status.value,
@@ -1229,6 +1290,10 @@ def _format_json_output(
                 if info.project_legacy_command
                 else None,
                 "matchers": info.project_matchers,
+                "feature_flag_enabled": info.project_feature_flag,
+                "feature_flag_path": str(info.project_feature_flag_path)
+                if info.project_feature_flag_path
+                else None,
             },
         }
         output["agents"].append(agent_data)

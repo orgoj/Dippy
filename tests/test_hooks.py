@@ -396,7 +396,7 @@ class TestCodexHooksFormat:
                         f"Codex 'run' must be a list, got {type(entry['run'])}"
                     )
                     assert "dippy" in entry["run"][0], (
-                        f"Codex 'run' must start with dippy command"
+                        "Codex 'run' must start with dippy command"
                     )
 
     def test_all_hooks_codex_uses_correct_format(self):
@@ -476,3 +476,17 @@ class TestCodexHooksFormat:
         if config_path.exists():
             config = json.loads(config_path.read_text())
             assert not _has_dippy_hook(config, "codex")
+
+    def test_list_hooks_json_reports_codex_feature_flag(self, tmp_path, capsys):
+        """hooks list --json must expose Codex feature flag state."""
+        from dippy.cli.hooks import install, list_hooks
+
+        install(agent="codex", global_config=False, cwd=str(tmp_path))
+        capsys.readouterr()
+        result = list_hooks(cwd=str(tmp_path), json_output=True)
+        assert result == 0
+
+        payload = json.loads(capsys.readouterr().out)
+        codex = next(agent for agent in payload["agents"] if agent["id"] == "codex")
+        assert codex["project"]["feature_flag_enabled"] is True
+        assert codex["project"]["feature_flag_path"].endswith(".codex/config.toml")

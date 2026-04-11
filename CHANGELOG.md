@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.11] - 2026-04-11
+
+### Fixed
+
+- **Codex doctor coverage** - `dippy doctor` now diagnoses OpenAI Codex CLI alongside Claude, Gemini, Cursor, and Windsurf
+  - Detects Codex hook presence from `.codex/hooks.json`
+  - Validates `codex_hooks = true` in `.codex/config.toml`
+  - Warns when hooks are installed but the Codex feature flag is missing
+  - Includes Codex hook approval log health in diagnostics
+- **Codex hook status reporting** - `dippy hooks list` now reports Codex feature-flag state in both text and JSON output, so status is accurate when `hooks.json` and `config.toml` diverge
+
+### Documentation
+
+- Added Codex to the supported agents list in README hooks management docs
+- Documented Codex feature-flag validation in doctor checks
+- Corrected Codex configuration references in hook system comparison docs to distinguish `hooks.json` from `config.toml`
+
 ## [0.2.9] - 2026-04-11
 
 ### Added

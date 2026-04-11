@@ -17,7 +17,13 @@ from enum import Enum
 from pathlib import Path
 
 from dippy.cli.agents import AGENTS
-from dippy.cli.hooks import HOOK_COMMANDS, _get_hook_command_for_agent, _has_dippy_hook
+from dippy.cli.hooks import (
+    HOOK_COMMANDS,
+    _codex_config_toml_path,
+    _codex_feature_flag_enabled,
+    _get_hook_command_for_agent,
+    _has_dippy_hook,
+)
 
 
 class HealthStatus(Enum):
@@ -307,7 +313,7 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
     home_dir = Path.home()
 
     # Check each agent with hook support
-    for agent_id in ("claude", "gemini", "cursor", "windsurf"):
+    for agent_id in ("claude", "gemini", "cursor", "windsurf", "codex"):
         hook_config = HOOK_COMMANDS.get(agent_id)
         agent_info = AGENTS.get(agent_id)
         if not hook_config or not agent_info:
@@ -336,8 +342,21 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                 except (json.JSONDecodeError, IOError):
                     pass
 
+        global_feature_flag = None
+        project_feature_flag = None
+        if agent_id == "codex":
+            global_feature_flag = _codex_feature_flag_enabled(
+                _codex_config_toml_path(global_config=True)
+            )
+            if check_project:
+                project_feature_flag = _codex_feature_flag_enabled(
+                    _codex_config_toml_path(global_config=False, cwd=str(cwd_path))
+                )
+
         # Determine agent status
         agent_exists = global_config is not None or project_config is not None
+        if agent_id == "codex":
+            agent_exists = agent_exists or global_feature_flag or bool(project_feature_flag)
 
         if not agent_exists:
             # Agent not installed - show relevant paths only
@@ -428,6 +447,25 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                     matchers=matchers,
                 )
             )
+        elif agent_id == "codex" and (
+            ("global" in locations and global_feature_flag is False)
+            or ("project" in locations and project_feature_flag is False)
+        ):
+            missing_scopes = []
+            if "global" in locations and global_feature_flag is False:
+                missing_scopes.append("global")
+            if "project" in locations and project_feature_flag is False:
+                missing_scopes.append("project")
+            results.append(
+                CheckResult(
+                    f"Hook: {agent_info.name}",
+                    HealthStatus.WARNING,
+                    f"Hook installed, Codex feature flag missing ({', '.join(missing_scopes)})",
+                    "Run install again to enable codex_hooks in config.toml",
+                    fix_command=f"dippy hooks install {agent_id} --global --force",
+                    matchers=matchers,
+                )
+            )
         else:
             details = None
             if verbose:
@@ -506,13 +544,25 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> dict[str, list
         hook_names = [("PreToolUse", "PreToolUse"), ("PostToolUse", "PostToolUse")]
     elif agent_id == "gemini":
         hook_names = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
+    elif agent_id == "codex":
+        hook_names = [
+            ("PreToolUse", "PreToolUse"),
+            ("PostToolUse", "PostToolUse"),
+            ("Stop", "Stop"),
+        ]
     else:
         return matchers
 
     for config_key, display_name in hook_names:
         if config_key in hooks:
             for hook_entry in hooks[config_key]:
-                if "matcher" in hook_entry:
+                if agent_id == "codex":
+                    if "matchers" in hook_entry:
+                        if display_name not in matchers:
+                            matchers[display_name] = []
+                        tool_name = hook_entry["matchers"].get("tool_name", "(all)")
+                        matchers[display_name].append(tool_name)
+                elif "matcher" in hook_entry:
                     if display_name not in matchers:
                         matchers[display_name] = []
                     matchers[display_name].append(hook_entry["matcher"])
@@ -599,6 +649,7 @@ def check_log_health(verbose: bool) -> CheckResult:
     log_paths = [
         (Path.home() / ".claude" / "hook-approvals.log", "Claude Code"),
         (Path.home() / ".gemini" / "hook-approvals.log", "Gemini CLI"),
+        (Path.home() / ".codex" / "hook-approvals.log", "OpenAI Codex CLI"),
         (Path.home() / ".dippy" / "audit.log", "Dippy audit"),
     ]
 
@@ -728,6 +779,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         "cursor": "beforeShellExecution hook",
         "gemini": "BeforeTool/AfterTool hooks",
         "windsurf": "beforeShellExecution hook",
+        "codex": "PreToolUse/PostToolUse/Stop hooks + codex_hooks feature flag",
         "pi": "TypeScript extension",
     }.get(agent_id, "Unknown")
 

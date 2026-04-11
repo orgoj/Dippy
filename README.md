@@ -206,7 +206,7 @@ dippy hooks uninstall <agent>       # Remove hooks (project-local)
 dippy hooks uninstall <agent> --global  # Remove hooks (global)
 ```
 
-**Supported agents:** `claude`, `gemini`, `cursor`, `windsurf`
+**Supported agents:** `claude`, `gemini`, `cursor`, `windsurf`, `codex`
 
 **Status indicators:**
 - `+` = installed
@@ -227,7 +227,8 @@ dippy doctor --verbose              # Show detailed diagnostics
 
 **Health checks:**
 - ✓ Installation (on PATH, version check)
-- ✓ Hook status per agent (Claude, Gemini, Cursor, Windsurf, pi-mono)
+- ✓ Hook status per agent (Claude, Gemini, Cursor, Windsurf, Codex, pi-mono)
+- ✓ Codex `codex_hooks` feature flag validation
 - ✓ Legacy hook detection with full path
 - ✓ pi_wrapper check for pi-mono/moltbot
 - ✓ Configuration validation (syntax errors)

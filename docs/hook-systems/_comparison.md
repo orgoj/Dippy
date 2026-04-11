@@ -53,9 +53,9 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 | Aspect                      | Claude Code               | Cursor                 | Gemini CLI                      | Codex CLI              |
 | --------------------------- | ------------------------- | ---------------------- | ------------------------------- | ---------------------- |
-| **Config format**           | JSON                      | JSON                   | JSON                            | TOML                   |
-| **User config**             | `~/.claude/settings.json` | `~/.cursor/hooks.json` | `~/.gemini/settings.json`       | `~/.codex/config.toml` |
-| **Project config**          | `.claude/settings.json`   | `.cursor/hooks.json`   | `.gemini/settings.json`         | `.codex/config.toml`   |
+| **Config format**           | JSON                      | JSON                   | JSON                            | JSON + TOML            |
+| **User config**             | `~/.claude/settings.json` | `~/.cursor/hooks.json` | `~/.gemini/settings.json`       | `~/.codex/hooks.json` + `~/.codex/config.toml` |
+| **Project config**          | `.claude/settings.json`   | `.cursor/hooks.json`   | `.gemini/settings.json`         | `.codex/hooks.json` + `.codex/config.toml` |
 | **Hook type: command**      | ✅                         | ✅                      | ✅                               | ✅ (notify only)        |
 | **Hook type: prompt (LLM)** | ✅ (Haiku)                 | ❌                      | ❌                               | ❌                      |
 | **Tool matchers**           | ✅ Regex (`Write\|Edit`)   | ❌ Global only          | ✅ Regex (`write_file\|replace`) | N/A                    |
