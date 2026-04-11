@@ -47,6 +47,7 @@ from dippy.core.config import (
     match_mcp,
     match_web,
 )
+from dippy import __version__
 from dippy.core.analyzer import analyze
 from dippy.core.notifier import run_notifier, should_run_notifier
 from dippy.core.template import expand_template
@@ -717,7 +718,7 @@ Subcommands:
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
-    parser.add_argument("--version", action="version", version="dippy 0.2.8")
+    parser.add_argument("--version", action="version", version=f"dippy {__version__}")
     parser.add_argument(
         "--remote", action="store_true", help="Remote context (skip local path checks)"
     )

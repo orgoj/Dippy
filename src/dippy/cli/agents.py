@@ -32,7 +32,7 @@ class AgentInfo:
     name: str
     global_config: Path
     project_config: str
-    hook_format: Literal["claude", "cursor", "gemini", "pi", "none"]
+    hook_format: Literal["claude", "cursor", "gemini", "pi", "codex", "none"]
     config_format: Literal["json", "toml"]
     env_flags: tuple[str, ...]
     cli_flags: tuple[str, ...]
@@ -117,10 +117,10 @@ AGENTS: dict[str, AgentInfo] = {
     "codex": AgentInfo(
         id="codex",
         name="OpenAI Codex CLI",
-        global_config=Path.home() / ".codex" / "config.toml",
-        project_config=".codex/config.toml",
-        hook_format="none",  # Codex has no full hook system
-        config_format="toml",
+        global_config=Path.home() / ".codex" / "hooks.json",
+        project_config=".codex/hooks.json",
+        hook_format="codex",
+        config_format="json",
         env_flags=("DIPPY_CODEX",),
         cli_flags=("--codex",),
     ),

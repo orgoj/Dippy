@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.9] - 2026-04-11
+
 ### Added
+
+- **Codex CLI Hooks** - Full hook support for OpenAI Codex CLI
+  - PreToolUse/PostToolUse hooks for Bash command interception
+  - Stop hook for notifier continuation
+  - Dual-config install: `hooks.json` (hook definitions) + `config.toml` (feature flag)
+  - `dippy hooks install codex --global` / `dippy hooks install codex`
+  - Codex-specific response format following official wire protocol
+  - `codex_hooks = true` feature flag automatically enabled on install
 
 - **Idle Prompt Notifications** - Notification support for Claude Code idle state
   - New configuration `set idle-notifier-command "CMD"` with template expansion
@@ -27,6 +37,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Automatically analyzes inner commands starting after the trigger word
   - Support for custom target flags (e.g., `-t`, `-h`) with automatic fallback to first non-option token
   - Enforces `remote=True` for inner commands, skipping local path checks for remote operations
+
+### Fixed
+
+- **Codex hooks format** - Fixed `hooks.json` to use the correct Codex-native format: `matchers` object + `run` array (was using Claude Code's nested `hooks` array format which Codex does not recognize)
+- **Gemini fail-open security** - Error paths in Gemini mode now return `ask` instead of `allow`, closing an inadvertent security bypass where hook failures would silently approve commands
+- **Config merge** - `_merge_configs()` now correctly merges `aliases`, `log_rotate_max_days`, and `log_hook_approvals` from project config over global config
+- **HandlerContext cwd** - Analysis now passes working directory through `HandlerContext.cwd`, enabling Python handler to resolve relative script paths correctly
+- **Lazy handler loading** - `_discover_handlers()` now uses AST scan instead of importing every handler module at startup, reducing hook process cold-start time
+- **MCP statusline shell injection** - Removed `shell=True` from MCP cache refresh subprocess; cache now written via Python file APIs with atomic rename
 
 ## [0.2.7] - 2026-03-31
 

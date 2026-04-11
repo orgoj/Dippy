@@ -121,7 +121,14 @@ class TestAgentsRegistry:
             assert isinstance(info.name, str) and len(info.name) > 0
             assert isinstance(info.global_config, Path)
             assert isinstance(info.project_config, str) and len(info.project_config) > 0
-            assert info.hook_format in ("claude", "cursor", "gemini", "pi", "none")
+            assert info.hook_format in (
+                "claude",
+                "cursor",
+                "gemini",
+                "pi",
+                "codex",
+                "none",
+            )
             assert info.config_format in ("json", "toml")
             assert isinstance(info.env_flags, tuple)
             assert isinstance(info.cli_flags, tuple)
@@ -157,14 +164,14 @@ class TestAgentsRegistry:
         assert cursor.config_format == "json"
 
     def test_codex_agent_config(self):
-        """Codex agent has TOML config format."""
+        """Codex agent has hooks.json config for hook definitions."""
         codex = AGENTS["codex"]
         assert codex.id == "codex"
         assert codex.name == "OpenAI Codex CLI"
-        assert codex.global_config == Path.home() / ".codex" / "config.toml"
-        assert codex.project_config == ".codex/config.toml"
-        assert codex.hook_format == "none"  # No full hook system
-        assert codex.config_format == "toml"
+        assert codex.global_config == Path.home() / ".codex" / "hooks.json"
+        assert codex.project_config == ".codex/hooks.json"
+        assert codex.hook_format == "codex"
+        assert codex.config_format == "json"
 
 
 class TestDetectAgents:

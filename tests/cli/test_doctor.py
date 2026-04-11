@@ -46,10 +46,12 @@ class TestCheckInstallation:
 
         def mock_run(cmd, **kwargs):
             if cmd and "dippy" in str(cmd[0]):
+
                 class FakeResult:
                     returncode = 0
                     stdout = "dippy 1.0.0\n"
                     stderr = ""
+
                 return FakeResult()
             return real_run(cmd, **kwargs)
 
@@ -69,10 +71,12 @@ class TestCheckInstallation:
 
         def mock_run(cmd, **kwargs):
             if cmd and "dippy" in str(cmd[0]):
+
                 class FakeResult:
                     returncode = 1
                     stdout = ""
                     stderr = "error"
+
                 return FakeResult()
             return real_run(cmd, **kwargs)
 
@@ -88,7 +92,9 @@ class TestCheckConfigValidation:
         result = check_config_validation(tmp_path)
         assert result.status == HealthStatus.WARNING
 
-    def test_valid_project_config_returns_warning_no_global(self, tmp_path, monkeypatch):
+    def test_valid_project_config_returns_warning_no_global(
+        self, tmp_path, monkeypatch
+    ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         # Valid project config but no global config → warning for missing global
         config_file = tmp_path / ".dippy"
@@ -223,6 +229,7 @@ class TestApplyAutoFixes:
         # apply_auto_fixes does `from dippy.cli.hooks import install as hooks_install`
         # so patching the module attribute works
         import dippy.cli.hooks as _hooks_mod
+
         monkeypatch.setattr(_hooks_mod, "install", fake_install)
         result = apply_auto_fixes(checks, tmp_path)
         assert result is True
@@ -232,9 +239,12 @@ class TestApplyAutoFixes:
 class TestGeminiErrorBranches:
     """Tests for Gemini-specific error/fallback paths in doctor checks."""
 
-    def test_check_hook_status_gemini_invalid_json_no_crash(self, tmp_path, monkeypatch):
+    def test_check_hook_status_gemini_invalid_json_no_crash(
+        self, tmp_path, monkeypatch
+    ):
         """Gemini config with invalid JSON does not crash check_hook_status."""
         from dippy.cli.doctor import check_hook_status
+
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         # Create invalid Gemini config
         gemini_dir = tmp_path / ".gemini"
@@ -250,6 +260,7 @@ class TestGeminiErrorBranches:
     ):
         """Corrupted Gemini config yields WARNING (not installed) not CRITICAL."""
         from dippy.cli.doctor import check_hook_status
+
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         gemini_dir = tmp_path / ".gemini"
         gemini_dir.mkdir()
@@ -260,9 +271,12 @@ class TestGeminiErrorBranches:
         if gemini_result:
             assert gemini_result.status != HealthStatus.CRITICAL
 
-    def test_check_hook_status_gemini_empty_config_no_crash(self, tmp_path, monkeypatch):
+    def test_check_hook_status_gemini_empty_config_no_crash(
+        self, tmp_path, monkeypatch
+    ):
         """Empty Gemini settings.json does not crash."""
         from dippy.cli.doctor import check_hook_status
+
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
         gemini_dir = tmp_path / ".gemini"
         gemini_dir.mkdir()

@@ -2,6 +2,8 @@
 
 include .dippy-yolo
 
+allow tmux *
+
 allow ./bin/dippy-hook *
 
 allow-read /home/michael/work/ai/PI/pi-mono/**

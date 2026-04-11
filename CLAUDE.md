@@ -19,6 +19,18 @@ Shell command approval hook for AI coding assistants.
 
 **This applies to:** .py files, .md files, test files, documentation, comments, EVERYTHING!
 
+## Version Management
+
+Version must be bumped in **both** places when releasing:
+- `src/dippy/__init__.py` — `__version__ = "X.Y.Z"`
+- `pyproject.toml` — `version = "X.Y.Z"`
+
+`src/dippy/dippy.py` reads `__version__` dynamically — no manual update needed there.
+
+After changing `pyproject.toml`, regenerate the lock file: `uv lock`
+
+Also update `CHANGELOG.md`: move `[Unreleased]` entries under the new version heading.
+
 ## Commands
 
 ```bash

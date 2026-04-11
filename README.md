@@ -127,6 +127,9 @@ dippy hooks install cursor --global
 
 # Install for Windsurf (global)
 dippy hooks install windsurf --global
+
+# Install for Codex CLI (global, requires codex_hooks feature flag)
+dippy hooks install codex --global
 ```
 
 ### 2. Verify Installation
@@ -267,7 +270,7 @@ Dippy adapts its output format and behavior based on the agent:
 | Windsurf | `--windsurf` | `DIPPY_WINDSURF=1` | ✅ |
 | pi-mono | `--pi` | `DIPPY_PI=1` | extension |
 | Moltbot | `--moltbot` | `DIPPY_MOLTBOT=1` | extension |
-| OpenAI Codex | `--codex` | `DIPPY_CODEX=1` | partial |
+| OpenAI Codex | `--codex` | `DIPPY_CODEX=1` | ✅ |
 | PearAI | `--pearai` | `DIPPY_PEARAI=1` | partial |
 
 Each agent mode maintains its own approval log (e.g., `~/.claude/hook-approvals.log`).

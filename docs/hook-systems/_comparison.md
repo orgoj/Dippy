@@ -8,44 +8,44 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 ## Hook Event Support
 
-| Event Type                    | Claude Code          | Cursor                                                     | Gemini CLI                      | Codex CLI          |
-| ----------------------------- | -------------------- | ---------------------------------------------------------- | ------------------------------- | ------------------ |
-| **Pre-tool execution**        | ✅ PreToolUse         | ✅ beforeShellExecution, beforeMCPExecution, beforeReadFile | ✅ BeforeTool                    | ❌                  |
-| **Post-tool execution**       | ✅ PostToolUse        | ✅ afterShellExecution, afterMCPExecution, afterFileEdit    | ✅ AfterTool                     | ❌                  |
-| **Tool failure**              | ✅ PostToolUseFailure | ❌                                                          | ❌                               | ❌                  |
-| **Permission request**        | ✅ PermissionRequest  | ❌ (use beforeShell)                                        | ✅ Notification (ToolPermission) | ❌                  |
-| **User prompt submit**        | ✅ UserPromptSubmit   | ✅ beforeSubmitPrompt (beta)                                | ✅ BeforeAgent                   | ❌                  |
-| **Agent stop**                | ✅ Stop               | ✅ stop                                                     | ✅ AfterAgent                    | ❌                  |
-| **Subagent start**            | ✅ SubagentStart      | ❌                                                          | ❌                               | ❌                  |
-| **Subagent stop**             | ✅ SubagentStop       | ❌                                                          | ❌                               | ❌                  |
-| **Session start**             | ✅ SessionStart       | ❌                                                          | ✅ SessionStart                  | ❌                  |
-| **Session end**               | ✅ SessionEnd         | ❌                                                          | ✅ SessionEnd                    | ❌                  |
-| **Pre-compaction**            | ✅ PreCompact         | ❌                                                          | ✅ PreCompress                   | ❌                  |
-| **Notification**              | ✅ Notification       | ❌                                                          | ✅ Notification                  | ✅ notify (limited) |
-| **Pre-model (LLM request)**   | ❌                    | ❌                                                          | ✅ BeforeModel                   | ❌                  |
-| **Post-model (LLM response)** | ❌                    | ❌                                                          | ✅ AfterModel                    | ❌                  |
-| **Tool selection**            | ❌                    | ❌                                                          | ✅ BeforeToolSelection           | ❌                  |
-| **Agent thought/reasoning**   | ❌                    | ✅ afterAgentThought                                        | ❌                               | ❌                  |
-| **Tab completions**           | ❌                    | ✅ beforeTabFileRead, afterTabFileEdit                      | ❌                               | ❌                  |
+| Event Type                    | Claude Code          | Cursor                                                     | Gemini CLI                      | Codex CLI                     |
+| ----------------------------- | -------------------- | ---------------------------------------------------------- | ------------------------------- | ----------------------------- |
+| **Pre-tool execution**        | ✅ PreToolUse         | ✅ beforeShellExecution, beforeMCPExecution, beforeReadFile | ✅ BeforeTool                    | ✅ PreToolUse (Bash only)     |
+| **Post-tool execution**       | ✅ PostToolUse        | ✅ afterShellExecution, afterMCPExecution, afterFileEdit    | ✅ AfterTool                     | ✅ PostToolUse (Bash only)    |
+| **Tool failure**              | ✅ PostToolUseFailure | ❌                                                          | ❌                               | ❌                             |
+| **Permission request**        | ✅ PermissionRequest  | ❌ (use beforeShell)                                        | ✅ Notification (ToolPermission) | ⚠️ Parsed but not supported    |
+| **User prompt submit**        | ✅ UserPromptSubmit   | ✅ beforeSubmitPrompt (beta)                                | ✅ BeforeAgent                   | ✅ UserPromptSubmit            |
+| **Agent stop**                | ✅ Stop               | ✅ stop                                                     | ✅ AfterAgent                    | ✅ Stop                        |
+| **Subagent start**            | ✅ SubagentStart      | ❌                                                          | ❌                               | ❌                             |
+| **Subagent stop**             | ✅ SubagentStop       | ❌                                                          | ❌                               | ❌                             |
+| **Session start**             | ✅ SessionStart       | ❌                                                          | ✅ SessionStart                  | ✅ SessionStart                |
+| **Session end**               | ✅ SessionEnd         | ❌                                                          | ✅ SessionEnd                    | ❌                             |
+| **Pre-compaction**            | ✅ PreCompact         | ❌                                                          | ✅ PreCompress                   | ❌                             |
+| **Notification**              | ✅ Notification       | ❌                                                          | ✅ Notification                  | ✅ notify (limited)            |
+| **Pre-model (LLM request)**   | ❌                    | ❌                                                          | ✅ BeforeModel                   | ❌                             |
+| **Post-model (LLM response)** | ❌                    | ❌                                                          | ✅ AfterModel                    | ❌                             |
+| **Tool selection**            | ❌                    | ❌                                                          | ✅ BeforeToolSelection           | ❌                             |
+| **Agent thought/reasoning**   | ❌                    | ✅ afterAgentThought                                        | ❌                               | ❌                             |
+| **Tab completions**           | ❌                    | ✅ beforeTabFileRead, afterTabFileEdit                      | ❌                               | ❌                             |
 
-**Total Events:** Claude Code: 11 | Cursor: 10 | Gemini CLI: 11 | Codex CLI: 1
+**Total Events:** Claude Code: 11 | Cursor: 10 | Gemini CLI: 11 | Codex CLI: 5
 
 ---
 
 ## Hook Capabilities
 
-| Capability                   | Claude Code                            | Cursor              | Gemini CLI            | Codex CLI |
-| ---------------------------- | -------------------------------------- | ------------------- | --------------------- | --------- |
-| **Block operations**         | ✅ Exit 2 or JSON deny                  | ✅ permission: deny  | ✅ Exit 2 or JSON deny | ❌         |
-| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow     | ❌         |
-| **Prompt user**              | ✅ permissionDecision: ask              | ✅ permission: ask   | ✅ decision: ask       | ❌         |
-| **Modify tool input**        | ✅ updatedInput                         | ❌                   | ✅ (via deny + reason) | ❌         |
-| **Inject context to agent**  | ✅ additionalContext (UserPromptSubmit) | ✅ agent_message     | ✅ additionalContext   | ❌         |
-| **Message to user only**     | ✅ systemMessage                        | ✅ user_message      | ✅ systemMessage       | ❌         |
-| **Force agent continuation** | ✅ Stop hook block                      | ✅ followup_message  | ✅ AfterAgent block    | ❌         |
-| **Modify LLM request**       | ❌                                      | ❌                   | ✅ llm_request         | ❌         |
-| **Modify LLM response**      | ❌                                      | ❌                   | ✅ llm_response        | ❌         |
-| **Filter available tools**   | ❌                                      | ❌                   | ✅ toolConfig          | ❌         |
+| Capability                   | Claude Code                            | Cursor              | Gemini CLI            | Codex CLI               |
+| ---------------------------- | -------------------------------------- | ------------------- | --------------------- | ----------------------- |
+| **Block operations**         | ✅ Exit 2 or JSON deny                  | ✅ permission: deny  | ✅ Exit 2 or JSON deny | ⚠️ Parsed but not supported |
+| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow     | ❌                      |
+| **Prompt user**              | ✅ permissionDecision: ask              | ✅ permission: ask   | ✅ decision: ask       | ❌                      |
+| **Modify tool input**        | ✅ updatedInput                         | ❌                   | ✅ (via deny + reason) | ❌                      |
+| **Inject context to agent**  | ✅ additionalContext (UserPromptSubmit) | ✅ agent_message     | ✅ additionalContext   | ⚠️ Parsed but not supported |
+| **Message to user only**     | ✅ systemMessage                        | ✅ user_message      | ✅ systemMessage       | ⚠️ Parsed but not supported |
+| **Force agent continuation** | ✅ Stop hook block                      | ✅ followup_message  | ✅ AfterAgent block    | ✅ Stop hook block      |
+| **Modify LLM request**       | ❌                                      | ❌                   | ✅ llm_request         | ❌                      |
+| **Modify LLM response**      | ❌                                      | ❌                   | ✅ llm_response        | ❌                      |
+| **Filter available tools**   | ❌                                      | ❌                   | ✅ toolConfig          | ❌                      |
 
 ---
 
@@ -66,44 +66,44 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 ## Communication Protocol
 
-| Aspect                    | Claude Code               | Cursor              | Gemini CLI                | Codex CLI  |
-| ------------------------- | ------------------------- | ------------------- | ------------------------- | ---------- |
-| **Input method**          | stdin JSON                | stdin JSON          | stdin JSON                | stdin JSON |
-| **Output method**         | stdout JSON               | stdout JSON         | stdout JSON               | N/A        |
-| **Exit 0**                | Success, parse JSON       | Success, parse JSON | Success, parse JSON       | N/A        |
-| **Exit 2**                | Block with stderr message | Not documented      | Block with stderr message | N/A        |
-| **Other exit**            | Non-blocking warning      | Not documented      | Non-blocking warning      | N/A        |
-| **Invalid JSON fallback** | Treat as plain text       | Treat as plain text | Treat as systemMessage    | N/A        |
+| Aspect                    | Claude Code               | Cursor              | Gemini CLI                | Codex CLI           |
+| ------------------------- | ------------------------- | ------------------- | ------------------------- | ------------------- |
+| **Input method**          | stdin JSON                | stdin JSON          | stdin JSON                | stdin JSON          |
+| **Output method**         | stdout JSON               | stdout JSON         | stdout JSON               | stdout JSON         |
+| **Exit 0**                | Success, parse JSON       | Success, parse JSON | Success, parse JSON       | Success, parse JSON |
+| **Exit 2**                | Block with stderr message | Not documented      | Block with stderr message | Block with stderr  |
+| **Other exit**            | Non-blocking warning      | Not documented      | Non-blocking warning      | Non-blocking warning |
+| **Invalid JSON fallback** | Treat as plain text       | Treat as plain text | Treat as systemMessage    | Treat as plain text |
 
 ---
 
 ## Input JSON Schema (Common Fields)
 
-| Field             | Claude Code          | Cursor                | Gemini CLI      | Codex CLI |
-| ----------------- | -------------------- | --------------------- | --------------- | --------- |
-| `session_id`      | ✅                    | ✅ conversation_id     | ✅               | ❌         |
-| `hook_event_name` | ✅                    | ✅                     | ✅               | ❌         |
-| `cwd`             | ✅                    | ✅ (may be empty)      | ✅               | ❌         |
-| `tool_name`       | ✅                    | ✅ (in specific hooks) | ✅               | ❌         |
-| `tool_input`      | ✅                    | ✅                     | ✅               | ❌         |
-| `tool_result`     | ✅ (PostToolUse)      | ✅ result_json         | ✅ tool_response | ❌         |
-| `transcript_path` | ✅                    | ❌                     | ✅               | ❌         |
-| `timestamp`       | ❌                    | ❌                     | ✅               | ❌         |
-| `user_prompt`     | ✅ (UserPromptSubmit) | ✅ prompt              | ✅ prompt        | ❌         |
+| Field             | Claude Code          | Cursor                | Gemini CLI      | Codex CLI        |
+| ----------------- | -------------------- | --------------------- | --------------- | ---------------- |
+| `session_id`      | ✅                    | ✅ conversation_id     | ✅               | ✅                |
+| `hook_event_name` | ✅                    | ✅                     | ✅               | ✅                |
+| `cwd`             | ✅                    | ✅ (may be empty)      | ✅               | ✅                |
+| `tool_name`       | ✅                    | ✅ (in specific hooks) | ✅               | ✅ (Bash only)   |
+| `tool_input`      | ✅                    | ✅                     | ✅               | ✅                |
+| `tool_result`     | ✅ (PostToolUse)      | ✅ result_json         | ✅ tool_response | ✅                |
+| `transcript_path` | ✅                    | ❌                     | ✅               | ✅                |
+| `timestamp`       | ❌                    | ❌                     | ✅               | ✅                |
+| `user_prompt`     | ✅ (UserPromptSubmit) | ✅ prompt              | ✅ prompt        | ✅                |
 
 ---
 
 ## Output JSON Schema
 
-| Field                   | Claude Code                             | Cursor            | Gemini CLI                             | Codex CLI |
-| ----------------------- | --------------------------------------- | ----------------- | -------------------------------------- | --------- |
-| **Permission decision** | `hookSpecificOutput.permissionDecision` | `permission`      | `decision`                             | N/A       |
-| **Reason for agent**    | `permissionDecisionReason`              | `agent_message`   | `reason`                               | N/A       |
-| **Message for user**    | `systemMessage`                         | `user_message`    | `systemMessage`                        | N/A       |
-| **Modified input**      | `hookSpecificOutput.updatedInput`       | ❌                 | ❌                                      | N/A       |
-| **Context injection**   | `hookSpecificOutput.additionalContext`  | `agent_message`   | `hookSpecificOutput.additionalContext` | N/A       |
-| **Stop processing**     | `continue: false`                       | `continue: false` | `continue: false`                      | N/A       |
-| **Suppress output**     | `suppressOutput: true`                  | ❌                 | `suppressOutput: true`                 | N/A       |
+| Field                   | Claude Code                             | Cursor            | Gemini CLI                             | Codex CLI               |
+| ----------------------- | --------------------------------------- | ----------------- | -------------------------------------- | ----------------------- |
+| **Permission decision** | `hookSpecificOutput.permissionDecision` | `permission`      | `decision`                             | `permissionDecision`    |
+| **Reason for agent**    | `permissionDecisionReason`              | `agent_message`   | `reason`                               | `reason`                |
+| **Message for user**    | `systemMessage`                         | `user_message`    | `systemMessage`                        | `systemMessage`         |
+| **Modified input**      | `hookSpecificOutput.updatedInput`       | ❌                 | ❌                                      | N/A                      |
+| **Context injection**   | `hookSpecificOutput.additionalContext`  | `agent_message`   | `hookSpecificOutput.additionalContext` | `additionalContext`     |
+| **Stop processing**     | `continue: false`                       | `continue: false` | `continue: false`                      | `continue: false`        |
+| **Suppress output**     | `suppressOutput: true`                  | ❌                 | `suppressOutput: true`                 | `suppressOutput: true`   |
 
 ---
 
@@ -215,14 +215,16 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 ## Summary
 
-| Metric                 | Claude Code    | Cursor   | Gemini CLI      | Codex CLI |
-| ---------------------- | -------------- | -------- | --------------- | --------- |
-| **Hook events**        | 11             | 10       | 11              | 1         |
-| **Maturity**           | Stable (v2.1+) | Beta     | Stable (v0.21+) | N/A       |
-| **Documentation**      | Comprehensive  | Moderate | Comprehensive   | N/A       |
-| **Blocking support**   | ✅              | ✅        | ✅               | ❌         |
-| **Input modification** | ✅              | ❌        | ✅ (limited)     | ❌         |
-| **LLM hooks**          | ❌              | ❌        | ✅               | ❌         |
-| **Overall hook power** | ⭐⭐⭐⭐           | ⭐⭐⭐      | ⭐⭐⭐⭐⭐           | ⭐         |
+| Metric                 | Claude Code    | Cursor   | Gemini CLI      | Codex CLI       |
+| ---------------------- | -------------- | -------- | --------------- | --------------- |
+| **Hook events**        | 11             | 10       | 11              | 5               |
+| **Maturity**           | Stable (v2.1+) | Beta     | Stable (v0.21+) | Experimental    |
+| **Documentation**      | Comprehensive  | Moderate | Comprehensive   | Limited         |
+| **Blocking support**   | ✅              | ✅        | ✅               | ⚠️ Partial*     |
+| **Input modification** | ✅              | ❌        | ✅ (limited)     | ❌              |
+| **LLM hooks**          | ❌              | ❌        | ✅               | ❌              |
+| **Overall hook power** | ⭐⭐⭐⭐           | ⭐⭐⭐      | ⭐⭐⭐⭐⭐           | ⭐⭐             |
 
-**Bottom line:** Gemini CLI has the most powerful hook system (including LLM-level hooks), Claude Code has the most mature and well-documented system, Cursor has IDE-specific features, and Codex CLI currently lacks a proper hook system (only notifications).
+*\* Blocking support is experimental and requires `codex_hooks = true` feature flag. Currently supports SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, and Stop events with basic pattern matching.*
+
+**Bottom line:** Gemini CLI has the most powerful hook system (including LLM-level hooks), Claude Code has the most mature and well-documented system, Cursor has IDE-specific features, and Codex CLI now has experimental hooks support with 5 event types, though with limited capabilities compared to others.
