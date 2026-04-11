@@ -38,7 +38,7 @@ Codex CLI is OpenAI's locally-run coding agent that operates from your terminal.
 - Available on macOS, Linux, and Windows (experimental)
 - Included with ChatGPT Plus, Pro, Business, Edu, and Enterprise plans
 - Supports MCP (Model Context Protocol) for third-party tool integration
-- **No full hook system** - uses notification callbacks and policy controls instead
+- Full hook system with experimental hooks support (requires feature flag)
 
 **Repository:** [github.com/openai/codex](https://github.com/openai/codex)
 **License:** Apache-2.0
@@ -238,7 +238,7 @@ codex --yolo
 
 ## Notification Hooks
 
-Codex has a **limited hook system** compared to Claude Code. Currently, only notification callbacks are supported.
+Codex has a hook system with experimental hooks support (requires feature flag). Currently, notification callbacks remain fully supported.
 
 ### Configuration
 
@@ -285,6 +285,154 @@ Requested features:
 - Additional event types
 
 **Status:** Under consideration; maintainers direct users to upvote [Issue #2109](https://github.com/openai/codex/issues/2109).
+
+## Hooks
+
+Experimental. Hooks are under active development. Windows support temporarily disabled.
+
+Hooks are an extensibility framework for Codex. They allow you to inject your own scripts into the agentic loop.
+
+Hooks are behind a feature flag in config.toml:
+```toml
+[features]
+codex_hooks = true
+```
+
+Where Codex looks for hooks:
+- `~/.codex/hooks.json`
+- `<repo>/.codex/hooks.json`
+
+Config shape: hooks organized by event, matcher groups, and hook handlers.
+
+### Events
+
+- SessionStart
+- PreToolUse
+- PostToolUse
+- UserPromptSubmit
+- Stop
+
+### Matcher Patterns
+
+Regex string filtering. Only some events honor matcher:
+- PostToolUse/PreToolUse: filters tool_name (currently always Bash)
+- SessionStart: filters source (startup|resume)
+- UserPromptSubmit/Stop: matcher not supported
+
+### Configuration Example
+
+```json
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "matchers": {
+          "source": "startup"
+        },
+        "run": ["bash", "-c", "echo 'Starting new session'"]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matchers": {
+          "tool_name": "Bash"
+        },
+        "run": ["python", "/path/to/pre_hook.py"]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matchers": {
+          "tool_name": "Bash"
+        },
+        "run": ["bash", "-c", "echo 'Command completed'"]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "run": ["bash", "-c", "echo 'User prompt submitted'"]
+      }
+    ],
+    "Stop": [
+      {
+        "run": ["bash", "-c", "echo 'Session stopped'"]
+      }
+    ]
+  }
+}
+```
+
+### Common Input Fields
+
+All hooks receive these fields via stdin:
+- `session_id`
+- `transcript_path`
+- `cwd`
+- `hook_event_name`
+- `model`
+
+Turn-scoped hooks (PreToolUse, PostToolUse, UserPromptSubmit) also have:
+- `turn_id`
+
+### Common Output Fields
+
+Hooks can respond with these JSON fields via stdout:
+- `continue` (boolean): Continue processing (default: true)
+- `stopReason` (string): Why to stop (when continue: false)
+- `systemMessage` (string): Message to user
+- `suppressOutput` (boolean): Suppress tool output (default: false)
+
+Exit 0 with no output = success.
+
+### Event-Specific Details
+
+#### SessionStart
+
+- **Input fields**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `source` (startup|resume)
+- **Output fields**: Common fields + `additionalContext` (string, extra developer context)
+- **Example**: Plain text on stdout = extra developer context
+
+#### PreToolUse
+
+- **Input fields**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `turn_id`, `tool_name`, `tool_input.command`, `tool_use_id`
+- **Output fields**: Common fields + `permissionDecision` ("allow"|"deny"|"ask") - Currently parsed but not supported yet
+- **Special**: Can deny with permissionDecision:"deny" or exit 2
+- **Note**: Currently only supports Bash tool
+
+#### PostToolUse
+
+- **Input fields**: Same as PreToolUse + `tool_response`
+- **Output fields**: Common fields + `decision` ("block"|"allow"|"ask") - Currently parsed but not supported yet
+- **Special**: `decision:"block"` replaces tool result, `continue:false` stops processing
+- **Note**: Currently only supports Bash tool
+
+#### UserPromptSubmit
+
+- **Input fields**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `turn_id`, `prompt`
+- **Output fields**: Common fields + `decision` ("block"|"allow") - Currently parsed but not supported yet
+- **Special**: `decision:"block"` blocks prompt
+- **Note**: `additionalContext` supported but currently parsed but not supported yet
+
+#### Stop
+
+- **Input fields**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `last_assistant_message`, `stop_hook_active`
+- **Output fields**: Common fields + `decision` ("block") - Currently parsed but not supported yet
+- **Special**: `decision:"block"` means CONTINUE (creates new continuation prompt)
+- **Note**: Currently only parsed but not supported yet
+
+### Status Summary
+
+**Supported**:
+- SessionStart notifications with plain text context
+- PreToolUse/PostToolUse notifications (Bash only)
+- UserPromptSubmit/Stop notifications
+- Basic JSON output format
+
+**Parsed but not supported yet**:
+- Permission denial (permissionDecision: "deny")
+- Tool blocking (decision: "block")
+- Context injection (additionalContext)
+- Advanced matcher patterns
 
 ---
 
@@ -615,6 +763,8 @@ codex --disable web_search_request
 - Metrics capabilities with additional counters
 - Elevated sandbox onboarding prompts
 - **Bug fix:** Subprocesses inherit `LD_LIBRARY_PATH` (was causing 10x+ performance regressions)
+- **Experimental hooks system** with `codex_hooks` feature flag
+- Support for SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop events
 
 **0.79.0** (2026-01-07)
 - Multi-conversation agent control
@@ -717,16 +867,28 @@ codex --disable web_search_request
 
 ## Known Issues and Limitations
 
-### No Full Hook System
+### Hooks Development Status
 
-Unlike Claude Code, Cursor, and Gemini CLI, Codex does **not** have a comprehensive hook system for intercepting tool execution.
+Codex has an experimental hook system introduced in recent versions. While currently limited compared to Claude Code, Cursor, and Gemini CLI, full hook support is under active development.
 
-**Available:** Notification callbacks (`notify` setting)
-**Missing:**
-- PreToolUse / PostToolUse hooks
-- Permission interception
-- Tool input/output modification
+**Available:**
+- Notification callbacks (`notify` setting)
+- Basic hooks system (requires `codex_hooks = true` feature flag)
+- SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop events
+- Basic pattern matching (Bash tools only)
+
+**Limited Support (experimental):**
+- PreToolUse / PostToolUse hooks (Bash only)
 - Session lifecycle hooks
+- Basic permission interception (parsed but not fully supported yet)
+
+**Not Yet Supported:**
+- Permission denial/allowance (feature flag disabled)
+- Tool input/output modification
+- Advanced pattern matching
+- Context injection (parsed but not supported)
+
+**Status:** Under active development. Windows support temporarily disabled.
 
 **Feature Request:** [Discussion #2150](https://github.com/openai/codex/discussions/2150)
 
@@ -759,14 +921,14 @@ Requires feature flag in some versions; login flow may have edge cases.
 
 | Feature | Codex CLI | Claude Code | Cursor | Gemini CLI |
 | ------- | --------- | ----------- | ------ | ---------- |
-| Pre-tool hooks | ❌ | ✅ PreToolUse | ✅ beforeShellExecution | ✅ BeforeTool |
-| Post-tool hooks | ❌ | ✅ PostToolUse | ✅ afterFileEdit | ✅ AfterTool |
-| Permission hooks | ❌ | ✅ PermissionRequest | ✅ (via beforeShell) | ✅ Notification |
-| Session hooks | ❌ | ✅ SessionStart/End | ❌ | ✅ SessionStart/End |
+| Pre-tool hooks | ✅ PreToolUse (Bash only) | ✅ PreToolUse | ✅ beforeShellExecution | ✅ BeforeTool |
+| Post-tool hooks | ✅ PostToolUse (Bash only) | ✅ PostToolUse | ✅ afterFileEdit | ✅ AfterTool |
+| Permission hooks | ⚠️ Parsed but not supported | ✅ PermissionRequest | ✅ (via beforeShell) | ✅ Notification |
+| Session hooks | ✅ SessionStart/Stop | ✅ SessionStart/End | ❌ | ✅ SessionStart/End |
 | Model hooks | ❌ | ❌ | ❌ | ✅ BeforeModel/AfterModel |
 | Notification | ✅ notify | ✅ Notification | ❌ | ✅ Notification |
 | Input modification | ❌ | ✅ updatedInput | ✅ (limited) | ✅ |
-| Exit code blocking | ❌ | ✅ Exit 2 | ❌ | ✅ Exit 2 |
+| Exit code blocking | ⚠ Parsed but not supported | ✅ Exit 2 | ❌ | ✅ Exit 2 |
 
 ### Configuration Comparison
 
@@ -822,6 +984,7 @@ Requires feature flag in some versions; login flow may have edge cases.
 - [Codex CLI Overview](https://developers.openai.com/codex/cli/)
 - [Codex CLI Features](https://developers.openai.com/codex/cli/features/)
 - [Command Line Reference](https://developers.openai.com/codex/cli/reference/)
+- [Hooks Reference](https://developers.openai.com/codex/hooks.md)
 - [Basic Configuration](https://developers.openai.com/codex/config-basic/)
 - [Advanced Configuration](https://developers.openai.com/codex/config-advanced/)
 - [Configuration Reference](https://developers.openai.com/codex/config-reference/)

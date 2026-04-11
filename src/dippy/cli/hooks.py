@@ -79,6 +79,22 @@ MINIMAL_HOOKS = {
             ],
         }
     },
+    "codex": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matchers": {"tool_name": "Bash"},
+                    "run": ["dippy", "--codex"],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matchers": {"tool_name": "Bash"},
+                    "run": ["dippy", "--codex"],
+                }
+            ],
+        }
+    },
 }
 
 ALL_HOOKS = {
@@ -177,6 +193,27 @@ ALL_HOOKS = {
             ],
         }
     },
+    "codex": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matchers": {"tool_name": "Bash"},
+                    "run": ["dippy", "--codex"],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matchers": {"tool_name": "Bash"},
+                    "run": ["dippy", "--codex"],
+                }
+            ],
+            "Stop": [
+                {
+                    "run": ["dippy", "--codex"],
+                }
+            ],
+        }
+    },
 }
 
 # Legacy HOOK_COMMANDS for backward compatibility (Cursor/Windsurf use this format)
@@ -213,11 +250,80 @@ HOOK_COMMANDS = {
             },
         },
     },
+    "codex": {
+        "config": "~/.codex/hooks.json",
+        "project_config": ".codex/hooks.json",
+        "hook_entry": MINIMAL_HOOKS["codex"],
+    },
 }
 
 
 # Maximum number of backups to keep
 MAX_BACKUPS = 5
+
+
+def _ensure_codex_feature_flag(
+    config_path: Path,
+    dry_run: bool = False,
+) -> tuple[bool, str]:
+    """Ensure codex_hooks = true is set in Codex config.toml.
+
+    Codex requires a feature flag in config.toml alongside hooks.json.
+    This handles creating/modifying the TOML file with simple text
+    manipulation (no TOML writer dependency needed).
+
+    Args:
+        config_path: Path to config.toml (e.g. ~/.codex/config.toml)
+        dry_run: If True, only report what would change
+
+    Returns:
+        Tuple of (was_modified, message)
+    """
+    if config_path.exists():
+        content = config_path.read_text()
+    else:
+        content = ""
+
+    # Check if feature flag already exists
+    if "codex_hooks" in content and "codex_hooks = true" in content:
+        return False, "Feature flag already enabled"
+
+    if dry_run:
+        if "codex_hooks" in content:
+            return True, f"Would update codex_hooks flag in {config_path}"
+        return True, f"Would add [features] codex_hooks = true to {config_path}"
+
+    # Build the new content
+    if not content.strip():
+        # Empty or non-existent file
+        new_content = "[features]\ncodex_hooks = true\n"
+    elif "[features]" in content:
+        # Features section exists, add codex_hooks to it
+        lines = content.split("\n")
+        new_lines = []
+        inserted = False
+        for line in lines:
+            new_lines.append(line)
+            if line.strip() == "[features]" and not inserted:
+                new_lines.append("codex_hooks = true")
+                inserted = True
+        if not inserted:
+            # [features] might have been on a line with other content
+            new_lines.append("codex_hooks = true")
+        new_content = "\n".join(new_lines)
+        if not new_content.endswith("\n"):
+            new_content += "\n"
+    else:
+        # No [features] section, append it
+        new_content = content.rstrip("\n") + "\n\n[features]\ncodex_hooks = true\n"
+
+    # Backup config.toml if it exists
+    if config_path.exists():
+        _create_backup(config_path)
+
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    config_path.write_text(new_content)
+    return True, f"Enabled codex_hooks feature flag in {config_path}"
 
 
 class HookStatus(Enum):
@@ -309,6 +415,9 @@ def _get_hook_command_for_agent(agent: str) -> str:
         for hook_entry in hook_list:
             if "command" in hook_entry:
                 return hook_entry["command"]
+            if "run" in hook_entry and isinstance(hook_entry["run"], list):
+                # Codex format: return run array as space-joined string
+                return " ".join(str(r) for r in hook_entry["run"])
             if "hooks" in hook_entry:
                 for sub_hook in hook_entry["hooks"]:
                     if "command" in sub_hook:
@@ -547,6 +656,14 @@ def install(
             print(diff)
         else:
             print("(no changes)")
+        # Codex: show feature flag dry-run
+        if agent == "codex":
+            toml_path = _codex_config_toml_path(global_config, cwd)
+            flag_modified, flag_msg = _ensure_codex_feature_flag(
+                toml_path, dry_run=True
+            )
+            if flag_modified:
+                print(f"\n{flag_msg}")
         return 0
 
     # Create backup unless --no-backup
@@ -572,6 +689,13 @@ def install(
         print(f"Backup: {backup_path}")
     print()
     _print_hook_summary(agent, updated_config)
+
+    # Codex: enable feature flag in config.toml
+    if agent == "codex":
+        toml_path = _codex_config_toml_path(global_config, cwd)
+        flag_modified, flag_msg = _ensure_codex_feature_flag(toml_path)
+        print(f"\n{flag_msg}")
+
     return 0
 
 
@@ -602,6 +726,12 @@ def _print_hook_summary(agent: str, config: dict) -> None:
         ]
     elif agent == "gemini":
         hook_types = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
+    elif agent == "codex":
+        hook_types = [
+            ("PreToolUse", "PreToolUse"),
+            ("PostToolUse", "PostToolUse"),
+            ("Stop", "Stop"),
+        ]
     elif agent in ("cursor", "windsurf"):
         hook_types = [
             ("beforeShellExecution", "beforeShellExecution"),
@@ -633,6 +763,10 @@ def _print_hook_summary(agent: str, config: dict) -> None:
                     print(
                         f"  + {display_name}: {hook_entry['matcher'][:60]}... ({tools} tools)"
                     )
+                elif "matchers" in hook_entry:
+                    # Codex format
+                    tool_name = hook_entry["matchers"].get("tool_name", "")
+                    print(f"  + {display_name}: {tool_name}")
                 elif "command" in hook_entry:
                     # Cursor/Windsurf format
                     print(f"  + {display_name}: {hook_entry['command']}")
@@ -658,6 +792,23 @@ def _count_tools_in_matcher(matcher: str) -> str:
     mcp_count = sum(1 for p in parts if "mcp__" in p)
     non_mcp = len(parts) - mcp_count
     return f"{non_mcp}+MCP" if mcp_count else str(non_mcp)
+
+
+def _codex_config_toml_path(global_config: bool, cwd: str | None = None) -> Path:
+    """Get the Codex config.toml path for feature flag management.
+
+    Args:
+        global_config: Whether to use global or project-local path
+        cwd: Current working directory (for project-local)
+
+    Returns:
+        Path to config.toml
+    """
+    if global_config:
+        return Path.home() / ".codex" / "config.toml"
+    if cwd is None:
+        cwd = str(Path.cwd())
+    return Path(cwd) / ".codex" / "config.toml"
 
 
 def uninstall(
@@ -908,6 +1059,8 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
         ]
     elif agent_id == "gemini":
         hook_names = ["BeforeTool", "AfterTool"]
+    elif agent_id == "codex":
+        hook_names = ["PreToolUse", "PostToolUse", "Stop"]
     elif agent_id in ("cursor", "windsurf"):
         # These don't use matchers in the same way
         return ["(all shell commands)"]
@@ -917,22 +1070,31 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
     for hook_name in hook_names:
         if hook_name in hooks:
             for hook_entry in hooks[hook_name]:
-                # Only extract from entries that contain Dippy hooks
-                has_dippy = False
-                if "hooks" in hook_entry:
-                    for h in hook_entry["hooks"]:
-                        if _is_dippy_hook(h):
-                            has_dippy = True
-                            break
-
-                if not has_dippy:
-                    continue
-
-                if "matcher" in hook_entry:
-                    matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+                if agent_id == "codex":
+                    # Codex format: flat entry IS the hook
+                    if not _is_dippy_hook(hook_entry):
+                        continue
+                    if "matchers" in hook_entry:
+                        tool_name = hook_entry["matchers"].get("tool_name", "")
+                        matchers.append(f"{hook_name}: {tool_name}")
+                    else:
+                        matchers.append(f"{hook_name}: (all)")
                 else:
-                    # Hook without matcher (e.g., Stop, SubagentStop, AfterAgent)
-                    matchers.append(f"{hook_name}: (all)")
+                    # Claude/Gemini format: nested hooks structure
+                    has_dippy = False
+                    if "hooks" in hook_entry:
+                        for h in hook_entry["hooks"]:
+                            if _is_dippy_hook(h):
+                                has_dippy = True
+                                break
+
+                    if not has_dippy:
+                        continue
+
+                    if "matcher" in hook_entry:
+                        matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+                    else:
+                        matchers.append(f"{hook_name}: (all)")
 
     return matchers
 
@@ -1093,8 +1255,15 @@ def _get_installed_dippy_hook_types(config: dict, agent: str) -> set[str]:
             for h in hooks_list:
                 if _is_dippy_hook(h):
                     hook_types.add(hook_type)
+    elif agent == "codex":
+        # Codex format: flat top-level entries
+        hooks = config.get("hooks", {})
+        for hook_type, hook_list in hooks.items():
+            for entry in hook_list:
+                if _is_dippy_hook(entry):
+                    hook_types.add(hook_type)
     else:
-        # Claude/Gemini format
+        # Claude/Gemini format: nested hooks structure
         hooks = config.get("hooks", {})
         for hook_type, hook_list in hooks.items():
             for entry in hook_list:
@@ -1103,6 +1272,8 @@ def _get_installed_dippy_hook_types(config: dict, agent: str) -> set[str]:
                         if _is_dippy_hook(h):
                             hook_types.add(hook_type)
                             break
+                elif _is_dippy_hook(entry):
+                    hook_types.add(hook_type)
 
     return hook_types
 
@@ -1122,10 +1293,13 @@ def _has_dippy_hook(config: dict, agent: str) -> bool:
     config_str = json.dumps(config)
     # Check for dippy command (with or without flags, with or without path)
     # Matches: "dippy", "dippy --claude", "/path/to/dippy", "dippy-hook", etc.
+    # Also matches Codex format: "run": ["dippy", ...]
     return (
         '"command": "dippy' in config_str
         or '"command":"dippy' in config_str
         or ('"command": "/~' in config_str and "dippy" in config_str)
+        or '"run": ["dippy' in config_str
+        or '"run":["dippy' in config_str
     )
 
 
@@ -1194,7 +1368,8 @@ def _is_dippy_hook(hook_obj: dict) -> bool:
     """Check if a hook object is a Dippy hook.
 
     Must distinguish between:
-    - New style: dippy --claude, dippy --gemini, etc.
+    - New style: dippy --claude, dippy --gemini, etc. (command key)
+    - Codex style: run array with dippy as first element
     - Legacy: /path/to/dippy-hook, /path/to/dippy
     - NOT a match: random command with "dippy" in path like /home/user/adippy-workspace/script.sh
 
@@ -1207,30 +1382,32 @@ def _is_dippy_hook(hook_obj: dict) -> bool:
     if not isinstance(hook_obj, dict):
         return False
 
+    # Claude/Gemini/Cursor format: "command" key
     command = hook_obj.get("command", "")
-    if not command:
-        return False
+    if command:
+        cmd_lower = command.lower()
+        return (
+            # New style: "dippy --claude", "dippy --gemini", "dippy" alone
+            cmd_lower.startswith("dippy ")
+            or cmd_lower == "dippy"
+            # Legacy: any path ending with dippy-hook
+            or cmd_lower.endswith("dippy-hook")
+            # Legacy in path: /path/to/dippy, /my-dippy-scripts/hook, /path/to/dippy-hook
+            or "/dippy" in cmd_lower
+            or "\\dippy" in cmd_lower
+        )
 
-    cmd_lower = command.lower()
+    # Codex format: "run" array
+    run = hook_obj.get("run", [])
+    if isinstance(run, list) and run:
+        first = str(run[0]).lower()
+        return (
+            first == "dippy"
+            or first.endswith("/dippy")
+            or first.endswith("\\dippy")
+        )
 
-    # Match specific patterns:
-    # 1. Starts with "dippy " (with space) or "dippy" alone (e.g., "dippy --claude")
-    # 2. Ends with "dippy-hook" (legacy full path)
-    # 3. Contains "/dippy" or "\\dippy" (legacy in path, including /my-dippy-scripts)
-    # NOT: random command with "dippy" buried in middle without / or \
-    #     (like "adippy-workspace" or "dippyxx")
-
-    return (
-        # New style: "dippy --claude", "dippy --gemini", "dippy" alone
-        cmd_lower.startswith("dippy ")
-        or cmd_lower == "dippy"
-        # Legacy: any path ending with dippy-hook
-        or cmd_lower.endswith("dippy-hook")
-        # Legacy in path: /path/to/dippy, /my-dippy-scripts/hook, /path/to/dippy-hook
-        # The "/" or "\\" before "dippy" ensures we match path components, not random strings
-        or "/dippy" in cmd_lower
-        or "\\dippy" in cmd_lower
-    )
+    return False
 
 
 def _remove_dippy_hook(config: dict, agent: str) -> dict:
@@ -1261,8 +1438,21 @@ def _remove_dippy_hook(config: dict, agent: str) -> dict:
             # Remove empty hook types after iteration
             for hook_type in empty_hook_types:
                 del result["hooks"][hook_type]
+    elif agent == "codex":
+        # Codex format: flat top-level entries with "run" array (no nested hooks)
+        hook_types = ["PreToolUse", "PostToolUse", "Stop"]
+        if "hooks" in result:
+            for hook_type in hook_types:
+                if hook_type in result["hooks"]:
+                    result["hooks"][hook_type] = [
+                        entry
+                        for entry in result["hooks"][hook_type]
+                        if not _is_dippy_hook(entry)
+                    ]
+                    if not result["hooks"][hook_type]:
+                        del result["hooks"][hook_type]
     else:
-        # Claude/Gemini/Windsurf format - check ALL supported hook types
+        # Claude/Gemini format - nested hooks structure
         hook_types = [
             "PreToolUse",
             "PostToolUse",
