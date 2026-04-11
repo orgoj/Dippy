@@ -90,6 +90,9 @@ class TestCheckConfigValidation:
     def test_no_config_returns_warning(self, tmp_path, monkeypatch):
         # No config files exist in tmp_path — global config missing triggers warning
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        import dippy.core.config as _config_mod
+
+        monkeypatch.setattr(_config_mod, "USER_CONFIG", tmp_path / ".dippy" / "config")
         result = check_config_validation(tmp_path)
         assert result.status == HealthStatus.WARNING
 
@@ -97,6 +100,9 @@ class TestCheckConfigValidation:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        import dippy.core.config as _config_mod
+
+        monkeypatch.setattr(_config_mod, "USER_CONFIG", tmp_path / ".dippy" / "config")
         # Valid project config but no global config → warning for missing global
         config_file = tmp_path / ".dippy"
         config_file.write_text("allow zork\n")
@@ -108,10 +114,12 @@ class TestCheckConfigValidation:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        import dippy.core.config as _config_mod
+
+        monkeypatch.setattr(_config_mod, "USER_CONFIG", tmp_path / ".dippy" / "config")
         config_file = tmp_path / ".dippy"
         config_file.write_text("allow zork\n")
         # load_config is imported inside check_config_validation, so patch at source
-        import dippy.core.config as _config_mod
         from dippy.core.config import ConfigError
 
         def raise_error(*a, **kw):
@@ -291,6 +299,7 @@ class TestCodexDoctor:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
         codex_dir = tmp_path / ".codex"
         codex_dir.mkdir()
         (codex_dir / "config.toml").write_text("[features]\ncodex_hooks = true\n")
@@ -308,6 +317,7 @@ class TestCodexDoctor:
         self, tmp_path, monkeypatch
     ):
         monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
         workspace = tmp_path / "workspace"
         workspace.mkdir()
         codex_dir = workspace / ".codex"
@@ -317,7 +327,12 @@ class TestCodexDoctor:
                 {
                     "hooks": {
                         "PreToolUse": [
-                            {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]}
+                            {
+                                "matcher": "^Bash$",
+                                "hooks": [
+                                    {"type": "command", "command": "dippy --codex"}
+                                ],
+                            }
                         ]
                     }
                 }
@@ -330,7 +345,6 @@ class TestCodexDoctor:
         assert codex_result is not None
         assert codex_result.status == HealthStatus.WARNING
         assert "feature flag missing" in codex_result.message.lower()
-
 
 class TestRun:
     def test_returns_int(self, tmp_path, monkeypatch, capsys):

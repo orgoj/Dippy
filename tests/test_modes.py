@@ -103,6 +103,43 @@ def test_gemini_env_var(monkeypatch):
     assert result["decision"] == "allow"
 
 
+def test_codex_approve_format(monkeypatch):
+    """Test that Codex mode uses empty output for approvals."""
+    monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
+
+    import dippy.dippy
+
+    importlib.reload(dippy.dippy)
+
+    result = dippy.dippy.approve("git status")
+
+    assert result is None
+
+
+def test_codex_ask_format(monkeypatch):
+    """Test that Codex mode falls back to systemMessage for ask."""
+    monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
+
+    import dippy.dippy
+
+    importlib.reload(dippy.dippy)
+
+    result = dippy.dippy.ask("rm -rf")
+
+    assert result == {"systemMessage": "🐤 rm -rf"}
+
+
+def test_codex_mode_detection(monkeypatch):
+    """Test that --codex flag explicitly sets Codex mode."""
+    monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
+
+    import dippy.dippy
+
+    importlib.reload(dippy.dippy)
+
+    assert dippy.dippy.MODE == "codex"
+
+
 def test_shell_tool_names():
     """Test that shell tool names include Claude and Gemini variants."""
     from dippy.dippy import SHELL_TOOL_NAMES

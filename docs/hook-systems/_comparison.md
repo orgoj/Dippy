@@ -36,9 +36,9 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 | Capability                   | Claude Code                            | Cursor              | Gemini CLI            | Codex CLI               |
 | ---------------------------- | -------------------------------------- | ------------------- | --------------------- | ----------------------- |
-| **Block operations**         | ✅ Exit 2 or JSON deny                  | ✅ permission: deny  | ✅ Exit 2 or JSON deny | ⚠️ Parsed but not supported |
-| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow     | ❌                      |
-| **Prompt user**              | ✅ permissionDecision: ask              | ✅ permission: ask   | ✅ decision: ask       | ❌                      |
+| **Block operations**         | ✅ Exit 2 or JSON deny                  | ✅ permission: deny  | ✅ Exit 2 or JSON deny | ⚠️ Hard deny via `exit 2`; other decisions are limited |
+| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow     | ⚠️ Fail-open only; no strong allow contract |
+| **Prompt user**              | ✅ permissionDecision: ask              | ✅ permission: ask   | ✅ decision: ask       | ❌ `ask` fails open; advisory only |
 | **Modify tool input**        | ✅ updatedInput                         | ❌                   | ✅ (via deny + reason) | ❌                      |
 | **Inject context to agent**  | ✅ additionalContext (UserPromptSubmit) | ✅ agent_message     | ✅ additionalContext   | ⚠️ Parsed but not supported |
 | **Message to user only**     | ✅ systemMessage                        | ✅ user_message      | ✅ systemMessage       | ⚠️ Parsed but not supported |
@@ -225,6 +225,6 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 | **LLM hooks**          | ❌              | ❌        | ✅               | ❌              |
 | **Overall hook power** | ⭐⭐⭐⭐           | ⭐⭐⭐      | ⭐⭐⭐⭐⭐           | ⭐⭐             |
 
-*\* Blocking support is experimental and requires `codex_hooks = true` feature flag. Currently supports SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, and Stop events with basic pattern matching.*
+*\* Blocking support is experimental and requires `codex_hooks = true` feature flag. In current Dippy/Codex integration, hard deny works via `exit 2`, while `ask` remains advisory and fails open.*
 
 **Bottom line:** Gemini CLI has the most powerful hook system (including LLM-level hooks), Claude Code has the most mature and well-documented system, Cursor has IDE-specific features, and Codex CLI now has experimental hooks support with 5 event types, though with limited capabilities compared to others.

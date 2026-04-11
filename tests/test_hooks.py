@@ -95,24 +95,24 @@ class TestIsDippyHook:
         assert _is_dippy_hook(None) is False
         assert _is_dippy_hook(123) is False
 
-    def test_codex_format_run_array(self):
-        """Codex format: run array with dippy as first element is a dippy hook."""
-        hook = {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]}
+    def test_codex_nested_command_hook(self):
+        """Codex nested command hook is detected as a Dippy hook."""
+        hook = {"type": "command", "command": "dippy --codex"}
         assert _is_dippy_hook(hook) is True
 
-    def test_codex_format_run_array_full_path(self):
-        """Codex format: run array with full path to dippy."""
-        hook = {"run": ["/usr/local/bin/dippy", "--codex"]}
+    def test_codex_nested_command_hook_full_path(self):
+        """Codex nested command hook with full path is also detected."""
+        hook = {"type": "command", "command": "/usr/local/bin/dippy --codex"}
         assert _is_dippy_hook(hook) is True
 
-    def test_codex_format_run_array_not_dippy(self):
-        """Codex format: run array with non-dippy command is not a dippy hook."""
-        hook = {"matchers": {"tool_name": "Bash"}, "run": ["echo", "hello"]}
+    def test_codex_nested_command_hook_not_dippy(self):
+        """Non-Dippy Codex nested command hook is not detected."""
+        hook = {"type": "command", "command": "echo hello"}
         assert _is_dippy_hook(hook) is False
 
-    def test_codex_format_run_empty(self):
-        """Codex format: empty run array is not a dippy hook."""
-        hook = {"run": []}
+    def test_codex_legacy_flat_run_is_not_treated_as_valid_hook_object(self):
+        """Old flat Codex run entries are not valid hook objects anymore."""
+        hook = {"run": ["dippy", "--codex"]}
         assert _is_dippy_hook(hook) is False
 
 
@@ -384,6 +384,14 @@ class TestHooksInstallUninstall:
         assert "hooks" in config
         assert "PreToolUse" in config["hooks"]
 
+    def test_install_codex_fails_when_dot_codex_is_file(self, tmp_path, capsys):
+        from dippy.cli.hooks import install
+
+        (tmp_path / ".codex").write_text("")
+        result = install(agent="codex", global_config=False, cwd=str(tmp_path))
+        assert result == 1
+        assert "expected codex config directory" in capsys.readouterr().err.lower()
+
 
 class TestHooksCliParsing:
     """CLI parsing for hooks subcommand."""
@@ -409,68 +417,83 @@ class TestHooksCliParsing:
 class TestCodexHooksFormat:
     """Tests for bd-xpr: Codex hooks must use the correct native format."""
 
-    def test_minimal_hooks_codex_uses_matchers_object(self):
-        """MINIMAL_HOOKS['codex'] entries must use 'matchers' object, not 'matcher' string."""
+    def test_minimal_hooks_codex_uses_nested_matcher_groups(self):
+        """MINIMAL_HOOKS['codex'] must use matcher + nested command hooks."""
         from dippy.cli.hooks import MINIMAL_HOOKS
 
         hooks_data = MINIMAL_HOOKS["codex"]["hooks"]
         for hook_type, entries in hooks_data.items():
             for entry in entries:
-                assert "matcher" not in entry, (
-                    f"Codex hook in {hook_type} uses old 'matcher' key (should be 'matchers')"
-                )
-                if "matchers" in entry:
-                    assert isinstance(entry["matchers"], dict), (
-                        f"Codex 'matchers' must be a dict, got {type(entry['matchers'])}"
-                    )
-
-    def test_minimal_hooks_codex_uses_run_array(self):
-        """MINIMAL_HOOKS['codex'] entries must use 'run' array, not nested 'hooks'."""
-        from dippy.cli.hooks import MINIMAL_HOOKS
-
-        hooks_data = MINIMAL_HOOKS["codex"]["hooks"]
-        for hook_type, entries in hooks_data.items():
-            for entry in entries:
-                assert "hooks" not in entry, (
-                    f"Codex hook in {hook_type} uses nested 'hooks' (should be 'run' array)"
-                )
-                if "run" in entry:
-                    assert isinstance(entry["run"], list), (
-                        f"Codex 'run' must be a list, got {type(entry['run'])}"
-                    )
-                    assert "dippy" in entry["run"][0], (
-                        "Codex 'run' must start with dippy command"
-                    )
+                if hook_type != "Stop":
+                    assert entry.get("matcher") == "^Bash$"
+                assert "hooks" in entry
+                assert isinstance(entry["hooks"], list)
+                assert entry["hooks"]
+                for hook in entry["hooks"]:
+                    assert hook["type"] == "command"
+                    assert hook["command"] == "dippy --codex"
+                assert "matchers" not in entry
+                assert "run" not in entry
 
     def test_all_hooks_codex_uses_correct_format(self):
-        """ALL_HOOKS['codex'] must also use the correct Codex format."""
+        """ALL_HOOKS['codex'] must also use the native nested format."""
         from dippy.cli.hooks import ALL_HOOKS
 
         hooks_data = ALL_HOOKS["codex"]["hooks"]
         for hook_type, entries in hooks_data.items():
             for entry in entries:
-                assert "matcher" not in entry, (
-                    f"ALL_HOOKS codex {hook_type} uses old 'matcher' key"
-                )
-                assert "hooks" not in entry, (
-                    f"ALL_HOOKS codex {hook_type} uses nested 'hooks' array"
-                )
+                assert "hooks" in entry
+                assert "run" not in entry
+                assert "matchers" not in entry
 
-    def test_has_dippy_hook_detects_codex_format(self):
-        """_has_dippy_hook must detect Codex-format run-array entries."""
+    def test_has_dippy_hook_detects_codex_nested_format(self):
+        """_has_dippy_hook must detect the real nested Codex format."""
         from dippy.cli.hooks import _has_dippy_hook
 
         config = {
             "hooks": {
                 "PreToolUse": [
-                    {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]}
+                    {
+                        "matcher": "^Bash$",
+                        "hooks": [{"type": "command", "command": "dippy --codex"}],
+                    }
                 ]
             }
         }
         assert _has_dippy_hook(config, "codex") is True
 
-    def test_remove_dippy_hook_codex_flat_entries(self):
-        """_remove_dippy_hook must remove flat Codex-format entries."""
+    def test_remove_dippy_hook_codex_nested_entries(self):
+        """_remove_dippy_hook removes native nested Codex entries."""
+        from dippy.cli.hooks import _remove_dippy_hook
+
+        config = {
+            "hooks": {
+                "PreToolUse": [
+                    {
+                        "matcher": "^Bash$",
+                        "hooks": [{"type": "command", "command": "dippy --codex"}],
+                    },
+                    {
+                        "matcher": "^Bash$",
+                        "hooks": [{"type": "command", "command": "other-tool --flag"}],
+                    },
+                ],
+                "PostToolUse": [
+                    {
+                        "matcher": "^Bash$",
+                        "hooks": [{"type": "command", "command": "dippy --codex"}],
+                    }
+                ],
+            }
+        }
+        result = _remove_dippy_hook(config, "codex")
+        assert "PostToolUse" not in result.get("hooks", {})
+        pre = result.get("hooks", {}).get("PreToolUse", [])
+        assert len(pre) == 1
+        assert pre[0]["hooks"][0]["command"] == "other-tool --flag"
+
+    def test_remove_dippy_hook_codex_legacy_flat_entries(self):
+        """Cleanup still removes old flat run-array Codex entries."""
         from dippy.cli.hooks import _remove_dippy_hook
 
         config = {
@@ -478,21 +501,16 @@ class TestCodexHooksFormat:
                 "PreToolUse": [
                     {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]},
                     {"matchers": {"tool_name": "Bash"}, "run": ["other-tool", "--flag"]},
-                ],
-                "PostToolUse": [
-                    {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]}
-                ],
+                ]
             }
         }
         result = _remove_dippy_hook(config, "codex")
-        # Dippy entries removed
-        assert "PostToolUse" not in result.get("hooks", {})
         pre = result.get("hooks", {}).get("PreToolUse", [])
         assert len(pre) == 1
         assert pre[0]["run"] == ["other-tool", "--flag"]
 
-    def test_install_codex_writes_matchers_and_run(self, tmp_path):
-        """dippy hooks install codex must write matchers+run format."""
+    def test_install_codex_writes_nested_hooks(self, tmp_path):
+        """dippy hooks install codex must write nested matcher-group format."""
         from dippy.cli.hooks import install
 
         install(agent="codex", global_config=False, cwd=str(tmp_path))
@@ -502,12 +520,11 @@ class TestCodexHooksFormat:
         pre_entries = config["hooks"]["PreToolUse"]
         assert pre_entries, "Expected at least one PreToolUse entry"
         entry = pre_entries[0]
-        assert "matchers" in entry, "Expected 'matchers' key in codex hook entry"
-        assert isinstance(entry["matchers"], dict), "'matchers' must be a dict"
-        assert "run" in entry, "Expected 'run' key in codex hook entry"
-        assert isinstance(entry["run"], list), "'run' must be a list"
-        assert "matcher" not in entry, "Must not use old 'matcher' string key"
-        assert "hooks" not in entry, "Must not use nested 'hooks' array"
+        assert entry["matcher"] == "^Bash$"
+        assert "hooks" in entry
+        assert entry["hooks"] == [{"type": "command", "command": "dippy --codex"}]
+        assert "matchers" not in entry
+        assert "run" not in entry
 
     def test_uninstall_codex_removes_new_format(self, tmp_path):
         """dippy hooks uninstall codex removes new-format entries."""

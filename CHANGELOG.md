@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.13] - 2026-04-12
+
+### Fixed
+
+- **Codex hook config format** - `dippy hooks install codex` now writes the Codex-native nested hook format that current Codex actually parses
+  - Uses `matcher` plus nested `hooks` with `type: "command"` and `command: "dippy --codex"`
+  - Removes legacy flat Codex hook entries during reinstall/uninstall
+  - Prevents false "installed" status when stale flat entries exist but Codex has no runnable handlers
+- **Codex entrypoint isolation** - Hook subprocess tests now isolate `HOME` and `DIPPY_CONFIG`, so Codex-mode deny behavior is tested without leaking real user config or audit-log state
+
+### Documentation
+
+- Corrected project docs to describe the real Codex hook format and matcher model
+- Added README guidance for manual Codex hook config and session restart after hook changes
+
 ## [0.2.12] - 2026-04-11
 
 ### Fixed
@@ -65,9 +80,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Support for custom target flags (e.g., `-t`, `-h`) with automatic fallback to first non-option token
   - Enforces `remote=True` for inner commands, skipping local path checks for remote operations
 
-### Fixed
-
-- **Codex hooks format** - Fixed `hooks.json` to use the correct Codex-native format: `matchers` object + `run` array (was using Claude Code's nested `hooks` array format which Codex does not recognize)
 - **Gemini fail-open security** - Error paths in Gemini mode now return `ask` instead of `allow`, closing an inadvertent security bypass where hook failures would silently approve commands
 - **Config merge** - `_merge_configs()` now correctly merges `aliases`, `log_rotate_max_days`, and `log_hook_approvals` from project config over global config
 - **HandlerContext cwd** - Analysis now passes working directory through `HandlerContext.cwd`, enabling Python handler to resolve relative script paths correctly

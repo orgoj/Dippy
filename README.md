@@ -17,6 +17,8 @@
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
+- **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PostToolUse` on `Bash`
+- **Codex enforcement model** — `deny` hard-blocks via `exit 2`; `ask` is currently advisory and fails open
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
@@ -188,9 +190,33 @@ If you prefer manual configuration or need project-specific settings:
 }
 ```
 
+**Codex CLI** - add to `~/.codex/hooks.json` and enable `codex_hooks = true` in `~/.codex/config.toml`:
+```json
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [{ "type": "command", "command": "dippy --codex" }]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [{ "type": "command", "command": "dippy --codex" }]
+      }
+    ]
+  }
+}
+```
+
+**Current Codex limitation:** Dippy can hard-block Codex shell commands with `deny`, but `ask` is advisory only. Codex shows the `systemMessage` and still runs the command, so anything that must not execute needs a `deny` rule.
+
 **Hooks installed:**
 - **PreToolUse**: Validates tools BEFORE execution (Bash, file ops, WebSearch, MCP)
 - **PostToolUse**: Shows feedback messages AFTER execution (for `after` directive)
+
+Changing hook config requires restarting the agent session. For Codex, both `hooks.json` and `config.toml` are loaded at session start.
 
 ---
 
@@ -214,8 +240,8 @@ dippy hooks uninstall <agent> --global  # Remove hooks (global)
 - ` ` = not installed
 
 **Scopes:**
-- **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`
-- **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`
+- **Project-local** (default): `.claude/settings.json`, `.cursor/hooks.json`, `.gemini/settings.json`, `.codex/hooks.json`
+- **Global** (`--global`): `~/.claude/settings.json`, `~/.cursor/hooks.json`, `~/.gemini/settings.json`, `~/.codex/hooks.json`
 
 ### Diagnostics
 
@@ -380,7 +406,6 @@ dippy hooks install claude --global
 - **Hook not triggering** → Run `dippy doctor` to diagnose
 - **JSON syntax errors** → Check config with `dippy doctor`
 - **Legacy hook detected** → Run `dippy hooks install <agent> --global`
-
 ---
 
 ## Uninstall

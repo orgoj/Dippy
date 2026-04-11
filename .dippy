@@ -1,12 +1,6 @@
 # Dippy config for Dippy
 
-include .dippy-yolo
-
-allow tmux *
-
-allow ./bin/dippy-hook *
-
-allow-read /home/michael/work/ai/PI/pi-mono/**
+#include .dippy-yolo
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
@@ -44,8 +38,3 @@ deny just -C "Don't use -C, use the target directly"
 
 allow git add *
 allow ruff *
-
-# for merge yolo
-allow git *
-allow cc-find /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev *
-allow cc-find /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/** *

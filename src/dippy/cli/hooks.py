@@ -83,14 +83,24 @@ MINIMAL_HOOKS = {
         "hooks": {
             "PreToolUse": [
                 {
-                    "matchers": {"tool_name": "Bash"},
-                    "run": ["dippy", "--codex"],
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
                 }
             ],
             "PostToolUse": [
                 {
-                    "matchers": {"tool_name": "Bash"},
-                    "run": ["dippy", "--codex"],
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
                 }
             ],
         }
@@ -197,19 +207,34 @@ ALL_HOOKS = {
         "hooks": {
             "PreToolUse": [
                 {
-                    "matchers": {"tool_name": "Bash"},
-                    "run": ["dippy", "--codex"],
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
                 }
             ],
             "PostToolUse": [
                 {
-                    "matchers": {"tool_name": "Bash"},
-                    "run": ["dippy", "--codex"],
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
                 }
             ],
             "Stop": [
                 {
-                    "run": ["dippy", "--codex"],
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
                 }
             ],
         }
@@ -419,13 +444,12 @@ def _get_hook_command_for_agent(agent: str) -> str:
         for hook_entry in hook_list:
             if "command" in hook_entry:
                 return hook_entry["command"]
-            if "run" in hook_entry and isinstance(hook_entry["run"], list):
-                # Codex format: return run array as space-joined string
-                return " ".join(str(r) for r in hook_entry["run"])
             if "hooks" in hook_entry:
                 for sub_hook in hook_entry["hooks"]:
                     if "command" in sub_hook:
                         return sub_hook["command"]
+            if "run" in hook_entry and isinstance(hook_entry["run"], list):
+                return " ".join(str(r) for r in hook_entry["run"])
 
     return f"dippy --{agent}"
 
@@ -602,6 +626,19 @@ def install(
         if cwd is None:
             cwd = str(Path.cwd())
         config_path = Path(cwd) / hook_config["project_config"]
+
+    if agent == "codex":
+        codex_root = config_path.parent
+        if codex_root.exists() and not codex_root.is_dir():
+            print(
+                f"Error: Expected Codex config directory at {codex_root}, but found a file.",
+                file=sys.stderr,
+            )
+            print(
+                "Remove or rename that file so Dippy can create .codex/hooks.json.",
+                file=sys.stderr,
+            )
+            return 1
 
     # Check if agent's config directory exists
     if not config_path.parent.exists():
@@ -786,18 +823,17 @@ def _print_hook_summary(agent: str, config: dict) -> None:
                     continue
 
                 if "matcher" in hook_entry:
-                    # Claude/Gemini format
-                    tools = _count_tools_in_matcher(hook_entry["matcher"])
-                    print(
-                        f"  + {display_name}: {hook_entry['matcher'][:60]}... ({tools} tools)"
-                    )
-                elif "matchers" in hook_entry:
-                    # Codex format
-                    tool_name = hook_entry["matchers"].get("tool_name", "")
-                    print(f"  + {display_name}: {tool_name}")
+                    matcher = hook_entry["matcher"]
+                    if agent == "codex":
+                        print(f"  + {display_name}: {matcher}")
+                    else:
+                        tools = _count_tools_in_matcher(matcher)
+                        print(f"  + {display_name}: {matcher[:60]}... ({tools} tools)")
                 elif "command" in hook_entry:
                     # Cursor/Windsurf format
                     print(f"  + {display_name}: {hook_entry['command']}")
+                elif "run" in hook_entry:
+                    print(f"  + {display_name}: legacy flat Codex entry")
                 else:
                     # Hook without matcher or command (e.g., Stop, SubagentStop)
                     print(f"  + {display_name}: (all)")
@@ -850,7 +886,6 @@ def _codex_feature_flag_enabled(config_path: Path) -> bool:
         return False
 
     return "codex_hooks = true" in content
-
 
 def uninstall(
     agent: str,
@@ -1128,14 +1163,16 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
         if hook_name in hooks:
             for hook_entry in hooks[hook_name]:
                 if agent_id == "codex":
-                    # Codex format: flat entry IS the hook
-                    if not _is_dippy_hook(hook_entry):
-                        continue
-                    if "matchers" in hook_entry:
-                        tool_name = hook_entry["matchers"].get("tool_name", "")
-                        matchers.append(f"{hook_name}: {tool_name}")
-                    else:
-                        matchers.append(f"{hook_name}: (all)")
+                    nested_hooks = hook_entry.get("hooks", [])
+                    if isinstance(nested_hooks, list) and any(
+                        _is_dippy_hook(h) for h in nested_hooks
+                    ):
+                        if "matcher" in hook_entry:
+                            matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+                        else:
+                            matchers.append(f"{hook_name}: (all)")
+                    elif _is_legacy_codex_run_hook(hook_entry):
+                        matchers.append(f"{hook_name}: legacy flat entry")
                 else:
                     # Claude/Gemini format: nested hooks structure
                     has_dippy = False
@@ -1345,11 +1382,17 @@ def _get_installed_dippy_hook_types(config: dict, agent: str) -> set[str]:
                 if _is_dippy_hook(h):
                     hook_types.add(hook_type)
     elif agent == "codex":
-        # Codex format: flat top-level entries
+        # Codex format uses nested hooks like Claude/Gemini. Also scrub old flat entries.
         hooks = config.get("hooks", {})
         for hook_type, hook_list in hooks.items():
             for entry in hook_list:
-                if _is_dippy_hook(entry):
+                if not isinstance(entry, dict):
+                    continue
+                nested = entry.get("hooks", [])
+                if isinstance(nested, list) and any(_is_dippy_hook(h) for h in nested):
+                    hook_types.add(hook_type)
+                    continue
+                if _is_legacy_codex_run_hook(entry):
                     hook_types.add(hook_type)
     else:
         # Claude/Gemini format: nested hooks structure
@@ -1379,17 +1422,23 @@ def _has_dippy_hook(config: dict, agent: str) -> bool:
     Returns:
         True if any Dippy hook is found, False otherwise
     """
-    config_str = json.dumps(config)
-    # Check for dippy command (with or without flags, with or without path)
-    # Matches: "dippy", "dippy --claude", "/path/to/dippy", "dippy-hook", etc.
-    # Also matches Codex format: "run": ["dippy", ...]
-    return (
-        '"command": "dippy' in config_str
-        or '"command":"dippy' in config_str
-        or ('"command": "/~' in config_str and "dippy" in config_str)
-        or '"run": ["dippy' in config_str
-        or '"run":["dippy' in config_str
-    )
+    hooks = config.get("hooks", {})
+    if not isinstance(hooks, dict):
+        return False
+
+    for hook_list in hooks.values():
+        if not isinstance(hook_list, list):
+            continue
+        for entry in hook_list:
+            if not isinstance(entry, dict):
+                continue
+            if _is_dippy_hook(entry):
+                return True
+            nested = entry.get("hooks", [])
+            if isinstance(nested, list) and any(_is_dippy_hook(h) for h in nested):
+                return True
+
+    return False
 
 
 def _has_legacy_dippy_hook(config: dict) -> bool:
@@ -1486,17 +1535,20 @@ def _is_dippy_hook(hook_obj: dict) -> bool:
             or "\\dippy" in cmd_lower
         )
 
-    # Codex format: "run" array
-    run = hook_obj.get("run", [])
-    if isinstance(run, list) and run:
-        first = str(run[0]).lower()
-        return (
-            first == "dippy"
-            or first.endswith("/dippy")
-            or first.endswith("\\dippy")
-        )
-
     return False
+
+
+def _is_legacy_codex_run_hook(hook_obj: dict) -> bool:
+    """Detect old broken Codex flat hook entries so install/uninstall can clean them up."""
+    if not isinstance(hook_obj, dict):
+        return False
+
+    run = hook_obj.get("run", [])
+    if not isinstance(run, list) or not run:
+        return False
+
+    first = str(run[0]).lower()
+    return first == "dippy" or first.endswith("/dippy") or first.endswith("\\dippy")
 
 
 def _remove_dippy_hook(config: dict, agent: str) -> dict:
@@ -1528,16 +1580,32 @@ def _remove_dippy_hook(config: dict, agent: str) -> dict:
             for hook_type in empty_hook_types:
                 del result["hooks"][hook_type]
     elif agent == "codex":
-        # Codex format: flat top-level entries with "run" array (no nested hooks)
+        # Codex format: nested hooks. Also remove old broken flat run-array entries.
         hook_types = ["PreToolUse", "PostToolUse", "Stop"]
         if "hooks" in result:
             for hook_type in hook_types:
                 if hook_type in result["hooks"]:
-                    result["hooks"][hook_type] = [
-                        entry
-                        for entry in result["hooks"][hook_type]
-                        if not _is_dippy_hook(entry)
-                    ]
+                    kept_entries = []
+                    for entry in result["hooks"][hook_type]:
+                        if not isinstance(entry, dict):
+                            kept_entries.append(entry)
+                            continue
+
+                        if _is_legacy_codex_run_hook(entry):
+                            continue
+
+                        if "hooks" in entry:
+                            entry = copy.deepcopy(entry)
+                            entry["hooks"] = [
+                                h for h in entry["hooks"] if not _is_dippy_hook(h)
+                            ]
+                            if entry["hooks"]:
+                                kept_entries.append(entry)
+                            continue
+
+                        kept_entries.append(entry)
+
+                    result["hooks"][hook_type] = kept_entries
                     if not result["hooks"][hook_type]:
                         del result["hooks"][hook_type]
     else:

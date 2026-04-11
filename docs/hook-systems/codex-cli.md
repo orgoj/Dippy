@@ -314,9 +314,9 @@ Config shape: hooks organized by event, matcher groups, and hook handlers.
 
 ### Matcher Patterns
 
-Regex string filtering. Only some events honor matcher:
-- PostToolUse/PreToolUse: filters tool_name (currently always Bash)
-- SessionStart: filters source (startup|resume)
+Codex uses a single `matcher` regex string on each event entry. Only some events honor matcher:
+- PreToolUse/PostToolUse: regex matches `tool_name` (currently `Bash`)
+- SessionStart: regex matches `source` (`startup|resume`)
 - UserPromptSubmit/Stop: matcher not supported
 
 ### Configuration Example
@@ -326,36 +326,55 @@ Regex string filtering. Only some events honor matcher:
   "hooks": {
     "SessionStart": [
       {
-        "matchers": {
-          "source": "startup"
-        },
-        "run": ["bash", "-c", "echo 'Starting new session'"]
+        "matcher": "^startup$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc \"echo 'Starting new session'\""
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
-        "matchers": {
-          "tool_name": "Bash"
-        },
-        "run": ["python", "/path/to/pre_hook.py"]
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python /path/to/pre_hook.py"
+          }
+        ]
       }
     ],
     "PostToolUse": [
       {
-        "matchers": {
-          "tool_name": "Bash"
-        },
-        "run": ["bash", "-c", "echo 'Command completed'"]
+        "matcher": "^Bash$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc \"echo 'Command completed'\""
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [
       {
-        "run": ["bash", "-c", "echo 'User prompt submitted'"]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc \"echo 'User prompt submitted'\""
+          }
+        ]
       }
     ],
     "Stop": [
       {
-        "run": ["bash", "-c", "echo 'Session stopped'"]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash -lc \"echo 'Session stopped'\""
+          }
+        ]
       }
     ]
   }
@@ -395,8 +414,8 @@ Exit 0 with no output = success.
 #### PreToolUse
 
 - **Input fields**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`, `model`, `turn_id`, `tool_name`, `tool_input.command`, `tool_use_id`
-- **Output fields**: Common fields + `permissionDecision` ("allow"|"deny"|"ask") - Currently parsed but not supported yet
-- **Special**: Can deny with permissionDecision:"deny" or exit 2
+- **Output fields**: Common fields + `permissionDecision` ("allow"|"deny"|"ask") - parsed by Codex, but not reliable as an enforcement contract
+- **Special**: Hard deny works via `exit 2` + `stderr`. `ask` currently fails open and behaves like an advisory `systemMessage`, not a real approval prompt.
 - **Note**: Currently only supports Bash tool
 
 #### PostToolUse
@@ -427,9 +446,11 @@ Exit 0 with no output = success.
 - PreToolUse/PostToolUse notifications (Bash only)
 - UserPromptSubmit/Stop notifications
 - Basic JSON output format
+- Hard deny in PreToolUse via `exit 2` + `stderr`
 
 **Parsed but not supported yet**:
-- Permission denial (permissionDecision: "deny")
+- Prompting the user from PreToolUse (`permissionDecision: "ask"`)
+- Relying on `permissionDecision` values for allow/deny enforcement
 - Tool blocking (decision: "block")
 - Context injection (additionalContext)
 - Advanced matcher patterns
@@ -880,10 +901,12 @@ Codex has an experimental hook system introduced in recent versions. While curre
 **Limited Support (experimental):**
 - PreToolUse / PostToolUse hooks (Bash only)
 - Session lifecycle hooks
-- Basic permission interception (parsed but not fully supported yet)
+- Basic permission interception with hard deny via `exit 2`
+- Advisory `systemMessage` responses for non-blocking feedback
 
 **Not Yet Supported:**
-- Permission denial/allowance (feature flag disabled)
+- Reliable `ask` prompting from PreToolUse
+- Reliable `permissionDecision` allow/deny enforcement without `exit 2`
 - Tool input/output modification
 - Advanced pattern matching
 - Context injection (parsed but not supported)
@@ -937,7 +960,7 @@ Requires feature flag in some versions; login flow may have edge cases.
 | Config format | TOML + JSON | JSON | JSON | JSON |
 | Config location | `~/.codex/config.toml` + `~/.codex/hooks.json` | `~/.claude/settings.json` | `~/.cursor/hooks.json` | `~/.gemini/settings.json` |
 | Project config | `.codex/config.toml` + `.codex/hooks.json` | `.claude/settings.json` | `.cursor/hooks.json` | `.gemini/settings.json` |
-| Tool matchers | N/A | Regex patterns | N/A (global) | Regex patterns |
+| Tool matchers | Regex `matcher` field | Regex patterns | N/A (global) | Regex patterns |
 
 ### Sandbox/Approval Comparison
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -24,6 +25,7 @@ def run_hook(
     input_data: dict | str | None = None,
     via_symlink: bool = False,
     use_system_python: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     """Run dippy-hook with given input, optionally via a symlink."""
     if via_symlink:
@@ -31,12 +33,15 @@ def run_hook(
         with tempfile.TemporaryDirectory() as tmpdir:
             symlink_path = Path(tmpdir) / "dippy"
             symlink_path.symlink_to(DIPPY_HOOK)
-            return _run(symlink_path, input_data, use_system_python)
-    return _run(DIPPY_HOOK, input_data, use_system_python)
+            return _run(symlink_path, input_data, use_system_python, extra_env=extra_env)
+    return _run(DIPPY_HOOK, input_data, use_system_python, extra_env=extra_env)
 
 
 def _run(
-    script: Path, input_data: dict | str | None, use_system_python: bool = False
+    script: Path,
+    input_data: dict | str | None,
+    use_system_python: bool = False,
+    extra_env: dict[str, str] | None = None,
 ) -> subprocess.CompletedProcess:
     """Execute the script with input."""
     if input_data is None:
@@ -47,11 +52,24 @@ def _run(
         stdin_bytes = input_data.encode()
 
     python = SYSTEM_PYTHON if use_system_python else sys.executable
+    env = {}
+    for key, value in os.environ.items():
+        if not key.startswith("DIPPY_"):
+            env[key] = value
+    if extra_env:
+        env.update(extra_env)
+    env.setdefault("DIPPY_TEST_NO_LOG", "1")
+    home_dir = extra_env.get("HOME") if extra_env and "HOME" in extra_env else tempfile.mkdtemp(prefix="dippy-hook-home-")
+    env["HOME"] = home_dir
+    config_path = Path(home_dir) / "dippy-test.conf"
+    config_path.write_text(f"set log {Path(home_dir) / 'audit.log'}\n")
+    env.setdefault("DIPPY_CONFIG", str(config_path))
     return subprocess.run(
         [python, str(script)],
         input=stdin_bytes,
         capture_output=True,
         timeout=10,
+        env=env,
     )
 
 
@@ -87,6 +105,9 @@ class TestSymlinkResolution:
             nested.mkdir(parents=True)
             symlink_path = nested / "dippy"
             symlink_path.symlink_to(DIPPY_HOOK)
+            home_dir = tempfile.mkdtemp(prefix="dippy-hook-home-")
+            config_path = Path(home_dir) / "dippy-test.conf"
+            config_path.write_text(f"set log {Path(home_dir) / 'audit.log'}\n")
 
             stdin_bytes = json.dumps(input_data).encode()
             result = subprocess.run(
@@ -94,6 +115,16 @@ class TestSymlinkResolution:
                 input=stdin_bytes,
                 capture_output=True,
                 timeout=10,
+                env={
+                    **{
+                        k: v
+                        for k, v in os.environ.items()
+                        if not k.startswith("DIPPY_")
+                    },
+                    "DIPPY_TEST_NO_LOG": "1",
+                    "HOME": home_dir,
+                    "DIPPY_CONFIG": str(config_path),
+                },
             )
             assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
             output = json.loads(result.stdout)
@@ -143,6 +174,24 @@ class TestEndToEnd:
             assert result.returncode == 0
             output = json.loads(result.stdout)
             assert get_decision(output) == "deny"
+
+    def test_codex_deny_uses_exit_2_and_stderr(self, monkeypatch):
+        """Codex blocks via exit code 2 with stderr, not JSON permissionDecision."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            (cwd / ".dippy").write_text("deny false *")
+
+            input_data = {
+                "tool_name": "Bash",
+                "tool_input": {"command": "false"},
+                "cwd": str(cwd),
+                "hook_event_name": "PreToolUse",
+            }
+            result = run_hook(input_data, extra_env={"DIPPY_CODEX": "1", "HOME": tmpdir})
+
+        assert result.returncode == 2
+        assert result.stdout == b""
+        assert "false *" in result.stderr.decode()
 
 
 class TestErrorHandling:

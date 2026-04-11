@@ -1,3 +1,4 @@
 deny-edit .dippy*
 
+allow git *
 allow uv run *
