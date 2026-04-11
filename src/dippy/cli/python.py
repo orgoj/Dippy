@@ -15,7 +15,22 @@ from typing import NamedTuple
 
 from dippy.cli import Classification, HandlerContext
 
-COMMANDS = ["python", "python3"] + [f"python3.{v}" for v in range(8, 20)]
+COMMANDS = [
+    "python",
+    "python3",
+    "python3.8",
+    "python3.9",
+    "python3.10",
+    "python3.11",
+    "python3.12",
+    "python3.13",
+    "python3.14",
+    "python3.15",
+    "python3.16",
+    "python3.17",
+    "python3.18",
+    "python3.19",
+]
 
 # === Safe Module Whitelist ===
 # Only modules that cannot perform I/O, execute code, or mutate external state.

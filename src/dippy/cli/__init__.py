@@ -93,7 +93,15 @@ def get_description(tokens: list[str], handler_name: str = None) -> str:
 
 
 def _discover_handlers() -> dict[str, str]:
-    """Discover handler modules and build command -> module mapping."""
+    """Discover handler modules by scanning source files (no imports).
+
+    Reads each cli/*.py file as text, parses the AST to extract the
+    COMMANDS list, and builds a command→module mapping without importing
+    any handler module. This keeps startup cost minimal for a short-lived
+    hook process that only ever calls one handler.
+    """
+    import ast
+
     handlers = {}
     cli_dir = Path(__file__).parent
     for file in cli_dir.glob("*.py"):
@@ -101,11 +109,37 @@ def _discover_handlers() -> dict[str, str]:
             continue
         module_name = file.stem
         try:
-            module = importlib.import_module(f".{module_name}", package="dippy.cli")
-            for cmd in getattr(module, "COMMANDS", []):
-                handlers[cmd] = module_name
-        except ImportError:
+            source = file.read_text(encoding="utf-8")
+            tree = ast.parse(source, filename=str(file))
+        except (OSError, SyntaxError):
             continue
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Assign)
+                and any(
+                    isinstance(t, ast.Name) and t.id == "COMMANDS" for t in node.targets
+                )
+            ):
+                continue
+            try:
+                commands = ast.literal_eval(node.value)
+            except ValueError:
+                # Non-literal expression (e.g. list concat/comprehension):
+                # fall back to importing just this one module.
+                try:
+                    mod = importlib.import_module(
+                        f".{module_name}", package="dippy.cli"
+                    )
+                    for cmd in getattr(mod, "COMMANDS", []):
+                        handlers[cmd] = module_name
+                except ImportError:
+                    pass
+                break
+            if isinstance(commands, list):
+                for cmd in commands:
+                    if isinstance(cmd, str):
+                        handlers[cmd] = module_name
+            break
     return handlers
 
 
