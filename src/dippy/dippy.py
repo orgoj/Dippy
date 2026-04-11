@@ -84,6 +84,13 @@ def _detect_mode_from_flags() -> str | None:
 # Initial mode from flags/env
 MODE = _detect_mode_from_flags() or "claude"
 
+
+def _emit(result: dict | None) -> None:
+    """Emit hook result to stdout. Handles None sentinel for Codex (empty output = success)."""
+    if result is not None:
+        print(json.dumps(result))
+
+
 # === Logging Setup ===
 
 
@@ -148,6 +155,12 @@ def approve(
         if note:
             res["additionalContext"] = note
         return res
+    if MODE == "codex":
+        # Codex: exit 0 with no output is treated as success
+        # Return None sentinel — caller skips print()
+        if note:
+            return {"systemMessage": note}
+        return None
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
@@ -199,6 +212,12 @@ def ask(
         if note:
             res["additionalContext"] = note
         return res
+    if MODE == "codex":
+        # Codex: permissionDecision "ask" fails open, just show systemMessage
+        msg = f"🐤 {reason}"
+        if note:
+            return {"systemMessage": f"{msg}\n\n{note}"}
+        return {"systemMessage": msg}
     if MODE == "cursor":
         # Include both snake_case (v2.0+) and camelCase (v1.7.x) for compatibility
         msg = f"🐤 {reason}"
@@ -244,6 +263,13 @@ def deny(
         # Gemini CLI: Exit code 2 with stderr is the standard way to block a tool
         # and provide feedback to the agent without stopping the loop or
         # triggering a manual confirmation dialog (in v0.23+).
+        msg = f"🐤 {reason}"
+        if note:
+            msg = f"{msg}\n\n{note}"
+        print(msg, file=sys.stderr)
+        sys.exit(2)
+    if MODE == "codex":
+        # Codex: exit code 2 with stderr for blocking
         msg = f"🐤 {reason}"
         if note:
             msg = f"{msg}\n\n{note}"
@@ -297,6 +323,11 @@ def pass_(
         if note:
             res["additionalContext"] = note
         return res
+    if MODE == "codex":
+        # Codex: exit 0 with no output is treated as success
+        if note:
+            return {"systemMessage": note}
+        return None
 
     if note:
         return {"systemMessage": note}
@@ -686,7 +717,7 @@ Subcommands:
     )
     parser.add_argument("--config", metavar="PATH", help="Config file path override")
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
-    parser.add_argument("--version", action="version", version="dippy 0.2.7")
+    parser.add_argument("--version", action="version", version="dippy 0.2.8")
     parser.add_argument(
         "--remote", action="store_true", help="Remote context (skip local path checks)"
     )
@@ -744,7 +775,7 @@ Subcommands:
     )
     install_parser.add_argument(
         "agent",
-        choices=["claude", "gemini", "cursor", "windsurf"],
+        choices=["claude", "gemini", "cursor", "windsurf", "codex"],
         help="Agent to install hooks for",
     )
     install_parser.add_argument(
@@ -781,7 +812,7 @@ Subcommands:
     )
     uninstall_parser.add_argument(
         "agent",
-        choices=["claude", "gemini", "cursor", "windsurf"],
+        choices=["claude", "gemini", "cursor", "windsurf", "codex"],
         help="Agent to uninstall hooks for",
     )
     uninstall_parser.add_argument(
@@ -1032,6 +1063,8 @@ def main():
     else:
         logging.info(f"Mode set to: {MODE}")
 
+    command = ""  # ensure always bound for top-level except handler
+
     try:
         # Read hook input from stdin
         input_raw = sys.stdin.read()
@@ -1126,6 +1159,9 @@ def main():
                             }
                         )
                     )
+                elif MODE == "codex":
+                    # Codex Stop: decision "block" means continue
+                    print(json.dumps({"decision": "block", "reason": note}))
                 else:
                     # Claude Code: return decision "block" to force continuation
                     print(
@@ -1137,6 +1173,9 @@ def main():
                 # No notification, allow stop
                 if MODE == "gemini":
                     print(json.dumps({"decision": "allow", "continue": False}))
+                elif MODE == "codex":
+                    # Codex: continue=false allows normal stop
+                    print(json.dumps({"continue": False}))
                 else:
                     print(json.dumps({"decision": "approve", "continue": True}))
             return
@@ -1176,7 +1215,7 @@ def main():
                         log_decision(
                             "allow", message=permission_mode, tool=tool_name, agent=MODE
                         )
-                        print(json.dumps(approve(permission_mode)))
+                        _emit(approve(permission_mode))
                         return
                 # Handle MCP tool
                 if hook_event == "PostToolUse":
@@ -1210,7 +1249,7 @@ def main():
                             command=query,
                             agent=MODE,
                         )
-                        print(json.dumps(approve(permission_mode)))
+                        _emit(approve(permission_mode))
                         return
                 # Handle WebSearch tool
                 if hook_event == "PostToolUse":
@@ -1313,15 +1352,15 @@ def main():
                             # No rules matched any path — apply mode-specific fallback
                             if MODE == "gemini":
                                 log_decision(
-                                    "allow",
-                                    message=f"multi-file ({len(paths)} paths): no matching rule (Gemini fallback)",
+                                    "ask",
+                                    message=f"multi-file ({len(paths)} paths): no matching rule",
                                     tool=tool_name,
                                     file_path=paths[0],
                                     command=json.dumps(paths),
                                     cwd=cwd,
                                     agent=MODE,
                                 )
-                                print(json.dumps(approve("passing through (no match)")))
+                                _emit(ask("no matching rule"))
                             else:
                                 log_decision(
                                     "pass",
@@ -1352,7 +1391,7 @@ def main():
                             cwd=cwd,
                             agent=MODE,
                         )
-                        print(json.dumps(approve(permission_mode)))
+                        _emit(approve(permission_mode))
                         return
 
                     logging.info(f"Checking file op: {tool_name} -> {file_path}")
@@ -1361,14 +1400,14 @@ def main():
                         if not result:
                             if MODE == "gemini":
                                 log_decision(
-                                    "allow",
-                                    message="no matching rule (Gemini fallback)",
+                                    "ask",
+                                    message="no matching rule",
                                     tool=tool_name,
                                     file_path=file_path,
                                     cwd=cwd,
                                     agent=MODE,
                                 )
-                                result = approve("passing through (no match)")
+                                result = ask("no matching rule")
                             else:
                                 log_decision(
                                     "pass",
@@ -1383,14 +1422,14 @@ def main():
                         logging.error(f"Error checking file tool: {e}")
                         if MODE == "gemini":
                             log_decision(
-                                "allow",
+                                "ask",
                                 message="file-check-error",
                                 tool=tool_name,
                                 file_path=file_path,
                                 cwd=cwd,
                                 agent=MODE,
                             )
-                            print(json.dumps(approve(f"error recovery: {e}")))
+                            _emit(ask(f"error: {e}"))
                         else:
                             log_decision(
                                 "pass",
@@ -1406,12 +1445,12 @@ def main():
                 if hook_event != "PostToolUse":
                     if MODE == "gemini":
                         log_decision(
-                            "allow",
+                            "ask",
                             message=f"no file path for {tool_name}",
                             tool=tool_name,
                             agent=MODE,
                         )
-                        print(json.dumps(approve("no file path provided")))
+                        _emit(ask("no file path provided"))
                     else:
                         log_decision(
                             "pass",
@@ -1421,22 +1460,19 @@ def main():
                         )
                         print(json.dumps({}))
                 else:
-                    if MODE == "gemini":
-                        print(json.dumps(approve("no file path provided")))
-                    else:
-                        print(json.dumps({}))
+                    print(json.dumps({}))
                 return
 
             # Only handle shell/bash commands
             if tool_name not in SHELL_TOOL_NAMES:
                 if MODE == "gemini":
                     log_decision(
-                        "allow",
+                        "ask",
                         message=f"unsupported tool: {tool_name}",
                         tool=tool_name,
                         agent=MODE,
                     )
-                    print(json.dumps(approve(f"unsupported tool: {tool_name}")))
+                    _emit(ask(f"unsupported tool: {tool_name}"))
                 else:
                     log_decision(
                         "pass",
@@ -1461,7 +1497,9 @@ def main():
                     cwd=cwd,
                     agent=MODE,
                 )
-                print(json.dumps(approve(permission_mode)))
+                result = approve(permission_mode)
+                if result is not None:
+                    print(json.dumps(result))
                 return
 
         # Route based on hook event type
@@ -1471,21 +1509,27 @@ def main():
         else:
             logging.info(f"Checking: {command}")
             result = check_command(command, config, cwd)
-            print(json.dumps(result))
+            # Codex: None sentinel means exit 0 with no output
+            if result is not None:
+                print(json.dumps(result))
 
     except json.JSONDecodeError:
         logging.error("Invalid JSON input")
         if MODE == "gemini":
-            log_decision("allow", message="json-parse-error", agent=MODE)
-            print(json.dumps(approve("invalid json input")))
+            log_decision("ask", message="json-parse-error", agent=MODE)
+            result = ask("invalid json input")
+            if result is not None:
+                print(json.dumps(result))
         else:
             log_decision("pass", message="json-parse-error", agent=MODE)
             print(json.dumps({}))
     except Exception as e:
         logging.error(f"Error: {e}")
         if MODE == "gemini":
-            log_decision("allow", message="hook-error", command=command, agent=MODE)
-            print(json.dumps(approve(f"error recovery: {e}")))
+            log_decision("ask", message="hook-error", command=command, agent=MODE)
+            result = ask(f"error: {e}")
+            if result is not None:
+                print(json.dumps(result))
         else:
             log_decision("pass", message="hook-error", command=command, agent=MODE)
             print(json.dumps({}))
