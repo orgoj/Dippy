@@ -9,7 +9,7 @@ Each handler module exports:
 from __future__ import annotations
 
 import importlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
 from typing import Literal, Optional, Protocol
@@ -23,6 +23,9 @@ class HandlerContext:
     remote: bool = (
         False  # Whether command runs in remote context (container, ssh, etc.)
     )
+    cwd: Path = field(
+        default_factory=Path.cwd
+    )  # Working dir for relative path resolution
 
 
 @dataclass(frozen=True)

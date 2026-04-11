@@ -1285,3 +1285,60 @@ print(data, counts)
 """
         violations = analyze_python_source(source)
         assert len(violations) == 0, f"Expected no violations, got {violations}"
+
+
+class TestPythonCwdPropagation:
+    """Tests that HandlerContext.cwd is used for relative script resolution."""
+
+    def test_relative_safe_script_approved_via_context_cwd(self, check, tmp_path):
+        """Relative script resolved against context cwd should be analyzed and approved."""
+        script = tmp_path / "safe_calc.py"
+        script.write_text("result = sum(range(10))\nprint(result)\n")
+        # Pass relative name + explicit cwd — handler must use cwd, not Path.cwd()
+        result = check("python safe_calc.py", cwd=tmp_path)
+        assert is_approved(result), (
+            "Relative safe script should be approved when context cwd is correct"
+        )
+
+    def test_relative_dangerous_script_blocked_via_context_cwd(self, check, tmp_path):
+        """Relative script with dangerous imports is blocked via context cwd."""
+        script = tmp_path / "dangerous.py"
+        script.write_text("import os\nprint(os.getcwd())\n")
+        result = check("python dangerous.py", cwd=tmp_path)
+        assert needs_confirmation(result), (
+            "Relative dangerous script should require confirmation via context cwd"
+        )
+
+    def test_relative_script_wrong_cwd_returns_ask(self, check, tmp_path):
+        """Relative script not present in cwd returns ask (script not found)."""
+        # Script exists in tmp_path but cwd is different
+        script = tmp_path / "myfile.py"
+        script.write_text("x = 1\n")
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as other_dir:
+            from pathlib import Path
+
+            result = check("python myfile.py", cwd=Path(other_dir))
+        # Script not found in wrong cwd → needs confirmation
+        assert needs_confirmation(result), (
+            "Relative script not found in cwd should require confirmation"
+        )
+
+    def test_handler_context_cwd_attribute_exists(self):
+        """HandlerContext exposes a cwd attribute."""
+        from pathlib import Path
+
+        from dippy.cli import HandlerContext
+
+        ctx = HandlerContext(tokens=["python", "script.py"], cwd=Path("/some/path"))
+        assert ctx.cwd == Path("/some/path")
+
+    def test_handler_context_cwd_default_is_process_cwd(self):
+        """HandlerContext.cwd defaults to Path.cwd() when not specified."""
+        from pathlib import Path
+
+        from dippy.cli import HandlerContext
+
+        ctx = HandlerContext(tokens=["python"])
+        assert ctx.cwd == Path.cwd()

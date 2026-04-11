@@ -563,7 +563,7 @@ def _analyze_command(
                 ):
                     handler = get_handler(base)
                     outer_result = handler.classify(
-                        HandlerContext(words[base_idx:], remote=remote)
+                        HandlerContext(words[base_idx:], remote=remote, cwd=cwd)
                     )
                     if outer_result.action != "allow":
                         inner_cmd = _get_word_value(word).strip("$()")
@@ -784,7 +784,7 @@ def _analyze_simple_command(
     # 6. CLI-specific handlers
     handler = get_handler(base)
     if handler:
-        result = handler.classify(HandlerContext(tokens, remote=remote))
+        result = handler.classify(HandlerContext(tokens, remote=remote, cwd=cwd))
         desc = result.description or get_description(tokens, base)
         # Check handler-provided redirect targets against config (skip in remote mode)
         if result.redirect_targets and not remote:

@@ -775,7 +775,7 @@ def classify(ctx: HandlerContext) -> Classification:
     - Interactive mode
     """
     tokens = ctx.tokens
-    cwd = Path.cwd()
+    cwd = ctx.cwd
 
     desc = get_description(tokens)
 
