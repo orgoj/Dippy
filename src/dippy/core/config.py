@@ -192,12 +192,23 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         read_rules=base.read_rules + overlay.read_rules,
         web_rules=base.web_rules + overlay.web_rules,
         after_web_rules=base.after_web_rules + overlay.after_web_rules,
-        # Wrappers accumulate (merge dicts)
+        # Dicts accumulate (merge dicts)
         wrappers={**base.wrappers, **overlay.wrappers},
+        aliases={**base.aliases, **overlay.aliases},
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
         log_full=overlay.log_full if overlay.log_full else base.log_full,
+        log_rotate_max_days=(
+            overlay.log_rotate_max_days
+            if overlay.log_rotate_max_days != 30
+            else base.log_rotate_max_days
+        ),
+        log_hook_approvals=(
+            overlay.log_hook_approvals
+            if not overlay.log_hook_approvals
+            else base.log_hook_approvals
+        ),
         final=overlay.final if overlay.final is not None else base.final,
         askpass=overlay.askpass if overlay.askpass is not None else base.askpass,
         askpass_timeout=(
@@ -1303,7 +1314,11 @@ def _match_words(
                 raw_deny_set = rule.decision == "deny"
                 continue
             # Try env-stripped words for option rules too
-            if stripped_words and not raw_deny_set and _match_option_rule(rule, stripped_words):
+            if (
+                stripped_words
+                and not raw_deny_set
+                and _match_option_rule(rule, stripped_words)
+            ):
                 result = Match(
                     decision=rule.decision,
                     pattern=rule.pattern,
@@ -1320,7 +1335,11 @@ def _match_words(
         if not raw_matched and normalized_stripped:
             stripped_matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)
-        if not raw_matched and not stripped_matched and normalized_pattern.endswith(" *"):
+        if (
+            not raw_matched
+            and not stripped_matched
+            and normalized_pattern.endswith(" *")
+        ):
             if normalized_cmd == normalized_pattern[:-2]:
                 raw_matched = True
             elif normalized_stripped and normalized_stripped == normalized_pattern[:-2]:

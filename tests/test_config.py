@@ -2728,3 +2728,83 @@ class TestFinalConfig:
         # Second rule is from final config
         assert config.rules[1].scope == SCOPE_FINAL
         assert config.rules[1].source == str(final_cfg)
+
+
+class TestMergeConfigsMissingFields:
+    """Regression tests: all Config fields must merge correctly."""
+
+    def test_log_rotate_max_days_overlay_wins(self):
+        """log_rotate_max_days from overlay replaces base value."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(log_rotate_max_days=30)
+        overlay = Config(log_rotate_max_days=7)
+        merged = _merge_configs(base, overlay)
+        assert merged.log_rotate_max_days == 7
+
+    def test_log_rotate_max_days_default_preserves_base(self):
+        """log_rotate_max_days with default (30) in overlay preserves base."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(log_rotate_max_days=14)
+        overlay = Config()  # default is 30
+        merged = _merge_configs(base, overlay)
+        assert merged.log_rotate_max_days == 14
+
+    def test_log_rotate_max_days_zero_disabled(self):
+        """log_rotate_max_days=0 (disabled) in overlay must take effect."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(log_rotate_max_days=30)
+        overlay = Config(log_rotate_max_days=0)
+        merged = _merge_configs(base, overlay)
+        assert merged.log_rotate_max_days == 0
+
+    def test_log_hook_approvals_overlay_false_wins(self):
+        """log_hook_approvals=False in overlay replaces base True."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(log_hook_approvals=True)
+        overlay = Config(log_hook_approvals=False)
+        merged = _merge_configs(base, overlay)
+        assert merged.log_hook_approvals is False
+
+    def test_log_hook_approvals_base_preserved_when_overlay_default(self):
+        """log_hook_approvals default (True) in overlay preserves base False."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(log_hook_approvals=False)
+        overlay = Config()  # default is True
+        merged = _merge_configs(base, overlay)
+        assert merged.log_hook_approvals is False
+
+    def test_aliases_accumulate(self):
+        """aliases from base and overlay are merged (overlay wins on conflict)."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(aliases={"~/bin/gh": "gh", "~/bin/git": "git"})
+        overlay = Config(aliases={"~/bin/docker": "docker"})
+        merged = _merge_configs(base, overlay)
+        assert merged.aliases == {
+            "~/bin/gh": "gh",
+            "~/bin/git": "git",
+            "~/bin/docker": "docker",
+        }
+
+    def test_aliases_overlay_overrides_base_on_conflict(self):
+        """overlay alias overrides base alias for same key."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(aliases={"~/bin/gh": "old_gh"})
+        overlay = Config(aliases={"~/bin/gh": "gh"})
+        merged = _merge_configs(base, overlay)
+        assert merged.aliases["~/bin/gh"] == "gh"
+
+    def test_aliases_empty_overlay_preserves_base(self):
+        """Empty overlay aliases preserves base aliases."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(aliases={"~/bin/gh": "gh"})
+        overlay = Config()  # no aliases
+        merged = _merge_configs(base, overlay)
+        assert merged.aliases == {"~/bin/gh": "gh"}
