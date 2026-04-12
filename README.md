@@ -212,6 +212,8 @@ If you prefer manual configuration or need project-specific settings:
 
 **Current Codex limitation:** Dippy can hard-block Codex shell commands with `deny`, but `ask` is advisory only. Codex shows the `systemMessage` and still runs the command, so anything that must not execute needs a `deny` rule.
 
+**Codex sandbox gotcha:** During Codex `workspace-write` tool execution on Linux, `.codex` can appear inside the sandbox as a synthetic read-only file-like path even when the host workspace does not contain a normal `.codex` file. That artifact comes from Codex sandbox path protection, not from Dippy.
+
 **Hooks installed:**
 - **PreToolUse**: Validates tools BEFORE execution (Bash, file ops, WebSearch, MCP)
 - **PostToolUse**: Shows feedback messages AFTER execution (for `after` directive)
