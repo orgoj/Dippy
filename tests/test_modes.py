@@ -2,31 +2,33 @@
 
 from __future__ import annotations
 
-import importlib
 import pytest
 
 
 @pytest.fixture(autouse=True)
-def reset_dippy_module(monkeypatch):
-    """Reset dippy module after each test to restore Claude mode."""
-    yield
-    # Reset to Claude mode after each test
-    monkeypatch.setattr("sys.argv", ["dippy"])
+def reset_mode(monkeypatch):
+    """Reset MODE to claude after each test."""
     monkeypatch.delenv("DIPPY_GEMINI", raising=False)
     monkeypatch.delenv("DIPPY_CURSOR", raising=False)
     monkeypatch.delenv("DIPPY_CLAUDE", raising=False)
+    monkeypatch.delenv("DIPPY_CODEX", raising=False)
+    yield
     import dippy.dippy
 
-    importlib.reload(dippy.dippy)
+    dippy.dippy.MODE = "claude"
+
+
+def _set_mode(monkeypatch, mode: str) -> None:
+    """Set MODE directly on the dippy module."""
+    import dippy.dippy
+
+    dippy.dippy.MODE = mode
 
 
 def test_gemini_approve_format(monkeypatch):
     """Test that Gemini mode returns correct JSON format for approval."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--gemini"])
-
+    _set_mode(monkeypatch, "gemini")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("git status")
 
@@ -39,11 +41,8 @@ def test_gemini_approve_format(monkeypatch):
 
 def test_gemini_ask_format(monkeypatch):
     """Test that Gemini mode returns correct JSON format for ask."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--gemini"])
-
+    _set_mode(monkeypatch, "gemini")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.ask("rm -rf")
 
@@ -56,12 +55,8 @@ def test_gemini_ask_format(monkeypatch):
 
 def test_claude_approve_format(monkeypatch):
     """Test that Claude mode returns correct JSON format for approval."""
-    monkeypatch.setattr("sys.argv", ["dippy"])
-    monkeypatch.delenv("DIPPY_GEMINI", raising=False)
-
+    _set_mode(monkeypatch, "claude")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("git status")
 
@@ -73,12 +68,8 @@ def test_claude_approve_format(monkeypatch):
 
 def test_claude_ask_format(monkeypatch):
     """Test that Claude mode returns correct JSON format for ask."""
-    monkeypatch.setattr("sys.argv", ["dippy"])
-    monkeypatch.delenv("DIPPY_GEMINI", raising=False)
-
+    _set_mode(monkeypatch, "claude")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.ask("rm -rf")
 
@@ -90,12 +81,8 @@ def test_claude_ask_format(monkeypatch):
 
 def test_gemini_env_var(monkeypatch):
     """Test that DIPPY_GEMINI env var enables Gemini mode."""
-    monkeypatch.setattr("sys.argv", ["dippy"])
-    monkeypatch.setenv("DIPPY_GEMINI", "true")
-
+    _set_mode(monkeypatch, "gemini")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("ls")
 
@@ -105,11 +92,8 @@ def test_gemini_env_var(monkeypatch):
 
 def test_codex_approve_format(monkeypatch):
     """Test that Codex mode uses empty output for approvals."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
-
+    _set_mode(monkeypatch, "codex")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("git status")
 
@@ -118,11 +102,8 @@ def test_codex_approve_format(monkeypatch):
 
 def test_codex_ask_format(monkeypatch):
     """Test that Codex mode falls back to systemMessage for ask."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
-
+    _set_mode(monkeypatch, "codex")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.ask("rm -rf")
 
@@ -132,12 +113,9 @@ def test_codex_ask_format(monkeypatch):
 def test_codex_mode_detection(monkeypatch):
     """Test that --codex flag explicitly sets Codex mode."""
     monkeypatch.setattr("sys.argv", ["dippy", "--codex"])
+    from dippy.dippy import _detect_mode_from_flags
 
-    import dippy.dippy
-
-    importlib.reload(dippy.dippy)
-
-    assert dippy.dippy.MODE == "codex"
+    assert _detect_mode_from_flags() == "codex"
 
 
 def test_shell_tool_names():
@@ -154,11 +132,8 @@ def test_shell_tool_names():
 
 def test_cursor_approve_format(monkeypatch):
     """Test that Cursor mode returns correct JSON format for approval."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--cursor"])
-
+    _set_mode(monkeypatch, "cursor")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("git status")
 
@@ -179,11 +154,8 @@ def test_cursor_approve_format(monkeypatch):
 
 def test_cursor_ask_format(monkeypatch):
     """Test that Cursor mode returns correct JSON format for ask."""
-    monkeypatch.setattr("sys.argv", ["dippy", "--cursor"])
-
+    _set_mode(monkeypatch, "cursor")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.ask("rm -rf")
 
@@ -204,12 +176,8 @@ def test_cursor_ask_format(monkeypatch):
 
 def test_cursor_env_var(monkeypatch):
     """Test that DIPPY_CURSOR env var enables Cursor mode."""
-    monkeypatch.setattr("sys.argv", ["dippy"])
-    monkeypatch.setenv("DIPPY_CURSOR", "true")
-
+    _set_mode(monkeypatch, "cursor")
     import dippy.dippy
-
-    importlib.reload(dippy.dippy)
 
     result = dippy.dippy.approve("ls")
 
@@ -220,12 +188,9 @@ def test_cursor_env_var(monkeypatch):
 def test_cursor_mode_detection(monkeypatch):
     """Test that Cursor mode is correctly detected."""
     monkeypatch.setattr("sys.argv", ["dippy", "--cursor"])
+    from dippy.dippy import _detect_mode_from_flags
 
-    import dippy.dippy
-
-    importlib.reload(dippy.dippy)
-
-    assert dippy.dippy.MODE == "cursor"
+    assert _detect_mode_from_flags() == "cursor"
 
 
 # === Claude Flag Tests ===
@@ -234,24 +199,18 @@ def test_cursor_mode_detection(monkeypatch):
 def test_claude_flag(monkeypatch):
     """Test that --claude flag explicitly sets Claude mode."""
     monkeypatch.setattr("sys.argv", ["dippy", "--claude"])
+    from dippy.dippy import _detect_mode_from_flags
 
-    import dippy.dippy
-
-    importlib.reload(dippy.dippy)
-
-    assert dippy.dippy.MODE == "claude"
+    assert _detect_mode_from_flags() == "claude"
 
 
 def test_claude_env_var(monkeypatch):
     """Test that DIPPY_CLAUDE env var enables Claude mode."""
     monkeypatch.setattr("sys.argv", ["dippy"])
     monkeypatch.setenv("DIPPY_CLAUDE", "true")
+    from dippy.dippy import _detect_mode_from_flags
 
-    import dippy.dippy
-
-    importlib.reload(dippy.dippy)
-
-    assert dippy.dippy.MODE == "claude"
+    assert _detect_mode_from_flags() == "claude"
 
 
 def test_file_tool_names():
@@ -271,9 +230,6 @@ def test_no_flag_defaults_to_claude(monkeypatch):
     monkeypatch.delenv("DIPPY_GEMINI", raising=False)
     monkeypatch.delenv("DIPPY_CURSOR", raising=False)
     monkeypatch.delenv("DIPPY_CLAUDE", raising=False)
+    from dippy.dippy import _detect_mode_from_flags
 
-    import dippy.dippy
-
-    importlib.reload(dippy.dippy)
-
-    assert dippy.dippy.MODE == "claude"
+    assert _detect_mode_from_flags() is None

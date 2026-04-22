@@ -1,6 +1,6 @@
 # Dippy config for Dippy
 
-#include .dippy-yolo
+include .dippy-yolo
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
@@ -19,6 +19,7 @@ deny python3 -m pytest * "Use: uv run python -m pytest ..."
 allow uv run python -m pytest *
 allow uv run python ./*
 allow pytest run *
+allow just *
 
 # DANGER
 allow uv run python -c *
