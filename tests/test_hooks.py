@@ -316,7 +316,9 @@ class TestHooksInstallUninstall:
     def test_install_all_agents_creates_all_project_configs(self, tmp_path):
         from dippy.cli.hooks import install
 
-        result = install(agent=None, all_hooks=True, global_config=False, cwd=str(tmp_path))
+        result = install(
+            agent=None, all_hooks=True, global_config=False, cwd=str(tmp_path)
+        )
 
         assert result == 0
         assert (tmp_path / ".claude" / "settings.json").exists()
@@ -500,7 +502,10 @@ class TestCodexHooksFormat:
             "hooks": {
                 "PreToolUse": [
                     {"matchers": {"tool_name": "Bash"}, "run": ["dippy", "--codex"]},
-                    {"matchers": {"tool_name": "Bash"}, "run": ["other-tool", "--flag"]},
+                    {
+                        "matchers": {"tool_name": "Bash"},
+                        "run": ["other-tool", "--flag"],
+                    },
                 ]
             }
         }

@@ -33,7 +33,9 @@ def run_hook(
         with tempfile.TemporaryDirectory() as tmpdir:
             symlink_path = Path(tmpdir) / "dippy"
             symlink_path.symlink_to(DIPPY_HOOK)
-            return _run(symlink_path, input_data, use_system_python, extra_env=extra_env)
+            return _run(
+                symlink_path, input_data, use_system_python, extra_env=extra_env
+            )
     return _run(DIPPY_HOOK, input_data, use_system_python, extra_env=extra_env)
 
 
@@ -59,7 +61,11 @@ def _run(
     if extra_env:
         env.update(extra_env)
     env.setdefault("DIPPY_TEST_NO_LOG", "1")
-    home_dir = extra_env.get("HOME") if extra_env and "HOME" in extra_env else tempfile.mkdtemp(prefix="dippy-hook-home-")
+    home_dir = (
+        extra_env.get("HOME")
+        if extra_env and "HOME" in extra_env
+        else tempfile.mkdtemp(prefix="dippy-hook-home-")
+    )
     env["HOME"] = home_dir
     config_path = Path(home_dir) / "dippy-test.conf"
     config_path.write_text(f"set log {Path(home_dir) / 'audit.log'}\n")
@@ -187,7 +193,9 @@ class TestEndToEnd:
                 "cwd": str(cwd),
                 "hook_event_name": "PreToolUse",
             }
-            result = run_hook(input_data, extra_env={"DIPPY_CODEX": "1", "HOME": tmpdir})
+            result = run_hook(
+                input_data, extra_env={"DIPPY_CODEX": "1", "HOME": tmpdir}
+            )
 
         assert result.returncode == 2
         assert result.stdout == b""

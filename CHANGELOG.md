@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.14] - 2026-04-22
+
+### Added
+
+- **Python `-c` inline code AST analysis** - `python -c 'code'` is now statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved. (Design from nickdaview/python-c-analysis)
+- **Configurable Python module lists** - New `python-allow-module` and `python-deny-module` config directives let users customize which Python modules are considered safe or dangerous during static analysis.
+  - Example: `python-allow-module numpy` whitelists numpy imports in inline code.
+  - Example: `python-deny-module requests` blocks requests even though it's not in the hardcoded dangerous list.
+- **Bash expansion detection in `-c` arguments** - When the `-c` code argument contains shell expansions (`$VAR`, `$(cmd)`), Dippy falls back to `ask` since the code can't be statically analyzed.
+
+### Fixed
+
+- **`__getattribute__` reflection bypass** - Added `__getattribute__` to REFLECTION_ATTRS to prevent bypassing the AST analyzer via `obj.__getattribute__('__globals__')` (reported by Codex GPT-5.4 review).
+- **`--help` after `-c` bypass** - `python -c 'malicious' --help` no longer gets auto-approved via the help-flag shortcut. The analyzer now checks for `-c`/`-m` before matching version/help patterns.
+
 ## [0.2.13] - 2026-04-12
 
 ### Fixed

@@ -14,3 +14,12 @@ Hook PreToolUse:Bash requires confirmation for this command:
  ```
  
 - claude code subagents ignores allow - jak toto resit?
+
+## Fix test_modes failures (10 tests, pre-existing)
+
+`tests/test_modes.py` has 10 failing tests that only fail when run as part of the full suite (`just test`), but pass standalone. Suspected cause: the `include` config directive pollutes test state across test files.
+
+Affected tests:
+- `test_gemini_approve_format`, `test_gemini_ask_format`, `test_gemini_env_var`
+- `test_codex_approve_format`, `test_codex_ask_format`, `test_codex_mode_detection`
+- `test_cursor_approve_format`, `test_cursor_ask_format`, `test_cursor_env_var`, `test_cursor_mode_detection`

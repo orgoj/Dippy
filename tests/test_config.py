@@ -2808,3 +2808,67 @@ class TestMergeConfigsMissingFields:
         overlay = Config()  # no aliases
         merged = _merge_configs(base, overlay)
         assert merged.aliases == {"~/bin/gh": "gh"}
+
+
+class TestPythonModuleDirectives:
+    """Tests for python-allow-module and python-deny-module config directives."""
+
+    def test_parse_python_allow_module(self, tmp_path):
+        """python-allow-module adds modules to allow list."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text(
+            "python-allow-module numpy\npython-allow-module pandas\n"
+        )
+        config = _load_config_file(config_file)
+        assert config.python_allow_modules == ["numpy", "pandas"]
+
+    def test_parse_python_deny_module(self, tmp_path):
+        """python-deny-module adds modules to deny list."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("python-deny-module requests\n")
+        config = _load_config_file(config_file)
+        assert config.python_deny_modules == ["requests"]
+
+    def test_python_module_merge_accumulates(self):
+        """Python module lists accumulate across config layers."""
+        from dippy.core.config import Config, _merge_configs
+
+        base = Config(python_allow_modules=["numpy"])
+        overlay = Config(python_allow_modules=["pandas"])
+        merged = _merge_configs(base, overlay)
+        assert merged.python_allow_modules == ["numpy", "pandas"]
+
+    def test_python_allow_module_dotted_name(self, tmp_path):
+        """Dotted module names are valid."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("python-allow-module http.server\n")
+        config = _load_config_file(config_file)
+        assert config.python_allow_modules == ["http.server"]
+
+    def test_python_allow_module_invalid_name(self, tmp_path, caplog):
+        """Invalid module names are rejected with a warning."""
+        import logging
+
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("python-allow-module 123invalid\n")
+        with caplog.at_level(logging.WARNING):
+            config = _load_config_file(config_file)
+        assert config.python_allow_modules == []
+        assert "invalid" in caplog.text.lower()
+
+    def test_python_allow_module_inline_comment(self, tmp_path):
+        """Inline comments are stripped from module names."""
+        from dippy.core.config import _load_config_file
+
+        config_file = tmp_path / "config"
+        config_file.write_text("python-allow-module numpy # data science\n")
+        config = _load_config_file(config_file)
+        assert config.python_allow_modules == ["numpy"]

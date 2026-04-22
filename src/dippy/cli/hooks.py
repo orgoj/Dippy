@@ -887,6 +887,7 @@ def _codex_feature_flag_enabled(config_path: Path) -> bool:
 
     return "codex_hooks = true" in content
 
+
 def uninstall(
     agent: str,
     global_config: bool = False,
@@ -1215,7 +1216,10 @@ def _format_text_output(
         # Determine status indicator
         codex_flag_missing = info.agent_id == "codex" and (
             (info.has_any_hook() and info.global_feature_flag is False)
-            or (info.project_status == HookStatus.INSTALLED and info.project_feature_flag is False)
+            or (
+                info.project_status == HookStatus.INSTALLED
+                and info.project_feature_flag is False
+            )
         )
         if info.has_any_hook() and not info.has_legacy() and not codex_flag_missing:
             status_indicator = "+"

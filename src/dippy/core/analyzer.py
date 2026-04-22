@@ -502,6 +502,8 @@ def _analyze_command(
 
     # Get base command for injection check
     words = [_get_word_value(w) for w in node.words]
+    # Track which words contain bash expansions (param, cmdsub, procsub)
+    word_has_expansions = tuple(bool(getattr(w, "parts", [])) for w in node.words)
     # Skip env var assignments to find base command
     base_idx = 0
     while (
@@ -599,7 +601,12 @@ def _analyze_command(
         return _combine(decisions)
 
     cmd_decision = _analyze_simple_command(
-        words, config, cwd, context_flags, remote=remote
+        words,
+        config,
+        cwd,
+        context_flags,
+        remote=remote,
+        word_has_expansions=word_has_expansions,
     )
     decisions.append(cmd_decision)
 
@@ -676,6 +683,7 @@ def _analyze_simple_command(
     context_flags: frozenset[str] = frozenset(),
     *,
     remote: bool = False,
+    word_has_expansions: tuple[bool, ...] = (),
 ) -> Decision:
     """Analyze a simple command (list of words)."""
     if not words:
@@ -745,7 +753,14 @@ def _analyze_simple_command(
 
         if j < len(tokens):
             return _analyze_simple_command(
-                tokens[j:], config, cwd, context_flags, remote=remote
+                tokens[j:],
+                config,
+                cwd,
+                context_flags,
+                remote=remote,
+                word_has_expansions=word_has_expansions[j:]
+                if word_has_expansions
+                else (),
             )
         return Decision("ask", base, context_flags=context_flags, suggestion=suggestion)
 
@@ -784,7 +799,15 @@ def _analyze_simple_command(
     # 6. CLI-specific handlers
     handler = get_handler(base)
     if handler:
-        result = handler.classify(HandlerContext(tokens, remote=remote, cwd=cwd))
+        result = handler.classify(
+            HandlerContext(
+                tokens,
+                remote=remote,
+                cwd=cwd,
+                config=config,
+                word_has_expansions=word_has_expansions,
+            )
+        )
         desc = result.description or get_description(tokens, base)
         # Check handler-provided redirect targets against config (skip in remote mode)
         if result.redirect_targets and not remote:
@@ -871,6 +894,9 @@ def _is_version_or_help(tokens: list[str]) -> bool:
         return True
 
     if tokens[-1] in ("--help", "-h") and len(tokens) <= 4:
+        # After -c/-m, remaining tokens are script args, not interpreter flags
+        if "-c" in tokens or "-m" in tokens:
+            return False
         return True
 
     return False

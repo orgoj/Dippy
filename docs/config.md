@@ -613,7 +613,40 @@ set deny-format-pi "PI-specific format: {reason}"
 set deny-format-claude "Claude-specific format: {reason}"
 ```
 
+# Python module safety lists
+set python-allow-module numpy       # whitelist module for python -c analysis
+set python-allow-module pandas      # one module per directive, repeatable
+set python-deny-module requests     # block module even if not in default dangerous list
+```
+
 Settings use kebab-case or snake_case interchangeably.
+
+### Python Module Directives
+
+When `python -c 'code'` is analyzed for safety, Dippy checks imports against built-in safe and dangerous module lists. These directives let you customize those lists:
+
+```
+set python-allow-module <module>    # consider module safe in -c code
+set python-deny-module <module>     # consider module dangerous in -c code
+```
+
+- One module per directive; repeat to add multiple modules.
+- Dotted names are supported: `set python-allow-module numpy.linalg`
+- `python-allow-module` takes precedence over `python-deny-module` if both match.
+- Allow overrides the built-in dangerous list; deny overrides the built-in safe list.
+
+**Example — allow data science tools:**
+```
+set python-allow-module numpy
+set python-allow-module pandas
+set python-allow-module scipy
+```
+
+**Example — block specific modules:**
+```
+set python-deny-module requests
+set python-deny-module http.client
+```
 
 ### Deny Format
 

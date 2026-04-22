@@ -10,6 +10,25 @@ from pathlib import Path
 
 from dippy.core.parser import tokenize
 
+# Valid Python module path: dotted identifiers (e.g. "numpy", "http.server")
+_MODULE_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
+
+
+def _parse_module_name(rest: str) -> str:
+    """Parse and validate a Python module name from a directive argument."""
+    if "#" in rest:
+        rest = rest[: rest.index("#")].rstrip()
+    if not rest:
+        raise ValueError("requires a module name")
+    parts = rest.split()
+    if len(parts) != 1:
+        raise ValueError(f"requires exactly one module name, got: {rest!r}")
+    mod = parts[0]
+    if not _MODULE_RE.match(mod):
+        raise ValueError(f"invalid Python module name: {mod!r}")
+    return mod
+
+
 # Cache home directory at module load - fails fast if HOME is unset
 _HOME = Path.home()
 
@@ -114,6 +133,12 @@ class Config:
     aliases: dict[str, str] = field(default_factory=dict)
     """Command aliases mapping source to target (e.g., ~/bin/gh -> gh)."""
 
+    python_allow_modules: list[str] = field(default_factory=list)
+    """Extra modules to treat as safe for Python static analysis."""
+
+    python_deny_modules: list[str] = field(default_factory=list)
+    """Extra modules to treat as dangerous for Python static analysis."""
+
     default: str = "ask"  # 'allow' | 'ask' | 'pass'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
@@ -195,6 +220,9 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         # Dicts accumulate (merge dicts)
         wrappers={**base.wrappers, **overlay.wrappers},
         aliases={**base.aliases, **overlay.aliases},
+        # Python module lists accumulate
+        python_allow_modules=base.python_allow_modules + overlay.python_allow_modules,
+        python_deny_modules=base.python_deny_modules + overlay.python_deny_modules,
         # Settings: overlay wins if set
         default=overlay.default if overlay.default != "ask" else base.default,
         log=overlay.log if overlay.log is not None else base.log,
@@ -564,6 +592,8 @@ def parse_config(text: str, source: str | None = None) -> Config:
     web_rules: list[Rule] = []
     after_web_rules: list[Rule] = []
     wrappers: dict[str, WrapperInfo] = {}
+    python_allow_modules: list[str] = []
+    python_deny_modules: list[str] = []
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -830,6 +860,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
             elif directive == "set":
                 _apply_setting(settings, rest)
 
+            elif directive == "python-allow-module":
+                python_allow_modules.append(_parse_module_name(rest))
+
+            elif directive == "python-deny-module":
+                python_deny_modules.append(_parse_module_name(rest))
+
             else:
                 raise ValueError(f"unknown directive '{directive}'")
 
@@ -847,6 +883,8 @@ def parse_config(text: str, source: str | None = None) -> Config:
         web_rules=web_rules,
         after_web_rules=after_web_rules,
         wrappers=wrappers,
+        python_allow_modules=python_allow_modules,
+        python_deny_modules=python_deny_modules,
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),

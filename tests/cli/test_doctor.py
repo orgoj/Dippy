@@ -308,7 +308,9 @@ class TestCodexDoctor:
 
         results = check_hook_status(workspace, verbose=False)
 
-        codex_result = next((r for r in results if r.name == "Hook: OpenAI Codex CLI"), None)
+        codex_result = next(
+            (r for r in results if r.name == "Hook: OpenAI Codex CLI"), None
+        )
         assert codex_result is not None
         assert codex_result.status == HealthStatus.WARNING
         assert "hook not installed" in codex_result.message.lower()
@@ -341,10 +343,13 @@ class TestCodexDoctor:
 
         results = check_hook_status(workspace, verbose=False)
 
-        codex_result = next((r for r in results if r.name == "Hook: OpenAI Codex CLI"), None)
+        codex_result = next(
+            (r for r in results if r.name == "Hook: OpenAI Codex CLI"), None
+        )
         assert codex_result is not None
         assert codex_result.status == HealthStatus.WARNING
         assert "feature flag missing" in codex_result.message.lower()
+
 
 class TestRun:
     def test_returns_int(self, tmp_path, monkeypatch, capsys):

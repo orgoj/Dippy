@@ -356,7 +356,9 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
         # Determine agent status
         agent_exists = global_config is not None or project_config is not None
         if agent_id == "codex":
-            agent_exists = agent_exists or global_feature_flag or bool(project_feature_flag)
+            agent_exists = (
+                agent_exists or global_feature_flag or bool(project_feature_flag)
+            )
 
         if not agent_exists:
             # Agent not installed - show relevant paths only

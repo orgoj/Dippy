@@ -30,6 +30,8 @@
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
+- **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
+- **Configurable Python modules** — `python-allow-module` and `python-deny-module` directives to customize which modules are safe or dangerous during `-c` analysis
 - **CLI management** — `dippy hooks install/uninstall/list` and `dippy doctor` diagnostics
 <!-- FORK ENHANCEMENTS END -->
 

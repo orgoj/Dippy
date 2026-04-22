@@ -40,9 +40,7 @@ class TestPythonCodeExecution:
     @pytest.mark.parametrize(
         "cmd",
         [
-            "python -c 'print(1)'",
             "python3 -c 'import os; os.system(\"ls\")'",
-            "python -c 'x=1'",
             "python -m http.server",
             "python -m pip install foo",
             "python -m pytest",
@@ -60,6 +58,18 @@ class TestPythonCodeExecution:
         """Code execution modes should need confirmation."""
         result = check(cmd)
         assert needs_confirmation(result), f"Expected confirm: {cmd}"
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "python -c 'print(1)'",
+            "python -c 'x=1'",
+        ],
+    )
+    def test_inline_safe_code_approved(self, check, cmd):
+        """Safe inline code that passes AST analysis should be auto-approved."""
+        result = check(cmd)
+        assert is_approved(result), f"Expected approve: {cmd}"
 
     def test_calendar_module_approved(self, check):
         """calendar module is truly inert - just prints a calendar."""
@@ -1342,3 +1352,67 @@ class TestPythonCwdPropagation:
 
         ctx = HandlerContext(tokens=["python"])
         assert ctx.cwd == Path.cwd()
+
+
+class TestInlineCodeAnalysis:
+    """Tests for python -c inline code AST analysis."""
+
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "import json; d=json.loads('{\"a\":1}'); print(d['a'])",
+            "import json; json.dumps({'x': 1})",
+            "x=1; y=2; print(x+y)",
+            "from collections import OrderedDict; d=OrderedDict()",
+            "import math; print(math.pi)",
+        ],
+    )
+    def test_safe_inline_code_approved(self, check, code):
+        """Safe inline code should be auto-approved by AST analysis."""
+        result = check(f"python -c '{code}'")
+        assert is_approved(result), f"Expected approve: python -c '{code}'"
+
+    @pytest.mark.parametrize(
+        "code",
+        [
+            "import os; os.system('rm -rf /')",
+            "import subprocess; subprocess.run(['ls'])",
+            "open('/etc/passwd').read()",
+            "import shutil; shutil.rmtree('/tmp')",
+            "import pathlib; p=pathlib.Path('/tmp')",
+        ],
+    )
+    def test_dangerous_inline_code_ask(self, check, code):
+        """Dangerous inline code should still ask for confirmation."""
+        result = check(f"python -c '{code}'")
+        assert needs_confirmation(result), f"Expected confirm: python -c '{code}'"
+
+    def test_inline_code_with_config_allow_module(self, check):
+        """python-allow-module should whitelist modules for inline analysis."""
+        from dippy.cli import HandlerContext
+        from dippy.core.config import Config
+
+        config = Config(python_allow_modules=["graphify"])
+        ctx = HandlerContext(
+            tokens=["python3", "-c", "import graphify; print(graphify)"],
+            config=config,
+        )
+        from dippy.cli.python import classify
+
+        result = classify(ctx)
+        assert result.action == "allow"
+
+    def test_inline_code_with_config_deny_module(self, check):
+        """python-deny-module should block modules even if normally safe."""
+        from dippy.cli import HandlerContext
+        from dippy.core.config import Config
+
+        config = Config(python_deny_modules=["json"])
+        ctx = HandlerContext(
+            tokens=["python3", "-c", "import json; print(json.dumps({}))"],
+            config=config,
+        )
+        from dippy.cli.python import classify
+
+        result = classify(ctx)
+        assert result.action == "ask"
