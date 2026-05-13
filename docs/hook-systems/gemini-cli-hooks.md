@@ -170,7 +170,7 @@ Extension hooks support ${extensionPath} variable substitution.
 
 | Event               | Can Block | Can Modify Input        | Can Inject Context      |
 | ------------------- | --------- | ----------------------- | ----------------------- |
-| BeforeTool          | Yes       | Yes (via deny + reason) | Yes                     |
+| BeforeTool          | Yes       | Yes (`tool_input`)      | Yes                     |
 | AfterTool           | Yes       | N/A                     | Yes (additionalContext) |
 | BeforeAgent         | Yes       | N/A                     | Yes (additionalContext) |
 | AfterAgent          | Yes       | N/A                     | N/A                     |
@@ -497,6 +497,17 @@ Values: "exit" | "clear" | "logout" | "prompt_input_exit" | "other"
 | block   | Operation blocked  | Similar to deny                      |
 | ask     | Prompt user        | Request user confirmation            |
 | approve | Approve pending    | Approve a previously asked operation |
+
+### `allow` Is Not a Policy Approval
+
+As of Gemini CLI `0.42.0-nightly.20260511.g1a894c18e`, a `BeforeTool` hook
+that returns `{"decision": "allow"}` does not bypass Gemini's policy engine.
+It only means the hook itself does not block the tool. Gemini still evaluates
+the tool call with its policy engine and may still show the native approval
+dialog if the matching policy decision is `ask_user`.
+
+Use Gemini policy rules for automatic command approval. Use hooks for blocking,
+forcing a prompt, input modification, auditing, and context injection.
 
 ### Decision Examples
 
@@ -831,6 +842,42 @@ Major hooks release:
 ---
 
 ## Known Bugs and Issues
+
+### BeforeTool `allow` Does Not Auto-Approve Commands
+
+**Observed in:** Gemini CLI `0.42.0-nightly.20260511.g1a894c18e`, source
+checkout `/home/michael/projects/gemini-cli` at commit `8cda688fe`.
+
+**Symptoms:**
+- A hook such as Dippy returns `{"decision": "allow"}` for
+  `run_shell_command`.
+- The hook is invoked correctly and Dippy logs or prints an allow decision.
+- Gemini still asks for manual confirmation for commands that its policy engine
+  classifies as `ask_user`.
+
+**Why it happens:**
+- `packages/core/src/scheduler/hook-utils.ts` evaluates `BeforeTool` hooks and
+  only propagates `ask`, blocking decisions, and tool input modifications.
+- `packages/core/src/scheduler/scheduler.ts` then calls `checkPolicy(...)`
+  regardless of a hook `allow` result.
+- `decision: "allow"` is therefore "hook allows normal flow", not "policy
+  approved".
+
+**Dippy impact:**
+- Dippy's Gemini hook config is still valid:
+  - `hooks.BeforeTool` matcher:
+    `run_shell_command|write_file|replace|read_file|google_web_search`
+  - `hooks.AfterTool` matcher: `run_shell_command|google_web_search`
+  - hook command: `dippy --gemini`
+- Dippy can block with `deny`/`block`, force Gemini's native prompt with `ask`,
+  and modify supported tool input.
+- Dippy cannot auto-approve Gemini shell commands through `BeforeTool allow`.
+
+**Workaround:**
+- Add Gemini policy TOML rules with `decision = "allow"` for commands that
+  should run without prompting.
+- Alternatively use a more permissive Gemini approval mode only when that is
+  acceptable for the session.
 
 ### Issue #13155: Hooks Not Triggering
 
