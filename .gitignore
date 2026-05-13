@@ -30,6 +30,8 @@ htmlcov/
 # Local configuration (user-specific)
 dippy-local.toml
 tests/local/
+*.local.*
+.claude/plans/
 
 # Logs
 *.log
