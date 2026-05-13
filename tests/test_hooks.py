@@ -327,6 +327,7 @@ class TestHooksInstallUninstall:
         assert (tmp_path / ".windsurf" / "hooks.json").exists()
         assert (tmp_path / ".codex" / "hooks.json").exists()
         assert (tmp_path / ".codex" / "config.toml").exists()
+        assert "hooks = true" in (tmp_path / ".codex" / "config.toml").read_text()
 
     def test_install_claude_creates_hooks_config(self, tmp_path):
         from dippy.cli.hooks import install
@@ -530,6 +531,14 @@ class TestCodexHooksFormat:
         assert entry["hooks"] == [{"type": "command", "command": "dippy --codex"}]
         assert "matchers" not in entry
         assert "run" not in entry
+
+        permission_entries = config["hooks"]["PermissionRequest"]
+        assert permission_entries, "Expected at least one PermissionRequest entry"
+        permission_entry = permission_entries[0]
+        assert permission_entry["matcher"] == "^Bash$"
+        assert permission_entry["hooks"] == [
+            {"type": "command", "command": "dippy --codex"}
+        ]
 
     def test_uninstall_codex_removes_new_format(self, tmp_path):
         """dippy hooks uninstall codex removes new-format entries."""

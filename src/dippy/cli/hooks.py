@@ -92,6 +92,17 @@ MINIMAL_HOOKS = {
                     ],
                 }
             ],
+            "PermissionRequest": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
+                }
+            ],
             "PostToolUse": [
                 {
                     "matcher": "^Bash$",
@@ -216,6 +227,17 @@ ALL_HOOKS = {
                     ],
                 }
             ],
+            "PermissionRequest": [
+                {
+                    "matcher": "^Bash$",
+                    "hooks": [
+                        {
+                            "type": "command",
+                            "command": "dippy --codex",
+                        }
+                    ],
+                }
+            ],
             "PostToolUse": [
                 {
                     "matcher": "^Bash$",
@@ -291,9 +313,11 @@ def _ensure_codex_feature_flag(
     config_path: Path,
     dry_run: bool = False,
 ) -> tuple[bool, str]:
-    """Ensure codex_hooks = true is set in Codex config.toml.
+    """Ensure hooks = true is set in Codex config.toml.
 
     Codex requires a feature flag in config.toml alongside hooks.json.
+    Current Codex uses `hooks`; older versions accepted the legacy alias
+    `codex_hooks`.
     This handles creating/modifying the TOML file with simple text
     manipulation (no TOML writer dependency needed).
 
@@ -309,38 +333,55 @@ def _ensure_codex_feature_flag(
     else:
         content = ""
 
-    # Check if feature flag already exists
-    if "codex_hooks" in content and "codex_hooks = true" in content:
+    # Check if feature flag already exists. Keep the legacy alias working for
+    # older configs, but write the current canonical key on new installs.
+    if _codex_feature_flag_enabled(config_path):
         return False, "Feature flag already enabled"
 
+    has_any_hook_flag = re.search(r"(?m)^\s*(?:hooks|codex_hooks)\s*=", content)
+
     if dry_run:
-        if "codex_hooks" in content:
-            return True, f"Would update codex_hooks flag in {config_path}"
-        return True, f"Would add [features] codex_hooks = true to {config_path}"
+        if has_any_hook_flag:
+            return True, f"Would update hooks feature flag in {config_path}"
+        return True, f"Would add [features] hooks = true to {config_path}"
 
     # Build the new content
     if not content.strip():
         # Empty or non-existent file
-        new_content = "[features]\ncodex_hooks = true\n"
+        new_content = "[features]\nhooks = true\n"
+    elif re.search(r"(?m)^\s*hooks\s*=", content):
+        new_content = re.sub(
+            r"(?m)^(\s*)hooks\s*=\s*(?:true|false)(\s*(?:#.*)?)$",
+            r"\1hooks = true\2",
+            content,
+            count=1,
+        )
+    elif re.search(r"(?m)^\s*codex_hooks\s*=", content):
+        new_content = re.sub(
+            r"(?m)^(\s*)codex_hooks\s*=\s*(?:true|false)(\s*(?:#.*)?)$",
+            r"\1hooks = true\2",
+            content,
+            count=1,
+        )
     elif "[features]" in content:
-        # Features section exists, add codex_hooks to it
+        # Features section exists, add hooks to it
         lines = content.split("\n")
         new_lines = []
         inserted = False
         for line in lines:
             new_lines.append(line)
             if line.strip() == "[features]" and not inserted:
-                new_lines.append("codex_hooks = true")
+                new_lines.append("hooks = true")
                 inserted = True
         if not inserted:
             # [features] might have been on a line with other content
-            new_lines.append("codex_hooks = true")
+            new_lines.append("hooks = true")
         new_content = "\n".join(new_lines)
         if not new_content.endswith("\n"):
             new_content += "\n"
     else:
         # No [features] section, append it
-        new_content = content.rstrip("\n") + "\n\n[features]\ncodex_hooks = true\n"
+        new_content = content.rstrip("\n") + "\n\n[features]\nhooks = true\n"
 
     # Backup config.toml if it exists
     if config_path.exists():
@@ -348,7 +389,7 @@ def _ensure_codex_feature_flag(
 
     config_path.parent.mkdir(parents=True, exist_ok=True)
     config_path.write_text(new_content)
-    return True, f"Enabled codex_hooks feature flag in {config_path}"
+    return True, f"Enabled hooks feature flag in {config_path}"
 
 
 class HookStatus(Enum):
@@ -794,6 +835,7 @@ def _print_hook_summary(agent: str, config: dict) -> None:
     elif agent == "codex":
         hook_types = [
             ("PreToolUse", "PreToolUse"),
+            ("PermissionRequest", "PermissionRequest"),
             ("PostToolUse", "PostToolUse"),
             ("Stop", "Stop"),
         ]
@@ -885,7 +927,7 @@ def _codex_feature_flag_enabled(config_path: Path) -> bool:
     except OSError:
         return False
 
-    return "codex_hooks = true" in content
+    return bool(re.search(r"(?m)^\s*(?:hooks|codex_hooks)\s*=\s*true\s*$", content))
 
 
 def uninstall(
@@ -1153,7 +1195,7 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
     elif agent_id == "gemini":
         hook_names = ["BeforeTool", "AfterTool"]
     elif agent_id == "codex":
-        hook_names = ["PreToolUse", "PostToolUse", "Stop"]
+        hook_names = ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]
     elif agent_id in ("cursor", "windsurf"):
         # These don't use matchers in the same way
         return ["(all shell commands)"]
@@ -1585,7 +1627,7 @@ def _remove_dippy_hook(config: dict, agent: str) -> dict:
                 del result["hooks"][hook_type]
     elif agent == "codex":
         # Codex format: nested hooks. Also remove old broken flat run-array entries.
-        hook_types = ["PreToolUse", "PostToolUse", "Stop"]
+        hook_types = ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]
         if "hooks" in result:
             for hook_type in hook_types:
                 if hook_type in result["hooks"]:

@@ -463,7 +463,7 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                     f"Hook: {agent_info.name}",
                     HealthStatus.WARNING,
                     f"Hook installed, Codex feature flag missing ({', '.join(missing_scopes)})",
-                    "Run install again to enable codex_hooks in config.toml",
+                    "Run install again to enable hooks in config.toml",
                     fix_command=f"dippy hooks install {agent_id} --global --force",
                     matchers=matchers,
                 )
@@ -549,6 +549,7 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> dict[str, list
     elif agent_id == "codex":
         hook_names = [
             ("PreToolUse", "PreToolUse"),
+            ("PermissionRequest", "PermissionRequest"),
             ("PostToolUse", "PostToolUse"),
             ("Stop", "Stop"),
         ]
@@ -781,7 +782,7 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
         "cursor": "beforeShellExecution hook",
         "gemini": "BeforeTool/AfterTool hooks",
         "windsurf": "beforeShellExecution hook",
-        "codex": "PreToolUse/PostToolUse/Stop hooks + codex_hooks feature flag",
+        "codex": "PreToolUse/PermissionRequest/PostToolUse/Stop hooks + hooks feature flag",
         "pi": "TypeScript extension",
     }.get(agent_id, "Unknown")
 

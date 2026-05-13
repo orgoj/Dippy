@@ -137,6 +137,7 @@ def approve(
     config: Config | None = None,
     tool_name: str | None = None,
     command: str | None = None,
+    hook_event: str | None = None,
 ) -> dict:
     """Return approval response."""
     logging.info(f"APPROVED: {reason}")
@@ -157,8 +158,18 @@ def approve(
             res["additionalContext"] = note
         return res
     if MODE == "codex":
-        # Codex: exit 0 with no output is treated as success
-        # Return None sentinel — caller skips print()
+        if hook_event == "PermissionRequest":
+            res = {
+                "hookSpecificOutput": {
+                    "hookEventName": "PermissionRequest",
+                    "decision": {"behavior": "allow"},
+                }
+            }
+            if note:
+                res["systemMessage"] = note
+            return res
+        # Codex PreToolUse allow does not approve execution; empty output just
+        # lets the later PermissionRequest hook make the approval decision.
         if note:
             return {"systemMessage": note}
         return None
@@ -194,6 +205,7 @@ def ask(
     config: Config | None = None,
     tool_name: str | None = None,
     command: str | None = None,
+    hook_event: str | None = None,
 ) -> dict:
     """Return ask response to prompt user for confirmation."""
     logging.info(f"ASK: {reason}")
@@ -251,6 +263,7 @@ def deny(
     config: Config | None = None,
     tool_name: str | None = None,
     command: str | None = None,
+    hook_event: str | None = None,
 ) -> dict:
     """Return deny response to block the command."""
     logging.info(f"DENY: {reason}")
@@ -310,6 +323,7 @@ def pass_(
     config: Config | None = None,
     tool_name: str | None = None,
     command: str | None = None,
+    hook_event: str | None = None,
 ) -> dict:
     """Return empty response to let Claude handle permissions with its default behavior."""
     logging.info(f"PASS: {reason}")
@@ -428,7 +442,9 @@ def _run_askpass(
 # === Main Logic ===
 
 
-def check_command(command: str, config: Config, cwd: Path) -> dict:
+def check_command(
+    command: str, config: Config, cwd: Path, hook_event: str | None = None
+) -> dict:
     """
     Main entry point: check if a command should be approved.
 
@@ -448,13 +464,17 @@ def check_command(command: str, config: Config, cwd: Path) -> dict:
     )
 
     if result.action == "allow":
-        return approve(result.reason, config=config, command=command)
+        return approve(
+            result.reason, config=config, command=command, hook_event=hook_event
+        )
     elif result.action == "deny":
-        return deny(result.reason, config=config, command=command)
+        return deny(result.reason, config=config, command=command, hook_event=hook_event)
     elif result.action == "pass":
-        return pass_(result.reason, config=config, command=command)
+        return pass_(
+            result.reason, config=config, command=command, hook_event=hook_event
+        )
     else:
-        return ask(result.reason, config=config, command=command)
+        return ask(result.reason, config=config, command=command, hook_event=hook_event)
 
 
 def post_tool_response(
@@ -1217,7 +1237,7 @@ def main():
                         log_decision(
                             "allow", message=permission_mode, tool=tool_name, agent=MODE
                         )
-                        _emit(approve(permission_mode))
+                        _emit(approve(permission_mode, hook_event=hook_event))
                         return
                 # Handle MCP tool
                 if hook_event == "PostToolUse":
@@ -1251,7 +1271,7 @@ def main():
                             command=query,
                             agent=MODE,
                         )
-                        _emit(approve(permission_mode))
+                        _emit(approve(permission_mode, hook_event=hook_event))
                         return
                 # Handle WebSearch tool
                 if hook_event == "PostToolUse":
@@ -1499,7 +1519,7 @@ def main():
                     cwd=cwd,
                     agent=MODE,
                 )
-                result = approve(permission_mode)
+                result = approve(permission_mode, hook_event=hook_event)
                 if result is not None:
                     print(json.dumps(result))
                 return
@@ -1510,7 +1530,7 @@ def main():
             handle_post_tool_use(command, config, cwd)
         else:
             logging.info(f"Checking: {command}")
-            result = check_command(command, config, cwd)
+            result = check_command(command, config, cwd, hook_event=hook_event)
             # Codex: None sentinel means exit 0 with no output
             if result is not None:
                 print(json.dumps(result))

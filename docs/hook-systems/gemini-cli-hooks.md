@@ -2,8 +2,8 @@
 
 This document provides an exhaustive reference for the Gemini CLI hook system, covering configuration, JSON schemas, tool names, edge cases, version differences, and comparisons with Claude Code.
 
-**Last Updated:** January 2026
-**Gemini CLI Versions Covered:** v0.15.x through v0.23.x
+**Last Updated:** May 2026
+**Gemini CLI Versions Covered:** v0.15.x through v0.42.x
 
 ---
 
@@ -787,6 +787,11 @@ gemini hooks migrate --from-claude
 ---
 
 ## Version History and Changes
+
+### v0.42.x (May 2026)
+
+- `BeforeTool` hook `decision: "allow"` continues to Gemini's normal permission policy; it does not auto-approve shell command execution.
+- Blocking decisions are still effective, and `ask` can still route the command through Gemini's native confirmation UI.
 
 ### v0.15.x (November 2024)
 

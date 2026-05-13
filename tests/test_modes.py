@@ -100,6 +100,21 @@ def test_codex_approve_format(monkeypatch):
     assert result is None
 
 
+def test_codex_permission_request_approve_format(monkeypatch):
+    """Test that Codex PermissionRequest approvals use current hook schema."""
+    _set_mode(monkeypatch, "codex")
+    import dippy.dippy
+
+    result = dippy.dippy.approve("git status", hook_event="PermissionRequest")
+
+    assert result == {
+        "hookSpecificOutput": {
+            "hookEventName": "PermissionRequest",
+            "decision": {"behavior": "allow"},
+        }
+    }
+
+
 def test_codex_ask_format(monkeypatch):
     """Test that Codex mode falls back to systemMessage for ask."""
     _set_mode(monkeypatch, "codex")

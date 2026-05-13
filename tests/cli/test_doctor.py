@@ -302,7 +302,7 @@ class TestCodexDoctor:
         monkeypatch.setenv("HOME", str(tmp_path))
         codex_dir = tmp_path / ".codex"
         codex_dir.mkdir()
-        (codex_dir / "config.toml").write_text("[features]\ncodex_hooks = true\n")
+        (codex_dir / "config.toml").write_text("[features]\nhooks = true\n")
         workspace = tmp_path / "workspace"
         workspace.mkdir()
 

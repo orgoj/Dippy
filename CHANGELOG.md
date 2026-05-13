@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.15] - 2026-05-13
+
+### Fixed
+
+- **Codex command auto-approval on current Codex** - Codex shell command approvals now use the `PermissionRequest` hook event with `decision.behavior = "allow"`, matching current Codex behavior where `PreToolUse` no longer grants execution approval.
+- **Codex hook installation** - `dippy hooks install codex` now installs `PreToolUse`, `PermissionRequest`, and `PostToolUse` Bash hooks.
+- **Codex feature flag compatibility** - The installer now writes the current `[features] hooks = true` flag while still detecting legacy `codex_hooks = true` configs.
+
+### Documentation
+
+- Updated Codex hook docs for current `PermissionRequest` approval flow and `hooks` feature flag.
+- Documented the Gemini CLI 0.42 limitation where `BeforeTool` `allow` continues to Gemini's normal policy instead of auto-approving shell commands.
+
 ## [0.2.14] - 2026-04-22
 
 ### Added

@@ -2,8 +2,8 @@
 
 This document provides a comprehensive reference for OpenAI's Codex CLI, covering configuration, sandbox modes, approval policies, notification hooks, execpolicy, MCP integration, and comparison with other AI coding assistants.
 
-**Last Updated:** January 2026
-**Codex CLI Versions Covered:** v0.65 through v0.80.x
+**Last Updated:** May 2026
+**Codex CLI Versions Covered:** v0.65 through v0.130.x
 
 ---
 
@@ -297,7 +297,7 @@ Hooks are an extensibility framework for Codex. They allow you to inject your ow
 Hooks are behind a feature flag in config.toml:
 ```toml
 [features]
-codex_hooks = true
+hooks = true
 ```
 
 Where Codex looks for hooks:
@@ -310,6 +310,7 @@ Config shape: hooks organized by event, matcher groups, and hook handlers.
 
 - SessionStart
 - PreToolUse
+- PermissionRequest
 - PostToolUse
 - UserPromptSubmit
 - Stop
@@ -317,7 +318,7 @@ Config shape: hooks organized by event, matcher groups, and hook handlers.
 ### Matcher Patterns
 
 Codex uses a single `matcher` regex string on each event entry. Only some events honor matcher:
-- PreToolUse/PostToolUse: regex matches `tool_name` (currently `Bash`)
+- PreToolUse/PermissionRequest/PostToolUse: regex matches `tool_name` (currently `Bash`)
 - SessionStart: regex matches `source` (`startup|resume`)
 - UserPromptSubmit/Stop: matcher not supported
 
@@ -779,6 +780,14 @@ codex --disable web_search_request
 
 ## Version History and Changelog
 
+### May 2026
+
+**0.130.x** (2026-05)
+- Hook permission approval is handled by the `PermissionRequest` event.
+- `PermissionRequest` hook output supports `decision.behavior = "allow"` and `decision.behavior = "deny"`.
+- `PreToolUse` remains useful for observation or blocking, but an allow response there does not grant shell execution approval.
+- Current feature flag key is `[features] hooks = true`; older `codex_hooks = true` configs are legacy.
+
 ### January 2026
 
 **0.80.0** (2026-01-09)
@@ -896,19 +905,20 @@ Codex has an experimental hook system introduced in recent versions. While curre
 
 **Available:**
 - Notification callbacks (`notify` setting)
-- Basic hooks system (requires `codex_hooks = true` feature flag)
-- SessionStart, PreToolUse, PostToolUse, UserPromptSubmit, Stop events
+- Basic hooks system (requires `hooks = true` feature flag; `codex_hooks` is a legacy alias)
+- SessionStart, PreToolUse, PermissionRequest, PostToolUse, UserPromptSubmit, Stop events
 - Basic pattern matching (Bash tools only)
 
 **Limited Support (experimental):**
-- PreToolUse / PostToolUse hooks (Bash only)
+- PreToolUse / PermissionRequest / PostToolUse hooks (Bash only)
 - Session lifecycle hooks
 - Basic permission interception with hard deny via `exit 2`
+- Auto-approval from PermissionRequest hooks with `decision.behavior = "allow"`
 - Advisory `systemMessage` responses for non-blocking feedback
 
 **Not Yet Supported:**
 - Reliable `ask` prompting from PreToolUse
-- Reliable `permissionDecision` allow/deny enforcement without `exit 2`
+- Reliable `permissionDecision` allow enforcement from PreToolUse without PermissionRequest
 - Tool input/output modification
 - Advanced pattern matching
 - Context injection (parsed but not supported)
@@ -948,7 +958,7 @@ Requires feature flag in some versions; login flow may have edge cases.
 | ------- | --------- | ----------- | ------ | ---------- |
 | Pre-tool hooks | ✅ PreToolUse (Bash only) | ✅ PreToolUse | ✅ beforeShellExecution | ✅ BeforeTool |
 | Post-tool hooks | ✅ PostToolUse (Bash only) | ✅ PostToolUse | ✅ afterFileEdit | ✅ AfterTool |
-| Permission hooks | ⚠️ Parsed but not supported | ✅ PermissionRequest | ✅ (via beforeShell) | ✅ Notification |
+| Permission hooks | ✅ PermissionRequest | ✅ PermissionRequest | ✅ (via beforeShell) | ⚠️ BeforeTool cannot auto-approve |
 | Session hooks | ✅ SessionStart/Stop | ✅ SessionStart/End | ❌ | ✅ SessionStart/End |
 | Model hooks | ❌ | ❌ | ❌ | ✅ BeforeModel/AfterModel |
 | Notification | ✅ notify | ✅ Notification | ❌ | ✅ Notification |

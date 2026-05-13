@@ -17,8 +17,8 @@
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
-- **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PostToolUse` on `Bash`
-- **Codex enforcement model** — `deny` hard-blocks via `exit 2`; `ask` is currently advisory and fails open
+- **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PermissionRequest`/`PostToolUse` on `Bash`
+- **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
@@ -132,7 +132,7 @@ dippy hooks install cursor --global
 # Install for Windsurf (global)
 dippy hooks install windsurf --global
 
-# Install for Codex CLI (global, requires codex_hooks feature flag)
+# Install for Codex CLI (global, requires hooks feature flag)
 dippy hooks install codex --global
 ```
 
@@ -192,11 +192,17 @@ If you prefer manual configuration or need project-specific settings:
 }
 ```
 
-**Codex CLI** - add to `~/.codex/hooks.json` and enable `codex_hooks = true` in `~/.codex/config.toml`:
+**Codex CLI** - add to `~/.codex/hooks.json` and enable `hooks = true` in `~/.codex/config.toml`:
 ```json
 {
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "^Bash$",
+        "hooks": [{ "type": "command", "command": "dippy --codex" }]
+      }
+    ],
+    "PermissionRequest": [
       {
         "matcher": "^Bash$",
         "hooks": [{ "type": "command", "command": "dippy --codex" }]
@@ -212,7 +218,9 @@ If you prefer manual configuration or need project-specific settings:
 }
 ```
 
-**Current Codex limitation:** Dippy can hard-block Codex shell commands with `deny`, but `ask` is advisory only. Codex shows the `systemMessage` and still runs the command, so anything that must not execute needs a `deny` rule.
+**Current Codex behavior:** Dippy auto-approves allowed shell commands in the `PermissionRequest` hook. `ask` intentionally defers to Codex's native approval UI; anything that must not execute needs a `deny` rule.
+
+**Current Gemini limitation:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy", not as command approval. Dippy can still block with `deny` and force prompts with `ask`, but Gemini may still show its own approval dialog for allowed shell commands.
 
 **Codex sandbox gotcha:** During Codex `workspace-write` tool execution on Linux, `.codex` can appear inside the sandbox as a synthetic read-only file-like path even when the host workspace does not contain a normal `.codex` file. That artifact comes from Codex sandbox path protection, not from Dippy.
 
@@ -258,7 +266,7 @@ dippy doctor --verbose              # Show detailed diagnostics
 **Health checks:**
 - ✓ Installation (on PATH, version check)
 - ✓ Hook status per agent (Claude, Gemini, Cursor, Windsurf, Codex, pi-mono)
-- ✓ Codex `codex_hooks` feature flag validation
+- ✓ Codex `hooks` feature flag validation
 - ✓ Legacy hook detection with full path
 - ✓ pi_wrapper check for pi-mono/moltbot
 - ✓ Configuration validation (syntax errors)
