@@ -506,8 +506,52 @@ It only means the hook itself does not block the tool. Gemini still evaluates
 the tool call with its policy engine and may still show the native approval
 dialog if the matching policy decision is `ask_user`.
 
-Use Gemini policy rules for automatic command approval. Use hooks for blocking,
-forcing a prompt, input modification, auditing, and context injection.
+To achieve "Pure Dippy Control" where Dippy is the sole decision maker for command
+approvals, see [Pure Dippy Control (YOLO Mode Integration)](#pure-dippy-control-yolo-mode-integration).
+
+---
+
+## Pure Dippy Control (YOLO Mode Integration)
+
+If you want Dippy to be the primary authority for command approvals and avoid
+double prompts (one from Dippy, one from Gemini), you should enable Gemini's
+native **YOLO Mode**.
+
+### How it Works
+
+1. **Gemini YOLO Mode**: When active, Gemini's policy engine defaults to `ALLOW`
+   for any tool call that isn't explicitly blocked by a Gemini policy rule.
+2. **Dippy Hook**: The `BeforeTool` hook still runs *before* the policy engine.
+3. **Control Flow**:
+   - Dippy returns `deny` -> Command is blocked immediately.
+   - Dippy returns `ask` -> Gemini shows its native approval prompt.
+   - Dippy returns `allow` -> Gemini checks policy, sees YOLO mode, and proceeds
+     without its own prompt.
+
+### Activation Methods
+
+#### 1. Per Session (Command Line)
+Alias your `gemini` command or run it explicitly with the `--yolo` (or `-y`) flag:
+```bash
+gemini --yolo
+```
+
+#### 2. Persistent (settings.json)
+Set the `approvalMode` to `"yolo"` in your `~/.gemini/settings.json` or
+`.gemini/settings.json`:
+```json
+{
+  "approvalMode": "yolo"
+}
+```
+
+### Strategic Advantage
+This configuration leverages Gemini's flexibility to trust the "BeforeTool" hook
+(Dippy) as the primary security filter. Dippy can then use its advanced
+`.dippy` configuration and command-specific handlers to provide much more
+granular and context-aware security than Gemini's basic policy engine.
+
+---
 
 ### Decision Examples
 

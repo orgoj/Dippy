@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.16] - 2026-05-14
+
+### Added
+
+- **Gemini YOLO mode automation** - Added `dippy hooks setup-gemini-yolo` to configure Gemini CLI for "Pure Dippy Control". This sets `approvalMode: "yolo"` in Gemini's `settings.json`, allowing Dippy to act as the primary authority for command approvals without Gemini's redundant secondary prompts.
+- **Enhanced Gemini diagnostics** - `dippy doctor` now checks Gemini's `approvalMode` and recommends YOLO mode for the best Dippy experience.
+
+### Documentation
+
+- Added comprehensive guide for "Pure Dippy Control" in `docs/hook-systems/gemini-cli-hooks.md`.
+- Updated `README.md` with Gemini YOLO mode instructions.
+
 ## [0.2.15] - 2026-05-13
 
 ### Fixed

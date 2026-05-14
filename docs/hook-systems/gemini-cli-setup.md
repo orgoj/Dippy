@@ -2,16 +2,26 @@
 
 This guide explains how to integrate Dippy with Gemini CLI to automate tool approvals.
 
-## Prerequisites
+## Recommended Setup (Automated)
 
-- Gemini CLI installed and configured
-- Dippy installed (either via Homebrew or manually)
+The easiest way to set up Dippy for Gemini CLI is using the built-in hooks manager:
 
-## Quick Start
+```bash
+# 1. Install the hooks
+dippy hooks install gemini --global
 
-1. Find the absolute path to `dippy-hook` script:
-   - If installed via Homebrew: `$(which dippy-hook)` (usually `/opt/homebrew/bin/dippy-hook` or `/usr/local/bin/dippy-hook`)
-   - If installed manually: `/path/to/Dippy/bin/dippy-hook`
+# 2. Enable Pure Dippy Control (YOLO mode)
+dippy hooks setup-gemini-yolo --global
+```
+
+This will automatically configure your `~/.gemini/settings.json` with the correct hooks and set `approvalMode` to `yolo` so that Dippy has full authority over command approvals.
+
+---
+
+## Manual Configuration (Advanced)
+
+1. Find the absolute path to `dippy`:
+   - Usually `$(which dippy)` (e.g., `/home/user/.local/bin/dippy`)
 
 2. Edit your Gemini CLI settings file at `~/.gemini/settings.json`.
 
@@ -19,6 +29,7 @@ This guide explains how to integrate Dippy with Gemini CLI to automate tool appr
 
 ```json
 {
+  "approvalMode": "yolo",
   "hooks": {
     "BeforeTool": [
       {
@@ -27,7 +38,7 @@ This guide explains how to integrate Dippy with Gemini CLI to automate tool appr
           {
             "name": "dippy",
             "type": "command",
-            "command": "/path/to/dippy-hook --gemini",
+            "command": "dippy --gemini",
             "description": "Dippy approval autopilot"
           }
         ]
@@ -40,7 +51,7 @@ This guide explains how to integrate Dippy with Gemini CLI to automate tool appr
           {
             "name": "dippy-post",
             "type": "command",
-            "command": "/path/to/dippy-hook --gemini",
+            "command": "dippy --gemini",
             "description": "Dippy post-tool feedback"
           }
         ]
@@ -50,7 +61,7 @@ This guide explains how to integrate Dippy with Gemini CLI to automate tool appr
 }
 ```
 
-**Note:** Replace `/path/to/dippy-hook` with the actual absolute path found in step 1.
+**Note:** Setting `"approvalMode": "yolo"` is critical for "Pure Dippy Control". Without it, Gemini may still prompt you for commands that Dippy has already allowed.
 
 ## Supported Tools
 
@@ -65,7 +76,7 @@ Dippy can intercept and approve/deny the following Gemini CLI tools:
 
 ## How it works
 
-- **BeforeTool**: Runs before the tool executes. If Dippy returns `allow`, the tool runs immediately. If `ask`, Gemini prompts you. If `deny`, Dippy exits with **Exit Code 2**, which blocks the tool and provides immediate feedback to the agent without a confirmation dialog.
+- **BeforeTool**: Runs before the tool executes. If Dippy returns `allow`, the tool runs immediately (provided YOLO mode is active). If `ask`, Gemini prompts you. If `deny`, Dippy exits with **Exit Code 2**, which blocks the tool and provides immediate feedback to the agent without a confirmation dialog.
 - **AfterTool**: Runs after the tool completes. Used for providing feedback to the agent (e.g., reminding it to check something after a command).
 
 ## Configuration
@@ -79,10 +90,10 @@ See [Configuration Documentation](../config.md) for more details.
 ## Troubleshooting
 
 - **Logs**: Check `~/.gemini/hook-approvals.log` for Dippy's internal logs when running in Gemini mode.
-- **Permissions**: Ensure `dippy-hook` has execution permissions (`chmod +x`).
-- **Path**: Always use absolute paths in `settings.json`.
+- **Diagnostics**: Run `dippy doctor --agent gemini` to check your configuration.
+- **Manual Check**: You can test how Dippy sees a command with `dippy --cmd "your command" --gemini`.
 
 ## References
 
 - [Gemini CLI Hooks Official Documentation](https://geminicli.com/docs/hooks/)
-- [Gemini CLI Hooks Reference (JSON Schema)](https://geminicli.com/docs/hooks/reference/)
+- [Pure Dippy Control Guide](./gemini-cli-hooks.md)

@@ -1015,6 +1015,90 @@ def uninstall(
     return 0
 
 
+def setup_gemini_yolo(
+    global_config: bool = False,
+    cwd: str | None = None,
+    disable: bool = False,
+    dry_run: bool = False,
+) -> int:
+    """Enable or disable Gemini YOLO mode for Pure Dippy Control.
+
+    Args:
+        global_config: If True, update global settings.json, otherwise project-local
+        cwd: Current working directory (for project-local config)
+        disable: If True, set mode back to "default", otherwise set to "yolo"
+        dry_run: If True, only report what would change
+
+    Returns:
+        Exit code: 0 for success, 1 for errors
+    """
+    agent_id = "gemini"
+    hook_config = HOOK_COMMANDS.get(agent_id)
+    if not hook_config:
+        print(f"Error: Unknown agent {agent_id}", file=sys.stderr)
+        return 1
+
+    if global_config:
+        config_path = Path(hook_config["config"]).expanduser()
+    else:
+        if cwd is None:
+            cwd_path = Path.cwd()
+        else:
+            cwd_path = Path(cwd)
+        config_path = cwd_path / hook_config["project_config"]
+
+    target_mode = "default" if disable else "yolo"
+    
+    if not config_path.exists():
+        if disable:
+            print(f"No Gemini configuration found at {config_path}")
+            return 0
+        existing_config = {}
+    else:
+        try:
+            with open(config_path) as f:
+                existing_config = json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error: Could not read {config_path}: {e}", file=sys.stderr)
+            return 1
+
+    # Check current mode
+    current_mode = existing_config.get("approvalMode")
+    if not current_mode and "policyEngineConfig" in existing_config:
+        current_mode = existing_config["policyEngineConfig"].get("approvalMode")
+    
+    if current_mode == target_mode:
+        print(f"Gemini approval mode is already '{target_mode}' in {config_path}")
+        return 0
+
+    if dry_run:
+        print(f"Would set Gemini approval mode to '{target_mode}' in {config_path}")
+        return 0
+
+    # Update config
+    updated_config = copy.deepcopy(existing_config)
+    updated_config["approvalMode"] = target_mode
+    
+    # Remove from policyEngineConfig if it exists there to avoid confusion
+    if "policyEngineConfig" in updated_config and "approvalMode" in updated_config["policyEngineConfig"]:
+        del updated_config["policyEngineConfig"]["approvalMode"]
+        if not updated_config["policyEngineConfig"]:
+            del updated_config["policyEngineConfig"]
+
+    # Write updated config
+    try:
+        config_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(config_path, "w") as f:
+            json.dump(updated_config, f, indent=2, sort_keys=True)
+    except IOError as e:
+        print(f"Error: Could not write to {config_path}: {e}", file=sys.stderr)
+        return 1
+
+    action = "Disabled" if disable else "Enabled"
+    print(f"{action} Gemini YOLO mode (Pure Dippy Control) in {config_path}")
+    return 0
+
+
 def list_hooks(
     global_config: bool = False,
     cwd: str | None = None,

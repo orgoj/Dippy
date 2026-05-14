@@ -37,7 +37,7 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 | Capability                   | Claude Code                            | Cursor              | Gemini CLI            | Codex CLI               |
 | ---------------------------- | -------------------------------------- | ------------------- | --------------------- | ----------------------- |
 | **Block operations**         | ✅ Exit 2 or JSON deny                  | ✅ permission: deny  | ✅ Exit 2 or JSON deny | ⚠️ Hard deny via `exit 2`; other decisions are limited |
-| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow     | ⚠️ Fail-open only; no strong allow contract |
+| **Allow operations**         | ✅ permissionDecision: allow            | ✅ permission: allow | ✅ decision: allow (requires YOLO mode for shell) | ⚠️ Fail-open only; no strong allow contract |
 | **Prompt user**              | ✅ permissionDecision: ask              | ✅ permission: ask   | ✅ decision: ask       | ❌ `ask` fails open; advisory only |
 | **Modify tool input**        | ✅ updatedInput                         | ❌                   | ✅ (via deny + reason) | ❌                      |
 | **Inject context to agent**  | ✅ additionalContext (UserPromptSubmit) | ✅ agent_message     | ✅ additionalContext   | ⚠️ Parsed but not supported |
@@ -151,7 +151,7 @@ A comprehensive comparison of hook/extensibility features across Claude Code, Cu
 
 | Issue Type             | Claude Code                            | Cursor                            | Gemini CLI   | Codex CLI                          |
 | ---------------------- | -------------------------------------- | --------------------------------- | ------------ | ---------------------------------- |
-| **Hook not firing**    | Regression v2.0.27-v2.0.31             | Multiple hooks bug                | Issue #13155 | N/A (no hooks)                     |
+| **Hook not firing**    | Regression v2.0.27-v2.0.31             | Multiple hooks bug                | Issue #13155; Double prompt bug (fix: YOLO mode) | N/A (no hooks)                     |
 | **Race conditions**    | PermissionRequest dialog               | N/A                               | N/A          | N/A                                |
 | **Field name changes** | Legacy `decision`→`permissionDecision` | camelCase→snake_case (v2.0)       | N/A          | N/A                                |
 | **Windows issues**     | None major                             | Git Bash/PowerShell injection     | None major   | WSL recommended                    |

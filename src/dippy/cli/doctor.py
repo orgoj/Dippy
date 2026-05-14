@@ -744,6 +744,22 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
             try:
                 with open(global_config) as f:
                     config = json.load(f)
+                
+                # Gemini-specific: Check for YOLO mode
+                if agent_id == "gemini":
+                    # approvalMode can be top-level or under policyEngineConfig
+                    approval_mode = config.get("approvalMode")
+                    if not approval_mode and "policyEngineConfig" in config:
+                        approval_mode = config["policyEngineConfig"].get("approvalMode")
+                    
+                    if not approval_mode:
+                        approval_mode = "default"
+                    
+                    details.append(f"Gemini approval mode: {approval_mode}")
+                    if approval_mode != "yolo":
+                        issues.append("Pure Dippy Control not active (YOLO mode disabled)")
+                        details.append("Tip: Run 'dippy hooks setup-gemini-yolo' to enable full control.")
+                
                 if _has_dippy_hook(config, agent_id):
                     # Check if legacy by inspecting config
                     config_str = json.dumps(config)
@@ -771,6 +787,22 @@ def check_agent_specific(agent_id: str, cwd: Path, verbose: bool) -> CheckResult
             try:
                 with open(project_config) as f:
                     config = json.load(f)
+                
+                # Gemini-specific: Check for YOLO mode in project config
+                if agent_id == "gemini":
+                    approval_mode = config.get("approvalMode")
+                    if not approval_mode and "policyEngineConfig" in config:
+                        approval_mode = config["policyEngineConfig"].get("approvalMode")
+                    
+                    if approval_mode:
+                        details.append(f"Project Gemini approval mode: {approval_mode}")
+                        if approval_mode == "yolo":
+                            # If project enables YOLO, it might be active even if global doesn't
+                            if "Pure Dippy Control not active (YOLO mode disabled)" in issues:
+                                issues.remove("Pure Dippy Control not active (YOLO mode disabled)")
+                        else:
+                            details.append("Project Gemini overrides global to non-YOLO")
+
                 if _has_dippy_hook(config, agent_id):
                     details.append("Dippy hook in project: installed")
             except (json.JSONDecodeError, IOError):

@@ -848,6 +848,28 @@ Subcommands:
         help="Show what would be done without making changes",
     )
 
+    # hooks setup-gemini-yolo
+    yolo_parser = hooks_subparsers.add_parser(
+        "setup-gemini-yolo",
+        help="Enable Gemini YOLO mode for Pure Dippy Control",
+        description="Configures Gemini's approvalMode to 'yolo' so that Dippy can take full control over command approvals without double-prompting.",
+    )
+    yolo_parser.add_argument(
+        "--global",
+        action="store_true",
+        help="Update global settings.json instead of project-local",
+    )
+    yolo_parser.add_argument(
+        "--disable",
+        action="store_true",
+        help="Disable YOLO mode (set back to 'default')",
+    )
+    yolo_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show what would be done without making changes",
+    )
+
     # === doctor subcommand ===
     doctor_parser = subparsers.add_parser(
         "doctor",
@@ -1026,6 +1048,14 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
             agent=args.agent,
             global_config=getattr(args, "global", False),
             cwd=getattr(args, "cwd", None),
+            dry_run=getattr(args, "dry_run", False),
+        )
+    elif args.hooks_action == "setup-gemini-yolo":
+        from dippy.cli.hooks import setup_gemini_yolo
+        return setup_gemini_yolo(
+            global_config=getattr(args, "global", False),
+            cwd=getattr(args, "cwd", None),
+            disable=getattr(args, "disable", False),
             dry_run=getattr(args, "dry_run", False),
         )
     else:

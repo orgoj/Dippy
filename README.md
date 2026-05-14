@@ -220,7 +220,11 @@ If you prefer manual configuration or need project-specific settings:
 
 **Current Codex behavior:** Dippy auto-approves allowed shell commands in the `PermissionRequest` hook. `ask` intentionally defers to Codex's native approval UI; anything that must not execute needs a `deny` rule.
 
-**Current Gemini limitation:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy", not as command approval. Dippy can still block with `deny` and force prompts with `ask`, but Gemini may still show its own approval dialog for allowed shell commands.
+**Current Gemini behavior:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy" by default. To enable **Pure Dippy Control** and avoid double prompts, use:
+```bash
+dippy hooks setup-gemini-yolo
+```
+This enables Gemini's native YOLO mode, trusting Dippy as the primary authority.
 
 **Codex sandbox gotcha:** During Codex `workspace-write` tool execution on Linux, `.codex` can appear inside the sandbox as a synthetic read-only file-like path even when the host workspace does not contain a normal `.codex` file. That artifact comes from Codex sandbox path protection, not from Dippy.
 
