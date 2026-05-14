@@ -17,6 +17,7 @@
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
+- **Pure Dippy Control (Gemini)** — YOLO mode automation via `dippy hooks setup-gemini-yolo`
 - **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PermissionRequest`/`PostToolUse` on `Bash`
 - **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
