@@ -98,7 +98,19 @@ Memorix automatically compacts memories on store:
 - **Use concise titles** (~5-10 words) and structured facts
 - **Include file paths** in filesModified when relevant
 - **Include related concepts** for better searchability
-- **Always use topicKey** for recurring topics to prevent duplicates
-- **Always resolve** completed tasks and fixed bugs
-- **Always include reasoning** — "chose X because Y" is 10x more valuable than "did X"
+- Always use topicKey for recurring topics to prevent duplicates
+- Always resolve completed tasks and fixed bugs
+- Always include reasoning — "chose X because Y" is 10x more valuable than "did X"
 - Search defaults to `status="active"` — use `status="all"` to include resolved memories
+
+## RULE 6: Version Bumping — Sync Everywhere
+
+When bumping the project version, you MUST update it in ALL of the following locations simultaneously:
+
+1. `pyproject.toml` — `version = "X.Y.Z"`
+2. `src/dippy/__init__.py` — `__version__ = "X.Y.Z"`
+3. `CHANGELOG.md` — Add a new header `## [X.Y.Z] - YYYY-MM-DD`
+4. `uv.lock` — Run `uv lock` to synchronize the lockfile
+
+NEVER update only one or two of these. A version bump is only complete when all four are synchronized and committed together.
+
