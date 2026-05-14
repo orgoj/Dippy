@@ -471,8 +471,20 @@ Values: "exit" | "clear" | "logout" | "prompt_input_exit" | "other"
 | Exit Code | Behavior             | stdout Handling                                        |
 | --------- | -------------------- | ------------------------------------------------------ |
 | 0         | Success              | Parsed as JSON; falls back to systemMessage if invalid |
-| 2         | Blocking error       | stderr shown to agent/user; operation may be blocked   |
+| 2         | Blocking error       | Legacy way to block; may be reported as hook failure   |
 | Other     | Non-blocking warning | stderr logged but execution continues                  |
+
+### Preferred Denial Method (v0.23+)
+
+The preferred way to block a tool is to return a JSON object on stdout with `decision: "deny"`. While exit code 2 with stderr was used in earlier versions, some newer Gemini CLI versions (e.g., v0.42+) may report an exit code 2 as a `Hook failed` error instead of a clean tool denial.
+
+```json
+{
+  "decision": "deny",
+  "reason": "Forbidden command",
+  "systemMessage": "This command is disabled by security policy."
+}
+```
 
 ### Exit Code Semantics Comparison
 

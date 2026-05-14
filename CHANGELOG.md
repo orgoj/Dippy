@@ -5,7 +5,11 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.17] - 2026-05-14
+
+### Fixed
+
+- **Gemini CLI hook protocol compliance** - Fixed a compatibility issue where Gemini CLI would report a "Hook failed" error on zablokované (denied) příkazy. Dippy now correctly returns a JSON response with `decision: "deny"` instead of exiting with code 2, matching the newer Gemini CLI hook protocol.
 
 ## [0.2.16] - 2026-05-14
 

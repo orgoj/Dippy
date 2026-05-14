@@ -274,14 +274,16 @@ def deny(
     )
 
     if MODE == "gemini":
-        # Gemini CLI: Exit code 2 with stderr is the standard way to block a tool
-        # and provide feedback to the agent without stopping the loop or
-        # triggering a manual confirmation dialog (in v0.23+).
-        msg = f"🐤 {reason}"
+        # Gemini CLI: decision "deny" is the standard way to block a tool.
+        # It provides feedback to the agent without stopping the loop.
+        res = {
+            "decision": "deny",
+            "reason": f"🐤 {reason}",
+            "systemMessage": f"🐤 {reason}",
+        }
         if note:
-            msg = f"{msg}\n\n{note}"
-        print(msg, file=sys.stderr)
-        sys.exit(2)
+            res["additionalContext"] = note
+        return res
     if MODE == "codex":
         # Codex: exit code 2 with stderr for blocking
         msg = f"🐤 {reason}"
