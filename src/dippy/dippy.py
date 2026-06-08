@@ -34,6 +34,7 @@ import os
 import sys
 from pathlib import Path
 
+from dippy.core.analyzer import analyze
 from dippy.core.config import (
     Config,
     ConfigError,
@@ -47,11 +48,6 @@ from dippy.core.config import (
     match_mcp,
     match_web,
 )
-from dippy import __version__
-from dippy.core.analyzer import analyze
-from dippy.core.notifier import run_notifier, should_run_notifier
-from dippy.core.template import expand_template
-
 
 # === Mode Detection ===
 
@@ -114,17 +110,23 @@ def _get_log_file() -> Path:
     return Path.home() / ".claude" / "hook-approvals.log"
 
 
+_LOG_FORMAT = "%(asctime)s [%(levelname)s] %(message)s"
+_LOG_DATEFMT = "%Y-%m-%d %H:%M:%S"
+
+
 def setup_logging():
-    """Configure logging to file. Fails silently if unable to write."""
+    """Add a file handler for the detected mode's log directory.
+
+    Called after mode is finalized so the log file goes to the correct
+    directory (~/.claude/, ~/.cursor/, etc.). Fails silently.
+    """
     try:
         log_file = _get_log_file()
         log_file.parent.mkdir(parents=True, exist_ok=True)
-        logging.basicConfig(
-            filename=str(log_file),
-            level=logging.INFO,
-            format="%(asctime)s [%(levelname)s] %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
-        )
+        handler = logging.FileHandler(str(log_file))
+        handler.setLevel(logging.INFO)
+        handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT))
+        logging.getLogger().addHandler(handler)
     except (OSError, PermissionError):
         pass  # Logging is optional - don't crash if we can't write
 
@@ -1110,21 +1112,30 @@ def main():
     # Detect mode strictly from flags/env or default to claude
     MODE = _detect_mode_from_flags() or "claude"
 
-    # Hook mode: continue with original behavior
-    setup_logging()
-    if MODE == "gemini":
-        logging.info("Gemini mode enforced by flag/env.")
-    else:
-        logging.info(f"Mode set to: {MODE}")
-
-    command = ""  # ensure always bound for top-level except handler
+    # Root passes INFO through to the file handler (added once the mode, and
+    # thus the log directory, is known). The stderr fallback only surfaces
+    # warnings/errors, so normal runs stay quiet there while early failures
+    # (bad JSON, unknown tool) are still visible before the file handler exists.
+    root = logging.getLogger()
+    root.setLevel(logging.INFO)
+    stderr_handler = logging.StreamHandler()
+    stderr_handler.setLevel(logging.WARNING)
+    stderr_handler.setFormatter(logging.Formatter(_LOG_FORMAT, datefmt=_LOG_DATEFMT))
+    root.addHandler(stderr_handler)
 
     try:
         # Read hook input from stdin
-        input_raw = sys.stdin.read()
-        if not input_raw:
-            return
-        input_data = json.loads(input_raw)
+        input_data = json.load(sys.stdin)
+
+        # Auto-detect mode from input if no explicit flag/env was set
+        if _EXPLICIT_MODE is None:
+            MODE = _detect_mode_from_input(input_data)
+
+        # Add file handler now that mode (and thus log directory) is known
+        setup_logging()
+
+        if _EXPLICIT_MODE is None:
+            logging.info(f"Auto-detected mode: {MODE}")
 
         # Extract cwd from input
         # Cursor: top-level "cwd"
