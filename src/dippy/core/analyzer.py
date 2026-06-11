@@ -812,6 +812,9 @@ def _analyze_simple_command(
         # Check handler-provided redirect targets against config
         if result.redirect_targets:
             for target in result.redirect_targets:
+                # Skip safe redirects
+                if target in SAFE_REDIRECT_TARGETS or target.startswith("&"):
+                    continue
                 redirect_match = match_redirect(target, config, cwd)
                 if redirect_match:
                     if redirect_match.decision == "deny":

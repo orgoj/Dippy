@@ -50,6 +50,13 @@ class Classification:
     redirect_targets: tuple[str, ...] | None = (
         None  # File targets to check against redirect rules
     )
+    wrapper_context: list[str] | None = (
+        None  # Context flags for wrapper commands (ssh, sudo)
+    )
+    remote: bool = False  # Inner command runs in remote context (container, ssh, etc.)
+    replace_suggestion: bool = (
+        False  # Set True for handlers where outer command IS the policy surface
+    )
 
 
 class CLIHandler(Protocol):
