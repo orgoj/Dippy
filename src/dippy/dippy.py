@@ -48,6 +48,8 @@ from dippy.core.config import (
     match_mcp,
     match_web,
 )
+from dippy import __version__
+from dippy.core.notifier import run_notifier, should_run_notifier
 
 # === Mode Detection ===
 
@@ -78,14 +80,28 @@ def _detect_mode_from_flags() -> str | None:
     return None
 
 
-# Initial mode from flags/env
-MODE = _detect_mode_from_flags() or "claude"
+def _detect_mode_from_input(input_data: dict) -> str:
+    """Auto-detect mode from input JSON structure."""
+    # Cursor: {"command": "...", "cwd": "..."}
+    if "command" in input_data and "tool_name" not in input_data:
+        return "cursor"
+
+    # Claude/Gemini: {"tool_name": "...", "tool_input": {...}}
+    tool_name = input_data.get("tool_name", "")
+
+    # Gemini uses "shell", "run_shell_command", etc.
+    if tool_name in ("shell", "run_shell", "run_shell_command", "execute_shell"):
+        return "gemini"
+
+    # Claude uses "Bash" and MCP tools use "mcp__*" prefix
+    if tool_name and tool_name != "Bash" and not tool_name.startswith("mcp__"):
+        logging.warning(f"Unknown tool_name '{tool_name}', defaulting to Claude mode")
+    return "claude"
 
 
-def _emit(result: dict | None) -> None:
-    """Emit hook result to stdout. Handles None sentinel for Codex (empty output = success)."""
-    if result is not None:
-        print(json.dumps(result))
+# Initial mode from flags/env (may be overridden by auto-detect)
+_EXPLICIT_MODE = _detect_mode_from_flags()
+MODE = _EXPLICIT_MODE or "claude"  # Default for logging setup
 
 
 # === Logging Setup ===
@@ -1591,12 +1607,12 @@ def main():
     except Exception as e:
         logging.error(f"Error: {e}")
         if MODE == "gemini":
-            log_decision("ask", message="hook-error", command=command, agent=MODE)
+            log_decision("ask", message="hook-error", agent=MODE)
             result = ask(f"error: {e}")
             if result is not None:
                 print(json.dumps(result))
         else:
-            log_decision("pass", message="hook-error", command=command, agent=MODE)
+            log_decision("pass", message="hook-error", agent=MODE)
             print(json.dumps({}))
 
 
