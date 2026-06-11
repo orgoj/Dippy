@@ -1315,9 +1315,10 @@ def main():
                     print(json.dumps(result))
                 return
 
-            # Check if this is a WebSearch tool
-            if tool_name in ("WebSearch", "google_web_search"):
-                query = tool_input.get("query") or tool_input.get("q") or ""
+            # Check if this is a web tool (Claude: WebSearch/WebFetch, Gemini: google_web_search/web_fetch)
+            if tool_name in ("WebSearch", "WebFetch", "google_web_search", "web_fetch"):
+                # WebSearch/google_web_search use query, WebFetch/web_fetch use url
+                match_value = tool_input.get("query") or tool_input.get("url") or tool_input.get("q") or ""
                 # Check for bypass permissions mode first
                 if hook_event != "PostToolUse":
                     permission_mode = input_data.get("permission_mode", "default")
@@ -1327,24 +1328,24 @@ def main():
                             "allow",
                             message=permission_mode,
                             tool=tool_name,
-                            command=query,
+                            command=match_value,
                             agent=MODE,
                         )
                         _emit(approve(permission_mode, hook_event=hook_event))
                         return
-                # Handle WebSearch tool
+                # Handle WebSearch/WebFetch tool
                 if hook_event == "PostToolUse":
-                    logging.info(f"PostToolUse WebSearch: {query}")
-                    handle_web_post_tool_use(query, config)
+                    logging.info(f"PostToolUse {tool_name}: {match_value}")
+                    handle_web_post_tool_use(match_value, config)
                 else:
-                    logging.info(f"Checking WebSearch: {query}")
-                    result = check_web_tool(query, config)
+                    logging.info(f"Checking {tool_name}: {match_value}")
+                    result = check_web_tool(match_value, config)
                     if not result:
                         log_decision(
                             "pass",
                             message="no matching rule",
-                            tool="WebSearch",
-                            command=query,
+                            tool=tool_name,
+                            command=match_value,
                             agent=MODE,
                         )
                     print(json.dumps(result))
