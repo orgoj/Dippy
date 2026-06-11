@@ -824,7 +824,7 @@ def _analyze_simple_command(
                 else:
                     # No matching rule - ask by default for file writes
                     return Decision("ask", desc)
-        if result.action == "approve":
+        if result.action in ("approve", "allow"):
             return Decision("allow", desc)
         elif result.action == "delegate" and result.inner_command:
             # Delegate to inner command (e.g., bash -c 'inner')
