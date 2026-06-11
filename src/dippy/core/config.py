@@ -214,6 +214,12 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         after_rules=base.after_rules + overlay.after_rules,
         mcp_rules=base.mcp_rules + overlay.mcp_rules,
         after_mcp_rules=base.after_mcp_rules + overlay.after_mcp_rules,
+        edit_rules=base.edit_rules + overlay.edit_rules,
+        read_rules=base.read_rules + overlay.read_rules,
+        web_rules=base.web_rules + overlay.web_rules,
+        after_web_rules=base.after_web_rules + overlay.after_web_rules,
+        # Wrappers: overlay wins for conflicting keys
+        wrappers={**base.wrappers, **overlay.wrappers},
         # Aliases: overlay wins for conflicting keys
         aliases={**base.aliases, **overlay.aliases},
         # Settings: overlay wins if set
@@ -580,7 +586,14 @@ def parse_config(text: str, source: str | None = None) -> Config:
     after_rules: list[Rule] = []
     mcp_rules: list[Rule] = []
     after_mcp_rules: list[Rule] = []
+    edit_rules: list[Rule] = []
+    read_rules: list[Rule] = []
+    web_rules: list[Rule] = []
+    after_web_rules: list[Rule] = []
+    wrappers: dict[str, WrapperInfo] = {}
     aliases: dict[str, str] = {}
+    python_allow_modules: list[str] = []
+    python_deny_modules: list[str] = []
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -600,10 +613,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
+                pattern_part, exact = _strip_exact_anchor(pattern_part)
                 rules.append(
                     Rule(
                         "allow",
                         _expand_pattern_tildes(pattern_part),
+                        exact=exact,
                         required_flags=flags,
                         negated_flags=neg_flags,
                     )
@@ -616,10 +631,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
+                pattern, exact = _strip_exact_anchor(pattern)
                 rules.append(
                     Rule(
                         "ask",
                         _expand_pattern_tildes(pattern),
+                        exact=exact,
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
@@ -633,10 +650,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
+                pattern, exact = _strip_exact_anchor(pattern)
                 rules.append(
                     Rule(
                         "deny",
                         _expand_pattern_tildes(pattern),
+                        exact=exact,
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
@@ -721,6 +740,131 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     )
                 aliases[expanded_source] = alias_target
 
+            elif directive == "wrapper":
+                if not rest:
+                    raise ValueError("requires a command name")
+                parts = rest.split()
+                wrapper_name = parts[0]
+
+                if wrapper_name.startswith("-"):
+                    raise ValueError(
+                        f"wrapper name cannot start with '-': {wrapper_name}"
+                    )
+                if wrapper_name in wrappers:
+                    logging.warning(
+                        f"{prefix}line {lineno}: duplicate wrapper definition: {wrapper_name}"
+                    )
+
+                trigger = None
+                target_flag = None
+                context_flag = None
+                context_first = False
+                new_syntax_used = False
+                i = 1
+                while i < len(parts):
+                    if parts[i] == "--cmd" and i + 1 < len(parts):
+                        new_syntax_used = True
+                        trigger = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--flag" and i + 1 < len(parts):
+                        new_syntax_used = True
+                        target_flag = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--context" and i + 1 < len(parts):
+                        new_syntax_used = True
+                        context_flag = parts[i + 1]
+                        i += 2
+                    elif parts[i] == "--context-first":
+                        new_syntax_used = True
+                        context_first = True
+                        i += 1
+                    else:
+                        i += 1
+
+                if not new_syntax_used and len(parts) >= 2:
+                    j = 1
+                    if j < len(parts) and not parts[j].startswith("-"):
+                        trigger = parts[j]
+                        j += 1
+                    if j < len(parts) and parts[j].startswith("-"):
+                        target_flag = parts[j]
+
+                if not new_syntax_used:
+                    context_first = True
+
+                wrappers[wrapper_name] = WrapperInfo(
+                    name=wrapper_name,
+                    trigger=trigger,
+                    target_flag=target_flag,
+                    context_flag=context_flag,
+                    context_first=context_first,
+                )
+
+            elif directive == "allow-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                edit_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+
+            elif directive == "ask-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "deny-edit":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                edit_rules.append(
+                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "allow-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                read_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
+
+            elif directive == "ask-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                read_rules.append(
+                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "deny-read":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                read_rules.append(
+                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                )
+
+            elif directive == "allow-web":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                web_rules.append(Rule("allow", rest))
+
+            elif directive == "ask-web":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                web_rules.append(Rule("ask", pattern, message=message))
+
+            elif directive == "deny-web":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                web_rules.append(Rule("deny", pattern, message=message))
+
+            elif directive == "after-web":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern, message = _extract_message(rest)
+                after_web_rules.append(Rule("after", pattern, message=message))
+
             elif directive == "set":
                 _apply_setting(settings, rest)
 
@@ -742,7 +886,14 @@ def parse_config(text: str, source: str | None = None) -> Config:
         after_rules=after_rules,
         mcp_rules=mcp_rules,
         after_mcp_rules=after_mcp_rules,
+        edit_rules=edit_rules,
+        read_rules=read_rules,
+        web_rules=web_rules,
+        after_web_rules=after_web_rules,
+        wrappers=wrappers,
         aliases=aliases,
+        python_allow_modules=python_allow_modules,
+        python_deny_modules=python_deny_modules,
         default=settings.get("default", "ask"),
         log=settings.get("log"),
         log_full=settings.get("log_full", False),
@@ -1140,6 +1291,13 @@ def _match_option_rule(rule: Rule, words: list[str]) -> bool:
     remaining_words = words[len(prefix_words) :]
     items_set = set(rule.items)
     return bool(items_set.intersection(remaining_words))
+
+
+def _strip_exact_anchor(pattern: str) -> tuple[str, bool]:
+    """Strip | anchor from pattern, return (pattern, is_exact)."""
+    if pattern.endswith("|"):
+        return pattern[:-1].rstrip(), True
+    return pattern, False
 
 
 def _has_glob_chars(pattern: str) -> bool:

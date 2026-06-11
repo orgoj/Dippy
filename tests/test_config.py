@@ -693,10 +693,18 @@ class TestMatchCommand:
         assert match_command(cmd("gitk"), cfg, tmp_path) is None  # no space after git
 
     def test_exact_match(self, tmp_path):
-        cfg = Config(rules=[Rule("allow", "git status")])
+        """Exact match with | anchor only matches the exact command."""
+        cfg = parse_config("allow git status|")
         assert match_command(cmd("git status"), cfg, tmp_path) is not None
         assert match_command(cmd("git statuses"), cfg, tmp_path) is None
         assert match_command(cmd("git status --short"), cfg, tmp_path) is None
+
+    def test_prefix_matching_without_glob(self, tmp_path):
+        """Pattern without wildcards does prefix matching (implicit trailing *)."""
+        cfg = Config(rules=[Rule("allow", "git status")])
+        assert match_command(cmd("git status"), cfg, tmp_path) is not None
+        assert match_command(cmd("git status --short"), cfg, tmp_path) is not None
+        assert match_command(cmd("git statuses"), cfg, tmp_path) is None
 
     def test_no_match_returns_none(self, tmp_path):
         cfg = Config(rules=[Rule("allow", "git *")])
@@ -847,10 +855,11 @@ class TestMatchCommand:
         m = match_command(cmd("ls -la"), cfg, tmp_path)
         assert m.message is None
 
-    def test_pattern_no_wildcards_exact_only(self, tmp_path):
+    def test_pattern_no_wildcards_prefix_matching(self, tmp_path):
+        """Pattern without wildcards does prefix matching."""
         cfg = Config(rules=[Rule("allow", "ls")])
         assert match_command(cmd("ls"), cfg, tmp_path) is not None
-        assert match_command(cmd("ls -la"), cfg, tmp_path) is None
+        assert match_command(cmd("ls -la"), cfg, tmp_path) is not None
         assert match_command(cmd("lsof"), cfg, tmp_path) is None
 
     def test_commands_with_quotes(self, tmp_path):
