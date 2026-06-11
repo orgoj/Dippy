@@ -59,6 +59,7 @@ class Rule:
     message: str | None = None
     source: str | None = None  # file path
     scope: str | None = None  # user/project/env
+    exact: bool = False  # True when pattern ends with | (exact match only)
     items: list[str] | None = None  # for option rules: list of items to match anywhere
     required_flags: frozenset[str] | None = None  # context flags that must all match
     negated_flags: frozenset[str] | None = (
@@ -115,8 +116,29 @@ class Config:
     after_mcp_rules: list[Rule] = field(default_factory=list)
     """After-MCP rules for PostToolUse feedback on MCP tools."""
 
+    edit_rules: list[Rule] = field(default_factory=list)
+    """Edit rules for Write/Edit/MultiEdit tools."""
+
+    read_rules: list[Rule] = field(default_factory=list)
+    """Read rules for Read tool."""
+
+    web_rules: list[Rule] = field(default_factory=list)
+    """WebSearch tool rules in load order."""
+
+    after_web_rules: list[Rule] = field(default_factory=list)
+    """After-web rules for PostToolUse feedback on WebSearch."""
+
+    wrappers: dict[str, WrapperInfo] = field(default_factory=dict)
+    """Custom wrapper commands mapping name to info."""
+
     aliases: dict[str, str] = field(default_factory=dict)
     """Command aliases mapping source to target (e.g., ~/bin/gh -> gh)."""
+
+    python_allow_modules: list[str] = field(default_factory=list)
+    """Extra modules to treat as safe for Python static analysis."""
+
+    python_deny_modules: list[str] = field(default_factory=list)
+    """Extra modules to treat as dangerous for Python static analysis."""
 
     default: str = "ask"  # 'allow' | 'ask'
     log: Path | None = None  # None = no logging
@@ -1120,6 +1142,11 @@ def _match_option_rule(rule: Rule, words: list[str]) -> bool:
     return bool(items_set.intersection(remaining_words))
 
 
+def _has_glob_chars(pattern: str) -> bool:
+    """Check if pattern contains any fnmatch glob characters."""
+    return any(c in pattern for c in "*?[")
+
+
 def _resolve_alias(word: str, config: Config, cwd: Path) -> str:
     """Resolve command word through aliases."""
     normalized_word = _normalize_token(word, cwd)
@@ -1130,9 +1157,16 @@ def _resolve_alias(word: str, config: Config, cwd: Path) -> str:
     return word
 
 
-def _match_words(words: list[str], config: Config, cwd: Path) -> Match | None:
+def _match_words(
+    words: list[str],
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
+) -> Match | None:
     """Match command words against rules. Returns last matching rule."""
-    if words:
+    if words and not remote:
         resolved_first = _resolve_alias(words[0], config, cwd)
         resolved_words = [resolved_first] + words[1:]
     else:
@@ -1201,20 +1235,39 @@ def _match_words(words: list[str], config: Config, cwd: Path) -> Match | None:
             continue  # option rules don't use fnmatch
 
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
-        raw_matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
+        raw_matched = False
         stripped_matched = False
-        if not raw_matched and normalized_stripped:
-            stripped_matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
-        # Trailing ' *' also matches bare command (no args)
-        if (
-            not raw_matched
-            and not stripped_matched
-            and normalized_pattern.endswith(" *")
-        ):
-            if normalized_cmd == normalized_pattern[:-2]:
+        
+        # Prefix matching: implicit trailing * unless exact anchor used or has globs
+        if not rule.exact and not _has_glob_chars(normalized_pattern):
+            # Try prefix match first (command with any args)
+            prefix_pattern = normalized_pattern + " *"
+            if fnmatch.fnmatch(normalized_cmd, prefix_pattern):
                 raw_matched = True
-            elif normalized_stripped and normalized_stripped == normalized_pattern[:-2]:
-                stripped_matched = True
+            # Also match exact (bare command case)
+            elif normalized_cmd == normalized_pattern:
+                raw_matched = True
+            # Try stripped words
+            if not raw_matched and normalized_stripped:
+                if fnmatch.fnmatch(normalized_stripped, prefix_pattern):
+                    stripped_matched = True
+                elif normalized_stripped == normalized_pattern:
+                    stripped_matched = True
+        else:
+            # Exact matching (has | anchor or glob characters)
+            raw_matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
+            # Trailing ' *' also matches bare command (no args)
+            if not raw_matched and normalized_pattern.endswith(" *"):
+                base = normalized_pattern[:-2]
+                if not fnmatch.fnmatch("", base):
+                    raw_matched = fnmatch.fnmatch(normalized_cmd, base)
+            # Try stripped words
+            if not raw_matched and normalized_stripped:
+                stripped_matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
+                if not stripped_matched and normalized_pattern.endswith(" *"):
+                    base = normalized_pattern[:-2]
+                    if not fnmatch.fnmatch("", base):
+                        stripped_matched = fnmatch.fnmatch(normalized_stripped, base)
 
         if raw_matched:
             result = Match(
