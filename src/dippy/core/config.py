@@ -1329,7 +1329,11 @@ def _match_words(
         resolved_words = [resolved_first] + words[1:]
     else:
         resolved_words = words
-    normalized_cmd = _normalize_words(resolved_words, cwd)
+    # In remote mode, skip path expansion (paths are container-local)
+    if remote:
+        normalized_cmd = " ".join(resolved_words)
+    else:
+        normalized_cmd = _normalize_words(resolved_words, cwd)
     result: Match | None = None
     active_flags = context_flags or frozenset()
 
