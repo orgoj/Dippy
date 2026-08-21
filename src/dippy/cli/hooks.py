@@ -1048,7 +1048,7 @@ def setup_gemini_yolo(
         config_path = cwd_path / hook_config["project_config"]
 
     target_mode = "default" if disable else "yolo"
-    
+
     if not config_path.exists():
         if disable:
             print(f"No Gemini configuration found at {config_path}")
@@ -1066,7 +1066,7 @@ def setup_gemini_yolo(
     current_mode = existing_config.get("approvalMode")
     if not current_mode and "policyEngineConfig" in existing_config:
         current_mode = existing_config["policyEngineConfig"].get("approvalMode")
-    
+
     if current_mode == target_mode:
         print(f"Gemini approval mode is already '{target_mode}' in {config_path}")
         return 0
@@ -1078,9 +1078,12 @@ def setup_gemini_yolo(
     # Update config
     updated_config = copy.deepcopy(existing_config)
     updated_config["approvalMode"] = target_mode
-    
+
     # Remove from policyEngineConfig if it exists there to avoid confusion
-    if "policyEngineConfig" in updated_config and "approvalMode" in updated_config["policyEngineConfig"]:
+    if (
+        "policyEngineConfig" in updated_config
+        and "approvalMode" in updated_config["policyEngineConfig"]
+    ):
         del updated_config["policyEngineConfig"]["approvalMode"]
         if not updated_config["policyEngineConfig"]:
             del updated_config["policyEngineConfig"]

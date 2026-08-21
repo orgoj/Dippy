@@ -26,8 +26,6 @@ from dippy.core.config import (
     match_command,
     match_mcp,
     match_redirect,
-    match_after_web,
-    match_web,
     parse_config,
 )
 

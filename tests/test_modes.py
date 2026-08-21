@@ -19,10 +19,14 @@ def reset_mode(monkeypatch):
 
 
 def _set_mode(monkeypatch, mode: str) -> None:
-    """Set MODE directly on the dippy module."""
+    """Set MODE on the dippy module for the duration of one test.
+
+    Uses monkeypatch so the module global is restored afterwards; a bare
+    assignment leaks the mode into every later test in the same process.
+    """
     import dippy.dippy
 
-    dippy.dippy.MODE = mode
+    monkeypatch.setattr(dippy.dippy, "MODE", mode)
 
 
 def test_gemini_approve_format(monkeypatch):

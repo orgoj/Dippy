@@ -36,12 +36,12 @@ class TestIsDippyHook:
 
     def test_legacy_hook_full_path_ends_with_dippy_hook(self):
         """Legacy: /path/to/dippy-hook ends with 'dippy-hook'."""
-        hook = {"command": "/home/michael/.local/bin/dippy-hook"}
+        hook = {"command": "/home/user/.local/bin/dippy-hook"}
         assert _is_dippy_hook(hook) is True
 
     def test_legacy_hook_full_path_ends_with_dippy(self):
         """Legacy: /path/to/dippy ends with '/dippy'."""
-        hook = {"command": "/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/dippy"}
+        hook = {"command": "/opt/tools/dippy/dippy"}
         assert _is_dippy_hook(hook) is True
 
     def test_legacy_hook_with_dippy_in_path(self):

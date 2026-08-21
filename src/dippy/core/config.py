@@ -261,6 +261,9 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         deny_format_agents={**base.deny_format_agents, **overlay.deny_format_agents},
         # Watched environment variables accumulate across scopes
         context_env=base.context_env + overlay.context_env,
+        # Python module lists accumulate, so a project config extends the global one
+        python_allow_modules=base.python_allow_modules + overlay.python_allow_modules,
+        python_deny_modules=base.python_deny_modules + overlay.python_deny_modules,
     )
 
 
@@ -1424,7 +1427,7 @@ def _match_words(
         normalized_pattern = _normalize_pattern(rule.pattern, cwd)
         raw_matched = False
         stripped_matched = False
-        
+
         # Prefix matching: implicit trailing * unless exact anchor used or has globs
         if not rule.exact and not _has_glob_chars(normalized_pattern):
             # Try prefix match first (command with any args)
@@ -1450,7 +1453,9 @@ def _match_words(
                     raw_matched = fnmatch.fnmatch(normalized_cmd, base)
             # Try stripped words
             if not raw_matched and normalized_stripped:
-                stripped_matched = fnmatch.fnmatch(normalized_stripped, normalized_pattern)
+                stripped_matched = fnmatch.fnmatch(
+                    normalized_stripped, normalized_pattern
+                )
                 if not stripped_matched and normalized_pattern.endswith(" *"):
                     base = normalized_pattern[:-2]
                     if not fnmatch.fnmatch("", base):

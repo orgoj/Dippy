@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.19] - 2026-08-21
+
+### Fixed
+
+- **`_emit()` restored** - The helper was deleted in 62d49af while eight call sites kept referencing it. Every one of those paths raised `NameError`, which the top-level handler turned into a generic `ask`, so the specific reason ("unsupported tool: X", "no file path provided") never reached the user. The idle-notifier path was equally broken by a missing `expand_template` import.
+- **Explicit mode is re-read per call** - `main()` used the import-time `_EXPLICIT_MODE` constant, so an explicit `--gemini`/`DIPPY_GEMINI` could be overridden by input auto-detection. The flags are now read when the call runs.
+- **Python module lists survive config merging** - `python-allow-module` and `python-deny-module` in a project config were silently discarded by `_merge_configs()`; a project-level `python-deny-module` had no effect at all. Both lists now accumulate like the other rule lists.
+
 ## [0.2.18] - 2026-08-21
 
 ### Added
@@ -15,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- **Gemini CLI hook protocol compliance** - Fixed a compatibility issue where Gemini CLI would report a "Hook failed" error on zablokované (denied) příkazy. Dippy now correctly returns a JSON response with `decision: "deny"` instead of exiting with code 2, matching the newer Gemini CLI hook protocol.
+- **Gemini CLI hook protocol compliance** - Fixed a compatibility issue where Gemini CLI would report a "Hook failed" error on denied commands. Dippy now correctly returns a JSON response with `decision: "deny"` instead of exiting with code 2, matching the newer Gemini CLI hook protocol.
 
 ## [0.2.16] - 2026-05-14
 

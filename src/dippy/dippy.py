@@ -50,6 +50,7 @@ from dippy.core.config import (
 )
 from dippy import __version__
 from dippy.core.notifier import run_notifier, should_run_notifier
+from dippy.core.template import expand_template
 
 # === Mode Detection ===
 
@@ -102,6 +103,12 @@ def _detect_mode_from_input(input_data: dict) -> str:
 # Initial mode from flags/env (may be overridden by auto-detect)
 _EXPLICIT_MODE = _detect_mode_from_flags()
 MODE = _EXPLICIT_MODE or "claude"  # Default for logging setup
+
+
+def _emit(result: dict | None) -> None:
+    """Emit hook result to stdout. Handles None sentinel for Codex (empty output = success)."""
+    if result is not None:
+        print(json.dumps(result))
 
 
 # === Logging Setup ===
@@ -488,7 +495,9 @@ def check_command(
             result.reason, config=config, command=command, hook_event=hook_event
         )
     elif result.action == "deny":
-        return deny(result.reason, config=config, command=command, hook_event=hook_event)
+        return deny(
+            result.reason, config=config, command=command, hook_event=hook_event
+        )
     elif result.action == "pass":
         return pass_(
             result.reason, config=config, command=command, hook_event=hook_event
@@ -1072,6 +1081,7 @@ def handle_hooks_subcommand(args: argparse.Namespace) -> int:
         )
     elif args.hooks_action == "setup-gemini-yolo":
         from dippy.cli.hooks import setup_gemini_yolo
+
         return setup_gemini_yolo(
             global_config=getattr(args, "global", False),
             cwd=getattr(args, "cwd", None),
@@ -1143,14 +1153,19 @@ def main():
         # Read hook input from stdin
         input_data = json.load(sys.stdin)
 
-        # Auto-detect mode from input if no explicit flag/env was set
-        if _EXPLICIT_MODE is None:
+        # Auto-detect mode from input if no explicit flag/env was set.
+        # Re-read the flags here instead of trusting the import-time constant, so
+        # the mode reflects the process this call actually runs in.
+        explicit_mode = _detect_mode_from_flags()
+        if explicit_mode is None:
             MODE = _detect_mode_from_input(input_data)
+        else:
+            MODE = explicit_mode
 
         # Add file handler now that mode (and thus log directory) is known
         setup_logging()
 
-        if _EXPLICIT_MODE is None:
+        if explicit_mode is None:
             logging.info(f"Auto-detected mode: {MODE}")
 
         # Extract cwd from input
@@ -1275,7 +1290,6 @@ def main():
         command = ""
         tool_name = None
         file_path = ""
-        query = ""
 
         if MODE == "cursor":
             # Cursor sends command directly (beforeShellExecution hook)
@@ -1318,7 +1332,12 @@ def main():
             # Check if this is a web tool (Claude: WebSearch/WebFetch, Gemini: google_web_search/web_fetch)
             if tool_name in ("WebSearch", "WebFetch", "google_web_search", "web_fetch"):
                 # WebSearch/google_web_search use query, WebFetch/web_fetch use url
-                match_value = tool_input.get("query") or tool_input.get("url") or tool_input.get("q") or ""
+                match_value = (
+                    tool_input.get("query")
+                    or tool_input.get("url")
+                    or tool_input.get("q")
+                    or ""
+                )
                 # Check for bypass permissions mode first
                 if hook_event != "PostToolUse":
                     permission_mode = input_data.get("permission_mode", "default")
