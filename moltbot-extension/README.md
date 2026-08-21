@@ -14,7 +14,7 @@ Command and file operation validation for Moltbot's Pi agent.
 ### Option 1: Symlink (recommended for development)
 
 ```bash
-ln -s /path/to/dippy-dev/moltbot-extension ~/.moltbot/extensions/dippy
+ln -s /path/to/dippy/moltbot-extension ~/.moltbot/extensions/dippy
 ```
 
 ### Option 2: Config reference
@@ -22,7 +22,7 @@ ln -s /path/to/dippy-dev/moltbot-extension ~/.moltbot/extensions/dippy
 Add to ~/.moltbot/config.yaml:
 ```yaml
 plugins:
-  - path: /path/to/dippy-dev/moltbot-extension
+  - path: /path/to/dippy/moltbot-extension
     config:
       enabled: true
       askBehavior: block  # block | ask | allow
@@ -134,18 +134,18 @@ moltbot agent --message "run rm -rf /"
 ## Requirements
 
 - Python 3.8+
-- dippy-dev repo accessible at configured path
+- dippy repo accessible at configured path
 - Moltbot with plugin support
 
 ## Troubleshooting
 
 ### "Dippy wrapper not found"
 
-Ensure the symlink points to the correct location and the dippy-dev repo is complete:
+Ensure the symlink points to the correct location and the dippy repo is complete:
 
 ```bash
 ls -la ~/.moltbot/extensions/dippy
-ls /path/to/dippy-dev/src/dippy/pi_wrapper.py
+ls /path/to/dippy/src/dippy/pi_wrapper.py
 ```
 
 ### "Dippy validation error"

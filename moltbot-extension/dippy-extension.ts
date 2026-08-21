@@ -5,12 +5,12 @@
  *
  * Installation:
  *   1. Symlink to moltbot workspace extensions:
- *      ln -s /path/to/dippy-dev/moltbot-extension \
+ *      ln -s /path/to/dippy/moltbot-extension \
  *            ~/.moltbot/extensions/dippy
  *
  *   2. Or reference in moltbot config:
  *      plugins:
- *        - path: /path/to/dippy-dev/moltbot-extension
+ *        - path: /path/to/dippy/moltbot-extension
  *          config:
  *            enabled: true
  *            askBehavior: block

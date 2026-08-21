@@ -2,7 +2,7 @@
 
 ## Key Takeaway
 
-**Moltbot needs no modifications.** The solution is purely in dippy-dev repo - we create `moltbot-extension/` similar to existing `pi-extension/`.
+**Moltbot needs no modifications.** The solution is purely in dippy repo - we create `moltbot-extension/` similar to existing `pi-extension/`.
 
 ## Why This Works
 
@@ -33,12 +33,12 @@ Moltbot hook API (`before_tool_call`) is nearly identical to pi-mono:
 
 ---
 
-## Implementation in dippy-dev Repo
+## Implementation in dippy Repo
 
-### File Structure (in dippy-dev)
+### File Structure (in dippy)
 
 ```
-dippy-dev/
+dippy/
 ├── pi-extension/              # Existing pi-mono extension
 │   ├── dippy-extension.ts
 │   └── README.md
@@ -62,12 +62,12 @@ Adaptation of existing pi-extension for moltbot API:
  *
  * Installation:
  *   1. Symlink to moltbot workspace extensions:
- *      ln -s /path/to/dippy-dev/moltbot-extension \
+ *      ln -s /path/to/dippy/moltbot-extension \
  *            ~/.moltbot/extensions/dippy
  *
  *   2. Or reference in moltbot config:
  *      plugins:
- *        - path: /path/to/dippy-dev/moltbot-extension
+ *        - path: /path/to/dippy/moltbot-extension
  *          config:
  *            enabled: true
  *            askBehavior: block
@@ -244,7 +244,7 @@ export default function register(api: MoltbotPluginApi) {
 
 **No changes in moltbot repo!**
 
-In dippy-dev only:
+In dippy only:
 1. Create `moltbot-extension/` directory
 2. Create `moltbot-extension/dippy-extension.ts`
 3. Create `moltbot-extension/README.md`
@@ -252,8 +252,8 @@ In dippy-dev only:
 ### Installation and Usage
 
 ```bash
-# In dippy-dev repo
-cd /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev
+# In dippy repo
+cd /path/to/dippy
 
 # Symlink to moltbot
 ln -s $(pwd)/moltbot-extension ~/.moltbot/extensions/dippy
@@ -273,13 +273,13 @@ moltbot agent --message "run rm -rf /"   # → deny
 
 ## Implementation Steps (after approval)
 
-1. **Create `moltbot-extension/` in dippy-dev repo**
+1. **Create `moltbot-extension/` in dippy repo**
    - `dippy-extension.ts` - main extension code (see above)
    - `README.md` - documentation (see above)
 
 2. **Test installation**
    ```bash
-   cd /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev
+   cd /path/to/dippy
    mkdir -p moltbot-extension
    # create files
 
@@ -298,14 +298,14 @@ moltbot agent --message "run rm -rf /"   # → deny
 
 | File | Repo | Content |
 |------|------|---------|
-| `moltbot-extension/dippy-extension.ts` | dippy-dev | Extension code (see plan) |
-| `moltbot-extension/README.md` | dippy-dev | Installation guide |
+| `moltbot-extension/dippy-extension.ts` | dippy | Extension code (see plan) |
+| `moltbot-extension/README.md` | dippy | Installation guide |
 
 **Moltbot repo**: No changes
 
 ## Decisions
 
-1. **Location**: Extension lives in **dippy-dev repo** (`moltbot-extension/`)
+1. **Location**: Extension lives in **dippy repo** (`moltbot-extension/`)
    - User symlinks or references in moltbot config
    - Shares `pi_wrapper.py` with pi-extension
 

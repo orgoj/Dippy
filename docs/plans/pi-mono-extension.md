@@ -5,7 +5,7 @@ Create a **completely independent pi-mono extension** that integrates dippy's ba
 
 ## Key Principle: External Extension Architecture
 - ✅ **No pi-mono core modifications**
-- ✅ **Extension lives in dippy-dev repository**
+- ✅ **Extension lives in dippy repository**
 - ✅ **Installable via `pi install npm:dippy-extension`**
 - ✅ **Uses official pi-mono extension API**
 - ✅ **Fully distributed as npm package**
@@ -13,7 +13,7 @@ Create a **completely independent pi-mono extension** that integrates dippy's ba
 ## Current State Analysis
 
 ### Dippy (Developed by You)
-- **Location**: `/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev`
+- **Location**: `/path/to/dippy`
 - **Language**: Python with bash AST parser
 - **Security Model**: Whitelist-based (allow/ask/deny)
 - **Modifiable**: You control the codebase
@@ -37,9 +37,9 @@ Create a **completely independent pi-mono extension** that integrates dippy's ba
 
 ## Architecture Decision
 
-### Approach: **Standalone Extension in dippy-dev**
+### Approach: **Standalone Extension in dippy**
 
-Create extension **inside dippy-dev repository** that:
+Create extension **inside dippy repository** that:
 
 1. **Wraps Python dippy core** via subprocess
 2. **Implements pi-mono Extension API** in TypeScript
@@ -372,10 +372,10 @@ cp src/dippy/pi_api.py pi-extension/python/
 
 ### Phase 4: Package Structure
 
-Final dippy-dev structure:
+Final dippy structure:
 
 ```
-/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/
+/path/to/dippy/
 ├── src/dippy/
 │   ├── core/
 │   │   ├── analyzer.py
@@ -413,7 +413,7 @@ cp src/dippy/pi_api.py dist/python/
 npm run build
 
 echo "Extension built successfully!"
-echo "Install with: pi install /path/to/dippy-dev/pi-extension"
+echo "Install with: pi install /path/to/dippy/pi-extension"
 ```
 
 **Publish to npm:**
@@ -433,13 +433,13 @@ pi install npm:dippy-extension@latest
 
 **Option 2: From local path**
 ```bash
-pi install /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension
+pi install /path/to/dippy/pi-extension
 ```
 
 **Option 3: Manual installation**
 ```bash
 mkdir -p ~/.pi/agent/extensions
-ln -s /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension/dist/index.js \
+ln -s /path/to/dippy/pi-extension/dist/index.js \
       ~/.pi/agent/extensions/dippy.js
 ```
 
@@ -447,7 +447,7 @@ ln -s /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension/dist/index.js \
 ```json
 {
   "packages": [
-    "/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension"
+    "/path/to/dippy/pi-extension"
   ]
 }
 ```
@@ -537,16 +537,16 @@ ls -la dist/  # Should have index.js, index.d.ts, python/
 ### 2. Python API Testing
 ```bash
 # Test Python JSON API directly
-cd /home/michael/work/ai/PI/pi-mono
+cd /path/to/pi-mono
 echo '{"command":"ls","context":{}}' | \
-  python3 /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/src/dippy/pi_api.py
+  python3 /path/to/dippy/src/dippy/pi_api.py
 # Expected output: {"action":"allow",...}
 ```
 
 ### 3. Extension Loading Test
 ```bash
 # Install extension locally
-pi install /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension
+pi install /path/to/dippy/pi-extension
 
 # Check if loaded
 pi --version

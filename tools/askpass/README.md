@@ -6,10 +6,10 @@ GUI approval dialog for Dippy when running in headless environments (tmux, scree
 
 ```bash
 # Symlink to your bin
-ln -s /path/to/dippy-dev/tools/askpass/dippy-askpass ~/bin/dippy-askpass
+ln -s /path/to/dippy/tools/askpass/dippy-askpass ~/bin/dippy-askpass
 
 # Or copy
-cp /path/to/dippy-dev/tools/askpass/dippy-askpass ~/bin/
+cp /path/to/dippy/tools/askpass/dippy-askpass ~/bin/
 ```
 
 ## Configuration

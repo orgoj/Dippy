@@ -179,7 +179,7 @@ include .dippy-local-*
 include ~/.dippy/team-defaults
 
 # Include all developer-specific overrides
-include .dippy-dev-*
+include .dippy-user-*
 
 # Include with glob pattern
 include conf.d/*.conf

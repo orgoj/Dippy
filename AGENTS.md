@@ -11,18 +11,18 @@ language, but write every file in English.
 ## Commands
 
 ```bash
-just test    # the gate before committing (sequential, Python 3.12)
+just check   # lint + format check + tests in parallel — the gate before committing
+just test    # tests only (sequential, Python 3.12)
 just lint    # ruff check
-just fmt     # ruff format
-just check   # all of the above in parallel
+just fmt     # ruff format --check
 ```
 
-`just check` is currently red: 5 tests in `test_gemini_failopen.py` fail under
-xdist because workers share global MODE state. `just test` is green — use it.
+Never mutate a module global in a test with a bare assignment; `MODE` was leaked
+that way for months and made `test_gemini_failopen.py` pass for the wrong reason.
+Use `monkeypatch.setattr`.
 
 `scripts/debug/check-path.py` reports why a path is allowed/asked/denied by the
-live config. Edit the `path` variable, then
-`PYTHONPATH=src python3 scripts/debug/check-path.py`.
+live config: `PYTHONPATH=src python3 scripts/debug/check-path.py PATH [CWD]`.
 
 ## Paths
 

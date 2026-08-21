@@ -21,7 +21,7 @@ Benefits:
 # ~/.pi/agent/extensions/dippy-extension.ts
 
 # If you need to install/reinstall:
-ln -s /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension/dippy-extension.ts \
+ln -s /path/to/dippy/pi-extension/dippy-extension.ts \
       ~/.pi/agent/extensions/dippy-extension.ts
 ```
 
@@ -29,7 +29,7 @@ ln -s /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension/dippy-extension.
 
 - **Dippy installed** in system Python:
   ```bash
-  pip install dippy  # or: pip install -e /path/to/dippy-dev
+  pip install dippy  # or: pip install -e /path/to/dippy
   ```
 - **pi-mono** with extension support
 

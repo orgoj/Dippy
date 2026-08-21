@@ -5,7 +5,7 @@
  * Intercepts bash, read, write, and edit tool calls and validates them through dippy.
  *
  * Installation:
- *   ln -s /path/to/dippy-dev/pi-extension/dippy-extension.ts \
+ *   ln -s /path/to/dippy/pi-extension/dippy-extension.ts \
  *         ~/.pi/agent/extensions/dippy-extension.ts
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";

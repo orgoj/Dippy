@@ -48,7 +48,7 @@ Complete documentation including:
 ## File Structure
 
 ```
-/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/
+/path/to/dippy/
 ├── src/dippy/
 │   ├── core/
 │   │   ├── analyzer.py       # Entry point: analyze()
@@ -64,7 +64,7 @@ Complete documentation including:
 
 The extension is already installed via symlink:
 ```bash
-~/.pi/agent/extensions/dippy-extension.ts -> /home/michael/work/ai/CLAUDE/TOOLS/dippy-dev/pi-extension/dippy-extension.ts
+~/.pi/agent/extensions/dippy-extension.ts -> /path/to/dippy/pi-extension/dippy-extension.ts
 ```
 
 ## Test Results
@@ -72,15 +72,15 @@ The extension is already installed via symlink:
 ### Python Wrapper Tests
 ```bash
 # Safe command
-echo '{"command":"ls","cwd":"/home/michael"}' | python3 src/dippy/pi_wrapper.py
+echo '{"command":"ls","cwd":"/home/user"}' | python3 src/dippy/pi_wrapper.py
 # Output: {"action":"allow", "reason":"ls", "context_flags":[], "error":false}
 
 # Dangerous command
-echo '{"command":"rm -rf /","cwd":"/home/michael"}' | python3 src/dippy/pi_wrapper.py
+echo '{"command":"rm -rf /","cwd":"/home/user"}' | python3 src/dippy/pi_wrapper.py
 # Output: {"action":"ask", "reason":"rm: rm -rf *", "context_flags":[], "error":false}
 
 # Git command (allowed by default config)
-echo '{"command":"git status","cwd":"/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev"}' | python3 src/dippy/pi_wrapper.py
+echo '{"command":"git status","cwd":"/path/to/dippy"}' | python3 src/dippy/pi_wrapper.py
 # Output: {"action":"allow", "reason":"git *", "context_flags":[], "error":false}
 
 # pip install (requires approval)
@@ -213,8 +213,8 @@ const pythonExe = process.env.DIPPY_PYTHON || 'python3';
 
 ## References
 
-- **pi-mono extension API**: `/home/michael/work/ai/PI/pi-mono/packages/coding-agent/docs/extensions.md`
-- **pi-mono extension types**: `/home/michael/work/ai/PI/pi-mono/packages/coding-agent/src/core/extensions/types.ts`
-- **Example extension**: `/home/michael/work/ai/PI/pi-mono/packages/coding-agent/examples/extensions/permission-gate.ts`
+- **pi-mono extension API**: `pi-mono/packages/coding-agent/docs/extensions.md`
+- **pi-mono extension types**: `pi-mono/packages/coding-agent/src/core/extensions/types.ts`
+- **Example extension**: `pi-mono/packages/coding-agent/examples/extensions/permission-gate.ts`
 - **Dippy entry point**: `src/dippy/core/analyzer.py` (`analyze()` function)
 - **Dippy config**: `src/dippy/core/config.py` (`load_config()` function)

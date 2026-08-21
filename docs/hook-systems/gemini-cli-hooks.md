@@ -901,8 +901,8 @@ Major hooks release:
 
 ### BeforeTool `allow` Does Not Auto-Approve Commands
 
-**Observed in:** Gemini CLI `0.42.0-nightly.20260511.g1a894c18e`, source
-checkout `/home/michael/projects/gemini-cli` at commit `8cda688fe`.
+**Observed in:** Gemini CLI `0.42.0-nightly.20260511.g1a894c18e`, from a source
+checkout at commit `8cda688fe`.
 
 **Symptoms:**
 - A hook such as Dippy returns `{"decision": "allow"}` for
