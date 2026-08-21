@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.18] - 2026-08-21
+
+### Added
+
+- **Environment context flags** - New `set context-env VAR` directive (repeatable) exposes an environment variable as the context flag `[$VAR=value]`. Rules can now be scoped per agent (for example `[$HCOM_INSTANCE_NAME=bot1]`) inside a single config, and combined with wrapper and AST flags. Unset or empty variables produce no flag, so guarded `allow` rules stay fail-closed.
+
 ## [0.2.17] - 2026-05-14
 
 ### Fixed

@@ -140,6 +140,9 @@ class Config:
     python_deny_modules: list[str] = field(default_factory=list)
     """Extra modules to treat as dangerous for Python static analysis."""
 
+    context_env: tuple[str, ...] = ()
+    """Environment variables exposed as context flags ($NAME=value)."""
+
     default: str = "ask"  # 'allow' | 'ask'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
@@ -256,6 +259,8 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         if overlay.deny_format is not None
         else base.deny_format,
         deny_format_agents={**base.deny_format_agents, **overlay.deny_format_agents},
+        # Watched environment variables accumulate across scopes
+        context_env=base.context_env + overlay.context_env,
     )
 
 
@@ -492,6 +497,19 @@ def load_config(cwd: Path, config_path: str | None = None) -> Config:
     _rotate_logs(config)
 
     return config
+
+
+def env_context_flags(config: Config) -> frozenset[str]:
+    """Build context flags from environment variables listed by 'set context-env'.
+
+    Each watched variable that is set and non-empty yields a flag '$NAME=value'.
+    Unset or empty variables yield nothing, so rules guarded by them never match.
+    """
+    return frozenset(
+        f"${name}={value}"
+        for name in config.context_env
+        if (value := os.environ.get(name))
+    )
 
 
 def _extract_context_flags(
@@ -907,6 +925,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
         idle_notifier_command=settings.get("idle_notifier_command"),
         deny_format=settings.get("deny_format"),
         deny_format_agents=settings.get("deny_format_agents", {}),
+        context_env=tuple(settings.get("context_env", [])),
     )
 
 
@@ -1074,6 +1093,12 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         if "deny_format_agents" not in settings:
             settings["deny_format_agents"] = {}
         settings["deny_format_agents"][agent_name] = _strip_quotes(value)
+
+    # Environment variables exposed as context flags (repeatable)
+    elif key_normalized == "context_env":
+        if value is None:
+            raise ValueError("'context-env' requires an environment variable name")
+        settings.setdefault("context_env", []).append(_strip_quotes(value))
 
     else:
         raise ValueError(f"unknown setting '{key}'")

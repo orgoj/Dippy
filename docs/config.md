@@ -216,6 +216,39 @@ ask [flags] <glob> "message"
 | `ssh` | Inside `ssh "command"` | `ssh host "rm /tmp/*"` |
 | `sudo` | Inside `sudo`, `doas`, `pkexec` | `sudo rm /etc/passwd` |
 | `<custom>` | Inside user-defined wrappers | `wrap server1 free -h` |
+| `$VAR=value` | Environment variable is set to that value | `[$HCOM_INSTANCE_NAME=bot1]` |
+
+Note: context flags are supported by `allow`, `ask` and `deny` only. The
+`-redirect`, `-edit`, `-read`, `-mcp`, `-web` and `-opt` variants ignore them.
+
+### Environment Flags
+
+Environment variables become context flags only after being declared with
+`set context-env` (see [Settings](#settings)). Each declared variable that is
+set and non-empty produces the flag `$NAME=value`:
+
+```
+set context-env HCOM_INSTANCE_NAME
+
+allow [$HCOM_INSTANCE_NAME=bot1] deploy-tool *
+deny  [$HCOM_INSTANCE_NAME=bot2] deploy-tool * "bot2 must not deploy"
+```
+
+This lets one config serve several agents that share a working directory,
+without giving each of them a separate `$DIPPY_CONFIG` file.
+
+Environment flags are added at the start of the analysis, so they combine with
+every other flag - including wrapper flags for nested commands:
+
+```
+wrapper remote-run --cmd run --context -t
+
+# only bot1, only on host1, only this command
+allow [$HCOM_INSTANCE_NAME=bot1,remote-run,host1] systemctl status *
+```
+
+An unset or empty variable produces no flag at all, so an `allow` rule guarded
+by it never matches (fail-closed).
 
 ### Custom Wrappers
 
@@ -606,6 +639,10 @@ set final ~/.dippy/emergency  # emergency overrides (loaded last)
 # GUI approval (SSH_ASKPASS style)
 set askpass /path/to/askpass  # external approval program
 set askpass-timeout 60        # seconds to wait (default: 60)
+
+# Environment variables exposed as context flags (repeatable)
+set context-env HCOM_INSTANCE_NAME
+set context-env CI
 
 # Deny message formatting (for AI agents)
 set deny-format "Custom template: {command} -> {reason}"

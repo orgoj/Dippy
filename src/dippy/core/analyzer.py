@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from dippy.core.config import Config, match_redirect, WrapperInfo
+from dippy.core.config import Config, env_context_flags, match_redirect, WrapperInfo
 from dippy.core.allowlists import SIMPLE_SAFE, WRAPPER_COMMANDS
 from dippy.cli import get_handler, get_description, HandlerContext
 from dippy.vendor.parable import parse, ParseError
@@ -70,7 +70,7 @@ def analyze(
     if not nodes:
         return Decision("ask", "empty command")
 
-    flags = context_flags or frozenset()
+    flags = (context_flags or frozenset()) | env_context_flags(config)
     decisions = [
         _analyze_node(node, config, cwd, flags, remote=remote) for node in nodes
     ]
