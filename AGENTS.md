@@ -1,217 +1,95 @@
 # Dippy
 
-Shell command approval hook for AI coding assistants.
+Shell command approval hook for AI coding assistants. See [README.md](README.md).
 
-## **CRITICAL: ENGLISH-ONLY CODE (NON-NEGOTIABLE!)**
+## Language
 
-**ALL source code, documentation, comments, test messages, and user-facing strings MUST be in English ONLY!**
-
-**FORBIDDEN:**
-- ❌ Czech text in ANY file (src/, tests/, docs/, *.md)
-- ❌ Czech words like "rekurzivně", "příkazy", "konfigurace", etc.
-- ❌ Czech comments in code
-- ❌ Czech diacritics: č, ř, ž, š, ň, ě, ť, ď, Ě, Š, Č, Ř, Ž, Ý, Á, Í, É
-
-**MANDATORY:**
-- ✅ Write EVERYTHING in English - code, docs, comments, tests, logs
-- ✅ If user speaks Czech, respond in Czech BUT write code in English
-- ✅ Check files for Czech text before committing: `rg "[čřžšňěťďĚŠČŘŽÝÁÍÉ]"`
-
-**This applies to:** .py files, .md files, test files, documentation, comments, EVERYTHING!
-
-## Version Management
-
-Version must be bumped in **both** places when releasing:
-- `src/dippy/__init__.py` — `__version__ = "X.Y.Z"`
-- `pyproject.toml` — `version = "X.Y.Z"`
-
-`src/dippy/dippy.py` reads `__version__` dynamically — no manual update needed there.
-
-After changing `pyproject.toml`, regenerate the lock file: `uv lock`
-
-Also update `CHANGELOG.md`: move `[Unreleased]` entries under the new version heading.
+This repository is English-only: code, comments, documentation, tests, commit
+messages, log output and user-facing strings. Answer the user in their own
+language, but write every file in English.
 
 ## Commands
 
 ```bash
-just test          # Run tests (Python 3.12, quiet mode - errors only)
-just test-parallel # Run tests in parallel (with xdist -n auto)
-just test-py312    # Run tests (Python 3.12, explicit)
-just lint          # Lint (ruff check)
-just fmt           # Format (ruff format)
-just check         # All of the above in parallel — MUST PASS before committing
-
-**Known issue:** `just check` fails on 5 tests in `test_gemini_failopen.py` under
-xdist (global MODE state shared between workers). Sequential `just test` is green.
-Until fixed, `just test` is the gate before committing.
-
-## Debugging Tools
-
-- `scripts/debug/check-path.py` — Verifies a specific file path against the active Dippy configuration. Useful for diagnosing why a `Read` or `Edit` operation is being blocked or asked.
-  - **Usage:** Edit the `path` variable in the script and run: `export PYTHONPATH=$PYTHONPATH:$(pwd)/src && python3 scripts/debug/check-path.py`
+just test    # the gate before committing (sequential, Python 3.12)
+just lint    # ruff check
+just fmt     # ruff format
+just check   # all of the above in parallel
 ```
 
-**Test output:**
-- Default `just test`: quiet mode, shows only summary and errors (no progress dots)
-- Use `just test-parallel` for faster parallel execution with xdist
-- `just check` uses `test-parallel` for speed
+`just check` is currently red: 5 tests in `test_gemini_failopen.py` fail under
+xdist because workers share global MODE state. `just test` is green — use it.
 
-## Project Context
+`scripts/debug/check-path.py` reports why a path is allowed/asked/denied by the
+live config. Edit the `path` variable, then
+`PYTHONPATH=src python3 scripts/debug/check-path.py`.
 
-- **Config**: `~/.dippy/config` (global), `.dippy/` (project-local)
-- **Audit log**: `~/.dippy/audit.log` (JSONL format with cwd, decision, cmd, agent, ts fields)
-- **Entry point**: `log_decision()` in `src/dippy/core/config.py`
-- **Standard logging**: goes to `~/.claude/hook-approvals.log`
+## Paths
 
-## Process Rules
+- Config: `~/.dippy/config` (global), `.dippy` (project-local)
+- Audit log: `~/.dippy/audit.log` — JSONL, fields `cwd`, `decision`, `cmd`, `agent`, `ts`
+- Hook log: `~/.claude/hook-approvals.log`
+- Written by `log_decision()` in `src/dippy/core/config.py`
+- Installed with `uv tool install --force .` from this repo
 
-- plan mode: wait for explicit user confirmation before calling ExitPlanMode - never assume readiness
-- sources: check local repositories (~/work/ai/) before web searches or GitHub API calls
-- research: ALWAYS web search for current best practices before implementing unfamiliar configs/patterns - user has no patience for trial-and-error experiments
-- testing: use existing test suite (`just test`), never write adhoc tests
-- testing: `dippy --cmd --config X` still loads `~/.dippy/config` first (--config is an override, not a replacement) - isolate with `HOME=/tmp/empty` when verifying that a project config is self-contained
-- testing: verify new allow rules against a bypass attempt, not just the happy path (e.g. `wrapper sub run "rm -rf /"` for every wrapper subcommand rule)
-- testing: use fictional commands in config rule tests to avoid SIMPLE_SAFE allowlist interference
-- testing: always isolate tests from live config/system using tmp_path, monkeypatch, and explicit isolation verification tests
-- testing: TDD is mandatory for ALL changes including "small" bug fixes - write failing test FIRST, then implement fix
-- testing: run expensive commands once to /tmp/file.txt 2>&1, analyze with grep/wc/head/tail - never re-run for different views
-- testing: prefer `uv run python -m pytest` over `just` in restricted environments for reliability
-- verification: check actual running system (real files, real logs, real config) - never verify with synthetic examples when real system is accessible
-- verification: never assume systematic issues across multiple files - use grep/rg to find actual errors, fix ONLY confirmed bugs
-- documentation: always read README.md before making assumptions about config/log locations
-- documentation: README.md has priority for user-facing features - docs/ is for technical reference only
-- documentation: update docs/README when adding/changing features
-- documentation: keep docs minimal and tool-specific - don't explain technologies users already know
-- documentation: main docs in `docs/config.md`, README for overview only
-- documentation: when adding tool support, update core docs, pi-extension/README.md, and docs/hook-systems/
-- documentation: VSCode extension requires manual regex updates in `editors/vscode/syntaxes/dippy.tmLanguage.json` when adding new directives
-- backlog: use filters with `backlog task list` (e.g., `-p high -s todo`), never bare listing
-- development: prefer simple KISS solutions over clever features - don't add overhead on every operation when once-per-day is sufficient
-- development: prefer native Dippy tool matchers (match_read, match_edit) over synthetic bash command simulation
-- development: prefer surgical edit over full write for configuration files to prevent accidental regressions (e.g., reverting user's manual changes)
-- development: ensure pi_wrapper.py remains synchronized with dippy.py for logging, agent identification, and tool handling
-- development: if changing >5 files, you're probably wrong - verify with actual error data before making mass changes
-- development: don't simplify user's exact requirements without asking - implement literally
-- development: ask before acting when user requests explanation - don't make edits when user says "vysvetli mi" or "nic dalsiho nedelej"
-- development: use code review subagent for significant changes (>100 lines or new features)
-- development: avoid duplicate list maintenance - discover from code, never maintain separate constant lists (e.g., BUILTIN_COMMANDS)
-- development: avoid imports inside functions - ugly pattern that violates code cleanliness
-- background tasks: daily cleanup/rotation tasks should run once per relevant period, not on every startup/write
-- log rotation: use yesterday's date for rotated files (active file always has current name)
-- pi-mono: plan mode is a pi-mono feature, not Dippy (exit via `/plan` or Ctrl+Alt+P)
+## Testing
 
-## Dippy Configuration
+- TDD is mandatory, including one-line bug fixes: failing test first.
+- **A wrong rule is a security bug.** Test every new `allow` against a bypass
+  attempt, not just the happy path — e.g. `wrapper sub run "rm -rf /"` for each
+  wrapper subcommand rule.
+- Use fictional command names in rule tests; real ones hit the SIMPLE_SAFE allowlist.
+- Isolate from the live system with `tmp_path` and `monkeypatch`.
+- `--config X` is an override, not a replacement — `~/.dippy/config` still loads.
+  Set `HOME=/tmp/empty` to prove a project config stands alone.
+- Never modify the user's live config from a development task.
 
-- rules: follow "last match wins" behavior
-- allowlists: SIMPLE_SAFE commands cannot be overridden by `set` directive, but CAN be overridden by config rules (rules have higher priority)
-- notifier: `notifier-command` and `notifier-include` directives for sidekick context injection (v0.2.5+)
-- pattern matching: happens after quote stripping by Parable parser
-- directives: only `ask` and `deny` support messages, `allow` does not
-- tool directives: `allow-edit` is the universal directive for all modification tools (Write, Edit, MultiEdit). Also supports `allow-read`, `ask-read`, `deny-read` for file access.
+## Config semantics
 
-## Technical Patterns
+- Last match wins.
+- Rules beat the SIMPLE_SAFE allowlist; `set` does not.
+- Patterns are matched after the Parable parser strips quotes.
+- A glob-free pattern matches as a prefix; `|` anchors it exactly.
+- Only `ask` and `deny` take a message. `allow` does not.
+- `allow-edit` covers Write, Edit and MultiEdit; `allow-read`/`ask-read`/`deny-read` cover Read.
 
-- context_flags: when delegating analysis, preserve outer context by combining with inner context_flags
-- context_flags: when creating Decision objects, explicitly pass context_flags parameter (don't rely on defaults)
-- context_flags: when handlers delegate via Classification, preserve remote flag by returning Classification(..., remote=ctx.remote)
-- remote mode: container/ssh commands should NOT expand paths against host cwd - use literal paths when remote=True
-- type changes: when changing field types in dataclasses, update ALL consumers systematically (handlers, analyzer, tests)
-- optional sets: use truthiness (`if value`) not identity (`if value is not None`) for optional frozensets - empty set is falsy but not None
-- banned modules: avoid `shlex`; use `dippy.core.parser.tokenize` for bash-compatible tokenization
-- suggestion field: use `" ".join(tokens)` for output formatting (not `shlex.join` — shlex is banned; space-join is sufficient for allow-rule suggestions where fnmatch handles patterns)
-- pi-mono: use `deliverAs: "followUp"` for agent-initiated turns to prevent collisions with user input
-- notifier: `agent_end` hook enables long-polling idle behaviors with `--idle` flag
+## Landmines
 
-## Communication
+- `shlex` is banned. Use `dippy.core.parser.tokenize`.
+- Never import inside a function.
+- Never maintain a list that duplicates something derivable from code (e.g. `BUILTIN_COMMANDS`).
+- Pass `context_flags` explicitly when constructing `Decision`; when a handler
+  delegates via `Classification`, carry `remote=ctx.remote` through.
+- `remote=True` means paths are literal — never expand them against the host cwd.
+- Prefer the native matchers (`match_read`, `match_edit`) over simulating a bash command.
+- Keep `pi_wrapper.py` in sync with `dippy.py` for logging, agent identification and tool handling.
+- pi-mono agent-initiated turns need `deliverAs: "followUp"`, or they collide with user input.
+- Rotated log files are named for yesterday; the active file keeps the current name.
+- Adding a directive? Update the regex in `editors/vscode/syntaxes/dippy.tmLanguage.json` by hand.
 
-- communication: ALWAYS explain the intended change and the reasoning behind it FIRST. Wait for user approval before modifying any files.
-- communication: Czech phrases signal STOP - "kurva" (fundamental error requiring correction), "musi byt" (non-negotiable requirement), "nemam cas na pokusy" (no experiments allowed, research first)
+## Documentation
+
+`README.md` owns user-facing features, `docs/config.md` owns the reference.
+Adding tool support also touches `pi-extension/README.md` and `docs/hook-systems/`.
 
 ## Git
 
-- remotes: `upstream`=ldayton/Dippy, `origin`=fork (orgoj/Dippy), `nickdaview`, `tony`, `temathe`=contributors
-- attribution: when documenting fork features, run `git remote -v` first, use `git log --all --source` for commit origins
-- operations: always check `git status` first to detect interrupted states
-- merges: use worktrees for large upstream merges (see skill: safe-upstream-merge)
-- merges: use fast-forward (`--ff-only`) for branch synchronization
-- workflow: dippy is installed via `uv tool install --force .` from this repo (no dev worktree anymore)
-- commits: run `just test` BEFORE committing - NON-NEGOTIABLE, never commit failing tests or skip this step
-- commits: bump version (see Version Management) BEFORE committing a feat: or fix: - user should never have to ask
-- commits: use conventional format (feat:, fix:, chore:, docs:) with Co-Authored-By trailer
-- commits: push immediately after commit when user requests
+- Remotes: `upstream`=ldayton/Dippy, `origin`=fork (orgoj/Dippy); `nickdaview`, `tony`, `temathe` are contributors.
+- Conventional commits (`feat:`, `fix:`, `chore:`, `docs:`) with a `Co-Authored-By` trailer.
+- Run `just test` before committing. Never commit a red suite.
+- Bump the version before a `feat:` or `fix:` — the user should never have to ask.
+  Both `src/dippy/__init__.py` and `pyproject.toml`, then `uv lock`, then move
+  `CHANGELOG.md`'s `[Unreleased]` entries under the new heading.
+  (`src/dippy/dippy.py` reads `__version__` dynamically.)
+- Large upstream merges go in a worktree (skill: safe-upstream-merge). Run the
+  suite immediately after the merge to get a baseline before assuming breakage.
+- Verify feature claims against `git diff` and `git log --all --source` before
+  writing them down.
 
-## Merge Process
+## Working with the user
 
-- upstream merges: run tests IMMEDIATELY after merge to baseline - don't assume systematic issues
-- verification: create merge report with git hash/date in filename (docs/orgoj/merge_report_YYYY-MM-DD.md)
-- verification: verify README claims against actual code using git diff and grep - don't claim features without evidence
-- context: use git log --all --source to verify commit origins before attributing features
-
-## Upstream
-
-Read [README.md](README.md) for an overview.
-
-Configuration docs: [../Dippy.wiki/Configuration.md](../Dippy.wiki/Configuration.md)
-
-<!-- bv-agent-instructions-v1 -->
-
----
-
-## Beads Workflow Integration
-
-This project uses [beads_viewer](https://github.com/Dicklesworthstone/beads_viewer) for issue tracking. Issues are stored in `.beads/` and tracked in git.
-
-### Essential Commands
-
-```bash
-# View issues (launches TUI - avoid in automated sessions)
-bv
-
-# CLI commands for agents (use these instead)
-br ready              # Show issues ready to work (no blockers)
-br list --status=open # All open issues
-br show <id>          # Full issue details with dependencies
-br create --title="..." --type=task --priority=2
-br update <id> --status=in_progress
-br close <id> --reason="Completed"
-br close <id1> <id2>  # Close multiple issues at once
-br sync               # Commit and push changes
-```
-
-### Workflow Pattern
-
-1. **Start**: Run `br ready` to find actionable work
-2. **Claim**: Use `br update <id> --status=in_progress`
-3. **Work**: Implement the task
-4. **Complete**: Use `br close <id>`
-5. **Sync**: Always run `br sync` at session end
-
-### Key Concepts
-
-- **Dependencies**: Issues can block other issues. `br ready` shows only unblocked work.
-- **Priority**: P0=critical, P1=high, P2=medium, P3=low, P4=backlog (use numbers, not words)
-- **Types**: task, bug, feature, epic, question, docs
-- **Blocking**: `br dep add <issue> <depends-on>` to add dependencies
-
-### Session Protocol
-
-**Before ending any session, run this checklist:**
-
-```bash
-git status              # Check what changed
-git add <files>         # Stage code changes
-br sync                 # Commit beads changes
-git commit -m "..."     # Commit code
-br sync                 # Commit any new beads changes
-git push                # Push to remote
-```
-
-### Best Practices
-
-- Check `br ready` at session start to find available work
-- Update status as you work (in_progress → closed)
-- Create new issues with `br create` when you discover tasks
-- Use descriptive titles and set appropriate priority/type
-- Always `br sync` before ending session
-
-<!-- end-bv-agent-instructions -->
+- Explain the intended change and the reasoning first; wait for approval before editing.
+- Implement the stated requirement literally. Do not simplify it without asking.
+- "Explain this" is not "change this."
+- Wait for explicit confirmation before `ExitPlanMode`.
+- Fix only confirmed bugs. If a change touches more than five files, get evidence first.
