@@ -193,7 +193,7 @@ set deny-format-pi "TEST_DENY: {command}|{reason}"
             input=json.dumps(input_data),
             capture_output=True,
             text=True,
-            cwd="/home/michael/work/ai/CLAUDE/TOOLS/dippy-dev",
+            cwd=str(Path(__file__).parent.parent),
             env={**{"DIPPY_CONFIG": str(config_file), "PYTHONPATH": "src"}},
         )
 

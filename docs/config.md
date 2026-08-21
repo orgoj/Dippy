@@ -255,21 +255,37 @@ by it never matches (fail-closed).
 Define your own wrapper commands with the `wrapper` directive:
 
 ```
-wrapper <command_name> [subcommand_trigger] [target_flag]
+wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag>] [--context-first]
 ```
+
+| Option | Meaning |
+|--------|---------|
+| `--cmd <trigger>` | Subcommand after which the inner command starts (e.g. `run`, `exec`) |
+| `--flag <target_flag>` | Flag whose value is the destination (e.g. `-t`) |
+| `--context <flag>` | Flag whose value is added to the context flags |
+| `--context-first` | First positional arg is the destination and becomes a context flag |
 
 **Example:**
 
 ```
-# Basic wrapper (first non-option is destination)
-wrapper wrap
+# Everything after the wrapper name is the inner command
+wrapper rtk
 
-# Wrapper with subcommand (inner command starts after 'run')
-wrapper cca-tmux-cli run
+# Inner command starts after 'run'
+wrapper tokf --cmd run
 
-# Wrapper with subcommand and target flag (target follows '-t')
-wrapper cca-tmux-cli run -t
+# 'docker -t NAME exec CMD' - target after -t, inner command after 'exec'
+wrapper docker --cmd exec --flag -t
+
+# 'cca-tmux-cli -t SESSION run CMD' - SESSION becomes a context flag
+wrapper cca-tmux-cli --cmd run --context -t
+
+# 'ssh SERVER CMD' - first positional arg becomes a context flag
+wrapper ssh --context-first
 ```
+
+The legacy positional form (`wrapper NAME trigger -flag`) is still parsed for
+backwards compatibility and implies `--context-first`.
 
 **Usage:**
 
@@ -306,6 +322,15 @@ allow [cca-tmux-cli,l2] ls *
 3. **Context flags**: Sets both the wrapper name (`cca-tmux-cli`) and destination (`l2`) as flags.
 4. **Recursive analysis**: Analyzes the `inner_command` recursively.
 5. **Remote mode**: Inner commands are automatically analyzed with `remote=True`, which skips local path checks (ideal for SSH/containers).
+
+**Wrapper flags only exist once the trigger is found.** `cca-tmux-cli -t host read`
+(no `run`) is analyzed as a plain command, so `[cca-tmux-cli]` rules do not apply
+to it - subcommands of the wrapper itself need ordinary positional rules.
+
+**sudo inside a wrapper must be spelled out.** With a reset rule like
+`ask [wrap] *`, a rule `allow [wrap,sudo] journalctl *` never fires - the reset
+matches the `sudo` token before delegation reaches the inner command. Write
+`allow [wrap] sudo journalctl *` instead.
 
 Custom wrappers merge via set union across config scopes (user + project).
 Later definitions of the same wrapper name override earlier ones.
@@ -400,6 +425,21 @@ For `allow`, `ask`, `deny` rules, patterns match the full command string:
 ```
 allow python ?*   # matches 'python foo', NOT bare 'python'
 allow python *    # matches both 'python foo' AND bare 'python'
+```
+
+**Patterns without globs match as a prefix.** `allow git status` also matches
+`git status --short` - and anything else that follows. Convenient for simple
+commands, dangerous when the extra arguments change what actually runs:
+
+```
+allow cca-tmux-cli list        # also allows: cca-tmux-cli list run "rm -rf /"
+```
+
+**Exact anchor `|`** disables prefix matching - the pattern must match the whole
+command:
+
+```
+allow cca-tmux-cli list|       # only the bare subcommand
 ```
 
 ### Path Patterns

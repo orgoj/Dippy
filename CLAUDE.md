@@ -41,6 +41,10 @@ just lint          # Lint (ruff check)
 just fmt           # Format (ruff format)
 just check         # All of the above in parallel — MUST PASS before committing
 
+**Known issue:** `just check` fails on 5 tests in `test_gemini_failopen.py` under
+xdist (global MODE state shared between workers). Sequential `just test` is green.
+Until fixed, `just test` is the gate before committing.
+
 ## Debugging Tools
 
 - `scripts/debug/check-path.py` — Verifies a specific file path against the active Dippy configuration. Useful for diagnosing why a `Read` or `Edit` operation is being blocked or asked.
@@ -65,6 +69,8 @@ just check         # All of the above in parallel — MUST PASS before committin
 - sources: check local repositories (~/work/ai/) before web searches or GitHub API calls
 - research: ALWAYS web search for current best practices before implementing unfamiliar configs/patterns - user has no patience for trial-and-error experiments
 - testing: use existing test suite (`just test`), never write adhoc tests
+- testing: `dippy --cmd --config X` still loads `~/.dippy/config` first (--config is an override, not a replacement) - isolate with `HOME=/tmp/empty` when verifying that a project config is self-contained
+- testing: verify new allow rules against a bypass attempt, not just the happy path (e.g. `wrapper sub run "rm -rf /"` for every wrapper subcommand rule)
 - testing: use fictional commands in config rule tests to avoid SIMPLE_SAFE allowlist interference
 - testing: always isolate tests from live config/system using tmp_path, monkeypatch, and explicit isolation verification tests
 - testing: TDD is mandatory for ALL changes including "small" bug fixes - write failing test FIRST, then implement fix
@@ -123,13 +129,14 @@ just check         # All of the above in parallel — MUST PASS before committin
 
 ## Git
 
-- remotes: `original`=upstream (ldayton/Dippy), `origin`=fork (orgoj/Dippy), `tony`=contributor (tony-nekola-silk)
+- remotes: `upstream`=ldayton/Dippy, `origin`=fork (orgoj/Dippy), `nickdaview`, `tony`, `temathe`=contributors
 - attribution: when documenting fork features, run `git remote -v` first, use `git log --all --source` for commit origins
 - operations: always check `git status` first to detect interrupted states
 - merges: use worktrees for large upstream merges (see skill: safe-upstream-merge)
 - merges: use fast-forward (`--ff-only`) for branch synchronization
-- workflow: uses git worktrees for isolated development (e.g., `orgoj-dev` worktree for development)
+- workflow: dippy is installed via `uv tool install --force .` from this repo (no dev worktree anymore)
 - commits: run `just test` BEFORE committing - NON-NEGOTIABLE, never commit failing tests or skip this step
+- commits: bump version (see Version Management) BEFORE committing a feat: or fix: - user should never have to ask
 - commits: use conventional format (feat:, fix:, chore:, docs:) with Co-Authored-By trailer
 - commits: push immediately after commit when user requests
 
