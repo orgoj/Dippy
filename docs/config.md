@@ -327,6 +327,21 @@ allow [cca-tmux-cli,l2] ls *
 (no `run`) is analyzed as a plain command, so `[cca-tmux-cli]` rules do not apply
 to it - subcommands of the wrapper itself need ordinary positional rules.
 
+To cut one agent off from a wrapper entirely, both halves of that split matter.
+A `[wrapper]` rule reaches only what follows the trigger, so it leaves the
+wrapper's own subcommands open. A positional rule on the wrapper name matches
+the invocation itself and therefore covers every subcommand, the trigger
+included:
+
+```
+deny [$AGENT=mail,cca-tmux-cli] *   # only `run "..."` - list and read stay open
+deny [$AGENT=mail] cca-tmux-cli *   # the whole tool, run included
+```
+
+**A wrapper is recognised by its bare name.** `/usr/local/bin/wrap host free -h`
+is not unwrapped, so neither the wrapper flags nor a `wrap *` rule apply to it -
+it falls through to whatever matches the full path, usually `ask`.
+
 **sudo inside a wrapper must be spelled out.** With a reset rule like
 `ask [wrap] *`, a rule `allow [wrap,sudo] journalctl *` never fires - the reset
 matches the `sudo` token before delegation reaches the inner command. Write
@@ -441,6 +456,20 @@ command:
 ```
 allow cca-tmux-cli list|       # only the bare subcommand
 ```
+
+**A pattern token containing `/` is resolved against cwd - globs included.**
+This is what makes `allow node bin/*` expand to `allow node /cwd/bin/*`, but it
+also means a leading `*/` never matches an arbitrary absolute path: `*/tool`
+becomes `/cwd/*/tool`. Without a `/` the token is left alone, and `*` then
+crosses path separators normally:
+
+```
+deny *my-tool *     # matches /opt/x/my-tool arg
+deny */my-tool *    # does NOT match it - reads as /cwd/*/my-tool
+```
+
+A rule that silently never matches is the dangerous half of this: check a new
+`deny` against the command it is meant to stop before trusting it.
 
 ### Path Patterns
 
