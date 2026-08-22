@@ -1,4 +1,8 @@
 deny-edit .dippy*
 
+allow dippy *
 allow git *
 allow uv run *
+
+# DANGER
+allow uv run python -c *

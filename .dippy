@@ -13,29 +13,27 @@ deny .venv/bin/* *  "Use `uv`"
 deny python * "Use `uv run python`"
 deny python3 * "Use `uv run python`"
 deny python3 -m pytest * "Use: uv run python -m pytest ..."
+
 # deny uv run pytest *  "Use: uv run python -m pytest ..."
 # deny uv run python *  "Use: uv run python -m pytest ..."
-
 allow uv run python -m pytest *
 allow uv run python ./*
-allow pytest run *
-allow just *
 
-# DANGER
-allow uv run python -c *
+allow pytest run *
 
 allow DIPPY_CONFIG=$CONF PYTHONPATH=src python3 -m dippy.dippy *
 
 
 #---- Just ----#
-allow just check *
-allow just fmt *
-allow just lint *
-allow just test *
+allow just *
+# allow just check *
+# allow just fmt *
+# allow just lint *
+# allow just test *
 deny just -C "Don't use -C, use the target directly"
+
+allow ruff *
 
 #deny git worktree add * "Use relative path: git worktree add .worktrees/..."
 #allow git worktree add .worktrees/**
-
 allow git add *
-allow ruff *
