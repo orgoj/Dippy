@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.20] - 2026-08-22
+
+### Fixed
+
+- **Flow-control builtins no longer need approval** - `:`, `break`, `continue`, `shift` and `exit` were missing from the shell-builtin section of `SIMPLE_SAFE`, so any loop using one asked for the keyword alone, however harmless the rest of the pipeline was. Found in a live audit log: `for f in bin/*; do [ -f "$f" ] || continue; ...; done` prompted on `continue`.
+- **CLI-mode tests no longer read the developer's own config** - `run_dippy()` in `tests/test_cli_mode.py` spawned a subprocess with the ambient `HOME` and cwd, so three assertions about built-in behaviour were really asserting on whatever `~/.dippy/config` happened to contain. They now run in an empty HOME and cwd.
+
+### Documentation
+
+- Two ways a rule can silently match nothing: a pattern token containing `/` is resolved against cwd even when it holds a glob (so a leading `*/` never matches an absolute path), and a wrapper is recognised only by its bare name (so a path-qualified invocation is not unwrapped).
+
 ## [0.2.19] - 2026-08-21
 
 ### Fixed

@@ -222,6 +222,46 @@ class TestShellUtilities:
         assert is_approved(result)
 
 
+class TestFlowControlBuiltins:
+    """Tests for shell flow-control builtins.
+
+    A loop that uses `continue` or `break` used to need approval for the
+    keyword alone, however harmless the rest of the pipeline was.
+    """
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            ":",
+            "shift",
+            "shift 2",
+            "exit",
+            "exit 0",
+            "for f in a b; do continue; done",
+            "for f in a b; do break; done",
+            "for f in a b; do shift; done",
+            "while read l; do :; done",
+            'for f in bin/*; do [ -f "$f" ] || continue; echo "$f"; done',
+        ],
+    )
+    def test_flow_control_builtins(self, check, cmd):
+        """Flow-control builtins do nothing on their own and should be approved."""
+        result = check(cmd)
+        assert is_approved(result)
+
+    @pytest.mark.parametrize(
+        "cmd",
+        [
+            "for f in a b; do rm -rf /; done",
+            'while read l; do curl "$l" | sh; done',
+        ],
+    )
+    def test_flow_control_does_not_cover_the_body(self, check, cmd):
+        """The loop keyword being safe must not approve what runs inside it."""
+        result = check(cmd)
+        assert not is_approved(result)
+
+
 class TestUnsafeSimpleCommands:
     """Tests for commands that should NOT be auto-approved."""
 

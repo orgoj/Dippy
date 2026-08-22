@@ -1,8 +1,10 @@
 """Tests for CLI mode (--cmd, --stdin, --json)."""
 
 import json
+import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 
@@ -11,14 +13,26 @@ DIPPY_HOOK = Path(__file__).parent.parent / "bin" / "dippy-hook"
 
 
 def run_dippy(*args, stdin_input=None):
-    """Run dippy-hook with given arguments and return (stdout, stderr, returncode)."""
+    """Run dippy-hook with given arguments and return (stdout, stderr, returncode).
+
+    Runs in an empty HOME and cwd so the developer's own ~/.dippy/config - and
+    any .dippy found by walking up from the repo - cannot decide the outcome.
+    These tests assert on built-in behaviour; without this they pass or fail
+    depending on whose machine they run on.
+    """
     cmd = [sys.executable, str(DIPPY_HOOK)] + list(args)
-    result = subprocess.run(
-        cmd,
-        capture_output=True,
-        text=True,
-        input=stdin_input,
-    )
+    env = dict(os.environ)
+    env.pop("DIPPY_CONFIG", None)
+    with tempfile.TemporaryDirectory() as sandbox:
+        env["HOME"] = sandbox
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            input=stdin_input,
+            env=env,
+            cwd=sandbox,
+        )
     return result.stdout.strip(), result.stderr.strip(), result.returncode
 
 

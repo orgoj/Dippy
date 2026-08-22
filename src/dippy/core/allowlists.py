@@ -236,6 +236,11 @@ SIMPLE_SAFE = frozenset(
         # === Shell Builtins & Utilities ===
         "true",  # return success
         "false",  # return failure
+        ":",  # no-op
+        "break",  # leave a loop
+        "continue",  # next loop iteration
+        "shift",  # drop positional parameters
+        "exit",  # end the shell
         "getopt",  # parse command options
         "getopts",  # parse command options (shell builtin)
         "shopt",  # set/unset shell options (session-local)
