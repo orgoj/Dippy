@@ -6,6 +6,7 @@ Delegates to inner command check with 'sudo' wrapper context.
 """
 
 from dippy.cli import Classification, HandlerContext
+from dippy.core.bash import bash_join
 
 COMMANDS = ["sudo", "doas", "pkexec"]
 
@@ -67,8 +68,10 @@ def classify(ctx: HandlerContext) -> Classification:
     if i >= len(tokens):
         return Classification("ask", description=f"{base} (no command)")
 
-    # Join remaining tokens as the command
-    inner_cmd = " ".join(tokens[i:])
+    # Join remaining tokens as the command. sudo execs argv directly, so a
+    # quoted metacharacter is an argument — re-quote it instead of letting it
+    # become syntax again.
+    inner_cmd = bash_join(tokens[i:])
 
     return Classification(
         "delegate",

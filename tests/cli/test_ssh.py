@@ -95,3 +95,21 @@ class TestSshWrapperContext:
         result = classify(HandlerContext(["ssh", "host"]))
         assert result.action == "ask"
         assert result.remote is False
+
+
+class TestSshJoinsWithoutRequoting:
+    """ssh must NOT re-quote the remote command.
+
+    Unlike sudo, env or uv run, ssh concatenates its arguments with spaces
+    and hands the result to a remote *shell*. The remote metacharacters are
+    syntax, so re-quoting the tokens would hide a compound command from
+    analysis. This is why ssh keeps a plain join.
+    """
+
+    def test_remote_compound_is_analysed_as_two_commands(self, check):
+        result = check("ssh host 'ls; pwd'")
+        assert is_approved(result), "both remote commands are safe"
+
+    def test_remote_compound_hides_nothing(self, check):
+        result = check("ssh host 'ls; rm -rf /'")
+        assert needs_confirmation(result), "the remote rm must still be seen"

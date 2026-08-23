@@ -32,3 +32,15 @@ def test_command(check, command: str, expected: bool):
         assert is_approved(result), f"Expected approve: {command}"
     else:
         assert needs_confirmation(result), f"Expected confirm: {command}"
+
+
+class TestCaffeinateQuoting:
+    """Delegation must preserve the shell quoting of the inner command."""
+
+    def test_paren_argument_does_not_break_parsing(self, check):
+        result = check("caffeinate -i echo '(a)'")
+        assert is_approved(result), "quoted parens must not produce a parse error"
+
+    def test_semicolon_argument_is_not_a_command_separator(self, check):
+        result = check("caffeinate -i echo 'a;zonk'")
+        assert is_approved(result), "quoted ';' must not introduce a second command"

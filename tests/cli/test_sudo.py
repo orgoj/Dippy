@@ -92,3 +92,19 @@ class TestSudoWrapperContext:
         result = classify(HandlerContext(["sudo", "-i"]))
         assert result.action == "ask"
         assert result.wrapper_context is None
+
+
+class TestSudoQuoting:
+    """Delegation must preserve the shell quoting of the inner command.
+
+    sudo execs argv directly — it does not run a shell — so a quoted
+    metacharacter is an argument, not syntax.
+    """
+
+    def test_paren_argument_does_not_break_parsing(self, check):
+        result = check("sudo echo '(a)'")
+        assert is_approved(result), "quoted parens must not produce a parse error"
+
+    def test_semicolon_argument_is_not_a_command_separator(self, check):
+        result = check("sudo echo 'a;zonk'")
+        assert is_approved(result), "quoted ';' must not introduce a second command"

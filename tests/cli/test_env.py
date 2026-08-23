@@ -58,3 +58,15 @@ def test_command(check, command: str, expected: bool) -> None:
         assert is_approved(result), f"Expected approved for: {command}"
     else:
         assert needs_confirmation(result), f"Expected confirmation for: {command}"
+
+
+class TestEnvQuoting:
+    """Delegation must preserve the shell quoting of the inner command."""
+
+    def test_paren_argument_does_not_break_parsing(self, check):
+        result = check("env FOO=1 echo '(a)'")
+        assert is_approved(result), "quoted parens must not produce a parse error"
+
+    def test_semicolon_argument_is_not_a_command_separator(self, check):
+        result = check("env FOO=1 echo 'a;zonk'")
+        assert is_approved(result), "quoted ';' must not introduce a second command"

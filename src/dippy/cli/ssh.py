@@ -89,7 +89,10 @@ def classify(ctx: HandlerContext) -> Classification:
         # No command after --
         return Classification("ask", description=f"ssh {host}")
 
-    # Join remaining tokens as the remote command
+    # Join remaining tokens as the remote command. Unlike sudo or env, ssh
+    # concatenates its arguments with spaces and hands the result to a remote
+    # shell, so the metacharacters are syntax there. Do not use bash_join() —
+    # re-quoting would hide a remote compound command from analysis.
     remote_cmd = " ".join(tokens[i:])
 
     return Classification(

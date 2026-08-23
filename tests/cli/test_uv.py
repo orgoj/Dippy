@@ -212,3 +212,22 @@ class TestUvRunDelegation:
         config = Config(rules=[Rule("allow", "python *")])
         result = check("uv run --with requests python script.py", config=config)
         assert is_approved(result), "uv run with flags should still delegate"
+
+
+class TestUvRunQuoting:
+    """Delegation must preserve the shell quoting of the inner command.
+
+    uv run executes argv directly, so an argument that contains shell
+    metacharacters is data, not syntax. Rebuilding the inner command without
+    quotes turns that data back into syntax.
+    """
+
+    def test_paren_argument_does_not_break_parsing(self, check):
+        """A quoted paren stays an argument instead of becoming a subshell."""
+        result = check("uv run echo '(a)'")
+        assert is_approved(result), "quoted parens must not produce a parse error"
+
+    def test_semicolon_argument_is_not_a_command_separator(self, check):
+        """A quoted semicolon must not split the inner command in two."""
+        result = check("uv run echo 'a;zonk'")
+        assert is_approved(result), "quoted ';' must not introduce a second command"
