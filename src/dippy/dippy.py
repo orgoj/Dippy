@@ -41,6 +41,7 @@ from dippy.core.config import (
     configure_logging,
     load_config,
     log_decision,
+    Match,
     match_after_mcp,
     match_after_web,
     match_edit,
@@ -567,6 +568,21 @@ def is_mcp_tool(name: str) -> bool:
     return name.startswith("mcp__")
 
 
+def _rule_reason(match: Match) -> str:
+    """Describe the rule that matched, naming the file it came from.
+
+    Without the source a bare `[.dippy*]` reads the same whether the rule came
+    from `~/.dippy/config` or from a project `.dippy` that overrides it, and
+    finding out costs a grep through every config and everything they include.
+    A rule's own message is user-facing guidance, so it is left alone.
+    """
+    if match.message:
+        return match.message
+    if match.source:
+        return f"[{match.pattern} @ {match.source}]"
+    return f"[{match.pattern}]"
+
+
 def check_mcp_tool(tool_name: str, config: Config) -> dict:
     """Check if an MCP tool should be approved based on config rules.
 
@@ -580,7 +596,7 @@ def check_mcp_tool(tool_name: str, config: Config) -> dict:
     match = match_mcp(tool_name, config)
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
-    reason = match.message if match.message else f"[{match.pattern}]"
+    reason = _rule_reason(match)
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
         return approve(reason, config=config, tool_name=tool_name)
@@ -616,7 +632,7 @@ def check_web_tool(query: str, config: Config) -> dict:
     match = match_web(query, config)
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
-    reason = match.message if match.message else f"[{match.pattern}]"
+    reason = _rule_reason(match)
     log_decision(match.decision, reason, rule=match.pattern, agent=MODE)
     if match.decision == "allow":
         return approve(reason, config=config, tool_name="WebSearch")
@@ -693,7 +709,7 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
 
-    reason = match.message if match.message else f"[{match.pattern}]"
+    reason = _rule_reason(match)
     log_decision(
         match.decision,
         rule=match.pattern,

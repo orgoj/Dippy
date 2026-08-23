@@ -471,6 +471,27 @@ deny */my-tool *    # does NOT match it - reads as /cwd/*/my-tool
 A rule that silently never matches is the dangerous half of this: check a new
 `deny` against the command it is meant to stop before trusting it.
 
+**`/**/tool` is the form that matches every invocation.** A leading `/` anchors
+the pattern at the filesystem root instead of cwd, and `**` then covers both a
+relative and an absolute path:
+
+```
+allow /**/hcom list *   # matches ./target/debug/hcom, /home/u/.cargo/bin/hcom
+allow hcom list *       # matches the PATH binary - a separate rule
+```
+
+**`*` and `**` skip whole tokens, including subcommands.** Because `*` matches
+spaces, a glob in the middle of a pattern is a bypass surface: a rule meant to
+allow one read-only subcommand also allows a destructive one that happens to be
+followed by the right words.
+
+```
+allow hcom * agent show *    # also allows: hcom kill boom agent show x
+```
+
+Spell out the intervening tokens instead - one rule per option form is verbose
+but cannot be walked through.
+
 ### Path Patterns
 
 For redirect and file rules (`*-redirect`, `*-edit`, `*-mcp`), patterns match paths:
@@ -515,6 +536,13 @@ allow node bin/*
 ```
 
 If no rule matches, built-in handlers decide.
+
+Some of those handlers make rules unnecessary. `--help` and `-h` are approved
+whenever they are the last token of a command of at most four tokens, so
+`tool sub sub2 --help` needs no rule but the longer `tool --name X sub --help`
+does. `help`, `version` and `--version` are approved only as the single
+argument. `-c` or `-m` anywhere in the command disables all of this - what
+follows them is script input, not a flag.
 
 ## Command Rules
 
@@ -1180,6 +1208,8 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 **Log rotation:** Dippy automatically rotates audit logs daily. The current log is renamed to `audit-YYYY-MM-DD.log` (yesterday's date) on the first run after midnight. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
 **Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
+
+File, MCP and web rules name their origin in the decision reason - `[.dippy* @ /home/u/proj/.dippy]` - which tells you whether a user rule or a project rule won. The named file is the one that was loaded, so a rule reached through `include` is reported under the file that includes it.
 
 **Suggestion field:** When `set log_full` is enabled, ask decisions include a `suggestion` field in the audit log. This shows the env-stripped command (without `VAR=val` prefixes) that you can copy directly as an `allow` rule. Only command-matching asks have suggestions; redirect and substitution asks do not.
 

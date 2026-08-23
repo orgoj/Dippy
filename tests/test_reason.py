@@ -186,3 +186,64 @@ class TestCompoundCommands:
         cmd = "cat file | tee out\nrm foo"
         reason = get_reason(check(cmd))
         assert reason == "tee out, rm foo"
+
+
+class TestFileRuleReasonNamesItsSource:
+    """A file rule reason must say which config file the rule came from.
+
+    Without it the reason is a bare `[.dippy*]`, which reads exactly the same
+    whether the rule sits in the user's `~/.dippy/config` or in a project
+    `.dippy` that overrides it - and finding out costs a manual grep through
+    every config and every file they include.
+    """
+
+    @staticmethod
+    def _check(rule, tmp_path, tool="Edit"):
+        from dippy.core.config import Config
+        from dippy.dippy import check_file_tool
+
+        rules = {"edit_rules" if tool != "Read" else "read_rules": [rule]}
+        return get_reason(
+            check_file_tool(tool, str(tmp_path / "target"), Config(**rules), tmp_path)
+        )
+
+    def test_source_is_named(self, tmp_path):
+        from dippy.core.config import Rule
+
+        reason = self._check(
+            Rule("ask", f"{tmp_path}/*", source="/home/u/proj/.dippy"), tmp_path
+        )
+        assert "/home/u/proj/.dippy" in reason
+        assert f"{tmp_path}/*" in reason
+
+    def test_read_rules_too(self, tmp_path):
+        from dippy.core.config import Rule
+
+        reason = self._check(
+            Rule("deny", f"{tmp_path}/*", source="/home/u/.dippy/config"),
+            tmp_path,
+            tool="Read",
+        )
+        assert "/home/u/.dippy/config" in reason
+
+    def test_message_is_left_alone(self, tmp_path):
+        """A rule's own message is user-facing guidance - do not clutter it."""
+        from dippy.core.config import Rule
+
+        reason = self._check(
+            Rule(
+                "deny",
+                f"{tmp_path}/*",
+                message="secrets are off limits",
+                source="/home/u/proj/.dippy",
+            ),
+            tmp_path,
+        )
+        assert reason == "secrets are off limits"
+
+    def test_unsourced_rule_is_unchanged(self, tmp_path):
+        """Rules built in code carry no source; the reason stays as it was."""
+        from dippy.core.config import Rule
+
+        reason = self._check(Rule("ask", f"{tmp_path}/*"), tmp_path)
+        assert reason == f"[{tmp_path}/*]"

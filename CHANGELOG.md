@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.22] - 2026-08-23
+
+### Added
+
+- **File, MCP and web rule decisions name the config file they came from** - the reason was a bare `[.dippy*]`, which reads exactly the same whether the rule sits in `~/.dippy/config` or in a project `.dippy` that overrides it. It now reads `[.dippy* @ /home/u/proj/.dippy]`. Found the hard way: an `ask-edit .dippy*` in the user config appeared to be denying, and locating the project `deny-edit` that actually won - reached through an `include` - took a manual grep through four files. A rule's own message is user-facing guidance and is left untouched.
+
+### Documentation
+
+- `/**/tool` is the pattern form that matches every invocation path, relative and absolute alike - the reference documented the `*/tool` trap but never the way out.
+- `*` and `**` in a command pattern skip whole tokens, so a glob in the middle is a bypass surface: `allow hcom * agent show *` also allows `hcom kill boom agent show x`.
+- The built-in help/version approvals, so nobody writes rules that were never needed: `--help` and `-h` up to four tokens, `help`/`version`/`--version` only as the single argument, and none of it when `-c` or `-m` is present.
+
 ## [0.2.21] - 2026-08-23
 
 ### Fixed
