@@ -88,8 +88,6 @@ Adding tool support also touches `pi-extension/README.md` and `docs/hook-systems
   Both `src/dippy/__init__.py` and `pyproject.toml`, then `uv lock`, then move
   `CHANGELOG.md`'s `[Unreleased]` entries under the new heading.
   (`src/dippy/dippy.py` reads `__version__` dynamically.)
-- Large upstream merges go in a worktree (skill: safe-upstream-merge). Run the
-  suite immediately after the merge to get a baseline before assuming breakage.
 - Verify feature claims against `git diff` and `git log --all --source` before
   writing them down.
 
