@@ -281,7 +281,10 @@ HOOK_COMMANDS = {
         "hook_entry": {
             "version": 1,
             "hooks": {
-                "beforeShellExecution": [{"command": "dippy --cursor"}],
+                # preToolUse, not beforeShellExecution: the latter ignores an
+                # "allow" answer and prompts anyway. The matcher keeps Dippy
+                # out of every non-shell tool call.
+                "preToolUse": [{"matcher": "Shell", "command": "dippy --cursor"}],
                 "afterShellExecution": [{"command": "dippy --cursor"}],
             },
         },
@@ -841,6 +844,7 @@ def _print_hook_summary(agent: str, config: dict) -> None:
         ]
     elif agent in ("cursor", "windsurf"):
         hook_types = [
+            ("preToolUse", "preToolUse"),
             ("beforeShellExecution", "beforeShellExecution"),
             ("afterShellExecution", "afterShellExecution"),
         ]

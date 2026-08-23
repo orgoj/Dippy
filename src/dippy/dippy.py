@@ -84,8 +84,12 @@ def _detect_mode_from_flags() -> str | None:
 
 def _detect_mode_from_input(input_data: dict) -> str:
     """Auto-detect mode from input JSON structure."""
-    # Cursor: {"command": "...", "cwd": "..."}
+    # Cursor beforeShellExecution: {"command": "...", "cwd": "..."}
     if "command" in input_data and "tool_name" not in input_data:
+        return "cursor"
+
+    # Cursor preToolUse: same shape as Claude, but tagged with cursor_version
+    if "cursor_version" in input_data:
         return "cursor"
 
     # Claude/Gemini: {"tool_name": "...", "tool_input": {...}}
@@ -658,6 +662,7 @@ def handle_web_post_tool_use(query: str, config: Config) -> None:
 SHELL_TOOL_NAMES = frozenset(
     {
         "Bash",  # Claude Code
+        "Shell",  # Cursor preToolUse
         "bash",  # pi-mono
         "exec",  # moltbot
         "shell",  # Gemini CLI
@@ -1308,9 +1313,22 @@ def main():
         file_path = ""
 
         if MODE == "cursor":
-            # Cursor sends command directly (beforeShellExecution hook)
-            command = input_data.get("command", "")
-            tool_name = None
+            # preToolUse: Claude-shaped payload, shell tool is named "Shell",
+            # tool_input is an object.
+            # beforeShellExecution: the command sits at the top level.
+            # beforeMCPExecution: has tool_name too, but tool_input is a JSON
+            # *string* — it must keep falling through to the top-level command.
+            cursor_tool = input_data.get("tool_name")
+            cursor_input = input_data.get("tool_input")
+            if cursor_tool is not None and isinstance(cursor_input, dict):
+                if cursor_tool not in SHELL_TOOL_NAMES:
+                    print(json.dumps({}))
+                    return
+                tool_name = cursor_tool
+                command = cursor_input.get("command", "")
+            else:
+                command = input_data.get("command", "")
+                tool_name = None
         else:
             # Claude Code and Gemini CLI use tool_name/tool_input format
             tool_name = input_data.get("tool_name", "")

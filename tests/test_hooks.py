@@ -329,6 +329,23 @@ class TestHooksInstallUninstall:
         assert (tmp_path / ".codex" / "config.toml").exists()
         assert "hooks = true" in (tmp_path / ".codex" / "config.toml").read_text()
 
+    def test_install_cursor_uses_pre_tool_use(self, tmp_path):
+        """Cursor must be wired to preToolUse, not beforeShellExecution.
+
+        beforeShellExecution ignores an "allow" answer and prompts anyway,
+        which defeats the whole point of Dippy.
+        """
+        from dippy.cli.hooks import install
+
+        result = install(agent="cursor", global_config=False, cwd=str(tmp_path))
+        assert result == 0
+        config = json.loads((tmp_path / ".cursor" / "hooks.json").read_text())
+        hooks = config["hooks"]
+        assert "beforeShellExecution" not in hooks
+        assert hooks["preToolUse"] == [
+            {"matcher": "Shell", "command": "dippy --cursor"}
+        ]
+
     def test_install_claude_creates_hooks_config(self, tmp_path):
         from dippy.cli.hooks import install
 

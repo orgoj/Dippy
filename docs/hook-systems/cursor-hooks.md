@@ -102,6 +102,7 @@ Enable IntelliSense in Cursor settings:
 | Hook                   | Trigger                         | Can Block? | Can Message Agent?   |
 | ---------------------- | ------------------------------- | ---------- | -------------------- |
 | `beforeSubmitPrompt`   | Before prompt sent to LLM       | Yes        | No (beta limitation) |
+| `preToolUse`           | Before a tool runs (matchable)  | Yes        | Yes                  |
 | `beforeShellExecution` | Before shell command runs       | Yes        | Yes                  |
 | `afterShellExecution`  | After shell command completes   | No         | No                   |
 | `beforeMCPExecution`   | Before MCP tool invocation      | Yes        | Yes                  |
@@ -159,6 +160,46 @@ Enable IntelliSense in Cursor settings:
   "agent_message": "Sent to agent context"
 }
 ```
+
+### preToolUse
+
+A Claude-shaped hook. Unlike `beforeShellExecution` it honours an `allow`
+answer, so this is the one Dippy installs:
+
+```json
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      { "matcher": "Shell", "command": "dippy --cursor" }
+    ]
+  }
+}
+```
+
+**Input:**
+```json
+{
+  "cursor_version": "2.1.46",
+  "hook_event_name": "preToolUse",
+  "tool_name": "Shell",
+  "tool_input": { "command": "git status" },
+  "cwd": "/path/to/project"
+}
+```
+
+**Output:** Same as `beforeShellExecution`.
+
+**Caveats:**
+- `preToolUse` does not honour `ask` — an `ask` answer falls back to Cursor's
+  own approval prompt. `allow` and `deny` work.
+- `beforeShellExecution` is the opposite: `deny` works, `allow` is ignored and
+  Cursor prompts anyway. Installing both means the `allow` never takes effect,
+  so Dippy uses `preToolUse` alone.
+- Cursor's sandbox bypasses hook decisions entirely. Sandboxed commands run
+  regardless of the answer; only commands that need `required_permissions`
+  respect `allow` and `deny`.
+- The `matcher` keeps Dippy out of every non-shell tool call.
 
 ### afterShellExecution
 

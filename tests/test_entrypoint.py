@@ -202,6 +202,102 @@ class TestEndToEnd:
         assert "false *" in result.stderr.decode()
 
 
+class TestCursorHooks:
+    """Cursor speaks two hook protocols and Dippy has to answer both.
+
+    beforeShellExecution puts the command at the top level, but Cursor runs
+    its own approval prompt afterwards regardless of an "allow" answer.
+    preToolUse behaves like Claude's PreToolUse and honours "allow", so it is
+    the one worth wiring up — its payload wraps the command in tool_input and
+    names the tool "Shell".
+    """
+
+    def test_before_shell_execution_allows_safe_command(self):
+        input_data = {"command": "git status", "cwd": str(REPO_ROOT)}
+        result = run_hook(input_data, extra_env={"DIPPY_CURSOR": "1"})
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        output = json.loads(result.stdout)
+        assert output["permission"] == "allow"
+
+    def test_pre_tool_use_allows_safe_command(self):
+        input_data = {
+            "cursor_version": "2.0.0",
+            "tool_name": "Shell",
+            "tool_input": {"command": "git status"},
+            "cwd": str(REPO_ROOT),
+            "hook_event_name": "PreToolUse",
+        }
+        result = run_hook(input_data, extra_env={"DIPPY_CURSOR": "1"})
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        output = json.loads(result.stdout)
+        assert output["permission"] == "allow"
+
+    def test_pre_tool_use_asks_for_unknown_command(self):
+        input_data = {
+            "cursor_version": "2.0.0",
+            "tool_name": "Shell",
+            "tool_input": {"command": "zonk --wipe"},
+            "cwd": str(REPO_ROOT),
+            "hook_event_name": "PreToolUse",
+        }
+        result = run_hook(input_data, extra_env={"DIPPY_CURSOR": "1"})
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        output = json.loads(result.stdout)
+        assert output["permission"] == "ask"
+
+    def test_pre_tool_use_denies_via_config(self):
+        """A deny rule must still deny — the command never reaches the shell."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            cwd = Path(tmpdir)
+            (cwd / ".dippy").write_text('deny zonk * "not this one"\n')
+
+            input_data = {
+                "cursor_version": "2.0.0",
+                "tool_name": "Shell",
+                "tool_input": {"command": "zonk --wipe"},
+                "cwd": str(cwd),
+                "hook_event_name": "PreToolUse",
+            }
+            result = run_hook(
+                input_data, extra_env={"DIPPY_CURSOR": "1", "HOME": tmpdir}
+            )
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        output = json.loads(result.stdout)
+        assert output["permission"] == "deny"
+
+    def test_before_mcp_execution_still_checks_the_server_command(self):
+        """beforeMCPExecution carries tool_input as a JSON string, not an object.
+
+        It must keep using the top-level command, otherwise the preToolUse
+        branch would silently stop checking MCP server launches.
+        """
+        input_data = {
+            "cursor_version": "2.0.0",
+            "hook_event_name": "beforeMCPExecution",
+            "tool_name": "github__create_issue",
+            "tool_input": '{"title": "x"}',
+            "command": "zonk --serve",
+            "cwd": str(REPO_ROOT),
+        }
+        result = run_hook(input_data, extra_env={"DIPPY_CURSOR": "1"})
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        output = json.loads(result.stdout)
+        assert output["permission"] == "ask"
+
+    def test_pre_tool_use_ignores_non_shell_tools(self):
+        """A Cursor tool Dippy does not handle must pass through untouched."""
+        input_data = {
+            "cursor_version": "2.0.0",
+            "tool_name": "SomeCursorTool",
+            "tool_input": {"foo": "bar"},
+            "cwd": str(REPO_ROOT),
+            "hook_event_name": "PreToolUse",
+        }
+        result = run_hook(input_data, extra_env={"DIPPY_CURSOR": "1"})
+        assert result.returncode == 0, f"stderr: {result.stderr.decode()}"
+        assert json.loads(result.stdout) == {}
+
+
 class TestErrorHandling:
     """Test graceful handling of bad input."""
 

@@ -311,7 +311,7 @@ Dippy adapts its output format and behavior based on the agent:
 |-------|------|---------|--------------|
 | Claude Code | `--claude` | `DIPPY_CLAUDE=1` | ✅ |
 | Gemini CLI | `--gemini` | `DIPPY_GEMINI=1` | ✅ |
-| Cursor IDE | `--cursor` | `DIPPY_CURSOR=1` | ✅ |
+| Cursor IDE | `--cursor` | `DIPPY_CURSOR=1` | ✅ `preToolUse` |
 | Windsurf | `--windsurf` | `DIPPY_WINDSURF=1` | ✅ |
 | pi-mono | `--pi` | `DIPPY_PI=1` | extension |
 | Moltbot | `--moltbot` | `DIPPY_MOLTBOT=1` | extension |

@@ -212,6 +212,33 @@ def test_cursor_mode_detection(monkeypatch):
     assert _detect_mode_from_flags() == "cursor"
 
 
+def test_cursor_before_shell_execution_detected_from_input():
+    """beforeShellExecution sends the command at the top level, no tool_name."""
+    from dippy.dippy import _detect_mode_from_input
+
+    payload = {"command": "ls", "cwd": "/tmp"}
+    assert _detect_mode_from_input(payload) == "cursor"
+
+
+def test_cursor_pre_tool_use_detected_from_input():
+    """preToolUse looks like Claude's payload but carries cursor_version."""
+    from dippy.dippy import _detect_mode_from_input
+
+    payload = {
+        "cursor_version": "2.0.0",
+        "tool_name": "Shell",
+        "tool_input": {"command": "ls"},
+    }
+    assert _detect_mode_from_input(payload) == "cursor"
+
+
+def test_cursor_shell_tool_is_a_shell_tool():
+    """Cursor's preToolUse names the shell tool 'Shell'."""
+    from dippy.dippy import SHELL_TOOL_NAMES
+
+    assert "Shell" in SHELL_TOOL_NAMES
+
+
 # === Claude Flag Tests ===
 
 
