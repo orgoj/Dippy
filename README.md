@@ -23,6 +23,7 @@
 - **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
+- **`cp`/`mv` through redirect rules** — destinations (and `mv` sources, which get removed) are checked against `allow-redirect`/`ask-redirect`/`deny-redirect`, so `deny-redirect **/.dippy` also stops `mv .dippy /tmp/saved`
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Notifier (Sidekick)** — `set notifier-command "CMD"` for external notifications (mail check). Supports long-polling via `--idle` in stop hooks. Use `set notifier-include "tool1, tool2"` to limit when it triggers.
 - **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input

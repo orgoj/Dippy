@@ -610,6 +610,22 @@ deny-redirect /etc/** "System config is off-limits"
 
 Note: `**` is only supported in redirect rules. Command rules use standard fnmatch globs.
 
+### What redirect rules cover
+
+Besides `>`, `>>` and `2>`, redirect rules also govern commands that write
+files through their arguments: `tee`, `find -fprint`, `sort -o`, and `cp`/`mv`.
+
+For `cp` and `mv` the destination is checked. `mv` also removes its sources, so
+those paths are checked too — a `deny-redirect **/.dippy` stops
+`mv .dippy /tmp/saved`, not just a write into `.dippy`.
+
+A destination directory is expanded to the paths actually written
+(`cp -t /tmp a b` → `/tmp/a`, `/tmp/b`). Dippy never stats the filesystem, so a
+bare `cp a /tmp` is taken at face value and asks; write `cp a /tmp/` when you
+mean the directory.
+
+Without a matching rule these commands ask, which is what they did before.
+
 ## Option Rules
 
 Option rules provide fine-grained control over specific subcommands or flags. Unlike normal pattern matching, option rules match if:
