@@ -40,7 +40,9 @@ commands with an empty HOME, so the live config cannot leak into the result.
 - TDD is mandatory, including one-line bug fixes: failing test first.
 - **A wrong rule is a security bug.** Test every new `allow` against a bypass
   attempt, not just the happy path — e.g. `wrapper sub run "rm -rf /"` for each
-  wrapper subcommand rule.
+  wrapper subcommand rule. Run the bypass through `dippy --cmd` or
+  `scripts/debug/try-rules.sh`, never by executing it. The whole point of the
+  test is that the command is destructive.
 - Use fictional command names in rule tests; real ones hit the SIMPLE_SAFE allowlist.
 - Isolate from the live system with `tmp_path` and `monkeypatch`.
 - `--config X` is an override, not a replacement — `~/.dippy/config` still loads.

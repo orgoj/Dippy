@@ -676,6 +676,21 @@ deny-opt "docker run" --volume /:/host
 
 **Important:** Item matching uses **exact word-boundary** matching. `--force` does NOT match `--force-with-lease`. For prefix matching, use normal glob rules like `deny "git push *--force*"`.
 
+**Items match whole tokens, not words inside a quoted argument.** A rule meant to
+catch a keyword in a query or a script body silently matches nothing:
+
+```
+deny-opt duckdb COPY    # does NOT match: duckdb -readonly db.db "COPY (SELECT 1) TO '/x'"
+```
+
+The query is a single token once the parser strips the quotes, and an item is
+compared against whole tokens. To reach inside it, use a normal rule with `**`
+and a glob; character classes are how you get case-insensitivity:
+
+```
+ask duckdb ** *[Cc][Oo][Pp][Yy]*
+```
+
 **Mixing with normal rules:**
 
 Option rules mix with normal `allow`/`ask`/`deny` rules. Last match wins:
