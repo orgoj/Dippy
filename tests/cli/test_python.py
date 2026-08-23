@@ -1442,3 +1442,116 @@ class TestInlineCodeAnalysis:
 
         result = classify(ctx)
         assert result.action == "ask"
+
+
+class TestPythonAllowSymbol:
+    """`python-allow-symbol module.symbol` narrows a module-wide allowance.
+
+    `sys` is dangerous as a whole (sys.exit, sys.modules), but a single name
+    like sys.stdin is not. The allowance covers exactly `from sys import
+    stdin` — never `import sys`, never another name from the same module.
+    """
+
+    def _classify(self, code: str, **config_kwargs):
+        from dippy.cli import HandlerContext
+        from dippy.cli.python import classify
+        from dippy.core.config import Config
+
+        ctx = HandlerContext(
+            tokens=["python3", "-c", code], config=Config(**config_kwargs)
+        )
+        return classify(ctx)
+
+    def test_allowed_symbol_is_approved(self):
+        result = self._classify(
+            "from sys import stdin\nprint(stdin.isatty())",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "allow"
+
+    def test_alias_of_allowed_symbol_is_approved(self):
+        result = self._classify(
+            "from sys import stdin as s\nprint(s.isatty())",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "allow"
+
+    def test_other_symbol_from_same_module_still_asks(self):
+        result = self._classify(
+            "from sys import exit\nexit(1)",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+    def test_every_name_in_a_multi_import_must_be_allowed(self):
+        result = self._classify(
+            "from sys import stdin, argv\nprint(stdin, argv)",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+    def test_plain_import_of_the_module_still_asks(self):
+        result = self._classify(
+            "import sys\nprint(sys.stdin)",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+    def test_wildcard_import_still_asks(self):
+        result = self._classify(
+            "from sys import *",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+    def test_symbol_from_another_module_still_asks(self):
+        result = self._classify(
+            "from socket import stdin",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+    def test_explicit_deny_module_beats_the_symbol_allowance(self):
+        """A deny the user wrote themselves must win — this is the bypass test."""
+        result = self._classify(
+            "from sys import stdin",
+            python_allow_symbols=["sys.stdin"],
+            python_deny_modules=["sys"],
+        )
+        assert result.action == "ask"
+
+    def test_symbol_allowance_works_for_an_unknown_module(self):
+        result = self._classify(
+            "from zonklib import helper\nprint(helper)",
+            python_allow_symbols=["zonklib.helper"],
+        )
+        assert result.action == "allow"
+
+    def test_relative_import_is_never_the_allowed_module(self):
+        """`from .sys import stdin` imports a local file, not the stdlib."""
+        result = self._classify(
+            "from .sys import stdin",
+            python_allow_symbols=["sys.stdin"],
+        )
+        assert result.action == "ask"
+
+
+class TestRelativeImports:
+    """A relative import names a local file, never the stdlib module."""
+
+    def _classify(self, code: str):
+        from dippy.cli import HandlerContext
+        from dippy.cli.python import classify
+        from dippy.core.config import Config
+
+        ctx = HandlerContext(tokens=["python3", "-c", code], config=Config())
+        return classify(ctx)
+
+    def test_relative_import_of_safe_module_name_asks(self):
+        """`from .json import loads` must not inherit json's safe status."""
+        result = self._classify("from .json import loads\nprint(loads)")
+        assert result.action == "ask"
+
+    def test_absolute_import_of_safe_module_is_still_approved(self):
+        result = self._classify("from json import loads\nprint(loads)")
+        assert result.action == "allow"

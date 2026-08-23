@@ -747,40 +747,73 @@ set deny-format-pi "PI-specific format: {reason}"
 set deny-format-claude "Claude-specific format: {reason}"
 ```
 
-# Python module safety lists
-set python-allow-module numpy       # whitelist module for python -c analysis
-set python-allow-module pandas      # one module per directive, repeatable
-set python-deny-module requests     # block module even if not in default dangerous list
-```
-
 Settings use kebab-case or snake_case interchangeably.
 
 ### Python Module Directives
 
-When `python -c 'code'` is analyzed for safety, Dippy checks imports against built-in safe and dangerous module lists. These directives let you customize those lists:
+When `python -c 'code'` or a Python script is analyzed for safety, Dippy checks
+imports against built-in safe and dangerous module lists. These directives let
+you customize those lists.
+
+They are **standalone directives, not settings** — `set python-allow-module` is
+an unknown setting and gets skipped with a warning.
 
 ```
-set python-allow-module <module>    # consider module safe in -c code
-set python-deny-module <module>     # consider module dangerous in -c code
+python-allow-module <module>    # consider module safe
+python-deny-module <module>     # consider module dangerous
+python-allow-symbol <module>.<symbol>   # allow one name from a module
 ```
 
 - One module per directive; repeat to add multiple modules.
-- Dotted names are supported: `set python-allow-module numpy.linalg`
+- Dotted names are supported: `python-allow-module numpy.linalg`
 - `python-allow-module` takes precedence over `python-deny-module` if both match.
 - Allow overrides the built-in dangerous list; deny overrides the built-in safe list.
+- Lists accumulate across configs: a project `.dippy` extends the global list
+  instead of replacing it.
 
 **Example — allow data science tools:**
 ```
-set python-allow-module numpy
-set python-allow-module pandas
-set python-allow-module scipy
+python-allow-module numpy
+python-allow-module pandas
+python-allow-module scipy
 ```
 
 **Example — block specific modules:**
 ```
-set python-deny-module requests
-set python-deny-module http.client
+python-deny-module requests
+python-deny-module http.client
 ```
+
+#### `python-allow-symbol`
+
+Allows exactly one name from a module that would otherwise be rejected — useful
+when the module as a whole is too broad to trust:
+
+```
+python-allow-symbol sys.stdin
+```
+
+That approves `from sys import stdin` (aliases included:
+`from sys import stdin as s`), while everything else about `sys` stays as it
+was. Specifically, these still need approval:
+
+- `import sys` — a plain module import, not a symbol import
+- `from sys import exit` — a name that was not allowed
+- `from sys import stdin, argv` — every name in the import must be allowed
+- `from sys import *` — wildcards are never allowed
+- `from .sys import stdin` — a relative import reads a local file, not the stdlib
+
+A `python-deny-module` you wrote yourself beats the symbol allowance, even
+across merged configs; the built-in dangerous list does not.
+
+There is no `python-deny-symbol`: you can already deny a whole module, and for
+a mixed module you allow the few symbols you need and the rest falls through to
+`ask`.
+
+> This is a trust decision, not a sandbox. Importing a symbol runs the module's
+> top-level code, and what you do with the imported object may have side
+> effects static analysis cannot see. The other AST safety checks still apply
+> after the import is accepted.
 
 ### Deny Format
 

@@ -33,7 +33,7 @@
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
-- **Configurable Python modules** — `python-allow-module` and `python-deny-module` directives to customize which modules are safe or dangerous during `-c` analysis
+- **Configurable Python modules** — `python-allow-module` and `python-deny-module` directives to customize which modules are safe or dangerous during `-c` analysis, plus `python-allow-symbol sys.stdin` to allow a single name from a module that is otherwise too broad to trust *(design by nickdaview)*
 - **CLI management** — `dippy hooks install/uninstall/list` and `dippy doctor` diagnostics
 <!-- FORK ENHANCEMENTS END -->
 
