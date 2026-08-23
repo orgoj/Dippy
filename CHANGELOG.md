@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.23] - 2026-08-23
+
+### Added
+
+- **`python-allow-symbol module.symbol`** - allows one name from a module too broad to trust as a whole: `python-allow-symbol sys.stdin` approves `from sys import stdin` (aliases included) while `import sys`, `from sys import exit`, multi-name imports, wildcards and relative imports keep asking. A `python-deny-module` the user wrote themselves beats the allowance; the built-in dangerous list does not. Design by nickdaview.
+- **`cp` and `mv` destinations go through the redirect rules** - the same rules that already govern `>`, `tee` and `find -fprint`. `mv` also removes its sources, so those paths are checked too: `deny-redirect **/.dippy` now stops `mv .dippy /tmp/saved`, not just a write into it. A destination directory is expanded to the paths actually written (`cp -t /tmp a b` → `/tmp/a`, `/tmp/b`). Without a matching rule both still ask, exactly as before.
+- **Cursor `preToolUse` hook** - `beforeShellExecution` ignores an `allow` answer and prompts anyway, which defeats the point of Dippy. `dippy hooks install cursor` now writes `preToolUse` with a `Shell` matcher instead. `beforeMCPExecution` keeps its old handling: its `tool_input` is a JSON string, not an object, so it still checks the top-level command. Reported by nickdaview.
+
+### Fixed
+
+- **Delegating handlers no longer lose shell quoting** - `uv run`, `env`, `arch`, `caffeinate` and `sudo` rebuilt the inner command with a bare `" ".join()`, so an argument containing metacharacters turned back into syntax: `uv run echo '(a)'` became a parse error, and `sudo echo 'a;zonk'` was analyzed as two commands. They now re-quote with `bash_join()`. `ssh` deliberately keeps the plain join - it hands its arguments to a remote *shell*, where the metacharacters really are syntax, and re-quoting would hide a remote compound command from analysis. Upstream #117, extended to the fork's own handlers.
+- **Glob patterns in `after` rules match bare commands** - the trailing `' *'` fallback in `match_after` compared strings literally, so `after pyth?n *` matched `python foo` but not `python`. `match_command` was fixed for this in upstream #118; `match_after` was missed.
+- **A relative import no longer inherits a module's safe status** - `from .json import loads` reads a local `json.py`, but the Python analyzer treated it as the stdlib module and approved it. Relative imports now always ask.
+
+### Documentation
+
+- `python-allow-module` and `python-deny-module` are standalone directives, not settings. The reference wrote them as `set python-allow-module numpy`, which is an unknown setting: skipped with a warning, leaving the module list empty and every import asking.
+
 ## [0.2.22] - 2026-08-23
 
 ### Added
