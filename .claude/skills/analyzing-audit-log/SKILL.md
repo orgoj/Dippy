@@ -31,14 +31,16 @@ Do not modify the user's configuration when they only ask for recommendations.
 When they explicitly request the change, edit the live configuration surgically
 and preserve unrelated content.
 
-Validate representative commands with the real configuration:
+Validate representative commands. Use `scripts/debug/try-rules.sh` from the
+Dippy repo, which runs the engine with an empty HOME so nothing leaks in:
 
 ```bash
-dippy --json --cwd "$PWD" --cmd 'mkdir -p tmp'
-dippy --json --cwd "$PWD" --cmd 'printf test > tmp/output.txt'
-dippy --json --cwd "$PWD" --cmd 'rm -f tmp/output.txt'
-dippy --json --cwd "$PWD" --cmd 'printf test > output.txt'
+./scripts/debug/try-rules.sh tmp/candidate-rules 'mkdir -p tmp' 'rm -f tmp/x'
 ```
+
+Write paths out literally - a `$VAR` or `$PWD` in the command is a literal to
+Dippy and matches no path rule, so every check turns into its own approval
+prompt.
 
 The intended workflow must return `allow`; the out-of-scope control must remain
 `ask` or `deny`.

@@ -24,6 +24,9 @@ Use `monkeypatch.setattr`.
 `scripts/debug/check-path.py` reports why a path is allowed/asked/denied by the
 live config: `PYTHONPATH=src python3 scripts/debug/check-path.py PATH [CWD]`.
 
+`scripts/debug/try-rules.sh RULES CMD...` tries candidate rules against sample
+commands with an empty HOME, so the live config cannot leak into the result.
+
 ## Paths
 
 - Config: `~/.dippy/config` (global), `.dippy` (project-local)
@@ -66,6 +69,10 @@ live config: `PYTHONPATH=src python3 scripts/debug/check-path.py PATH [CWD]`.
 - pi-mono agent-initiated turns need `deliverAs: "followUp"`, or they collide with user input.
 - Rotated log files are named for yesterday; the active file keeps the current name.
 - Adding a directive? Update the regex in `editors/vscode/syntaxes/dippy.tmLanguage.json` by hand.
+- A shell variable in a path defeats every path rule: Dippy sees the literal
+  `$R/scripts/...` and cannot normalize it. Write the path out.
+- `.dippy` and `~/.dippy/config` get edited by the user mid-turn. Re-read
+  immediately before appending, or you commit a duplicate rule.
 
 ## Documentation
 
