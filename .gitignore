@@ -33,6 +33,10 @@ tests/local/
 *.local.*
 .claude/plans/
 
+# Project scratch directory - the agent's working files (allowed for mkdir,
+# redirect, read, edit and rm by the shipped rules), never part of the repo.
+tmp/
+
 # Logs
 *.log
 

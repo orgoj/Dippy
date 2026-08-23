@@ -21,7 +21,10 @@ allow uv run python ./*
 
 allow pytest run *
 
+allow ./scripts/debug/try-rules.sh *
+
 allow DIPPY_CONFIG=$CONF PYTHONPATH=src python3 -m dippy.dippy *
+allow PYTHONPATH=src python3 ./scripts/debug/check-path.py *
 
 
 #---- Just ----#
