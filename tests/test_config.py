@@ -1498,6 +1498,18 @@ class TestMatchAfter:
         result = match_after(["python"], cfg, tmp_path)
         assert result == "Python ran"
 
+    def test_glob_in_trailing_star_base_matches_bare_command(self, tmp_path):
+        """The bare-command fallback must interpret globs, like match_command."""
+        cfg = Config(after_rules=[Rule("after", "pyth?n *", message="Python ran")])
+        assert match_after(["python", "foo"], cfg, tmp_path) == "Python ran"
+        assert match_after(["python"], cfg, tmp_path) == "Python ran"
+
+    def test_degenerate_star_base_does_not_match_everything(self, tmp_path):
+        """Pattern '* *' must still require a second word."""
+        cfg = Config(after_rules=[Rule("after", "* *", message="two words")])
+        assert match_after(["zonk", "arg"], cfg, tmp_path) == "two words"
+        assert match_after(["zonk"], cfg, tmp_path) is None
+
     def test_path_normalization(self, tmp_path):
         home = str(Path.home())
         cfg = Config(after_rules=[Rule("after", f"{home}/bin/*", message="custom bin")])

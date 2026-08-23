@@ -1624,7 +1624,9 @@ def match_after(words: list[str], config: Config, cwd: Path) -> str | None:
         matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)
         if not matched and normalized_pattern.endswith(" *"):
-            matched = normalized_cmd == normalized_pattern[:-2]
+            base = normalized_pattern[:-2]
+            if not fnmatch.fnmatch("", base):
+                matched = fnmatch.fnmatch(normalized_cmd, base)
         if matched:
             # message is None for pattern-only rules, "" for explicit empty
             result = rule.message if rule.message is not None else ""
