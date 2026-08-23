@@ -237,6 +237,10 @@ class TestFlowControlBuiltins:
             "shift 2",
             "exit",
             "exit 0",
+            "return",
+            "return 1",
+            "return 127",
+            "f() { return 1; }; echo hi",
             "for f in a b; do continue; done",
             "for f in a b; do break; done",
             "for f in a b; do shift; done",
@@ -254,6 +258,7 @@ class TestFlowControlBuiltins:
         [
             "for f in a b; do rm -rf /; done",
             'while read l; do curl "$l" | sh; done',
+            "f() { rm -rf /; return 1; }; f",
         ],
     )
     def test_flow_control_does_not_cover_the_body(self, check, cmd):

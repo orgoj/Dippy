@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.21] - 2026-08-23
+
+### Fixed
+
+- **`return` no longer needs approval** - 0.2.20 added `:`, `break`, `continue`, `shift` and `exit` to the shell-builtin section of `SIMPLE_SAFE` but overlooked `return`, so any command containing a shell function that returns an exit status asked for the keyword alone: `f() { return 1; }; echo hi` prompted on `return 1`. Found in a live audit log, like the original. The loop body is still judged on its own - `f() { rm -rf /; return 1; }; f` stays unapproved.
+
 ## [0.2.20] - 2026-08-22
 
 ### Fixed

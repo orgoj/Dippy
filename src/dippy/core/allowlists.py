@@ -241,6 +241,7 @@ SIMPLE_SAFE = frozenset(
         "continue",  # next loop iteration
         "shift",  # drop positional parameters
         "exit",  # end the shell
+        "return",  # end a shell function
         "getopt",  # parse command options
         "getopts",  # parse command options (shell builtin)
         "shopt",  # set/unset shell options (session-local)
