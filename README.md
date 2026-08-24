@@ -221,7 +221,26 @@ If you prefer manual configuration or need project-specific settings:
 }
 ```
 
-**Current Codex behavior:** Dippy auto-approves allowed shell commands in the `PermissionRequest` hook. `ask` intentionally defers to Codex's native approval UI; anything that must not execute needs a `deny` rule.
+**Current Codex behavior:** Dippy auto-approves allowed shell commands in the
+`PermissionRequest` hook, but Codex only emits that event when its own policy
+already requires approval. `PreToolUse` cannot force a prompt: an `ask` there
+is advisory and otherwise fails open. For an external wrapper that can change
+state outside the sandbox, add a Codex execpolicy prompt rule so every wrapper
+invocation reaches `PermissionRequest`:
+
+```python
+prefix_rule(
+    pattern = ["cca-tmux-cli"],
+    decision = "prompt",
+    justification = "Let Dippy decide whether this remote command requires user approval.",
+)
+```
+
+Put global rules in `~/.codex/rules/*.rules` or project rules in
+`.codex/rules/*.rules`, then restart Codex. The prefix matches every argument,
+subcommand and target after the executable. Codex has no catch-all execpolicy
+pattern, so add one prompt rule per external wrapper that needs enforced `ask`
+semantics. See [Codex CLI hooks](docs/hook-systems/codex-cli.md).
 
 **Current Gemini behavior:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy" by default. To enable **Pure Dippy Control** and avoid double prompts, use:
 ```bash

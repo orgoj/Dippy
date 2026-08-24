@@ -458,6 +458,41 @@ Exit 0 with no output = success.
 - Context injection (additionalContext)
 - Advanced matcher patterns
 
+### Enforcing `ask` for External Wrappers
+
+`PreToolUse` cannot create a Codex approval request. Dippy's `ask` response is
+therefore advisory unless Codex independently decides that the command needs
+approval. This is unsafe for wrappers that can change state outside the local
+sandbox: the wrapper process may be sandbox-safe even though its remote action
+is not.
+
+Bridge such a wrapper into Codex's native approval flow with an execpolicy
+`prompt` rule:
+
+```python
+prefix_rule(
+    pattern = ["cca-tmux-cli"],
+    decision = "prompt",
+    justification = "Let Dippy decide whether this remote command requires user approval.",
+)
+```
+
+Place the rule in `~/.codex/rules/*.rules` to cover every project, or in
+`<project>/.codex/rules/*.rules` for a trusted project, then restart Codex. The
+single-element prefix matches every invocation of that executable regardless
+of its arguments, subcommand or remote target.
+
+The resulting flow is:
+
+1. `PreToolUse` lets Dippy hard-block `deny` decisions.
+2. The execpolicy rule forces Codex to emit `PermissionRequest`.
+3. Dippy auto-approves `allow`, returns no decision for `ask` so the native UI
+   prompts the user, and blocks `deny`.
+
+Execpolicy patterns must be non-empty literal prefixes; there is no wildcard
+or default rule that forces `PermissionRequest` for every Bash command. Add one
+prompt rule per external wrapper that requires enforced Dippy `ask` semantics.
+
 ---
 
 ## Execpolicy (Command Filtering)
