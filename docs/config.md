@@ -676,6 +676,22 @@ deny-opt "docker run" --volume /:/host
 
 **Important:** Item matching uses **exact word-boundary** matching. `--force` does NOT match `--force-with-lease`. For prefix matching, use normal glob rules like `deny "git push *--force*"`.
 
+**Option matching does not stop at `--`.** Every token after the prefix is
+considered, including arguments following the option delimiter. For example:
+
+```
+allow-opt "hcom send" --reply-to
+```
+
+also matches:
+
+```bash
+hcom send @agent -- '--reply-to'
+```
+
+Do not use an option rule as strict proof that an item was parsed as a CLI
+option unless this behavior is acceptable.
+
 **Items match whole tokens, not words inside a quoted argument.** A rule meant to
 catch a keyword in a query or a script body silently matches nothing:
 
