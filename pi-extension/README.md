@@ -76,6 +76,14 @@ extension handles decision:
   - deny: block with message
 ```
 
+## Maintenance
+
+- Keep the shared `src/dippy/pi_wrapper.py` entry point aligned with
+  `src/dippy/dippy.py` when logging, agent identification or tool handling
+  changes.
+- Send every pi-initiated user message with `deliverAs: "followUp"`; direct
+  delivery can collide with user input.
+
 ## Testing
 
 ```bash
