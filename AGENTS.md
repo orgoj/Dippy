@@ -22,6 +22,11 @@ just fmt     # ruff format --check
 - Use fictional command names in rule tests; real names may hit `SIMPLE_SAFE`.
 - Isolate config tests with `tmp_path`, `monkeypatch` and an empty `HOME`.
   `--config` adds an override; it does not replace `~/.dippy/config`.
+- Run every direct-execution check with an empty temporary `HOME` and a fake
+  non-GUI askpass; never open the real approval dialog during verification.
+- Merge scalar settings by membership in `configured_settings`, never by
+  comparing their value to the default. Test that a higher-priority scope can
+  explicitly restore the default value.
 - Use `monkeypatch.setattr` for module globals; bare assignment leaks state
   between tests.
 - Never modify the user's live Dippy configuration during repository work.
@@ -29,6 +34,9 @@ just fmt     # ruff format --check
 - Never import inside a function or duplicate a list derivable from code.
 - Propagate `context_flags` through every `Decision` and delegated
   `Classification`; preserve `remote=ctx.remote`.
+- Propagate global `--config` and `--cwd` through config loading,
+  classification, approval and execution for `run`, `run-on-server` and
+  `recover`; local execution must pass `cwd` to Bash.
 - Treat paths as literal when `remote=True`; never expand them against the host
   working directory.
 - Prefer native read and edit matchers over simulated shell commands.
