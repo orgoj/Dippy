@@ -1,6 +1,6 @@
 [project]
 name = "dippy"
-version = "0.2.23"
+version = "0.3.0"
 description = "Approval autopilot for Claude Code — stay in the flow by automatically allowing safe commands"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -38,6 +38,7 @@ dev = [
 [project.scripts]
 dippy = "dippy.dippy:main"
 dippy-statusline = "dippy.dippy_statusline:main"
+dippy-askpass-gui = "dippy.askpass_gui:main"
 
 [build-system]
 requires = ["uv_build>=0.7.19,<0.12"]

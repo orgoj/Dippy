@@ -31,6 +31,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
+- **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify the unchanged Bash string before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, pi-mono, Moltbot?
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
@@ -237,10 +238,10 @@ prefix_rule(
 ```
 
 Put global rules in `~/.codex/rules/*.rules` or project rules in
-`.codex/rules/*.rules`, then restart Codex. The prefix matches every argument,
-subcommand and target after the executable. Codex has no catch-all execpolicy
-pattern, so add one prompt rule per external wrapper that needs enforced `ask`
-semantics. See [Codex CLI hooks](docs/hook-systems/codex-cli.md).
+`.codex/rules/*.rules`, then restart Codex. Prefer Dippy's own stable execution
+surface for external commands: prompt `dippy run` and `dippy run-on-server` in
+the agent policy, then let the inner Dippy invocation enforce the command rules.
+See [Codex CLI hooks](docs/hook-systems/codex-cli.md).
 
 **Current Gemini behavior:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy" by default. To enable **Pure Dippy Control** and avoid double prompts, use:
 ```bash
@@ -259,6 +260,23 @@ Changing hook config requires restarting the agent session. For Codex, both `hoo
 ---
 
 ## CLI Commands
+
+### Approved Execution
+
+```bash
+dippy run 'CMD'
+dippy run-on-server SERVER 'CMD'
+dippy recover SERVER               # check an uncertain persistent run
+dippy recover SERVER --clear       # release after manual inspection
+```
+
+`run-on-server` accepts only aliases declared with `server SERVER`. Its
+transport comes from configuration and cannot be overridden at invocation.
+See [the configuration reference](docs/config.md#direct-execution) for SSH,
+tmux, Herdr, askpass, config-management setup, and the interaction between
+approval and agent CLI timeouts. Projects with a supervising agent or a custom
+user channel can set `approval-wait-message` without exposing the underlying
+enforcement mechanism.
 
 ### Hooks Management
 

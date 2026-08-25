@@ -15,6 +15,120 @@ Dippy's config system extends the built-in approval rules. Line-based, glob patt
 
 Dippy can validate commands from the command line without running as a hook. This is useful for scripting, testing rules, or integrating with other AI tools.
 
+### Direct execution
+
+```bash
+dippy run 'CMD'
+dippy run-on-server SERVER 'CMD'
+```
+
+These commands load the normal user and project configuration, classify the
+unchanged command string, and execute only an `allow` or an `ask` approved by
+the configured askpass provider. There is no terminal fallback: missing,
+broken, timed-out, or unexpected askpass responses deny execution.
+
+Approval is synchronous: the caller remains blocked while the dialog is open.
+The effective wait is therefore limited by both `askpass-timeout` and any
+timeout imposed by the calling agent CLI. The 59-second default is intended to
+let Dippy return its own fail-closed error before a common 60-second caller
+limit. A longer configured value works only when the caller also permits the
+longer wait; if the caller terminates first, Dippy cannot return a final error.
+The calling Dippy process is the sole owner of this deadline: it terminates the
+askpass process when the configured timeout expires. The built-in GUI has no
+independent timer, so it cannot race the caller and waits indefinitely when
+launched on its own.
+
+While waiting, Dippy writes a status line to its own stderr stating that the
+requested command has not started. A redirect inside the quoted command does
+not hide this status; redirecting the outer `dippy run` stderr does. On approval,
+local execution inherits the command's stdout and stderr and returns its exit
+code unchanged. On approval timeout, the command is not executed. Retry the
+same Dippy request when it can be reviewed, or choose another safe solution;
+never bypass Dippy because approval timed out.
+
+Every blocked execution states that the requested command was not executed. A
+denial includes the original command, the user's optional note or the matching
+rule reason, and guidance to revise the request or choose another safe
+solution.
+
+Runtime messages deliberately use neutral terms such as `Approval denied` and
+`Execution denied`. They do not name Dippy, askpass, providers, config files or
+internal enforcement details because `dippy run` may sit behind a compatibility
+wrapper. The agent needs the outcome, original command, execution status,
+reason and safe next step; naming the hidden enforcement mechanism or warning
+the agent not to bypass it would expose unnecessary implementation details and
+could itself suggest an evasion path.
+
+The initial wait status always reports that approval is required, gives the
+timeout, and states that execution has not started. Its final instruction is
+configured with `approval-wait-message`. The safe default is:
+
+```text
+Stop work and wait for the user unless you can continue safely without this command.
+```
+
+This default prevents an agent from treating the pending request as a command
+failure and starting unrelated recovery or bypass attempts. A project with a
+supervising agent or another user communication channel can replace the
+instruction in its `.dippy`, for example:
+
+```text
+set approval-wait-message "Contact the supervising agent through the project channel to request authorization, then wait."
+```
+
+Only the instruction is configurable; the neutral status, timeout, and
+not-started facts remain fixed so a project cannot accidentally hide them. An
+empty message is rejected.
+
+Remote targets must be safe SSH-config aliases declared explicitly:
+
+```text
+server build1
+server database-readonly
+
+set run-on-server-backend ssh       # ssh, tmux, or herdr
+set run-on-server-session dippy     # managed tmux session / Herdr session
+set run-on-server-timeout 300
+set run-on-server-poll-interval 0.1
+set askpass dippy-askpass-gui
+set askpass-timeout 59
+set approval-wait-message "Contact the supervising agent and wait."
+
+allow [run-on-server] frob status
+ask [run-on-server,build1] frob deploy
+```
+
+`ssh` preserves separate stdout and stderr. The persistent tmux and Herdr
+backends return their merged terminal capture and do not support interactive
+stdin. A timeout, interruption, missing marker, or uncertain SSH disconnect is
+recorded as `INDETERMINATE`; Dippy will not run another command on that server.
+Use `dippy recover SERVER` to check a persistent backend's completion marker,
+or inspect the target manually and run `dippy recover SERVER --clear`.
+If a persistent backend's start marker has already scrolled out but its
+completion marker remains, Dippy returns all command output still present in
+the capture buffer. Output discarded by tmux or Herdr itself cannot be
+recovered.
+
+Configuration can be changed without rewriting rules or comments:
+
+```bash
+dippy config get --user
+dippy config get --user run-on-server-backend
+dippy config set --user run-on-server-backend herdr
+dippy config set --project approval-wait-message \
+  "Contact the supervising agent through the project channel and wait."
+dippy config unset --user askpass
+dippy config server add --project build1
+dippy config server remove --project build1
+dippy config server list --project
+```
+
+The default scope is `--user`; `--project` edits `.dippy` in the current
+directory. Setting administration writes canonical hyphenated keys and updates
+an existing underscore spelling in place instead of creating a duplicate.
+Global `--config` and `--cwd` options apply to `run`, `run-on-server`, and
+`recover` as well as validation mode.
+
 ### Usage
 
 ```bash
@@ -777,12 +891,15 @@ set log ~/.dippy/audit.log  # enable logging to path
 set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
 set log-hook-approvals off  # disable hook-approvals.log
 
+# Instruction appended while direct execution waits for approval
+set approval-wait-message "Stop work and wait for the user."
+
 # Final config (loaded after all other configs)
 set final ~/.dippy/emergency  # emergency overrides (loaded last)
 
 # GUI approval (SSH_ASKPASS style)
 set askpass /path/to/askpass  # external approval program
-set askpass-timeout 60        # seconds to wait (default: 60)
+set askpass-timeout 59        # seconds to wait (default: 59)
 
 # Environment variables exposed as context flags (repeatable)
 set context-env HCOM_INSTANCE_NAME
@@ -921,7 +1038,8 @@ When Dippy runs in headless environments (tmux, screen, background processes), t
 ```
 # In ~/.dippy/config
 set askpass /usr/bin/zenity-dippy    # path to external program
-set askpass-timeout 60               # seconds to wait (default: 60)
+set askpass-timeout 59               # seconds to wait (default: 59)
+set approval-wait-message "Stop work and wait for the user."
 ```
 
 Or via environment variable (overrides config):

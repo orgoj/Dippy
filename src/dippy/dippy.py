@@ -48,10 +48,14 @@ from dippy.core.config import (
     match_read,
     match_mcp,
     match_web,
+    parse_config,
+    USER_CONFIG,
 )
 from dippy import __version__
+from dippy.config_admin import edit_config
 from dippy.core.notifier import run_notifier, should_run_notifier
 from dippy.core.template import expand_template
+from dippy.execution import configure_and_execute, recover, validate_server
 
 # === Mode Detection ===
 
@@ -803,6 +807,57 @@ Subcommands:
     parser.add_argument("--windsurf", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--pearai", action="store_true", help=argparse.SUPPRESS)
 
+    run_parser = subparsers.add_parser(
+        "run", help="Approve and execute one local Bash command string"
+    )
+    run_parser.add_argument("command", help="Quoted Bash command string")
+
+    remote_run_parser = subparsers.add_parser(
+        "run-on-server",
+        help="Approve and execute one Bash command on an allowed server",
+    )
+    remote_run_parser.add_argument("server", help="Allowed SSH-config alias")
+    remote_run_parser.add_argument("command", help="Quoted Bash command string")
+
+    recover_parser = subparsers.add_parser(
+        "recover", help="Recover an indeterminate run-on-server target"
+    )
+    recover_parser.add_argument("server")
+    recover_parser.add_argument(
+        "--clear", action="store_true", help="Explicitly release the target"
+    )
+
+    config_parser = subparsers.add_parser("config", help="Manage Dippy configuration")
+    config_subparsers = config_parser.add_subparsers(dest="config_action")
+    get_parser = config_subparsers.add_parser("get")
+    get_parser.add_argument("key", nargs="?")
+    get_scope = get_parser.add_mutually_exclusive_group()
+    get_scope.add_argument("--user", action="store_true")
+    get_scope.add_argument("--project", action="store_true")
+    unset_parser = config_subparsers.add_parser("unset")
+    unset_parser.add_argument("key")
+    unset_scope = unset_parser.add_mutually_exclusive_group()
+    unset_scope.add_argument("--user", action="store_true")
+    unset_scope.add_argument("--project", action="store_true")
+    set_parser = config_subparsers.add_parser("set")
+    set_parser.add_argument("key")
+    set_parser.add_argument("value")
+    set_scope = set_parser.add_mutually_exclusive_group()
+    set_scope.add_argument("--user", action="store_true")
+    set_scope.add_argument("--project", action="store_true")
+    server_parser = config_subparsers.add_parser("server")
+    server_subparsers = server_parser.add_subparsers(dest="server_action")
+    for action in ("add", "remove"):
+        action_parser = server_subparsers.add_parser(action)
+        action_parser.add_argument("server")
+        scope = action_parser.add_mutually_exclusive_group()
+        scope.add_argument("--user", action="store_true")
+        scope.add_argument("--project", action="store_true")
+    server_list_parser = server_subparsers.add_parser("list")
+    server_list_scope = server_list_parser.add_mutually_exclusive_group()
+    server_list_scope.add_argument("--user", action="store_true")
+    server_list_scope.add_argument("--project", action="store_true")
+
     # === hooks subcommand ===
     hooks_parser = subparsers.add_parser(
         "hooks",
@@ -1043,6 +1098,11 @@ def cli_mode(args: argparse.Namespace) -> int:
         return EXIT_ASK
 
 
+def _subcommand_config(args: argparse.Namespace) -> tuple[Path, Config]:
+    cwd = Path(args.cwd).resolve() if args.cwd else Path.cwd()
+    return cwd, load_config(cwd, config_path=args.config)
+
+
 def handle_subcommand(args: argparse.Namespace) -> int:
     """Handle dippy subcommands.
 
@@ -1052,13 +1112,115 @@ def handle_subcommand(args: argparse.Namespace) -> int:
     Returns:
         Exit code: 0 for success, 1 for errors
     """
-    if args.subcommand == "hooks":
+    if args.subcommand == "run":
+        try:
+            cwd, config = _subcommand_config(args)
+        except ConfigError as error:
+            print(f"config error: {error}", file=sys.stderr)
+            return 1
+        return configure_and_execute(args.command, cwd, config)
+    elif args.subcommand == "run-on-server":
+        try:
+            validate_server(args.server)
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        try:
+            cwd, config = _subcommand_config(args)
+        except ConfigError as error:
+            print(f"config error: {error}", file=sys.stderr)
+            return 1
+        return configure_and_execute(args.command, cwd, config, args.server)
+    elif args.subcommand == "recover":
+        try:
+            _, config = _subcommand_config(args)
+        except ConfigError as error:
+            print(f"config error: {error}", file=sys.stderr)
+            return 1
+        try:
+            return recover(args.server, config, clear=args.clear)
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+    elif args.subcommand == "config":
+        return handle_config_subcommand(args)
+    elif args.subcommand == "hooks":
         return handle_hooks_subcommand(args)
     elif args.subcommand == "doctor":
         return handle_doctor_subcommand(args)
     else:
         print(f"Unknown subcommand: {args.subcommand}", file=sys.stderr)
         return 1
+
+
+_CONFIG_KEYS = frozenset(
+    {
+        "askpass",
+        "askpass-timeout",
+        "approval-wait-message",
+        "run-on-server-backend",
+        "run-on-server-session",
+        "run-on-server-timeout",
+        "run-on-server-poll-interval",
+    }
+)
+
+
+def _admin_config_path(args: argparse.Namespace) -> Path:
+    return Path.cwd() / ".dippy" if getattr(args, "project", False) else USER_CONFIG
+
+
+def _read_admin_config(path: Path) -> Config:
+    return (
+        parse_config(path.read_text(), source=str(path)) if path.exists() else Config()
+    )
+
+
+def handle_config_subcommand(args: argparse.Namespace) -> int:
+    """Read or atomically edit one explicitly selected config scope."""
+    path = _admin_config_path(args)
+    action = args.config_action
+    if action is None:
+        print("config action required", file=sys.stderr)
+        return 1
+    if action == "server":
+        server_action = args.server_action
+        if server_action == "list":
+            for server in _read_admin_config(path).servers:
+                print(server)
+            return 0
+        if server_action is None:
+            print("server action required", file=sys.stderr)
+            return 1
+        try:
+            server = validate_server(args.server)
+        except ValueError as error:
+            print(str(error), file=sys.stderr)
+            return 1
+        edit_config(path, f"server-{server_action}", server)
+        return 0
+    if action == "get" and args.key is None:
+        if path.exists():
+            print(path.read_text(), end="")
+        return 0
+    key = args.key.lower().replace("_", "-")
+    if key not in _CONFIG_KEYS:
+        print(f"unsupported config key: {args.key}", file=sys.stderr)
+        return 1
+    attribute = key.replace("-", "_")
+    if action == "get":
+        value = getattr(_read_admin_config(path), attribute)
+        print(value)
+        return 0
+    if action == "set":
+        candidate = parse_config(f"set {key} {args.value}")
+        if attribute not in candidate.configured_settings:
+            print(f"invalid value for {args.key}: {args.value}", file=sys.stderr)
+            return 1
+        edit_config(path, "set", key, args.value)
+        return 0
+    edit_config(path, "unset", key)
+    return 0
 
 
 def handle_hooks_subcommand(args: argparse.Namespace) -> int:

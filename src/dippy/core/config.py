@@ -14,6 +14,7 @@ from dippy.core.parser import tokenize
 _MODULE_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$")
 # Single Python identifier (e.g. "stdin")
 _IDENTIFIER_RE = re.compile(r"^[a-zA-Z_][a-zA-Z0-9_]*$")
+_SERVER_ALIAS_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 def _parse_module_name(rest: str) -> str:
@@ -53,6 +54,10 @@ _HOME = Path.home()
 USER_CONFIG = _HOME / ".dippy" / "config"
 PROJECT_CONFIG_NAME = ".dippy"
 ENV_CONFIG = "DIPPY_CONFIG"
+DEFAULT_APPROVAL_WAIT_MESSAGE = (
+    "Stop work and wait for the user unless you can continue safely without "
+    "this command."
+)
 
 
 class ConfigError(Exception):
@@ -164,6 +169,15 @@ class Config:
     context_env: tuple[str, ...] = ()
     """Environment variables exposed as context flags ($NAME=value)."""
 
+    servers: list[str] = field(default_factory=list)
+    """SSH aliases explicitly permitted for ``run-on-server``."""
+
+    run_on_server_backend: str = "ssh"
+    run_on_server_session: str = "dippy"
+    run_on_server_timeout: float = 300.0
+    run_on_server_poll_interval: float = 0.1
+    configured_settings: frozenset[str] = frozenset()
+
     default: str = "ask"  # 'allow' | 'ask'
     log: Path | None = None  # None = no logging
     log_full: bool = False  # log full command (requires log path)
@@ -171,7 +185,8 @@ class Config:
     log_hook_approvals: bool = True  # log to hook-approvals.log
     final: Path | None = None  # path to final config (loaded last)
     askpass: Path | None = None  # external approval program (SSH_ASKPASS style)
-    askpass_timeout: int = 60  # seconds to wait for askpass response
+    askpass_timeout: int = 59  # seconds to wait for askpass response
+    approval_wait_message: str = DEFAULT_APPROVAL_WAIT_MESSAGE
     notifier_command: str | None = None  # external notification command
     notifier_include: frozenset[str] | None = None  # tools/commands to trigger notifier
     # Idle notifier (for Notification/idle_prompt hooks)
@@ -264,8 +279,13 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         askpass=overlay.askpass if overlay.askpass is not None else base.askpass,
         askpass_timeout=(
             overlay.askpass_timeout
-            if overlay.askpass_timeout != 60
+            if "askpass_timeout" in overlay.configured_settings
             else base.askpass_timeout
+        ),
+        approval_wait_message=(
+            overlay.approval_wait_message
+            if "approval_wait_message" in overlay.configured_settings
+            else base.approval_wait_message
         ),
         notifier_command=overlay.notifier_command
         if overlay.notifier_command is not None
@@ -280,6 +300,28 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         if overlay.deny_format is not None
         else base.deny_format,
         deny_format_agents={**base.deny_format_agents, **overlay.deny_format_agents},
+        servers=base.servers + [s for s in overlay.servers if s not in base.servers],
+        run_on_server_backend=(
+            overlay.run_on_server_backend
+            if "run_on_server_backend" in overlay.configured_settings
+            else base.run_on_server_backend
+        ),
+        run_on_server_session=(
+            overlay.run_on_server_session
+            if "run_on_server_session" in overlay.configured_settings
+            else base.run_on_server_session
+        ),
+        run_on_server_timeout=(
+            overlay.run_on_server_timeout
+            if "run_on_server_timeout" in overlay.configured_settings
+            else base.run_on_server_timeout
+        ),
+        run_on_server_poll_interval=(
+            overlay.run_on_server_poll_interval
+            if "run_on_server_poll_interval" in overlay.configured_settings
+            else base.run_on_server_poll_interval
+        ),
+        configured_settings=base.configured_settings | overlay.configured_settings,
         # Watched environment variables accumulate across scopes
         context_env=base.context_env + overlay.context_env,
         # Python module lists accumulate, so a project config extends the global one
@@ -638,6 +680,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
     python_allow_modules: list[str] = []
     python_deny_modules: list[str] = []
     python_allow_symbols: list[str] = []
+    servers: list[str] = []
     settings: dict[str, bool | int | str | Path] = {}
     prefix = f"{source}: " if source else ""
 
@@ -912,6 +955,14 @@ def parse_config(text: str, source: str | None = None) -> Config:
             elif directive == "set":
                 _apply_setting(settings, rest)
 
+            elif directive == "server":
+                if not rest or len(rest.split()) != 1:
+                    raise ValueError("'server' requires exactly one SSH alias")
+                if not _SERVER_ALIAS_RE.fullmatch(rest) or "@" in rest:
+                    raise ValueError(f"invalid server alias: {rest!r}")
+                if rest not in servers:
+                    servers.append(rest)
+
             elif directive == "python-allow-module":
                 python_allow_modules.append(_parse_module_name(rest))
 
@@ -949,13 +1000,22 @@ def parse_config(text: str, source: str | None = None) -> Config:
         log_hook_approvals=settings.get("log_hook_approvals", True),
         final=settings.get("final"),
         askpass=settings.get("askpass"),
-        askpass_timeout=settings.get("askpass_timeout", 60),
+        askpass_timeout=settings.get("askpass_timeout", 59),
+        approval_wait_message=settings.get(
+            "approval_wait_message", DEFAULT_APPROVAL_WAIT_MESSAGE
+        ),
         notifier_command=settings.get("notifier_command"),
         notifier_include=settings.get("notifier_include"),
         idle_notifier_command=settings.get("idle_notifier_command"),
         deny_format=settings.get("deny_format"),
         deny_format_agents=settings.get("deny_format_agents", {}),
         context_env=tuple(settings.get("context_env", [])),
+        servers=servers,
+        run_on_server_backend=settings.get("run_on_server_backend", "ssh"),
+        run_on_server_session=settings.get("run_on_server_session", "dippy"),
+        run_on_server_timeout=settings.get("run_on_server_timeout", 300.0),
+        run_on_server_poll_interval=settings.get("run_on_server_poll_interval", 0.1),
+        configured_settings=frozenset(settings),
     )
 
 
@@ -1057,6 +1117,18 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             )
         settings[key_normalized] = value
 
+    elif key_normalized == "run_on_server_backend":
+        if value not in ("ssh", "tmux", "herdr"):
+            raise ValueError(
+                f"'run-on-server-backend' must be 'ssh', 'tmux' or 'herdr', got '{value}'"
+            )
+        settings[key_normalized] = value
+
+    elif key_normalized == "run_on_server_session":
+        if value is None or not value.strip():
+            raise ValueError("'run-on-server-session' requires a name")
+        settings[key_normalized] = _strip_quotes(value)
+
     # Path settings
     elif key_normalized == "log":
         if value is None:
@@ -1072,6 +1144,14 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
         if value is None:
             raise ValueError("'askpass' requires a path")
         settings[key_normalized] = Path(value).expanduser()
+
+    elif key_normalized == "approval_wait_message":
+        if value is None:
+            raise ValueError("'approval-wait-message' requires a message")
+        message = _strip_quotes(value).strip()
+        if not message:
+            raise ValueError("'approval-wait-message' must not be empty")
+        settings[key_normalized] = message
 
     # Integer settings
     elif key_normalized == "log_rotate_max_days":
@@ -1089,6 +1169,20 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             settings[key_normalized] = int(value)
         except ValueError:
             raise ValueError(f"'askpass-timeout' must be an integer, got '{value}'")
+
+    elif key_normalized in (
+        "run_on_server_timeout",
+        "run_on_server_poll_interval",
+    ):
+        if value is None:
+            raise ValueError(f"'{key}' requires a positive number")
+        try:
+            number = float(value)
+        except ValueError:
+            raise ValueError(f"'{key}' must be a number, got '{value}'") from None
+        if number <= 0:
+            raise ValueError(f"'{key}' must be positive")
+        settings[key_normalized] = number
 
     elif key_normalized == "notifier_command":
         if value is None:

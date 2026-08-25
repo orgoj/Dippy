@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2026-08-25
+
+### Added
+
+- **Approved command execution** — `dippy run 'CMD'` classifies the exact command string, resolves `ask` through the configured askpass provider, and executes an approved command with Bash while preserving its exit code.
+- **Managed remote execution** — `dippy run-on-server SERVER 'CMD'` accepts only explicitly declared `server` aliases and supports configured SSH, tmux, and Herdr transports. Remote rules receive `[run-on-server]` and `[run-on-server,SERVER]` context.
+- **Fail-closed recovery** — uncertain remote results block later commands for that server and are never retried. `dippy recover SERVER` checks persistent backend markers; `--clear` explicitly releases a target after manual inspection.
+- **Configuration administration** — `dippy config get/set/unset` and `dippy config server add/remove/list` atomically update user or project configuration while preserving unrelated rules and comments.
+- **Tk approval provider** — `dippy-askpass-gui` displays read-only command context, supports an optional audit note, and denies on close or GUI failure. The calling Dippy process owns the configurable timeout, avoiding competing timers.
+- **Configurable approval wait instruction** — `set approval-wait-message "..."` customizes the instruction appended to the fixed neutral waiting status, with normal user/project/final precedence. The default tells the agent to stop and wait for the user unless it can continue safely without the pending command; projects can instead direct it to a supervising agent or another authorization channel.
+
+### Fixed
+
+- **Approval timeout diagnostics** — the Tk dialog now shows the working directory, and `dippy run` reports that execution has not started while waiting. Approval timeouts fail closed with the configured duration, the original requested command, and safe retry guidance without exposing the askpass invocation. The default is 59 seconds so Dippy can normally report the error before a one-minute caller timeout.
+- **Direct execution askpass override** — `dippy run` and `run-on-server` now honor `DIPPY_ASKPASS` when selecting the approval provider, matching the documented precedence and the existing hook path.
+- **Unambiguous execution denials** — approval denials, rule denials, unavailable approval services, and timeouts now show the original requested command and explicitly state that it was not executed. User notes and rule reasons are preserved with safe next-step guidance. Runtime messages remain implementation-neutral so compatibility wrappers do not expose their enforcement mechanism or suggest an evasion path.
+- **Execution config precedence** — explicit default-valued overrides such as project-level `set askpass-timeout 59` now replace a different user value, and `run`, `run-on-server`, and `recover` honor global `--config` and `--cwd` options.
+- **Canonical config administration** — `dippy config set/unset` treats underscore and hyphen spellings as the same setting and rewrites the result with canonical hyphens instead of appending duplicates.
+- **Persistent output fallback** — when a tmux or Herdr start marker has scrolled out but the completion marker remains, Dippy returns all output still retained in the capture buffer instead of returning none.
+
 ## [0.2.23] - 2026-08-23
 
 ### Added

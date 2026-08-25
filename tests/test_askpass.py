@@ -102,13 +102,13 @@ class TestAskpassConfigParsing:
         """set askpass-timeout abc raises ValueError (logged and skipped)."""
         cfg = parse_config("set askpass-timeout abc")
         # Invalid setting is skipped, timeout remains default
-        assert cfg.askpass_timeout == 60
+        assert cfg.askpass_timeout == 59
 
     def test_parse_set_askpass_timeout_missing_value(self):
         """set askpass-timeout without value raises ValueError (logged and skipped)."""
         cfg = parse_config("set askpass-timeout")
         # Invalid setting is skipped, timeout remains default
-        assert cfg.askpass_timeout == 60
+        assert cfg.askpass_timeout == 59
 
     def test_config_askpass_default_none(self):
         """Config().askpass is None by default."""
@@ -116,9 +116,9 @@ class TestAskpassConfigParsing:
         assert cfg.askpass is None
 
     def test_config_askpass_timeout_default(self):
-        """Config().askpass_timeout defaults to 60."""
+        """Config().askpass_timeout defaults to 59."""
         cfg = Config()
-        assert cfg.askpass_timeout == 60
+        assert cfg.askpass_timeout == 59
 
     def test_parse_combined_askpass_settings(self, tmp_path):
         """Both askpass and askpass-timeout parse together."""
@@ -371,7 +371,7 @@ class TestAskpassConfigMerge:
         """Overlay askpass_timeout overrides base."""
         from dippy.core.config import _merge_configs
 
-        base = Config(askpass_timeout=30)
-        overlay = Config(askpass_timeout=120)
+        base = parse_config("set askpass-timeout 30")
+        overlay = parse_config("set askpass-timeout 120")
         merged = _merge_configs(base, overlay)
         assert merged.askpass_timeout == 120
