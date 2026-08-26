@@ -208,16 +208,53 @@ def show_dialog(payload: dict[str, object]) -> tuple[str, str | None]:
     def finish(decision: str) -> None:
         result[0] = decision
         result[1] = note.get().strip() or None
-        root.destroy()
+        if hasattr(root, "destroy"):
+            root.destroy()
+
+    def on_key(event: tk.Event) -> None:
+        try:
+            focused = root.focus_get() if hasattr(root, "focus_get") else None
+            if focused == note:
+                if event.keysym in ("Return", "KP_Enter"):
+                    finish("allow")
+                elif event.keysym == "Escape":
+                    finish("deny")
+                return
+
+            if event.keysym in ("y", "Y") or getattr(event, "char", "") in ("y", "Y"):
+                finish("allow")
+            elif event.keysym in ("n", "N") or getattr(event, "char", "") in ("n", "N"):
+                finish("deny")
+            elif event.keysym in ("Return", "KP_Enter"):
+                finish("allow")
+            elif event.keysym == "Escape":
+                finish("deny")
+        except Exception:
+            pass
+
+    if hasattr(root, "bind"):
+        root.bind("<Key>", on_key)
+        root.bind("<Return>", lambda e: finish("allow"))
+        root.bind("<KP_Enter>", lambda e: finish("allow"))
+        root.bind("<Escape>", lambda e: finish("deny"))
+    if hasattr(note, "bind"):
+        note.bind("<Return>", lambda e: finish("allow"))
+        note.bind("<KP_Enter>", lambda e: finish("allow"))
+        note.bind("<Escape>", lambda e: finish("deny"))
 
     buttons = ttk.Frame(frame)
     buttons.grid(row=row, column=1, sticky="e", pady=(12, 0))
-    ttk.Button(buttons, text="Deny", command=lambda: finish("deny")).grid(
-        row=0, column=0, padx=4
+    deny_btn = ttk.Button(
+        buttons, text="Deny (n / Esc)", command=lambda: finish("deny")
     )
-    ttk.Button(buttons, text="Allow", command=lambda: finish("allow")).grid(
-        row=0, column=1, padx=4
+    deny_btn.grid(row=0, column=0, padx=4)
+    allow_btn = ttk.Button(
+        buttons, text="Allow (y / Enter)", command=lambda: finish("allow")
     )
+    allow_btn.grid(row=0, column=1, padx=4)
+    if hasattr(allow_btn, "focus_set"):
+        allow_btn.focus_set()
+
     root.protocol("WM_DELETE_WINDOW", lambda: finish("deny"))
     _center_window(root)
     root.mainloop()
