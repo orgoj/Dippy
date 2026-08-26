@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] - 2026-08-26
+
+### Added
+
+- **Context flags on file and web rules** — `allow-read`, `ask-read`, `deny-read`, `allow-edit`, `ask-edit`, `deny-edit`, `allow-web`, `ask-web`, and `deny-web` now support `[flags]` syntax (e.g., `[$HCOM_INSTANCE_NAME=agent]`), enabling per-agent file and web rule scoping.
+- **GUI dialog single-key shortcuts & multi-monitor centering** — `dippy-askpass-gui` supports instant keyboard operation (`y`/`Y`/`Enter` = allow, `n`/`N`/`Esc` = deny) and centers itself in the geometric center of the active monitor via `xrandr`.
+- **Multi-workspace session resolution** — file operations in multi-workspace AGY sessions match target paths against `workspacePaths` to locate and load the correct project `.dippy` configuration.
+
 ## [0.3.1] - 2026-08-26
 
 ### Added

@@ -13,12 +13,14 @@
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
-- **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules and combine them with wrapper flags
+- **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, file edit/read operations, and web requests
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), with `--cmd`, `--flag`, `--context`, `--context-first` flags for flexible configuration
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
+- **Tk Approval Provider (`dippy-askpass-gui`)** — standalone Tk GUI approval dialog with operation classification (Read File, Edit File, Command, Web Request, MCP Tool), single-key keyboard shortcuts (`y`/`Y`/`Enter` = allow, `n`/`N`/`Esc` = deny), and multi-monitor geometric centering via `xrandr`
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
-- **Pure Dippy Control (Gemini)** — YOLO mode automation via `dippy hooks setup-gemini-yolo`
+- **Pure Dippy Control (Gemini & AGY)** — YOLO mode automation via `dippy hooks setup-gemini-yolo` and AGY `--dangerously-skip-permissions` binary enforcement with askpass GUI resolution
+- **Antigravity CLI (AGY) support** — native lifecycle hook integration for Antigravity CLI with named-hook format in `~/.gemini/config/hooks.json` and `.agents/hooks.json`, plus multi-workspace session resolution (`workspacePaths`)
 - **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PermissionRequest`/`PostToolUse` on `Bash`
 - **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
@@ -33,7 +35,6 @@
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify the unchanged Bash string before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, Antigravity CLI (AGY), pi-mono, Moltbot, Codex, Windsurf, PearAI
-- **Antigravity CLI (AGY) support** — native lifecycle hook integration for Antigravity CLI with named-hook format in `~/.gemini/config/hooks.json` and `.agents/hooks.json`. In `--dangerously-skip-permissions` (YOLO) mode, Dippy provides Pure Control: auto-approving safe operations, hard-blocking denials, and routing `ask` decisions to `dippy-askpass-gui` (failing closed to `deny` if unconfigured).
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
 - **Configurable Python modules** — `python-allow-module` and `python-deny-module` directives to customize which modules are safe or dangerous during `-c` analysis, plus `python-allow-symbol sys.stdin` to allow a single name from a module that is otherwise too broad to trust *(design by nickdaview)*
