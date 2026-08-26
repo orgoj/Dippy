@@ -898,7 +898,7 @@ set approval-wait-message "Stop work and wait for the user."
 set final ~/.dippy/emergency  # emergency overrides (loaded last)
 
 # GUI approval (SSH_ASKPASS style)
-set askpass /path/to/askpass  # external approval program
+set askpass /path/to/askpass  # external approval program (e.g., dippy-askpass-gui)
 set askpass-timeout 59        # seconds to wait (default: 59)
 
 # Environment variables exposed as context flags (repeatable)
@@ -910,6 +910,34 @@ set deny-format "Custom template: {command} -> {reason}"
 set deny-format-pi "PI-specific format: {reason}"
 set deny-format-claude "Claude-specific format: {reason}"
 ```
+
+### GUI Approval Provider (`dippy-askpass-gui`)
+
+Dippy includes a standalone graphical approval dialog (`dippy-askpass-gui`) built with Tkinter. It is designed for fast, frictionless decision-making:
+
+- **Operation Classification**: Automatically distinguishes and highlights the operation type:
+  - **Read File** (`view_file`, `Read`, `read_file`): displays exact target file path.
+  - **Edit File** (`write_to_file`, `replace_file_content`, `Write`, `Edit`): displays exact target file path.
+  - **Run Command** (`Bash`, `run_command`): displays formatted shell command.
+  - **Web Request** & **MCP Tool Call**: displays target URL/query or MCP tool name.
+- **Multi-Monitor Centering**: Queries `xrandr --listmonitors` to detect active monitors, determines which monitor contains the mouse pointer, and positions the dialog in the exact geometric center of that active monitor.
+- **Fast Keyboard Navigation**:
+  - `y` / `Y` / `Enter` / `Return` — **Allow**
+  - `n` / `N` / `Esc` / `Escape` — **Deny**
+  - Focus defaults to the Allow button for instant one-touch operation.
+
+### Antigravity CLI (AGY) Integration & Pure Control
+
+Antigravity CLI (`agy`) integrates via lifecycle hooks defined in `~/.gemini/config/hooks.json` or `.agents/hooks.json`.
+
+#### Pure Control Model
+In YOLO / bypass mode (`--dangerously-skip-permissions`), AGY automatically ignores and skips tool `ask` prompts. To maintain security:
+- Dippy enforces a **Pure Control** model for AGY, returning strictly binary `{"decision": "allow"}` or `{"decision": "deny"}`.
+- When an operation matches an `ask` rule or falls through unclassified (`set default ask`), Dippy resolves the decision interactively through `dippy-askpass-gui`.
+- If approved, Dippy returns `allow`. If denied, dismissed, or timed out, Dippy returns `deny` to hard-block execution in AGY.
+
+#### Multi-Workspace Session Resolution
+In multi-workspace sessions (`workspacePaths`), AGY provides multiple root directories. Dippy matches target file paths against `workspacePaths` to locate the containing workspace and load the appropriate project `.dippy` configuration rules.
 
 Settings use kebab-case or snake_case interchangeably.
 
