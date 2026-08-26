@@ -313,7 +313,7 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
     home_dir = Path.home()
 
     # Check each agent with hook support
-    for agent_id in ("claude", "gemini", "cursor", "windsurf", "codex"):
+    for agent_id in ("claude", "gemini", "agy", "cursor", "windsurf", "codex"):
         hook_config = HOOK_COMMANDS.get(agent_id)
         agent_info = AGENTS.get(agent_id)
         if not hook_config or not agent_info:

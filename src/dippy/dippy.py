@@ -71,6 +71,13 @@ def _detect_mode_from_flags() -> str | None:
         return "claude"
     if "--gemini" in sys.argv or _env_flag("DIPPY_GEMINI"):
         return "gemini"
+    if (
+        "--agy" in sys.argv
+        or "--antigravity" in sys.argv
+        or _env_flag("DIPPY_AGY")
+        or _env_flag("DIPPY_ANTIGRAVITY")
+    ):
+        return "agy"
     if "--cursor" in sys.argv or _env_flag("DIPPY_CURSOR"):
         return "cursor"
     if "--pi" in sys.argv or _env_flag("DIPPY_PI"):
@@ -88,6 +95,10 @@ def _detect_mode_from_flags() -> str | None:
 
 def _detect_mode_from_input(input_data: dict) -> str:
     """Auto-detect mode from input JSON structure."""
+    # Antigravity CLI (AGY): {"toolCall": {"name": "...", "args": {...}}}
+    if "toolCall" in input_data:
+        return "agy"
+
     # Cursor beforeShellExecution: {"command": "...", "cwd": "..."}
     if "command" in input_data and "tool_name" not in input_data:
         return "cursor"
@@ -125,7 +136,7 @@ def _emit(result: dict | None) -> None:
 
 def _get_log_file() -> Path:
     """Get log file path based on mode."""
-    if MODE == "gemini":
+    if MODE in ("gemini", "agy"):
         return Path.home() / ".gemini" / "hook-approvals.log"
     if MODE == "cursor":
         return Path.home() / ".cursor" / "hook-approvals.log"
@@ -181,6 +192,14 @@ def approve(
         else None
     )
 
+    if MODE == "agy":
+        res = {
+            "decision": "allow",
+            "reason": f"🐤 {reason}",
+        }
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "gemini":
         res = {
             "decision": "allow",
@@ -249,6 +268,14 @@ def ask(
         else None
     )
 
+    if MODE == "agy":
+        res = {
+            "decision": "ask",
+            "reason": f"🐤 {reason}",
+        }
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "gemini":
         res = {
             "decision": "ask",
@@ -307,6 +334,14 @@ def deny(
         else None
     )
 
+    if MODE == "agy":
+        res = {
+            "decision": "deny",
+            "reason": f"🐤 {reason}",
+        }
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "gemini":
         # Gemini CLI: decision "deny" is the standard way to block a tool.
         # It provides feedback to the agent without stopping the loop.
@@ -369,6 +404,11 @@ def pass_(
         else None
     )
 
+    if MODE == "agy":
+        res = {"decision": "allow", "reason": f"🐤 {reason}"}
+        if note:
+            res["additionalContext"] = note
+        return res
     if MODE == "gemini":
         res = {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
         if note:
@@ -528,6 +568,9 @@ def post_tool_response(
         else None
     )
 
+    if MODE == "agy":
+        return {}
+
     context = f"🐤 {message}"
     if note:
         context = f"{context}\n\n{note}"
@@ -673,6 +716,7 @@ SHELL_TOOL_NAMES = frozenset(
         "run_shell",  # Gemini CLI alternate
         "run_shell_command",  # Gemini CLI official name
         "execute_shell",  # Gemini CLI alternate
+        "run_command",  # Antigravity CLI / AGY
     }
 )
 
@@ -694,6 +738,12 @@ FILE_TOOL_NAMES = frozenset(
         "replace",
         "read_file",
         "read_many_files",
+        "view_file",  # Antigravity CLI
+        "write_to_file",  # Antigravity CLI
+        "replace_file_content",  # Antigravity CLI
+        "grep_search",  # Antigravity CLI
+        "find_by_name",  # Antigravity CLI
+        "list_dir",  # Antigravity CLI
     }
 )
 
@@ -710,7 +760,18 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
-    if tool_name in ("Read", "read_file", "LS", "Glob", "Grep", "Search"):
+    if tool_name in (
+        "Read",
+        "read_file",
+        "view_file",
+        "LS",
+        "Glob",
+        "Grep",
+        "Search",
+        "grep_search",
+        "find_by_name",
+        "list_dir",
+    ):
         match = match_read(file_path, config, cwd)
     else:
         match = match_edit(file_path, config, cwd)
@@ -800,6 +861,8 @@ Subcommands:
     # Hook mode arguments (for backward compatibility)
     parser.add_argument("--claude", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--gemini", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--agy", action="store_true", help=argparse.SUPPRESS)
+    parser.add_argument("--antigravity", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--cursor", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--pi", action="store_true", help=argparse.SUPPRESS)
     parser.add_argument("--moltbot", action="store_true", help=argparse.SUPPRESS)
@@ -902,7 +965,7 @@ Subcommands:
     install_parser.add_argument(
         "agent",
         nargs="?",
-        choices=["claude", "gemini", "cursor", "windsurf", "codex"],
+        choices=["claude", "gemini", "agy", "cursor", "windsurf", "codex"],
         help="Agent to install hooks for; omit with --all to install for all agents",
     )
     install_parser.add_argument(
@@ -939,7 +1002,7 @@ Subcommands:
     )
     uninstall_parser.add_argument(
         "agent",
-        choices=["claude", "gemini", "cursor", "windsurf", "codex"],
+        choices=["claude", "gemini", "agy", "cursor", "windsurf", "codex"],
         help="Agent to uninstall hooks for",
     )
     uninstall_parser.add_argument(
@@ -987,6 +1050,7 @@ Subcommands:
         choices=[
             "claude",
             "gemini",
+            "agy",
             "cursor",
             "windsurf",
             "pi",
@@ -1354,10 +1418,22 @@ def main():
         # Extract cwd from input
         # Cursor: top-level "cwd"
         # Claude Code: may be in tool_input or top-level
+        # AGY: in toolCall.args.Cwd or workspacePaths
         cwd_str = input_data.get("cwd")
         if not cwd_str:
             tool_input = input_data.get("tool_input", {})
             cwd_str = tool_input.get("cwd")
+        if not cwd_str and "toolCall" in input_data:
+            tool_args = input_data["toolCall"].get("args", {})
+            cwd_str = (
+                tool_args.get("Cwd")
+                or tool_args.get("cwd")
+                or (
+                    input_data.get("workspacePaths", [None])[0]
+                    if input_data.get("workspacePaths")
+                    else None
+                )
+            )
         if cwd_str:
             cwd = Path(cwd_str).resolve()
         else:
@@ -1369,14 +1445,31 @@ def main():
             configure_logging(config)
         except ConfigError as e:
             logging.error(f"Config error: {e}")
-            if MODE == "gemini":
+            if MODE in ("gemini", "agy"):
                 print(json.dumps({"decision": "allow", "reason": f"config error: {e}"}))
             else:
                 print(json.dumps(ask(f"config error: {e}")))
             return
 
-        # Detect hook event type (Claude Code / Gemini CLI)
-        hook_event = input_data.get("hook_event_name", "PreToolUse")
+        # Detect hook event type (Claude Code / Gemini CLI / AGY)
+        hook_event = input_data.get("hook_event_name") or input_data.get(
+            "hookEventName"
+        )
+        if not hook_event:
+            if "terminationReason" in input_data or "fullyIdle" in input_data:
+                hook_event = "Stop"
+            elif "toolResponse" in input_data or (
+                "toolCall" in input_data and "error" in input_data
+            ):
+                hook_event = "PostToolUse"
+            elif (
+                "toolCall" in input_data
+                or "tool_name" in input_data
+                or "command" in input_data
+            ):
+                hook_event = "PreToolUse"
+            else:
+                hook_event = "PreToolUse"
 
         # Notification hook handling (idle_prompt, etc.)
         if hook_event == "Notification":
@@ -1427,7 +1520,16 @@ def main():
             logging.info(f"Stop hook: {hook_event}")
             note = run_notifier(config, idle=True)
             if note:
-                if MODE == "gemini":
+                if MODE == "agy":
+                    print(
+                        json.dumps(
+                            {
+                                "decision": "continue",
+                                "reason": note,
+                            }
+                        )
+                    )
+                elif MODE == "gemini":
                     print(
                         json.dumps(
                             {
@@ -1450,7 +1552,9 @@ def main():
                     )
             else:
                 # No notification, allow stop
-                if MODE == "gemini":
+                if MODE == "agy":
+                    print(json.dumps({}))
+                elif MODE == "gemini":
                     print(json.dumps({"decision": "allow", "continue": False}))
                 elif MODE == "codex":
                     # Codex: continue=false allows normal stop
@@ -1467,6 +1571,7 @@ def main():
 
         # Extract command based on mode
         # Cursor: {"command": "...", "cwd": "..."}
+        # AGY: {"toolCall": {"name": "...", "args": {...}}}
         # Claude/Gemini: {"tool_name": "...", "tool_input": {"command": "..."}}
 
         # Initialize context variables for safe exception handling
@@ -1491,6 +1596,151 @@ def main():
             else:
                 command = input_data.get("command", "")
                 tool_name = None
+        elif MODE == "agy" or "toolCall" in input_data:
+            tool_call = input_data.get("toolCall", {})
+            tool_name = tool_call.get("name", "")
+            tool_args = tool_call.get("args", {})
+            tool_input = tool_args
+
+            # Check if this is an MCP tool
+            if tool_name == "call_mcp_tool" or is_mcp_tool(tool_name):
+                if tool_name == "call_mcp_tool":
+                    server_name = tool_args.get("ServerName", "")
+                    inner_tool = tool_args.get("ToolName", "")
+                    mcp_name = (
+                        f"mcp__{server_name}__{inner_tool}"
+                        if server_name
+                        else f"mcp__{inner_tool}"
+                    )
+                else:
+                    mcp_name = tool_name
+
+                if hook_event == "PostToolUse":
+                    logging.info(f"PostToolUse MCP: {mcp_name}")
+                    handle_mcp_post_tool_use(mcp_name, config)
+                else:
+                    logging.info(f"Checking MCP: {mcp_name}")
+                    result = check_mcp_tool(mcp_name, config)
+                    if not result:
+                        log_decision(
+                            "pass",
+                            message="no matching rule",
+                            tool=mcp_name,
+                            agent=MODE,
+                        )
+                        result = pass_(
+                            "no matching rule", config=config, tool_name=mcp_name
+                        )
+                    print(json.dumps(result))
+                return
+
+            # Check if this is a web tool
+            if tool_name in (
+                "search_web",
+                "read_url_content",
+                "google_web_search",
+                "web_fetch",
+                "WebSearch",
+                "WebFetch",
+            ):
+                match_value = (
+                    tool_args.get("query")
+                    or tool_args.get("Url")
+                    or tool_args.get("url")
+                    or tool_args.get("q")
+                    or ""
+                )
+                if hook_event == "PostToolUse":
+                    logging.info(f"PostToolUse {tool_name}: {match_value}")
+                    handle_web_post_tool_use(match_value, config)
+                else:
+                    logging.info(f"Checking {tool_name}: {match_value}")
+                    result = check_web_tool(match_value, config)
+                    if not result:
+                        log_decision(
+                            "pass",
+                            message="no matching rule",
+                            tool=tool_name,
+                            command=match_value,
+                            agent=MODE,
+                        )
+                        result = pass_(
+                            "no matching rule", config=config, tool_name=tool_name
+                        )
+                    print(json.dumps(result))
+                return
+
+            # Check if this is a file operation tool
+            if tool_name in FILE_TOOL_NAMES:
+                file_path = (
+                    tool_args.get("AbsolutePath")
+                    or tool_args.get("TargetFile")
+                    or tool_args.get("SearchPath")
+                    or tool_args.get("SearchDirectory")
+                    or tool_args.get("DirectoryPath")
+                    or tool_args.get("file_path")
+                    or tool_args.get("path")
+                    or tool_args.get("filepath")
+                    or ""
+                )
+                if file_path and hook_event != "PostToolUse":
+                    logging.info(f"Checking file op: {tool_name} -> {file_path}")
+                    try:
+                        result = check_file_tool(tool_name, file_path, config, cwd)
+                        if not result:
+                            log_decision(
+                                "pass",
+                                message="no matching rule",
+                                tool=tool_name,
+                                file_path=file_path,
+                                cwd=cwd,
+                                agent=MODE,
+                            )
+                            result = pass_(
+                                "no matching rule", config=config, tool_name=tool_name
+                            )
+                        print(json.dumps(result))
+                    except Exception as e:
+                        logging.error(f"Error checking file tool: {e}")
+                        log_decision(
+                            "ask",
+                            message="file-check-error",
+                            tool=tool_name,
+                            file_path=file_path,
+                            cwd=cwd,
+                            agent=MODE,
+                        )
+                        _emit(ask(f"error: {e}"))
+                    return
+                if hook_event != "PostToolUse":
+                    log_decision(
+                        "ask",
+                        message=f"no file path for {tool_name}",
+                        tool=tool_name,
+                        agent=MODE,
+                    )
+                    _emit(ask("no file path provided"))
+                else:
+                    print(json.dumps({}))
+                return
+
+            # Only handle shell/bash commands
+            if tool_name not in SHELL_TOOL_NAMES:
+                log_decision(
+                    "pass",
+                    message=f"unsupported tool: {tool_name}",
+                    tool=tool_name,
+                    agent=MODE,
+                )
+                print(json.dumps(pass_(f"unsupported tool: {tool_name}")))
+                return
+
+            command = (
+                tool_args.get("CommandLine")
+                or tool_args.get("command")
+                or tool_args.get("cmd")
+                or ""
+            )
         else:
             # Claude Code and Gemini CLI use tool_name/tool_input format
             tool_name = input_data.get("tool_name", "")

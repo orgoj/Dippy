@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1] - 2026-08-26
+
+### Added
+
+- **Antigravity CLI (AGY) support** — native lifecycle hook integration for Antigravity CLI / AGY with named-hook format in `~/.gemini/config/hooks.json` and `.agents/hooks.json`.
+- **AGY hook event mapping** — full compatibility with AGY `toolCall` payload structure, supporting `run_command` (shell execution), `view_file` / `grep_search` / `find_by_name` / `list_dir` (read tools), `write_to_file` / `replace_file_content` (edit tools), `search_web` / `read_url_content` (web search), `call_mcp_tool` (MCP tools), `PostToolUse`, and `Stop` hooks.
+- **AGY CLI commands & diagnostics** — `--agy` and `--antigravity` flags, agent auto-detection via `DIPPY_AGY`, and management via `dippy hooks install/uninstall/list agy` and `dippy doctor --agent agy`.
+
 ## [0.3.0] - 2026-08-25
 
 ### Added

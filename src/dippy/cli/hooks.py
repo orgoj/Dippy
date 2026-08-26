@@ -79,6 +79,34 @@ MINIMAL_HOOKS = {
             ],
         }
     },
+    "agy": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "run_command|write_to_file|replace_file_content|view_file|search_web|call_mcp_tool",
+                    "hooks": [
+                        {
+                            "name": "dippy-approval",
+                            "type": "command",
+                            "command": "dippy --agy",
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "run_command|search_web|call_mcp_tool",
+                    "hooks": [
+                        {
+                            "name": "dippy-after",
+                            "type": "command",
+                            "command": "dippy --agy",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
     "codex": {
         "hooks": {
             "PreToolUse": [
@@ -214,6 +242,45 @@ ALL_HOOKS = {
             ],
         }
     },
+    "agy": {
+        "hooks": {
+            "PreToolUse": [
+                {
+                    "matcher": "run_command|write_to_file|replace_file_content|view_file|search_web|call_mcp_tool",
+                    "hooks": [
+                        {
+                            "name": "dippy-approval",
+                            "type": "command",
+                            "command": "dippy --agy",
+                        }
+                    ],
+                }
+            ],
+            "PostToolUse": [
+                {
+                    "matcher": "run_command|search_web|call_mcp_tool",
+                    "hooks": [
+                        {
+                            "name": "dippy-after",
+                            "type": "command",
+                            "command": "dippy --agy",
+                        }
+                    ],
+                }
+            ],
+            "Stop": [
+                {
+                    "hooks": [
+                        {
+                            "name": "dippy-stop",
+                            "type": "command",
+                            "command": "dippy --agy",
+                        }
+                    ],
+                }
+            ],
+        }
+    },
     "codex": {
         "hooks": {
             "PreToolUse": [
@@ -274,6 +341,11 @@ HOOK_COMMANDS = {
         "config": "~/.gemini/settings.json",
         "project_config": ".gemini/settings.json",
         "hook_entry": MINIMAL_HOOKS["gemini"],
+    },
+    "agy": {
+        "config": "~/.gemini/config/hooks.json",
+        "project_config": ".agents/hooks.json",
+        "hook_entry": MINIMAL_HOOKS["agy"],
     },
     "cursor": {
         "config": "~/.cursor/hooks.json",
@@ -819,7 +891,7 @@ def _print_hook_summary(agent: str, config: dict) -> None:
     if not hook_config:
         return
 
-    hooks_data = config.get("hooks", {})
+    hooks_data = config.get("dippy", {}) if agent == "agy" else config.get("hooks", {})
 
     # Determine which hook types to show based on agent
     # Show ALL hook types that are present, not just the minimal set
@@ -835,6 +907,12 @@ def _print_hook_summary(agent: str, config: dict) -> None:
         ]
     elif agent == "gemini":
         hook_types = [("BeforeTool", "BeforeTool"), ("AfterTool", "AfterTool")]
+    elif agent == "agy":
+        hook_types = [
+            ("PreToolUse", "PreToolUse"),
+            ("PostToolUse", "PostToolUse"),
+            ("Stop", "Stop"),
+        ]
     elif agent == "codex":
         hook_types = [
             ("PreToolUse", "PreToolUse"),
@@ -1285,6 +1363,25 @@ def _extract_matchers_from_config(config: dict, agent_id: str) -> list[str]:
         ]
     elif agent_id == "gemini":
         hook_names = ["BeforeTool", "AfterTool"]
+    elif agent_id == "agy":
+        hook_names = ["PreToolUse", "PostToolUse", "Stop"]
+        dippy_block = config.get("dippy", {})
+        if isinstance(dippy_block, dict):
+            for hook_name in hook_names:
+                if hook_name in dippy_block:
+                    for hook_entry in dippy_block[hook_name]:
+                        if not isinstance(hook_entry, dict):
+                            continue
+                        has_dippy = _is_dippy_hook(hook_entry) or any(
+                            _is_dippy_hook(h) for h in hook_entry.get("hooks", [])
+                        )
+                        if not has_dippy:
+                            continue
+                        if "matcher" in hook_entry:
+                            matchers.append(f"{hook_name}: {hook_entry['matcher']}")
+                        else:
+                            matchers.append(f"{hook_name}: (all)")
+        return matchers
     elif agent_id == "codex":
         hook_names = ["PreToolUse", "PermissionRequest", "PostToolUse", "Stop"]
     elif agent_id in ("cursor", "windsurf"):
@@ -1518,6 +1615,19 @@ def _get_installed_dippy_hook_types(config: dict, agent: str) -> set[str]:
             for h in hooks_list:
                 if _is_dippy_hook(h):
                     hook_types.add(hook_type)
+    elif agent == "agy":
+        dippy_block = config.get("dippy", {})
+        if isinstance(dippy_block, dict):
+            for hook_type, hook_list in dippy_block.items():
+                if isinstance(hook_list, list):
+                    for entry in hook_list:
+                        if not isinstance(entry, dict):
+                            continue
+                        if _is_dippy_hook(entry) or any(
+                            _is_dippy_hook(h) for h in entry.get("hooks", [])
+                        ):
+                            hook_types.add(hook_type)
+                            break
     elif agent == "codex":
         # Codex format uses nested hooks like Claude/Gemini. Also scrub old flat entries.
         hooks = config.get("hooks", {})
@@ -1559,6 +1669,19 @@ def _has_dippy_hook(config: dict, agent: str) -> bool:
     Returns:
         True if any Dippy hook is found, False otherwise
     """
+    if agent == "agy":
+        dippy_block = config.get("dippy")
+        if isinstance(dippy_block, dict):
+            for hook_list in dippy_block.values():
+                if isinstance(hook_list, list):
+                    for entry in hook_list:
+                        if not isinstance(entry, dict):
+                            continue
+                        if _is_dippy_hook(entry) or any(
+                            _is_dippy_hook(h) for h in entry.get("hooks", [])
+                        ):
+                            return True
+
     hooks = config.get("hooks", {})
     if not isinstance(hooks, dict):
         return False
@@ -1611,6 +1734,11 @@ def _merge_hook_entry(config: dict, hook_entry: dict, agent: str) -> dict:
 
     # First, remove any existing Dippy hooks
     result = _remove_dippy_hook(result, agent)
+
+    if agent == "agy":
+        dippy_block = copy.deepcopy(hook_entry.get("hooks", {}))
+        result["dippy"] = dippy_block
+        return result
 
     # Then add the new hooks
     if agent == "cursor":
@@ -1702,6 +1830,26 @@ def _remove_dippy_hook(config: dict, agent: str) -> dict:
         Configuration dict with Dippy hook removed
     """
     result = copy.deepcopy(config)
+
+    if agent == "agy":
+        if "dippy" in result:
+            del result["dippy"]
+        if "hooks" in result and isinstance(result["hooks"], dict):
+            for hook_type, hook_list in list(result["hooks"].items()):
+                if isinstance(hook_list, list):
+                    result["hooks"][hook_type] = [
+                        entry
+                        for entry in hook_list
+                        if not (
+                            _is_dippy_hook(entry)
+                            or any(_is_dippy_hook(h) for h in entry.get("hooks", []))
+                        )
+                    ]
+                    if not result["hooks"][hook_type]:
+                        del result["hooks"][hook_type]
+            if not result["hooks"]:
+                del result["hooks"]
+        return result
 
     if agent in ("cursor", "windsurf"):
         # Cursor/Windsurf format: simple list of hook dicts with "command" key

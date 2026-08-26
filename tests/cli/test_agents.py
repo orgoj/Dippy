@@ -100,11 +100,12 @@ class TestAgentInfo:
 class TestAgentsRegistry:
     """Test the AGENTS registry constant."""
 
-    def test_all_8_agents_defined(self):
-        """All 8 required agents are defined in the registry."""
+    def test_all_9_agents_defined(self):
+        """All 9 required agents are defined in the registry."""
         required_agents = {
             "claude",
             "gemini",
+            "agy",
             "cursor",
             "windsurf",
             "pi",
@@ -125,6 +126,7 @@ class TestAgentsRegistry:
                 "claude",
                 "cursor",
                 "gemini",
+                "agy",
                 "pi",
                 "codex",
                 "none",
@@ -152,6 +154,16 @@ class TestAgentsRegistry:
         assert gemini.project_config == ".gemini/settings.json"
         assert gemini.hook_format == "gemini"
         assert gemini.config_format == "json"
+
+    def test_agy_agent_config(self):
+        """AGY agent has correct config paths."""
+        agy = AGENTS["agy"]
+        assert agy.id == "agy"
+        assert agy.name == "Antigravity CLI / AGY"
+        assert agy.global_config == Path.home() / ".gemini" / "config" / "hooks.json"
+        assert agy.project_config == ".agents/hooks.json"
+        assert agy.hook_format == "agy"
+        assert agy.config_format == "json"
 
     def test_cursor_agent_config(self):
         """Cursor agent has correct config paths."""
@@ -398,6 +410,12 @@ class TestResolveDippyCommand:
         cmd = resolve_dippy_command("moltbot")
         assert "pi_wrapper.py" in cmd
 
+    def test_resolve_agy_command(self):
+        """AGY agent includes --agy flag."""
+        cmd = resolve_dippy_command("agy")
+        assert "--agy" in cmd
+        assert "dippy" in cmd
+
     def test_resolve_pearai_command(self):
         """PearAI agent includes --claude flag (compatible format)."""
         cmd = resolve_dippy_command("pearai")
@@ -425,13 +443,14 @@ class TestHelperFunctions:
         assert info is None
 
     def test_list_all_agents(self):
-        """list_all_agents returns all 8 agents."""
+        """list_all_agents returns all 9 agents."""
         all_agents = list_all_agents()
-        assert len(all_agents) == 8
+        assert len(all_agents) == 9
         agent_ids = {a.id for a in all_agents}
         assert agent_ids == {
             "claude",
             "gemini",
+            "agy",
             "cursor",
             "windsurf",
             "pi",

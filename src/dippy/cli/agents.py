@@ -32,7 +32,7 @@ class AgentInfo:
     name: str
     global_config: Path
     project_config: str
-    hook_format: Literal["claude", "cursor", "gemini", "pi", "codex", "none"]
+    hook_format: Literal["claude", "cursor", "gemini", "agy", "pi", "codex", "none"]
     config_format: Literal["json", "toml"]
     env_flags: tuple[str, ...]
     cli_flags: tuple[str, ...]
@@ -73,6 +73,16 @@ AGENTS: dict[str, AgentInfo] = {
         config_format="json",
         env_flags=("DIPPY_GEMINI",),
         cli_flags=("--gemini",),
+    ),
+    "agy": AgentInfo(
+        id="agy",
+        name="Antigravity CLI / AGY",
+        global_config=Path.home() / ".gemini" / "config" / "hooks.json",
+        project_config=".agents/hooks.json",
+        hook_format="agy",
+        config_format="json",
+        env_flags=("DIPPY_AGY", "DIPPY_ANTIGRAVITY"),
+        cli_flags=("--agy", "--antigravity"),
     ),
     "cursor": AgentInfo(
         id="cursor",

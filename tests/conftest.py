@@ -73,5 +73,18 @@ def needs_confirmation(result: dict) -> bool:
 
 @pytest.fixture(autouse=True)
 def disable_logging_in_tests(monkeypatch):
-    """Disable logging to production audit.log during tests."""
+    """Disable logging to production audit.log during tests and isolate MODE."""
     monkeypatch.setenv("DIPPY_TEST_NO_LOG", "1")
+    monkeypatch.delenv("DIPPY_GEMINI", raising=False)
+    monkeypatch.delenv("DIPPY_CURSOR", raising=False)
+    monkeypatch.delenv("DIPPY_CLAUDE", raising=False)
+    monkeypatch.delenv("DIPPY_CODEX", raising=False)
+    monkeypatch.delenv("DIPPY_AGY", raising=False)
+    monkeypatch.delenv("DIPPY_ANTIGRAVITY", raising=False)
+    monkeypatch.delenv("DIPPY_WINDSURF", raising=False)
+    monkeypatch.delenv("DIPPY_PI", raising=False)
+    monkeypatch.delenv("DIPPY_MOLTBOT", raising=False)
+    monkeypatch.delenv("DIPPY_PEARAI", raising=False)
+    import dippy.dippy as dippy_mod
+
+    monkeypatch.setattr(dippy_mod, "MODE", "claude")

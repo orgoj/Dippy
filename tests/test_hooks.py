@@ -581,3 +581,41 @@ class TestCodexHooksFormat:
         codex = next(agent for agent in payload["agents"] if agent["id"] == "codex")
         assert codex["project"]["feature_flag_enabled"] is True
         assert codex["project"]["feature_flag_path"].endswith(".codex/config.toml")
+
+    def test_install_agy_writes_named_hook(self, tmp_path):
+        """dippy hooks install agy writes named 'dippy' hook group."""
+        from dippy.cli.hooks import install, _has_dippy_hook
+
+        install(agent="agy", global_config=False, cwd=str(tmp_path))
+        config_path = tmp_path / ".agents" / "hooks.json"
+        assert config_path.exists()
+        config = json.loads(config_path.read_text())
+        assert "dippy" in config
+        assert "PreToolUse" in config["dippy"]
+        assert _has_dippy_hook(config, "agy") is True
+
+    def test_uninstall_agy_removes_named_hook(self, tmp_path):
+        """dippy hooks uninstall agy removes named 'dippy' hook group."""
+        from dippy.cli.hooks import install, uninstall, _has_dippy_hook
+
+        install(agent="agy", global_config=False, cwd=str(tmp_path))
+        uninstall(agent="agy", global_config=False, cwd=str(tmp_path))
+        config_path = tmp_path / ".agents" / "hooks.json"
+        config = json.loads(config_path.read_text())
+        assert not _has_dippy_hook(config, "agy")
+        assert "dippy" not in config
+
+    def test_list_hooks_json_reports_agy(self, tmp_path, capsys):
+        """hooks list --json includes agy agent."""
+        from dippy.cli.hooks import install, list_hooks
+
+        install(agent="agy", global_config=False, cwd=str(tmp_path))
+        capsys.readouterr()
+        result = list_hooks(cwd=str(tmp_path), json_output=True)
+        assert result == 0
+
+        payload = json.loads(capsys.readouterr().out)
+        agy = next(agent for agent in payload["agents"] if agent["id"] == "agy")
+        assert agy["id"] == "agy"
+        assert agy["project"]["status"] == "installed"
+        assert "PreToolUse" in agy["project"]["matchers"][0]
