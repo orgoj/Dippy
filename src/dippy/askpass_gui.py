@@ -64,6 +64,38 @@ def _payload() -> dict[str, object]:
     return value
 
 
+def _center_window(root: tk.Tk) -> None:
+    """Center window on the active screen / monitor where the pointer is."""
+    try:
+        if hasattr(root, "update_idletasks"):
+            root.update_idletasks()
+        w = root.winfo_reqwidth() if hasattr(root, "winfo_reqwidth") else 600
+        h = root.winfo_reqheight() if hasattr(root, "winfo_reqheight") else 350
+
+        px = root.winfo_pointerx() if hasattr(root, "winfo_pointerx") else 0
+        py = root.winfo_pointery() if hasattr(root, "winfo_pointery") else 0
+        sw = root.winfo_screenwidth() if hasattr(root, "winfo_screenwidth") else 1920
+        sh = root.winfo_screenheight() if hasattr(root, "winfo_screenheight") else 1080
+
+        if px > 0 or py > 0:
+            x = px - (w // 2)
+            y = py - (h // 2)
+            x = max(0, min(x, sw - w))
+            y = max(0, min(y, sh - h))
+        else:
+            x = max(0, (sw - w) // 2)
+            y = max(0, (sh - h) // 2)
+
+        if hasattr(root, "geometry"):
+            root.geometry(f"+{x}+{y}")
+        if hasattr(root, "lift"):
+            root.lift()
+        if hasattr(root, "focus_force"):
+            root.focus_force()
+    except Exception:
+        pass
+
+
 def show_dialog(payload: dict[str, object]) -> tuple[str, str | None]:
     """Show the modal dialog. Closing the window or timing out means deny."""
     if tk is None or ttk is None:
@@ -150,6 +182,7 @@ def show_dialog(payload: dict[str, object]) -> tuple[str, str | None]:
         row=0, column=1, padx=4
     )
     root.protocol("WM_DELETE_WINDOW", lambda: finish("deny"))
+    _center_window(root)
     root.mainloop()
     return str(result[0]), result[1]
 
