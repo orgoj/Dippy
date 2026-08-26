@@ -160,3 +160,64 @@ def test_context_env_requires_a_value():
     """'set context-env' without a variable name is rejected."""
     config = parse_config("set context-env")
     assert config.context_env == ()
+
+
+def test_read_rule_respects_context_env(monkeypatch):
+    monkeypatch.setenv(ENV_VAR, "research")
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow-read [${ENV_VAR}=research] src/**
+    """
+    )
+    from dippy.core.config import env_context_flags, match_read
+
+    flags = env_context_flags(config)
+    assert (
+        match_read("/work/src/main.py", config, Path("/work"), context_flags=flags)
+        is not None
+    )
+    assert (
+        match_read("/work/src/main.py", config, Path("/work"), context_flags=None)
+        is None
+    )
+
+
+def test_edit_rule_respects_context_env(monkeypatch):
+    monkeypatch.setenv(ENV_VAR, "research")
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow-edit [${ENV_VAR}=research] tmp/**
+    """
+    )
+    from dippy.core.config import env_context_flags, match_edit
+
+    flags = env_context_flags(config)
+    assert (
+        match_edit("/work/tmp/notes.md", config, Path("/work"), context_flags=flags)
+        is not None
+    )
+    assert (
+        match_edit("/work/src/app.py", config, Path("/work"), context_flags=flags)
+        is None
+    )
+    assert (
+        match_edit("/work/tmp/notes.md", config, Path("/work"), context_flags=None)
+        is None
+    )
+
+
+def test_web_rule_respects_context_env(monkeypatch):
+    monkeypatch.setenv(ENV_VAR, "research")
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow-web [${ENV_VAR}=research] *python*
+    """
+    )
+    from dippy.core.config import env_context_flags, match_web
+
+    flags = env_context_flags(config)
+    assert match_web("python docs", config, context_flags=flags) is not None
+    assert match_web("python docs", config, context_flags=None) is None

@@ -887,64 +887,65 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     context_first=context_first,
                 )
 
-            elif directive == "allow-edit":
+            elif directive in ("allow-edit", "ask-edit", "deny-edit"):
                 if not rest:
                     raise ValueError("requires a pattern")
-                edit_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
-
-            elif directive == "ask-edit":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
+                pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern, message = (
+                    _extract_message(pattern_part)
+                    if directive != "allow-edit"
+                    else (pattern_part, None)
+                )
+                decision = directive.split("-")[0]
                 edit_rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                    Rule(
+                        decision,
+                        _expand_pattern_tildes(pattern),
+                        message=message,
+                        required_flags=flags,
+                        negated_flags=neg_flags,
+                    )
                 )
 
-            elif directive == "deny-edit":
+            elif directive in ("allow-read", "ask-read", "deny-read"):
                 if not rest:
                     raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                edit_rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern, message = (
+                    _extract_message(pattern_part)
+                    if directive != "allow-read"
+                    else (pattern_part, None)
                 )
-
-            elif directive == "allow-read":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                read_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
-
-            elif directive == "ask-read":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
+                decision = directive.split("-")[0]
                 read_rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                    Rule(
+                        decision,
+                        _expand_pattern_tildes(pattern),
+                        message=message,
+                        required_flags=flags,
+                        negated_flags=neg_flags,
+                    )
                 )
 
-            elif directive == "deny-read":
+            elif directive in ("allow-web", "ask-web", "deny-web"):
                 if not rest:
                     raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                read_rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern, message = (
+                    _extract_message(pattern_part)
+                    if directive != "allow-web"
+                    else (pattern_part, None)
                 )
-
-            elif directive == "allow-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                web_rules.append(Rule("allow", rest))
-
-            elif directive == "ask-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                web_rules.append(Rule("ask", pattern, message=message))
-
-            elif directive == "deny-web":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                web_rules.append(Rule("deny", pattern, message=message))
+                decision = directive.split("-")[0]
+                web_rules.append(
+                    Rule(
+                        decision,
+                        pattern,
+                        message=message,
+                        required_flags=flags,
+                        negated_flags=neg_flags,
+                    )
+                )
 
             elif directive == "after-web":
                 if not rest:
@@ -1800,7 +1801,21 @@ def match_after_mcp(tool_name: str, config: Config) -> str | None:
     return result
 
 
-def match_web(query: str, config: Config) -> Match | None:
+def _check_rule_context_flags(rule: Rule, active_flags: frozenset[str] | None) -> bool:
+    """Check whether a rule's required and negated context flags are satisfied."""
+    flags = active_flags or frozenset()
+    if rule.required_flags is not None:
+        if not rule.required_flags.issubset(flags):
+            return False
+    if rule.negated_flags is not None:
+        if rule.negated_flags & flags:
+            return False
+    return True
+
+
+def match_web(
+    query: str, config: Config, context_flags: frozenset[str] | None = None
+) -> Match | None:
     """Match WebSearch query against web rules.
 
     Simpler than command matching - just fnmatch against query string.
@@ -1809,12 +1824,15 @@ def match_web(query: str, config: Config) -> Match | None:
     Args:
         query: WebSearch query string.
         config: Loaded configuration.
+        context_flags: Active context flags for conditional rules.
 
     Returns:
         Match object for the last matching rule, or None if no match.
     """
     result: Match | None = None
     for rule in config.web_rules:
+        if not _check_rule_context_flags(rule, context_flags):
+            continue
         if fnmatch.fnmatch(query, rule.pattern):
             result = Match(
                 decision=rule.decision,
@@ -1846,7 +1864,12 @@ def match_after_web(query: str, config: Config) -> str | None:
     return result
 
 
-def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
+def match_edit(
+    file_path: str,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+) -> Match | None:
     """Match file path against edit rules for Write/Edit/MultiEdit tools.
 
     Uses same glob matching as redirect rules. Last matching rule wins.
@@ -1855,6 +1878,7 @@ def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
         file_path: Absolute path to the file being edited.
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
+        context_flags: Active context flags for conditional rules.
 
     Returns:
         Match object for the last matching rule, or None if no match.
@@ -1862,6 +1886,8 @@ def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
     normalized_path = _normalize_path(file_path, cwd)
     result: Match | None = None
     for rule in config.edit_rules:
+        if not _check_rule_context_flags(rule, context_flags):
+            continue
         normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
         if _glob_match(normalized_path, normalized_pattern):
             result = Match(
@@ -1874,7 +1900,12 @@ def match_edit(file_path: str, config: Config, cwd: Path) -> Match | None:
     return result
 
 
-def match_read(file_path: str, config: Config, cwd: Path) -> Match | None:
+def match_read(
+    file_path: str,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+) -> Match | None:
     """Match file path against read rules for Read tool.
 
     Uses same glob matching as redirect rules. Last matching rule wins.
@@ -1883,6 +1914,7 @@ def match_read(file_path: str, config: Config, cwd: Path) -> Match | None:
         file_path: Absolute path to the file being read.
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
+        context_flags: Active context flags for conditional rules.
 
     Returns:
         Match object for the last matching rule, or None if no match.
@@ -1890,6 +1922,8 @@ def match_read(file_path: str, config: Config, cwd: Path) -> Match | None:
     normalized_path = _normalize_path(file_path, cwd)
     result: Match | None = None
     for rule in config.read_rules:
+        if not _check_rule_context_flags(rule, context_flags):
+            continue
         normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
         if _glob_match(normalized_path, normalized_pattern):
             result = Match(

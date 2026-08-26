@@ -39,6 +39,7 @@ from dippy.core.config import (
     Config,
     ConfigError,
     configure_logging,
+    env_context_flags,
     load_config,
     log_decision,
     Match,
@@ -765,7 +766,8 @@ def check_web_tool(query: str, config: Config) -> dict:
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
-    match = match_web(query, config)
+    context_flags = env_context_flags(config)
+    match = match_web(query, config, context_flags=context_flags)
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
     reason = _rule_reason(match)
@@ -845,6 +847,7 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     Returns:
         Hook response dict, or empty dict if no rules match (defer to default).
     """
+    context_flags = env_context_flags(config)
     if tool_name in (
         "Read",
         "read_file",
@@ -857,9 +860,9 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
         "find_by_name",
         "list_dir",
     ):
-        match = match_read(file_path, config, cwd)
+        match = match_read(file_path, config, cwd, context_flags=context_flags)
     else:
-        match = match_edit(file_path, config, cwd)
+        match = match_edit(file_path, config, cwd, context_flags=context_flags)
 
     if match is None:
         return {}  # No rules match - defer to Claude's default behavior
