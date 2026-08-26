@@ -45,11 +45,10 @@ class TestAgyResponses:
 
     def test_approve_agy_format(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")
-        resp = dippy_mod.approve("all commands safe")
-        assert resp == {
-            "decision": "allow",
-            "reason": "🐤 all commands safe",
-        }
+        resp = dippy_mod.approve("all commands safe", command="true")
+        assert resp["decision"] == "allow"
+        assert resp["reason"] == "🐤 all commands safe"
+        assert resp["permissionOverrides"] == ["command(true)"]
 
     def test_ask_agy_format(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")

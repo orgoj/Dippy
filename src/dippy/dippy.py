@@ -183,6 +183,8 @@ def approve(
     tool_name: str | None = None,
     command: str | None = None,
     hook_event: str | None = None,
+    file_path: str | None = None,
+    match_value: str | None = None,
 ) -> dict:
     """Return approval response."""
     logging.info(f"APPROVED: {reason}")
@@ -197,6 +199,18 @@ def approve(
             "decision": "allow",
             "reason": f"🐤 {reason}",
         }
+        overrides = []
+        if command:
+            overrides.append(f"command({command})")
+        if tool_name:
+            overrides.append(tool_name)
+        if file_path:
+            overrides.append(f"file({file_path})")
+            overrides.append(file_path)
+        if match_value:
+            overrides.append(match_value)
+        if overrides:
+            res["permissionOverrides"] = overrides
         if note:
             res["additionalContext"] = note
         return res
