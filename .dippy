@@ -5,6 +5,7 @@ include .dippy-yolo
 #---- File Operations ----#
 allow-read ./**
 allow-edit ./**
+allow-read ~/.dippy/audit.log
 
 #---- Python ----#
 allow rm -rf /**/__pycache__
