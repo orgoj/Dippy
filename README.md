@@ -508,4 +508,4 @@ uv run python -m pytest tests/test_agents.py -v
 ---
 
 **Full documentation:** [docs/config.md](docs/config.md)
-**Upstream:** [ldayton/Dippy](https://github.com/ldayton/Dippy)
+**Upstream repository:** [ldayton/Dippy](https://github.com/ldayton/Dippy)

@@ -370,6 +370,7 @@ def deny(
     tool_name: str | None = None,
     command: str | None = None,
     hook_event: str | None = None,
+    file_path: str | None = None,
 ) -> dict:
     """Return deny response to block the command."""
     logging.info(f"DENY: {reason}")
@@ -874,11 +875,17 @@ def check_file_tool(tool_name: str, file_path: str, config: Config, cwd: Path) -
     )
 
     if match.decision == "allow":
-        return approve(reason, config=config, tool_name=tool_name)
+        return approve(reason, config=config, tool_name=tool_name, file_path=file_path)
     elif match.decision == "deny":
-        return deny(reason, config=config, tool_name=tool_name)
+        return deny(reason, config=config, tool_name=tool_name, file_path=file_path)
     else:
-        return ask(reason, config=config, tool_name=tool_name)
+        return ask(
+            reason,
+            config=config,
+            tool_name=tool_name,
+            file_path=file_path,
+            cwd=cwd,
+        )
 
 
 # === CLI Mode ===
@@ -1512,12 +1519,37 @@ def main():
             cwd_str = (
                 tool_args.get("Cwd")
                 or tool_args.get("cwd")
-                or (
+                or tool_args.get("SearchDirectory")
+                or tool_args.get("DirectoryPath")
+            )
+            if not cwd_str:
+                target_file = (
+                    tool_args.get("AbsolutePath")
+                    or tool_args.get("TargetFile")
+                    or tool_args.get("SearchPath")
+                    or tool_args.get("file_path")
+                    or tool_args.get("path")
+                    or tool_args.get("filepath")
+                )
+                if target_file:
+                    try:
+                        target_p = Path(target_file).resolve()
+                        for ws in input_data.get("workspacePaths", []):
+                            if ws:
+                                ws_p = Path(ws).resolve()
+                                if ws_p == target_p or ws_p in target_p.parents:
+                                    cwd_str = str(ws_p)
+                                    break
+                        if not cwd_str:
+                            cwd_str = str(target_p.parent)
+                    except Exception:
+                        pass
+            if not cwd_str:
+                cwd_str = (
                     input_data.get("workspacePaths", [None])[0]
                     if input_data.get("workspacePaths")
                     else None
                 )
-            )
         if cwd_str:
             cwd = Path(cwd_str).resolve()
         else:
