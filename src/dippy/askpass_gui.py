@@ -64,8 +64,31 @@ def _payload() -> dict[str, object]:
     return value
 
 
+def _get_monitors() -> list[dict[str, int]]:
+    """Detect monitor geometries via xrandr."""
+    import re
+    import subprocess
+
+    try:
+        out = subprocess.check_output(
+            ["xrandr", "--listmonitors"],
+            text=True,
+            timeout=1,
+            stderr=subprocess.DEVNULL,
+        )
+        monitors = []
+        for line in out.splitlines():
+            m = re.search(r"(\d+)/\d+x(\d+)/\d+\+(\d+)\+(\d+)", line)
+            if m:
+                w, h, x, y = map(int, m.groups())
+                monitors.append({"w": w, "h": h, "x": x, "y": y})
+        return monitors
+    except Exception:
+        return []
+
+
 def _center_window(root: tk.Tk) -> None:
-    """Center window on the active screen / monitor where the pointer is."""
+    """Center window in the middle of the active monitor where the pointer is."""
     try:
         if hasattr(root, "update_idletasks"):
             root.update_idletasks()
@@ -74,15 +97,29 @@ def _center_window(root: tk.Tk) -> None:
 
         px = root.winfo_pointerx() if hasattr(root, "winfo_pointerx") else 0
         py = root.winfo_pointery() if hasattr(root, "winfo_pointery") else 0
-        sw = root.winfo_screenwidth() if hasattr(root, "winfo_screenwidth") else 1920
-        sh = root.winfo_screenheight() if hasattr(root, "winfo_screenheight") else 1080
 
-        if px > 0 or py > 0:
-            x = px - (w // 2)
-            y = py - (h // 2)
-            x = max(0, min(x, sw - w))
-            y = max(0, min(y, sh - h))
+        monitors = _get_monitors()
+        active_mon = None
+        for mon in monitors:
+            if (
+                mon["x"] <= px < mon["x"] + mon["w"]
+                and mon["y"] <= py < mon["y"] + mon["h"]
+            ):
+                active_mon = mon
+                break
+
+        if active_mon:
+            x = active_mon["x"] + max(0, (active_mon["w"] - w) // 2)
+            y = active_mon["y"] + max(0, (active_mon["h"] - h) // 2)
         else:
+            sw = (
+                root.winfo_screenwidth() if hasattr(root, "winfo_screenwidth") else 1920
+            )
+            sh = (
+                root.winfo_screenheight()
+                if hasattr(root, "winfo_screenheight")
+                else 1080
+            )
             x = max(0, (sw - w) // 2)
             y = max(0, (sh - h) // 2)
 

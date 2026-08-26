@@ -1508,52 +1508,54 @@ def main():
 
         # Extract cwd from input
         # Cursor: top-level "cwd"
-        # Claude Code: may be in tool_input or top-level
-        # AGY: in toolCall.args.Cwd or workspacePaths
-        cwd_str = input_data.get("cwd")
-        if not cwd_str:
-            tool_input = input_data.get("tool_input", {})
-            cwd_str = tool_input.get("cwd")
-        if not cwd_str and "toolCall" in input_data:
-            tool_args = input_data["toolCall"].get("args", {})
-            cwd_str = (
-                tool_args.get("Cwd")
-                or tool_args.get("cwd")
-                or tool_args.get("SearchDirectory")
-                or tool_args.get("DirectoryPath")
+        # Claude Code: in tool_input or top-level
+        # AGY: in toolCall.args.Cwd, workspacePaths, or process cwd
+        tool_input = input_data.get("tool_input", {})
+        tool_args = (
+            input_data.get("toolCall", {}).get("args", {})
+            if isinstance(input_data.get("toolCall"), dict)
+            else {}
+        )
+        cwd_str = (
+            input_data.get("cwd")
+            or tool_input.get("cwd")
+            or tool_args.get("Cwd")
+            or tool_args.get("cwd")
+            or tool_args.get("SearchDirectory")
+            or tool_args.get("DirectoryPath")
+        )
+        if not cwd_str and input_data.get("workspacePaths"):
+            target_file = (
+                tool_args.get("AbsolutePath")
+                or tool_args.get("TargetFile")
+                or tool_args.get("SearchPath")
+                or tool_args.get("file_path")
+                or tool_args.get("path")
+                or tool_args.get("filepath")
             )
+            if target_file:
+                try:
+                    target_p = Path(target_file).resolve()
+                    for ws in input_data["workspacePaths"]:
+                        if ws:
+                            ws_p = Path(ws).resolve()
+                            if ws_p == target_p or ws_p in target_p.parents:
+                                cwd_str = str(ws_p)
+                                break
+                except Exception:
+                    pass
             if not cwd_str:
-                target_file = (
-                    tool_args.get("AbsolutePath")
-                    or tool_args.get("TargetFile")
-                    or tool_args.get("SearchPath")
-                    or tool_args.get("file_path")
-                    or tool_args.get("path")
-                    or tool_args.get("filepath")
-                )
-                if target_file:
-                    try:
-                        target_p = Path(target_file).resolve()
-                        for ws in input_data.get("workspacePaths", []):
-                            if ws:
-                                ws_p = Path(ws).resolve()
-                                if ws_p == target_p or ws_p in target_p.parents:
-                                    cwd_str = str(ws_p)
-                                    break
-                        if not cwd_str:
-                            cwd_str = str(target_p.parent)
-                    except Exception:
-                        pass
-            if not cwd_str:
-                cwd_str = (
-                    input_data.get("workspacePaths", [None])[0]
-                    if input_data.get("workspacePaths")
-                    else None
-                )
-        if cwd_str:
-            cwd = Path(cwd_str).resolve()
-        else:
-            cwd = Path.cwd()
+                proc_cwd = Path.cwd().resolve()
+                ws_resolved = [
+                    Path(w).resolve() for w in input_data["workspacePaths"] if w
+                ]
+                if proc_cwd in ws_resolved:
+                    cwd_str = str(proc_cwd)
+                else:
+                    cwd_str = str(input_data["workspacePaths"][0])
+        if not cwd_str:
+            cwd_str = os.getcwd()
+        cwd = Path(cwd_str).resolve()
 
         # Load config (fails hard on errors)
         try:
