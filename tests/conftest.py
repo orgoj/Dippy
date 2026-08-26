@@ -88,3 +88,5 @@ def disable_logging_in_tests(monkeypatch):
     import dippy.dippy as dippy_mod
 
     monkeypatch.setattr(dippy_mod, "MODE", "claude")
+    yield
+    dippy_mod.MODE = "claude"

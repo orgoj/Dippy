@@ -273,6 +273,11 @@ def ask(
     tool_name: str | None = None,
     command: str | None = None,
     hook_event: str | None = None,
+    cwd: Path | None = None,
+    file_path: str | None = None,
+    match_value: str | None = None,
+    rule: str | None = None,
+    source: str | None = None,
 ) -> dict:
     """Return ask response to prompt user for confirmation."""
     logging.info(f"ASK: {reason}")
@@ -283,13 +288,41 @@ def ask(
     )
 
     if MODE == "agy":
-        res = {
-            "decision": "ask",
-            "reason": f"🐤 {reason}",
-        }
-        if note:
-            res["additionalContext"] = note
-        return res
+        # AGY CLI in bypass/YOLO mode ignores 'ask' responses.
+        # Dippy resolves 'ask' directly via external askpass GUI dialog (dippy-askpass-gui),
+        # returning strictly 'allow' or 'deny'.
+        actual_cwd = str(cwd or Path.cwd())
+        cmd_str = command or (
+            f"{tool_name} {file_path}" if file_path else (match_value or reason)
+        )
+        askpass_res = (
+            _run_askpass(
+                config,
+                command=cmd_str,
+                cwd=actual_cwd,
+                rule=rule,
+                message=reason,
+                tool=tool_name or "run_command",
+                source=source,
+            )
+            if config
+            else "deny"
+        )
+        if askpass_res == "allow":
+            return approve(
+                reason=f"approved by user: {reason}",
+                config=config,
+                tool_name=tool_name,
+                command=command,
+                file_path=file_path,
+                match_value=match_value,
+            )
+        return deny(
+            reason=f"approval denied or unavailable: {reason}",
+            config=config,
+            tool_name=tool_name,
+            command=command,
+        )
     if MODE == "gemini":
         res = {
             "decision": "ask",
@@ -566,7 +599,13 @@ def check_command(
             result.reason, config=config, command=command, hook_event=hook_event
         )
     else:
-        return ask(result.reason, config=config, command=command, hook_event=hook_event)
+        return ask(
+            result.reason,
+            config=config,
+            command=command,
+            hook_event=hook_event,
+            cwd=cwd,
+        )
 
 
 def post_tool_response(

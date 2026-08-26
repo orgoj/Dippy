@@ -50,13 +50,42 @@ class TestAgyResponses:
         assert resp["reason"] == "🐤 all commands safe"
         assert resp["permissionOverrides"] == ["command(true)"]
 
-    def test_ask_agy_format(self, monkeypatch):
+    def test_ask_agy_without_askpass_fails_closed(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")
         resp = dippy_mod.ask("needs approval")
-        assert resp == {
-            "decision": "ask",
-            "reason": "🐤 needs approval",
-        }
+        assert resp["decision"] == "deny"
+
+    def test_ask_agy_with_askpass_allow(self, tmp_path, monkeypatch):
+        fake_askpass = tmp_path / "fake_askpass.py"
+        fake_askpass.write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n")
+        fake_askpass.chmod(0o755)
+
+        monkeypatch.setattr(dippy_mod, "MODE", "agy")
+        monkeypatch.setenv("DIPPY_ASKPASS", str(fake_askpass))
+
+        from dippy.core.config import Config
+
+        config = Config(askpass=fake_askpass)
+
+        resp = dippy_mod.ask("needs approval", config=config, command="fictional_cmd")
+        assert resp["decision"] == "allow"
+        assert "approved by user" in resp["reason"]
+        assert resp["permissionOverrides"] == ["command(fictional_cmd)"]
+
+    def test_ask_agy_with_askpass_deny(self, tmp_path, monkeypatch):
+        fake_askpass = tmp_path / "fake_askpass.py"
+        fake_askpass.write_text("#!/usr/bin/env python3\nimport sys\nsys.exit(1)\n")
+        fake_askpass.chmod(0o755)
+
+        monkeypatch.setattr(dippy_mod, "MODE", "agy")
+        monkeypatch.setenv("DIPPY_ASKPASS", str(fake_askpass))
+
+        from dippy.core.config import Config
+
+        config = Config(askpass=fake_askpass)
+
+        resp = dippy_mod.ask("needs approval", config=config, command="fictional_cmd")
+        assert resp["decision"] == "deny"
 
     def test_deny_agy_format(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")

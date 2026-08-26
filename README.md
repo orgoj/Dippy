@@ -33,7 +33,7 @@
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify the unchanged Bash string before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, Antigravity CLI (AGY), pi-mono, Moltbot, Codex, Windsurf, PearAI
-- **Antigravity CLI (AGY) support** — native lifecycle hook integration for Antigravity CLI with named-hook format in `~/.gemini/config/hooks.json` and `.agents/hooks.json`
+- **Antigravity CLI (AGY) support** — native lifecycle hook integration for Antigravity CLI with named-hook format in `~/.gemini/config/hooks.json` and `.agents/hooks.json`. In `--dangerously-skip-permissions` (YOLO) mode, Dippy provides Pure Control: auto-approving safe operations, hard-blocking denials, and routing `ask` decisions to `dippy-askpass-gui` (failing closed to `deny` if unconfigured).
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
 - **Configurable Python modules** — `python-allow-module` and `python-deny-module` directives to customize which modules are safe or dangerous during `-c` analysis, plus `python-allow-symbol sys.stdin` to allow a single name from a module that is otherwise too broad to trust *(design by nickdaview)*
