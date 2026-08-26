@@ -95,13 +95,24 @@ class TestAgyResponses:
             "reason": "🐤 denied by config",
         }
 
-    def test_pass_agy_format(self, monkeypatch):
+    def test_pass_agy_format_default_allow(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")
-        resp = dippy_mod.pass_("passing through")
+        from dippy.core.config import Config
+
+        config = Config(default="allow")
+        resp = dippy_mod.pass_("passing through", config=config)
         assert resp == {
             "decision": "allow",
             "reason": "🐤 passing through",
         }
+
+    def test_pass_agy_format_default_ask_fails_closed(self, monkeypatch):
+        monkeypatch.setattr(dippy_mod, "MODE", "agy")
+        from dippy.core.config import Config
+
+        config = Config(default="ask")
+        resp = dippy_mod.pass_("passing through", config=config)
+        assert resp["decision"] == "deny"
 
     def test_post_tool_response_agy_format(self, monkeypatch):
         monkeypatch.setattr(dippy_mod, "MODE", "agy")

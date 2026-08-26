@@ -292,18 +292,16 @@ def ask(
         # Dippy resolves 'ask' directly via external askpass GUI dialog (dippy-askpass-gui),
         # returning strictly 'allow' or 'deny'.
         actual_cwd = str(cwd or Path.cwd())
-        cmd_str = command or (
-            f"{tool_name} {file_path}" if file_path else (match_value or reason)
-        )
         askpass_res = (
             _run_askpass(
                 config,
-                command=cmd_str,
+                command=command or "",
                 cwd=actual_cwd,
                 rule=rule,
                 message=reason,
-                tool=tool_name or "run_command",
+                tool=tool_name or ("run_command" if command else None),
                 source=source,
+                file_path=file_path,
             )
             if config
             else "deny"
@@ -442,6 +440,9 @@ def pass_(
     tool_name: str | None = None,
     command: str | None = None,
     hook_event: str | None = None,
+    cwd: Path | None = None,
+    file_path: str | None = None,
+    match_value: str | None = None,
 ) -> dict:
     """Return empty response to let Claude handle permissions with its default behavior."""
     logging.info(f"PASS: {reason}")
@@ -452,10 +453,33 @@ def pass_(
     )
 
     if MODE == "agy":
-        res = {"decision": "allow", "reason": f"🐤 {reason}"}
-        if note:
-            res["additionalContext"] = note
-        return res
+        if config and config.default == "allow":
+            return approve(
+                reason=reason,
+                config=config,
+                tool_name=tool_name,
+                command=command,
+                file_path=file_path,
+                match_value=match_value,
+            )
+        elif config and config.default == "deny":
+            return deny(
+                reason=reason,
+                config=config,
+                tool_name=tool_name,
+                command=command,
+            )
+        else:
+            # Default is "ask": unclassified items require approval via askpass GUI
+            return ask(
+                reason=reason,
+                config=config,
+                tool_name=tool_name,
+                command=command,
+                cwd=cwd,
+                file_path=file_path,
+                match_value=match_value,
+            )
     if MODE == "gemini":
         res = {"decision": "allow", "reason": f"🐤 {reason}", "continue": True}
         if note:
@@ -483,6 +507,7 @@ def _run_askpass(
     message: str | None,
     tool: str | None,
     source: str | None = None,
+    file_path: str | None = None,
 ) -> str:
     """Run external askpass program for GUI approval.
 
@@ -494,6 +519,7 @@ def _run_askpass(
         message: The rule message (if any).
         tool: The tool name (Bash, Write, etc.).
         source: The config file where the rule was defined.
+        file_path: The file path being operated on (if any).
 
     Returns:
         "allow" if exit 0, "deny" if exit 1, "ask" for any other case
@@ -512,7 +538,7 @@ def _run_askpass(
 
     # Set up environment variables
     env = os.environ.copy()
-    env["DIPPY_COMMAND"] = command
+    env["DIPPY_COMMAND"] = command or ""
     env["DIPPY_CWD"] = cwd
     if rule:
         env["DIPPY_RULE"] = rule
@@ -520,16 +546,21 @@ def _run_askpass(
         env["DIPPY_MESSAGE"] = message
     if tool:
         env["DIPPY_TOOL"] = tool
+    if file_path:
+        env["DIPPY_FILE_PATH"] = file_path
+    if config.askpass_timeout:
+        env["DIPPY_ASKPASS_TIMEOUT"] = str(config.askpass_timeout)
 
     # Prepare JSON input
     stdin_data = json.dumps(
         {
-            "command": command,
+            "command": command or "",
             "cwd": cwd,
             "rule": rule,
             "message": message,
             "tool": tool,
             "source": source,
+            "file_path": file_path,
         }
     )
 
@@ -1682,7 +1713,10 @@ def main():
                             agent=MODE,
                         )
                         result = pass_(
-                            "no matching rule", config=config, tool_name=mcp_name
+                            "no matching rule",
+                            config=config,
+                            tool_name=mcp_name,
+                            cwd=cwd,
                         )
                     print(json.dumps(result))
                 return
@@ -1718,7 +1752,11 @@ def main():
                             agent=MODE,
                         )
                         result = pass_(
-                            "no matching rule", config=config, tool_name=tool_name
+                            "no matching rule",
+                            config=config,
+                            tool_name=tool_name,
+                            match_value=match_value,
+                            cwd=cwd,
                         )
                     print(json.dumps(result))
                 return
@@ -1750,7 +1788,11 @@ def main():
                                 agent=MODE,
                             )
                             result = pass_(
-                                "no matching rule", config=config, tool_name=tool_name
+                                "no matching rule",
+                                config=config,
+                                tool_name=tool_name,
+                                file_path=file_path,
+                                cwd=cwd,
                             )
                         print(json.dumps(result))
                     except Exception as e:

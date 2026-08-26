@@ -14,6 +14,37 @@ except ModuleNotFoundError:
     ttk = None
 
 
+READ_TOOLS = {
+    "view_file",
+    "read_file",
+    "Read",
+    "read",
+    "read_many_files",
+    "LS",
+    "Glob",
+    "Grep",
+    "Search",
+}
+EDIT_TOOLS = {
+    "write_to_file",
+    "replace_file_content",
+    "Write",
+    "Edit",
+    "MultiEdit",
+    "write_file",
+    "replace",
+}
+WEB_TOOLS = {
+    "search_web",
+    "read_url_content",
+    "WebSearch",
+    "WebFetch",
+    "google_web_search",
+    "web_fetch",
+}
+MCP_TOOLS = {"call_mcp_tool"}
+
+
 def _payload() -> dict[str, object]:
     try:
         value = json.load(sys.stdin)
@@ -24,7 +55,12 @@ def _payload() -> dict[str, object]:
     value.setdefault("command", os.environ.get("DIPPY_COMMAND", ""))
     value.setdefault("cwd", os.environ.get("DIPPY_CWD") or None)
     value.setdefault("server", os.environ.get("DIPPY_SERVER") or None)
-    value.setdefault("reason", os.environ.get("DIPPY_RULE", ""))
+    value.setdefault("tool", os.environ.get("DIPPY_TOOL") or None)
+    value.setdefault("rule", os.environ.get("DIPPY_RULE") or None)
+    value.setdefault("message", os.environ.get("DIPPY_MESSAGE") or None)
+    value.setdefault("file_path", os.environ.get("DIPPY_FILE_PATH") or None)
+    if "reason" not in value:
+        value["reason"] = value.get("message") or value.get("rule") or ""
     return value
 
 
@@ -33,24 +69,64 @@ def show_dialog(payload: dict[str, object]) -> tuple[str, str | None]:
     if tk is None or ttk is None:
         raise RuntimeError("Tk is not available in this Python installation")
     result: list[str | None] = ["deny", None]
+
+    tool = str(payload.get("tool") or "").strip()
+    file_path = str(payload.get("file_path") or "").strip()
+    command = str(payload.get("command") or "").strip()
+    reason = str(payload.get("reason") or "").strip()
+
+    if tool in READ_TOOLS or (
+        not command and file_path and ("read" in tool.lower() or "view" in tool.lower())
+    ):
+        op_title = "Read File"
+        target_label = "File path"
+        target_value = file_path or command
+    elif tool in EDIT_TOOLS or (
+        not command
+        and file_path
+        and (
+            "write" in tool.lower()
+            or "edit" in tool.lower()
+            or "replace" in tool.lower()
+        )
+    ):
+        op_title = "Edit File"
+        target_label = "File path"
+        target_value = file_path or command
+    elif tool in WEB_TOOLS:
+        op_title = "Web Request"
+        target_label = "Query / URL"
+        target_value = command
+    elif tool in MCP_TOOLS or tool.startswith("mcp__"):
+        op_title = "MCP Tool Call"
+        target_label = "MCP Tool"
+        target_value = command or tool
+    else:
+        op_title = "Command"
+        target_label = "Command"
+        target_value = command or file_path
+
     root = tk.Tk()
-    root.title("Dippy command approval")
+    root.title(f"Dippy approval: {op_title}")
     root.attributes("-topmost", True)
     frame = ttk.Frame(root, padding=16)
     frame.grid(sticky="nsew")
 
+    rows_data = [
+        ("Operation", op_title),
+        (target_label, target_value),
+        ("Working directory", payload.get("cwd")),
+        ("Server", payload.get("server")),
+        ("Rule / Reason", reason),
+    ]
+
     row = 0
-    for title, key in (
-        ("Command", "command"),
-        ("Working directory", "cwd"),
-        ("Server", "server"),
-        ("Rule", "reason"),
-    ):
-        value = payload.get(key)
-        if value:
+    for title, val in rows_data:
+        if val:
             ttk.Label(frame, text=title).grid(row=row, column=0, sticky="nw", pady=4)
-            field = tk.Text(frame, width=72, height=4 if key == "command" else 1)
-            field.insert("1.0", str(value))
+            is_multiline = title in ("Command", "File path", "Query / URL")
+            field = tk.Text(frame, width=72, height=3 if is_multiline else 1)
+            field.insert("1.0", str(val))
             field.configure(state="disabled")
             field.grid(row=row, column=1, sticky="ew", pady=4)
             row += 1

@@ -2,6 +2,10 @@
 
 include .dippy-yolo
 
+#---- File Operations ----#
+allow-read ./**
+allow-edit ./**
+
 #---- Python ----#
 allow rm -rf /**/__pycache__
 

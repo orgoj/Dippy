@@ -89,6 +89,7 @@ MINIMAL_HOOKS = {
                             "name": "dippy-approval",
                             "type": "command",
                             "command": "dippy --agy",
+                            "timeout": 1800,
                         }
                     ],
                 }
@@ -252,6 +253,7 @@ ALL_HOOKS = {
                             "name": "dippy-approval",
                             "type": "command",
                             "command": "dippy --agy",
+                            "timeout": 1800,
                         }
                     ],
                 }
