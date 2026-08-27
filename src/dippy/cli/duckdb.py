@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 
 from dippy.cli import Classification, HandlerContext
 from dippy.core.sql import is_readonly_sql
@@ -12,6 +13,41 @@ COMMANDS = ["duckdb"]
 _DUCKDB_WRITE = frozenset(
     {"PRAGMA", "ATTACH", "DETACH", "VACUUM", "COPY", "EXPORT", "IMPORT"}
 )
+
+_LOCAL_WRITE = re.compile(
+    r"^(?:"
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?"
+    r"(?:TABLE|VIEW|INDEX|SCHEMA|SEQUENCE|TYPE|MACRO)\b"
+    r"|(?:ALTER|DROP)\s+(?:TABLE|VIEW|INDEX|SCHEMA|SEQUENCE|TYPE|MACRO)\b"
+    r"|INSERT\b|UPDATE\b|DELETE\b|TRUNCATE\b|MERGE\b|REPLACE\b"
+    r"|VACUUM\b|DETACH\b"
+    r")",
+    re.IGNORECASE,
+)
+
+
+def _writes_only_to_main_database(sql: str) -> bool:
+    """Return whether every statement is read-only or writes only main DB state."""
+    statements = [
+        statement.strip() for statement in sql.split(";") if statement.strip()
+    ]
+    if not statements:
+        return False
+
+    for statement in statements:
+        readonly = is_readonly_sql(statement, extra_write=_DUCKDB_WRITE)
+        if readonly is True:
+            continue
+        if re.match(r"^ATTACH(?:\s+DATABASE)?\b", statement, re.IGNORECASE):
+            if re.search(
+                r"\(\s*[^()]*\bREAD_ONLY\b[^()]*\)\s*$", statement, re.IGNORECASE
+            ):
+                continue
+            return False
+        if readonly is False and _LOCAL_WRITE.match(statement):
+            continue
+        return False
+    return True
 
 
 def classify(ctx: HandlerContext) -> Classification:
@@ -35,6 +71,8 @@ def classify(ctx: HandlerContext) -> Classification:
     sql_parts: list[str] = []
     i = 1
     filename_seen = False
+    filename: str | None = None
+    filename_has_expansions = False
     while i < len(tokens):
         token = tokens[i]
         # Skip option flags that take no argument
@@ -95,6 +133,10 @@ def classify(ctx: HandlerContext) -> Classification:
         if not filename_seen:
             # First non-option is filename (could be :memory: or a path)
             filename_seen = True
+            filename = token
+            filename_has_expansions = bool(
+                ctx.word_has_expansions and ctx.word_has_expansions[i]
+            )
             i += 1
             continue
         # Everything after filename is SQL
@@ -112,6 +154,12 @@ def classify(ctx: HandlerContext) -> Classification:
     readonly = is_readonly_sql(sql, extra_write=_DUCKDB_WRITE)
     if readonly is True:
         return Classification("allow", description="duckdb (read-only query)")
+    if filename and not filename_has_expansions and _writes_only_to_main_database(sql):
+        return Classification(
+            "allow",
+            description="duckdb (database write)",
+            redirect_targets=(filename,),
+        )
     if readonly is False:
         return Classification("ask", description="duckdb (write query)")
     # Unknown - ask

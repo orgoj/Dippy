@@ -2,6 +2,7 @@
 
 import pytest
 from conftest import is_approved, needs_confirmation
+from dippy.core.config import Config, Rule
 
 TESTS = [
     # Help/version - safe
@@ -75,3 +76,52 @@ def test_command(check, command: str, expected: bool):
         assert is_approved(result), f"Expected approve: {command}"
     else:
         assert needs_confirmation(result), f"Expected confirm: {command}"
+
+
+def test_write_to_database_allowed_by_redirect_rule(check, tmp_path):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+
+    result = check(
+        "duckdb tmp/work.db 'CREATE TABLE results AS SELECT 1 AS value'",
+        config,
+        tmp_path,
+    )
+
+    assert is_approved(result)
+
+
+def test_readonly_attach_and_writes_to_allowed_database(check, tmp_path):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    sql = (
+        "ATTACH 'source.db' AS source (READ_ONLY); "
+        "CREATE OR REPLACE TABLE results AS SELECT * FROM source.items; "
+        "SELECT count(*) FROM results;"
+    )
+
+    result = check(f'duckdb tmp/work.db "{sql}"', config, tmp_path)
+
+    assert is_approved(result)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "duckdb data/work.db 'CREATE TABLE results AS SELECT 1'",
+        "duckdb tmp/../../work.db 'CREATE TABLE results AS SELECT 1'",
+        "duckdb tmp/$DATABASE 'CREATE TABLE results AS SELECT 1'",
+        (
+            "duckdb tmp/work.db \"ATTACH 'other.db' AS other; "
+            'CREATE TABLE other.results AS SELECT 1;"'
+        ),
+        "duckdb tmp/work.db \"COPY (SELECT 1) TO '/etc/dippy-bypass'\"",
+        "duckdb tmp/work.db 'DROP SECRET production_credentials'",
+    ],
+)
+def test_database_redirect_rule_does_not_allow_external_writes(
+    check, tmp_path, command
+):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+
+    result = check(command, config, tmp_path)
+
+    assert needs_confirmation(result)

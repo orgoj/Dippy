@@ -10,9 +10,17 @@ environment, and final configs in load order because the last matching rule
 wins. Change live configuration only when the user explicitly requests it, and
 re-read a live config immediately before editing it.
 
+For an audit entry, use its exact command and `cwd`. Read that project's
+instructions and inspect each config scope separately before choosing a code or
+config fix; an explicit project rule can override a handler. Replay the command
+against the current installation before editing and the candidate source before
+installing.
+
 Test candidate command rules with `dippy --cmd` or the repository's
 `try-rules.sh` debug helper. Classify destructive bypass examples as strings;
 never execute them. Use the `check-path.py` debug helper for path decisions.
+Pass `--config` a persistent file, not process substitution such as `/dev/fd/*`,
+and use the project's documented Python runner for source checks.
 
 ## Codex `ask` Requires a Prompt Bridge
 
