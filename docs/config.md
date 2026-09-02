@@ -466,7 +466,10 @@ Later definitions of the same wrapper name override earlier ones.
 
 **Built-in wrappers vs custom:**
 
-Built-in wrappers (`ssh`, `sudo`) work the same way but are predefined. Custom wrappers let you define project-specific tools with the same context-aware control.
+Built-in wrappers (`ssh`, `sudo`) work the same way but are predefined. SSH
+adds both `ssh` and the exact target token as context flags, so
+`allow [ssh,ferda7] tail *` does not apply to another host. Custom wrappers let
+you define project-specific tools with the same context-aware control.
 
 **Flag syntax:**
 - AST context flags use `@` prefix: `@subshell`, `@compound`
@@ -680,6 +683,21 @@ deny rm -rf /* "Too dangerous"
 deny git push --force * "Use --force-with-lease instead"
 ```
 
+`delegate` is an opt-in escape from an outer command rule into a built-in CLI
+handler. It is useful when a global reset keeps a wrapper on `ask`, while one
+project or agent should classify the wrapped command instead:
+
+```
+ask ssh *
+delegate [$HCOM_INSTANCE_NAME=log_reader] ssh *
+allow [ssh] tail *
+```
+
+Only the matching invocation is delegated. A later `deny` still wins, and the
+inner command is analyzed normally, including every part of a compound command.
+Use `delegate` only for commands with a built-in handler; an unknown delegated
+command still falls through to `ask`.
+
 Inverse patterns via ordering (last match wins):
 
 ```
@@ -726,8 +744,11 @@ Note: `**` is only supported in redirect rules. Command rules use standard fnmat
 
 ### What redirect rules cover
 
-Besides `>`, `>>` and `2>`, redirect rules also govern commands that write
-files through their arguments: `tee`, `find -fprint`, `sort -o`, and `cp`/`mv`.
+All Bash redirects that can open a file for writing are covered, including
+`>`, `>>`, `>|`, `<>`, numbered descriptors such as `3>`, and variable
+descriptors such as `{fd}>`. Descriptor duplication such as `2>&1` remains
+safe. Redirect rules also govern commands that write files through their
+arguments: `tee`, `find -fprint`, `sort -o`, and `cp`/`mv`.
 
 For `cp` and `mv` the destination is checked. `mv` also removes its sources, so
 those paths are checked too — a `deny-redirect **/.dippy` stops

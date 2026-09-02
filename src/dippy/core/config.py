@@ -77,7 +77,7 @@ SCOPE_FINAL = "final"
 class Rule:
     """A single config rule with origin tracking."""
 
-    decision: str  # 'allow' | 'ask' | 'deny'
+    decision: str  # 'allow' | 'ask' | 'deny' | 'delegate'
     pattern: str
     message: str | None = None
     source: str | None = None  # file path
@@ -204,7 +204,7 @@ class Config:
 class Match:
     """Result of matching against config rules."""
 
-    decision: str  # 'allow' | 'ask' | 'deny'
+    decision: str  # 'allow' | 'ask' | 'deny' | 'delegate'
     pattern: str  # the glob pattern that matched
     message: str | None = None  # shown to AI on ask/deny
     source: str | None = None  # file path where rule was defined
@@ -744,6 +744,23 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         _expand_pattern_tildes(pattern),
                         exact=exact,
                         message=message,
+                        required_flags=flags,
+                        negated_flags=neg_flags,
+                    )
+                )
+
+            elif directive == "delegate":
+                if not rest:
+                    raise ValueError("requires a pattern")
+                pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                if not pattern_part:
+                    raise ValueError("requires a pattern after flags")
+                pattern_part, exact = _strip_exact_anchor(pattern_part)
+                rules.append(
+                    Rule(
+                        "delegate",
+                        _expand_pattern_tildes(pattern_part),
+                        exact=exact,
                         required_flags=flags,
                         negated_flags=neg_flags,
                     )
@@ -1670,7 +1687,8 @@ def match_command(
 
     Returns:
         Match object for the deciding rule, or None if no rules matched.
-        Priority when combining command + redirect matches: deny > ask > allow.
+        Priority when combining command + redirect matches:
+        deny > ask > delegate/allow.
         Returns the first match of the most restrictive decision type.
     """
     matches: list[Match] = []

@@ -22,6 +22,8 @@ just fmt     # ruff format --check
 - Use fictional command names in rule tests; real names may hit `SIMPLE_SAFE`.
 - Isolate config tests with `tmp_path`, `monkeypatch` and an empty `HOME`.
   `--config` adds an override; it does not replace `~/.dippy/config`.
+- Validate config changes in the complete file and final rule order; isolated
+  snippets can miss a later last-match-wins override.
 - Run every direct-execution check with an empty temporary `HOME` and a fake
   non-GUI askpass; never open the real approval dialog during verification.
 - Merge scalar settings by membership in `configured_settings`, never by

@@ -13,6 +13,7 @@
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
+- **Scoped handler delegation** — `delegate [flags] command *` sends a matched command through its native safety handler instead of approving it outright, including per-target SSH context
 - **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, file edit/read operations, and web requests
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), with `--cmd`, `--flag`, `--context`, `--context-first` flags for flexible configuration
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control

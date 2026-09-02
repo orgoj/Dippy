@@ -18,6 +18,30 @@ from dippy.vendor.parable import parse, ParseError
 
 # Redirect targets that are always safe (no file write)
 SAFE_REDIRECT_TARGETS = frozenset({"/dev/null", "-", "/dev/stdout", "/dev/stdin"})
+FILE_WRITING_REDIRECTS = frozenset({">", ">>", ">|", ">&", "&>", "&>>", "<>"})
+
+
+def _redirect_writes_file(op: str) -> bool:
+    """Return whether a Bash redirect operator can open its target for writing."""
+    if op.startswith("{"):
+        end = op.find("}")
+        if end != -1:
+            op = op[end + 1 :]
+    else:
+        op = op.lstrip("0123456789")
+    return op in FILE_WRITING_REDIRECTS
+
+
+def _redirect_target_is_safe(target: str) -> bool:
+    """Return whether a redirect target is a sink or literal fd operation."""
+    if target in SAFE_REDIRECT_TARGETS:
+        return True
+    if target == "&-":
+        return True
+    if target.startswith("&"):
+        descriptor = target[1:].removesuffix("-")
+        return descriptor.isdigit()
+    return False
 
 
 @dataclass
@@ -649,16 +673,24 @@ def _analyze_redirects(
             )
             decisions.extend(target_cmdsub_decisions)
 
-        # In remote mode, skip path-based redirect checks (paths are container-local)
+        # Direct SSH delegation is read-only by default. Its output redirects
+        # mutate the remote host, so keep them on ask even though the target is
+        # not a local path. Safe sink/file-descriptor redirects remain allowed.
         if remote:
+            if (
+                "ssh" in (context_flags or frozenset())
+                and _redirect_writes_file(op)
+                and not _redirect_target_is_safe(target)
+            ):
+                decisions.append(Decision("ask", f"remote redirect to {target}"))
             continue
 
         # Skip safe redirects
-        if target in SAFE_REDIRECT_TARGETS or target.startswith("&"):
+        if _redirect_target_is_safe(target):
             continue
 
         # Check output redirects against config
-        if op in (">", ">>", "&>", "&>>", "2>", "2>>"):
+        if _redirect_writes_file(op):
             redirect_match = match_redirect(target, config, cwd)
             if redirect_match:
                 if redirect_match.decision == "allow":
@@ -723,7 +755,7 @@ def _analyze_simple_command(
         elif config_match.decision == "deny":
             msg = config_match.message or config_match.pattern
             return Decision("deny", f"{base}: {msg}", context_flags=context_flags)
-        else:  # ask
+        elif config_match.decision == "ask":
             msg = config_match.message or config_match.pattern
             return Decision(
                 "ask",
@@ -731,6 +763,9 @@ def _analyze_simple_command(
                 context_flags=context_flags,
                 suggestion=suggestion,
             )
+        # A delegate rule opts this invocation into handler-based inner-command
+        # analysis. Redirect asks/denies have already taken priority in
+        # match_command().
 
     # 2. Handle wrapper commands (time, timeout, etc.) - analyze inner command
     if base in WRAPPER_COMMANDS and len(tokens) > 1:
@@ -813,8 +848,10 @@ def _analyze_simple_command(
         if result.redirect_targets:
             for target in result.redirect_targets:
                 # Skip safe redirects
-                if target in SAFE_REDIRECT_TARGETS or target.startswith("&"):
+                if _redirect_target_is_safe(target):
                     continue
+                if "ssh" in context_flags:
+                    return Decision("ask", f"remote redirect to {target}")
                 redirect_match = match_redirect(target, config, cwd)
                 if redirect_match:
                     if redirect_match.decision == "deny":

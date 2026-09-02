@@ -64,7 +64,7 @@ class TestSshWrapperContext:
         result = classify(HandlerContext(["ssh", "host", "rm", "/tmp/x"]))
         assert result.action == "delegate"
         assert result.inner_command == "rm /tmp/x"
-        assert result.wrapper_context == ["ssh"]
+        assert result.wrapper_context == ["ssh", "host"]
 
     def test_ssh_no_wrapper_context_for_interactive(self):
         """SSH handler does not set wrapper_context for ask actions."""
@@ -95,6 +95,35 @@ class TestSshWrapperContext:
         result = classify(HandlerContext(["ssh", "host"]))
         assert result.action == "ask"
         assert result.remote is False
+
+
+@pytest.mark.parametrize(
+    "option",
+    [
+        "-o ProxyCommand=rm",  # executes a local helper
+        "-L 8080:localhost:80",  # local forwarding
+        "-R 8080:localhost:80",  # remote forwarding
+        "-vL8080:localhost:80",  # forwarding hidden in a short-option cluster
+        "-vR8080:localhost:80",  # remote forwarding hidden in a cluster
+        "-vA",  # agent forwarding hidden in a cluster
+        "-K",  # GSSAPI credential delegation
+    ],
+)
+def test_stateful_or_executable_options_require_confirmation(check, option):
+    """A safe remote command must not hide unsafe SSH transport options."""
+    from dippy.core.config import parse_config
+
+    config = parse_config("allow [ssh] tail *")
+    result = check(f"ssh {option} host 'tail /log/error'", config)
+    assert needs_confirmation(result)
+
+
+def test_ssh_target_can_scope_inner_rules(check):
+    from dippy.core.config import parse_config
+
+    config = parse_config("ask [ssh] *\nallow [ssh,ferda7] tail *")
+    assert is_approved(check("ssh ferda7 'tail /log/error'", config))
+    assert needs_confirmation(check("ssh other 'tail /log/error'", config))
 
 
 class TestSshJoinsWithoutRequoting:

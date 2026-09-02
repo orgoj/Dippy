@@ -865,6 +865,23 @@ class TestSuggestionField:
         assert result.suggestion is None
 
 
+@pytest.mark.parametrize("redirect", [">|", "3>", "3>>", "{fd}>", "<>", ">&"])
+def test_every_file_writing_redirect_requires_confirmation(tmp_path, redirect):
+    """Alternate Bash redirect spellings must not bypass write checks."""
+    result = analyze(f"echo data {redirect} /tmp/out", Config(), tmp_path)
+    assert result.action == "ask"
+
+
+def test_fd_duplication_remains_safe(tmp_path):
+    result = analyze("echo data 2>&1", Config(), tmp_path)
+    assert result.action == "allow"
+
+
+def test_ampersand_prefixed_filename_is_not_fd_duplication(tmp_path):
+    result = analyze("echo data > '&file'", Config(), tmp_path)
+    assert result.action == "ask"
+
+
 class TestEnvStrippedPolicyRegression:
     """Regression: stripped-form matches must NOT override raw-form deny.
 

@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.4] - 2026-09-02
+
+### Added
+
+- **Scoped handler delegation** — `delegate` rules pass matched commands to Dippy's native handler instead of approving them outright, so wrapper configurations can expose narrowly scoped read-only SSH commands while retaining handler validation.
+- **SSH target context** — delegated SSH commands receive both `[ssh]` and the exact target token as context flags, enabling per-host inner-command rules.
+
+### Fixed
+
+- **SSH wrapper bypasses require approval** — forwarding, credential delegation, proxy, control-socket and similar SSH options (including clustered short options) no longer reach the read-only inner-command classifier, and every file-writing remote redirect remains approval-gated even when its path is locally writable.
+- **Complete Bash redirect protection** — alternate file-writing forms such as `>|`, `<>`, numbered descriptors and variable descriptors now follow redirect rules; descriptor duplication such as `2>&1` remains safe.
+
 ## [0.3.3] - 2026-08-28
 
 ### Fixed
