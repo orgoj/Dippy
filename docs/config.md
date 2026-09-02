@@ -1028,6 +1028,34 @@ a mixed module you allow the few symbols you need and the rest falls through to
 > effects static analysis cannot see. The other AST safety checks still apply
 > after the import is accepted.
 
+### Safe Data Processing (JSON and YAML)
+
+Coding agents frequently default to inline Python (`python3 -c "import json..."`) or writing ad-hoc temporary scripts (`tmp/*.py` or agent scratchpads) to filter, inspect, or join structured data like JSON and YAML.
+
+#### Why Blanket Python Allow Rules Are Problematic
+
+Attempting to resolve agent approval fatigue by allowing arbitrary Python:
+- `allow python -c *` opens an arbitrary code execution hole (an agent can run `os.system`, delete files, or exfiltrate secrets).
+- `allow python tmp/**.py` or allowing scratchpad directories is similarly unsafe: an agent can write arbitrary code to that path and execute it unprompted.
+- Dippy's Python AST analyzer intentionally blocks file I/O (`open()`, `pathlib`) because static analysis cannot safely prove that file reads won't leak sensitive files or be paired with side effects.
+
+#### The Recommended Solution: `yq`
+
+Instead of relaxing Python security rules or relying on complex, non-portable OS sandboxing, the recommended solution is directing agents to use **`yq`** ([mikefarah/yq](https://github.com/mikefarah/yq)):
+
+1. **Native Dippy auto-approval:** Dippy includes a built-in handler (`cli/yq.py`) that automatically classifies `yq` as `allow`. Only in-place file mutation flags (`-i`, `--inplace`) require confirmation.
+2. **Multiplatform single binary:** `yq` is a standalone Go executable with zero runtime dependencies, working identically across Linux, macOS, and Windows.
+3. **Multi-format support:** Natively processes both **JSON and YAML** (as well as XML, CSV, and TOML) and seamlessly converts between them (`-o=json`, `-o=yaml`).
+4. **No code execution risk:** Unlike Python interpreters, `yq` is a dedicated query and transformation tool with no shell escape hatches.
+
+#### Guiding Agents in Instructions
+
+To prevent agents from attempting Python one-liners in the first place, add a strict rule to your agent instructions (`CLAUDE.md`, `AGENTS.md`, or system prompt):
+
+```markdown
+JSON/YAML: strictly `yq` (never `jq`, never `python3 -c "import json"`, never python scripts for data inspection/conversion). Keys: `yq 'keys'`, nested: `yq '.env | keys'`, extract: `yq '.foo.bar'`, filter: `yq '.items[] | select(.active)'`.
+```
+
 ### Deny Format
 
 When a command is denied, Dippy can format the rejection message to be clearer for AI agents. This helps agents understand they should follow the instruction rather than trying alternative commands.
