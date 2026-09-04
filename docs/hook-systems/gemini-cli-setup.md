@@ -85,6 +85,16 @@ Dippy uses the same configuration files for Gemini CLI as it does for Claude Cod
 - User global: `~/.dippy/config`
 - Project-local: `.dippy` in project root
 
+### Antigravity (AGY) Artifact Access
+
+When using Antigravity CLI (`agy`), the agent creates and updates task plans, scratchpads, and session artifacts inside `~/.gemini/antigravity-cli/brain/**`. To allow AGY to manage these files without approval prompts, ensure the following file rules are present in `~/.dippy/config`:
+
+```
+# Antigravity (AGY) artifact and brain directory
+allow-read ~/.gemini/antigravity-cli/brain/**
+allow-edit ~/.gemini/antigravity-cli/brain/**
+```
+
 See [Configuration Documentation](../config.md) for more details.
 
 ## Troubleshooting

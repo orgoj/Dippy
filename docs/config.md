@@ -960,6 +960,15 @@ In YOLO / bypass mode (`--dangerously-skip-permissions`), AGY automatically igno
 #### Multi-Workspace Session Resolution
 In multi-workspace sessions (`workspacePaths`), AGY provides multiple root directories. Dippy matches target file paths against `workspacePaths` to locate the containing workspace and load the appropriate project `.dippy` configuration rules.
 
+#### Recommended Global Rules for Antigravity
+Antigravity stores scratchpads, task plans, and conversation transcripts in `~/.gemini/antigravity-cli/brain/**`. To allow AGY to manage its workspace without approval prompts, configure global file rules in `~/.dippy/config`:
+
+```
+# Antigravity (AGY) artifact and brain directory
+allow-read ~/.gemini/antigravity-cli/brain/**
+allow-edit ~/.gemini/antigravity-cli/brain/**
+```
+
 Settings use kebab-case or snake_case interchangeably.
 
 ### Python Module Directives
