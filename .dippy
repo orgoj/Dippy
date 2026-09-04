@@ -7,6 +7,10 @@ allow-read ./**
 allow-edit ./**
 allow-read ~/.dippy/audit.log
 
+# Safe reading of rule files for analysis (editing remains protected by global ask-edit)
+allow-read .dippy*
+allow-read **/.dippy*
+
 #---- Python ----#
 allow rm -rf /**/__pycache__
 
@@ -45,3 +49,5 @@ allow ruff *
 #deny git worktree add * "Use relative path: git worktree add .worktrees/..."
 #allow git worktree add .worktrees/**
 allow git add *
+allow git commit *
+allow git checkout -- *
