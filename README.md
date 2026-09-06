@@ -36,6 +36,7 @@
 - **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify the unchanged Bash string before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
+- **Optional project SSH profiles** — SSH, tmux and Herdr share explicit SSH config/agent selection with no user-authentication fallback, private control sockets, and project-scoped recovery; ordinary user SSH settings remain the default
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, Antigravity CLI (AGY), pi-mono, Moltbot, Codex, Windsurf, PearAI
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
@@ -276,6 +277,9 @@ dippy recover SERVER --clear       # release after manual inspection
 
 `run-on-server` accepts only aliases declared with `server SERVER`. Its
 transport comes from configuration and cannot be overridden at invocation.
+By default it uses your ordinary SSH settings. Projects can opt into an
+[isolated SSH profile](docs/config.md#project-ssh-profiles) with their own
+configuration, keys and authentication socket, shared by all three backends.
 See [the configuration reference](docs/config.md#direct-execution) for SSH,
 tmux, Herdr, askpass, config-management setup, and the interaction between
 approval and agent CLI timeouts. Projects with a supervising agent or a custom

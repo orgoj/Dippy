@@ -176,6 +176,8 @@ class Config:
     run_on_server_session: str = "dippy"
     run_on_server_timeout: float = 300.0
     run_on_server_poll_interval: float = 0.1
+    run_on_server_ssh_config: Path | None = None
+    run_on_server_ssh_auth_sock: str | None = None
     configured_settings: frozenset[str] = frozenset()
 
     default: str = "ask"  # 'allow' | 'ask'
@@ -301,6 +303,16 @@ def _merge_configs(base: Config, overlay: Config) -> Config:
         else base.deny_format,
         deny_format_agents={**base.deny_format_agents, **overlay.deny_format_agents},
         servers=base.servers + [s for s in overlay.servers if s not in base.servers],
+        run_on_server_ssh_config=(
+            overlay.run_on_server_ssh_config
+            if "run_on_server_ssh_config" in overlay.configured_settings
+            else base.run_on_server_ssh_config
+        ),
+        run_on_server_ssh_auth_sock=(
+            overlay.run_on_server_ssh_auth_sock
+            if "run_on_server_ssh_auth_sock" in overlay.configured_settings
+            else base.run_on_server_ssh_auth_sock
+        ),
         run_on_server_backend=(
             overlay.run_on_server_backend
             if "run_on_server_backend" in overlay.configured_settings
@@ -386,6 +398,16 @@ def _expand_includes(
 
         # Check if this is an include directive (with or without pattern)
         if not stripped.startswith("include"):
+            setting = stripped.split(None, 2)
+            if setting and setting[0].lower() == "set":
+                if len(setting) == 3 and setting[1].lower().replace("_", "-") in (
+                    "run-on-server-ssh-config",
+                    "run-on-server-ssh-auth-sock",
+                ):
+                    value = _strip_quotes(setting[2])
+                    if value != "none" and value.strip():
+                        value = str(_local_profile_path(value, base_dir))
+                        line = f'set {setting[1]} "{value}"'
             result_lines.append(line)
             continue
 
@@ -971,7 +993,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 after_web_rules.append(Rule("after", pattern, message=message))
 
             elif directive == "set":
-                _apply_setting(settings, rest)
+                _apply_setting(
+                    settings, rest, Path(source).parent if source else Path.cwd()
+                )
 
             elif directive == "server":
                 if not rest or len(rest.split()) != 1:
@@ -994,6 +1018,12 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 raise ValueError(f"unknown directive '{directive}'")
 
         except ValueError as e:
+            if directive == "set" and rest.lower().replace("_", "-").startswith(
+                "run-on-server-ssh-"
+            ):
+                raise ConfigError(
+                    f"{prefix}line {lineno}: invalid SSH profile: {e}"
+                ) from e
             logging.warning(f"{prefix}line {lineno}: {e} (skipped)")
 
     return Config(
@@ -1033,6 +1063,8 @@ def parse_config(text: str, source: str | None = None) -> Config:
         run_on_server_session=settings.get("run_on_server_session", "dippy"),
         run_on_server_timeout=settings.get("run_on_server_timeout", 300.0),
         run_on_server_poll_interval=settings.get("run_on_server_poll_interval", 0.1),
+        run_on_server_ssh_config=settings.get("run_on_server_ssh_config"),
+        run_on_server_ssh_auth_sock=settings.get("run_on_server_ssh_auth_sock"),
         configured_settings=frozenset(settings),
     )
 
@@ -1099,7 +1131,14 @@ def _strip_quotes(value: str) -> str:
     return value
 
 
-def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> None:
+def _local_profile_path(value: str, base: Path) -> Path:
+    path = Path(value).expanduser()
+    return (path if path.is_absolute() else base / path).absolute()
+
+
+def _apply_setting(
+    settings: dict[str, bool | int | str | Path], rest: str, base: Path | None = None
+) -> None:
     """Parse and apply a 'set' directive. Raises ValueError on invalid setting."""
     if not rest:
         raise ValueError("'set' requires a setting name")
@@ -1135,6 +1174,21 @@ def _apply_setting(settings: dict[str, bool | int | str | Path], rest: str) -> N
             )
         settings[key_normalized] = value
 
+    elif key_normalized in ("run_on_server_ssh_config", "run_on_server_ssh_auth_sock"):
+        if value is None or not _strip_quotes(value).strip():
+            raise ValueError(f"'{key}' requires a path or none")
+        value = _strip_quotes(value)
+        if any(c in value for c in "\x00\r\n"):
+            raise ValueError(f"'{key}' must be a single path")
+        if value == "none":
+            settings[key_normalized] = (
+                None if key_normalized.endswith("config") else "none"
+            )
+        else:
+            path = _local_profile_path(value, base or Path.cwd())
+            settings[key_normalized] = (
+                path if key_normalized.endswith("config") else str(path)
+            )
     elif key_normalized == "run_on_server_backend":
         if value not in ("ssh", "tmux", "herdr"):
             raise ValueError(

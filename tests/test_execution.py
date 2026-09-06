@@ -5,6 +5,7 @@ import json
 import re
 import subprocess
 import threading
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
@@ -27,7 +28,16 @@ from dippy.execution import (
     _poll_capture,
     _server_lock,
     _write_state,
+    _operation_key,
 )
+from dippy.ssh_transport import build_transport
+
+
+@pytest.fixture(autouse=True)
+def isolated_execution_environment(tmp_path, monkeypatch):
+    monkeypatch.setenv("HOME", str(tmp_path))
+    monkeypatch.setenv("DIPPY_ASKPASS", "/bin/false")
+    monkeypatch.setenv("SSH_ASKPASS", "/bin/false")
 
 
 @pytest.mark.parametrize(
@@ -102,6 +112,7 @@ def test_askpass_nonzero_is_deny(tmp_path, monkeypatch, returncode):
 
 
 def test_missing_or_broken_askpass_is_deny(tmp_path, monkeypatch):
+    monkeypatch.delenv("DIPPY_ASKPASS", raising=False)
     decision = Decision("ask", "unknown")
     missing_config = approve_with_askpass(Config(), "frob", decision)
     assert not missing_config.allowed
@@ -349,7 +360,7 @@ def test_timeout_blocks_target_until_explicit_recovery(tmp_path, monkeypatch):
     assert execute("frob", config, tmp_path, "srv") == 125
     assert execute("frob", config, tmp_path, "srv") == 1
     assert len(calls) == 1
-    assert recover("srv", config, clear=True) == 0
+    assert recover("srv", config, clear=True, cwd=tmp_path) == 0
 
 
 def test_tmux_backend_uses_readiness_and_base64(monkeypatch):
@@ -362,15 +373,26 @@ def test_tmux_backend_uses_readiness_and_base64(monkeypatch):
     def capture(target):
         markers = []
         for command in sent:
-            markers.extend(re.findall(r"DIPPY_END_([a-f0-9]+)", command))
+            markers.extend(re.findall(r"DIPPY_(?:END|TRANSPORT)_([a-f0-9]+)", command))
         return "\n".join(f"DIPPY_END_{marker}:0" for marker in markers) + "\n"
 
     monkeypatch.setattr("dippy.execution._tmux_capture", capture)
     config = Config(run_on_server_timeout=1, run_on_server_poll_interval=0.001)
-    assert _run_tmux(config, "srv", "frob | next > out", "abcdef") == 0
+    assert (
+        _run_tmux(
+            config,
+            "srv",
+            "frob | next > out",
+            "abcdef",
+            build_transport(config, "srv", Path.cwd()),
+        )
+        == 0
+    )
     assert len(sent) == 2
     encoded = re.search(r"printf %s (\S+) \| base64", sent[1]).group(1)
-    assert base64.b64decode(encoded).decode() == "frob | next > out"
+    payload = base64.b64decode(encoded).decode()
+    assert base64.b64encode(b"frob | next > out").decode() in payload
+    assert "'ssh'" in sent[1].replace("'\"'\"'", "'")
 
 
 def test_herdr_backend_uses_readiness_and_persistent_pane(monkeypatch):
@@ -383,26 +405,36 @@ def test_herdr_backend_uses_readiness_and_persistent_pane(monkeypatch):
     def capture(config, pane):
         markers = []
         for command in sent:
-            markers.extend(re.findall(r"DIPPY_END_([a-f0-9]+)", command))
+            markers.extend(re.findall(r"DIPPY_(?:END|TRANSPORT)_([a-f0-9]+)", command))
         return "\n".join(f"DIPPY_END_{marker}:0" for marker in markers) + "\n"
 
     monkeypatch.setattr("dippy.execution._herdr_capture", capture)
     config = Config(run_on_server_timeout=1, run_on_server_poll_interval=0.001)
-    assert _run_herdr(config, "srv", "frob\nnext", "abcdef") == 0
+    assert (
+        _run_herdr(
+            config,
+            "srv",
+            "frob\nnext",
+            "abcdef",
+            build_transport(config, "srv", Path.cwd()),
+        )
+        == 0
+    )
     assert len(sent) == 2
 
 
-def test_tmux_new_session_argv_is_fixed(monkeypatch):
+def test_tmux_new_session_argv_is_fixed(tmp_path, monkeypatch):
+    monkeypatch.setattr("dippy.execution._state_dir", lambda: tmp_path / "state")
     calls = []
 
     def fake_run(argv, **kwargs):
         calls.append(argv)
         code = 1 if argv[1] == "has-session" else 0
-        return subprocess.CompletedProcess(argv, code, "", "")
+        return subprocess.CompletedProcess(argv, code, "%12\n", "")
 
     monkeypatch.setattr("dippy.execution.subprocess.run", fake_run)
     config = Config(run_on_server_session="managed")
-    assert _ensure_tmux(config, "srv") == "=managed:=srv"
+    assert _ensure_tmux(config, "srv") == "%12"
     assert calls == [
         ["tmux", "has-session", "-t", "=managed"],
         [
@@ -413,7 +445,10 @@ def test_tmux_new_session_argv_is_fixed(monkeypatch):
             "managed",
             "-n",
             "srv",
-            "ssh -- srv",
+            "-P",
+            "-F",
+            "#{pane_id}",
+            "/bin/bash --noprofile --norc",
         ],
     ]
 
@@ -451,7 +486,7 @@ def test_herdr_create_uses_json_pane_id_and_fixed_argv(tmp_path, monkeypatch):
             "pane",
             "run",
             "w1:p9",
-            "ssh -- srv",
+            "exec /bin/bash --noprofile --norc",
         ],
     ]
 
@@ -459,15 +494,22 @@ def test_herdr_create_uses_json_pane_id_and_fixed_argv(tmp_path, monkeypatch):
 def test_recovery_parses_saved_marker(tmp_path, monkeypatch):
     monkeypatch.setattr("dippy.execution._state_dir", lambda: tmp_path / "state")
     _write_state(
-        "srv",
-        {"status": "indeterminate", "marker": "abcdef", "backend": "tmux"},
+        _operation_key(tmp_path, "srv"),
+        {
+            "status": "indeterminate",
+            "marker": "abcdef",
+            "backend": "tmux",
+            "session": "dippy",
+            "profile": "user",
+            "tmux_pane": "%1",
+        },
     )
     monkeypatch.setattr(
         "dippy.execution._tmux_capture", lambda target: "DIPPY_END_abcdef:9\n"
     )
     config = Config(servers=["srv"], run_on_server_backend="tmux")
-    assert recover("srv", config) == 9
-    assert _read_state("srv")["status"] == "complete"
+    assert recover("srv", config, cwd=tmp_path) == 9
+    assert _read_state(_operation_key(tmp_path, "srv"))["status"] == "complete"
 
 
 def test_server_lock_serializes_callers(tmp_path, monkeypatch):

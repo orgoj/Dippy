@@ -1,7 +1,51 @@
 """Tests for execution settings and comment-preserving config administration."""
 
+from argparse import Namespace
+
 from dippy.config_admin import edit_config
 from dippy.core.config import Config, _merge_configs, parse_config
+from dippy.dippy import handle_subcommand
+
+
+def test_invalid_ssh_setting_admin_reports_error_without_writing(
+    tmp_path, monkeypatch, capsys
+):
+    monkeypatch.chdir(tmp_path)
+    args = Namespace(
+        subcommand="config",
+        project=True,
+        config_action="set",
+        key="run-on-server-ssh-config",
+        value="",
+    )
+    assert handle_subcommand(args) == 1
+    assert "SSH profile" in capsys.readouterr().err
+    assert not (tmp_path / ".dippy").exists()
+
+
+def test_admin_accepts_project_profile_keys(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    for key, value in [
+        ("run-on-server-ssh-config", "ssh/config"),
+        ("run-on-server-ssh-auth-sock", "none"),
+    ]:
+        assert (
+            handle_subcommand(
+                Namespace(
+                    subcommand="config",
+                    project=True,
+                    config_action="set",
+                    key=key,
+                    value=value,
+                )
+            )
+            == 0
+        )
+    parsed = parse_config(
+        (tmp_path / ".dippy").read_text(), source=str(tmp_path / ".dippy")
+    )
+    assert parsed.run_on_server_ssh_config == tmp_path / "ssh/config"
+    assert parsed.run_on_server_ssh_auth_sock == "none"
 
 
 def test_execution_settings_and_servers_parse():

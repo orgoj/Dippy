@@ -1291,17 +1291,21 @@ def handle_subcommand(args: argparse.Namespace) -> int:
         return configure_and_execute(args.command, cwd, config, args.server)
     elif args.subcommand == "recover":
         try:
-            _, config = _subcommand_config(args)
+            cwd, config = _subcommand_config(args)
         except ConfigError as error:
             print(f"config error: {error}", file=sys.stderr)
             return 1
         try:
-            return recover(args.server, config, clear=args.clear)
+            return recover(args.server, config, clear=args.clear, cwd=cwd)
         except ValueError as error:
             print(str(error), file=sys.stderr)
             return 1
     elif args.subcommand == "config":
-        return handle_config_subcommand(args)
+        try:
+            return handle_config_subcommand(args)
+        except ConfigError as error:
+            print(f"config error: {error}", file=sys.stderr)
+            return 1
     elif args.subcommand == "hooks":
         return handle_hooks_subcommand(args)
     elif args.subcommand == "doctor":
@@ -1320,6 +1324,8 @@ _CONFIG_KEYS = frozenset(
         "run-on-server-session",
         "run-on-server-timeout",
         "run-on-server-poll-interval",
+        "run-on-server-ssh-config",
+        "run-on-server-ssh-auth-sock",
     }
 )
 

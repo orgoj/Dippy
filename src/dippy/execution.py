@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import fcntl
+import hashlib
 import json
 import os
 import re
@@ -18,6 +19,7 @@ from typing import Iterator
 
 from dippy.core.analyzer import Decision, analyze
 from dippy.core.config import Config, configure_logging, log_decision
+from dippy.ssh_transport import SSHTransport, build_transport, shell_quote
 
 _SERVER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 _SESSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
@@ -196,9 +198,20 @@ def _state_path(server: str) -> Path:
     return _state_dir() / f"{server}.json"
 
 
+def _operation_key(cwd: Path, server: str) -> str:
+    # Nested working directories share their nearest project configuration.
+    project = cwd.resolve()
+    for directory in (project, *project.parents):
+        if (directory / ".dippy").is_file() or (directory / ".git").exists():
+            project = directory
+            break
+    digest = hashlib.sha256(str(project).encode()).hexdigest()[:24]
+    return f"{server}-{digest}"
+
+
 def _write_state(server: str, data: dict[str, object]) -> None:
     directory = _state_dir()
-    directory.mkdir(parents=True, exist_ok=True)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     path = _state_path(server)
     temporary = path.with_suffix(".tmp")
     temporary.write_text(json.dumps(data, sort_keys=True))
@@ -208,15 +221,25 @@ def _write_state(server: str, data: dict[str, object]) -> None:
 def _read_state(server: str) -> dict[str, object]:
     try:
         value = json.loads(_state_path(server).read_text())
-    except (OSError, json.JSONDecodeError):
+    except FileNotFoundError:
         return {}
-    return value if isinstance(value, dict) else {}
+    except (OSError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read execution state {server}: {error}") from error
+    if not isinstance(value, dict) or value.get("status") not in (
+        "running",
+        "indeterminate",
+        "complete",
+        "cleared",
+        "ready",
+    ):
+        raise ValueError(f"invalid execution state: {server}")
+    return value
 
 
 @contextmanager
 def _server_lock(server: str) -> Iterator[None]:
     directory = _state_dir()
-    directory.mkdir(parents=True, exist_ok=True)
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
     with (directory / f"{server}.lock").open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         yield
@@ -227,8 +250,24 @@ def _shell_payload(command: str, marker: str) -> str:
     return (
         f"printf 'DIPPY_START_{marker}\\n'; "
         f"printf %s {encoded} | base64 -d | bash; "
-        f"dippy_status=$?; printf 'DIPPY_END_{marker}:%s\\n' \"$dippy_status\""
+        f"dippy_status=$?; printf '\\nDIPPY_END_{marker}:%s\\n' \"$dippy_status\""
     )
+
+
+def _transport_payload(transport: SSHTransport, command: str, marker: str) -> str:
+    # The user command is data on SSH stdin, never code in the local pane.
+    encoded = base64.b64encode(_shell_payload(command, marker).encode()).decode()
+    environment = ["env", "-u", "SSH_AUTH_SOCK", "-u", "SSH_AGENT_PID"]
+    for name in ("SSH_AUTH_SOCK", "SSH_AGENT_PID"):
+        if name in transport.env:
+            environment.append(f"{name}={transport.env[name]}")
+    argv = " ".join(shell_quote(arg) for arg in environment + transport.argv)
+    script = (
+        f"cd -- {shell_quote(str(transport.cwd))} && "
+        f"printf %s {encoded} | base64 -d | {argv}; "
+        f"printf '\\nDIPPY_TRANSPORT_{marker}:%s\\n' \"$?\""
+    )
+    return "/bin/bash --noprofile --norc -c " + shell_quote(script)
 
 
 def _run_checked(argv: list[str], **kwargs) -> subprocess.CompletedProcess:
@@ -247,6 +286,10 @@ def _poll_capture(capture, marker: str, timeout: float, interval: float) -> int:
         try:
             code = parse_marker(last, marker)
         except ValueError:
+            if re.search(
+                rf"(?:^|\n)DIPPY_TRANSPORT_{re.escape(marker)}:\d+\r?$", last, re.M
+            ):
+                raise TimeoutError("SSH ended without a remote completion marker")
             time.sleep(interval)
             continue
         start = re.search(rf"(?:^|\n)DIPPY_START_{re.escape(marker)}\r?\n", last)
@@ -262,18 +305,20 @@ def _poll_capture(capture, marker: str, timeout: float, interval: float) -> int:
     raise TimeoutError(f"missing completion marker DIPPY_END_{marker}")
 
 
-def _run_ssh(server: str, command: str, timeout: float) -> int:
+def _run_ssh(transport: SSHTransport, command: str, timeout: float) -> int:
     try:
         result = subprocess.run(
-            ["ssh", "--", server, "bash", "-s"],
+            transport.argv,
             input=command.encode(),
             timeout=timeout,
+            env=transport.env,
+            cwd=transport.cwd,
         )
     except subprocess.TimeoutExpired as error:
         raise TimeoutError(
             "SSH command timed out; remote status is indeterminate"
         ) from error
-    if result.returncode == 255:
+    if result.returncode == 255 or result.returncode < 0:
         raise TimeoutError("SSH connection ended without a reliable command result")
     return result.returncode
 
@@ -286,12 +331,12 @@ def _tmux_target(config: Config, server: str) -> str:
 
 def _ensure_tmux(config: Config, server: str) -> str:
     session = config.run_on_server_session
-    target = _tmux_target(config, server)
+    _tmux_target(config, server)  # Validate the configured session.
     exists = subprocess.run(
         ["tmux", "has-session", "-t", f"={session}"], capture_output=True
     )
     if exists.returncode != 0:
-        _run_checked(
+        result = _run_checked(
             [
                 "tmux",
                 "new-session",
@@ -300,32 +345,38 @@ def _ensure_tmux(config: Config, server: str) -> str:
                 session,
                 "-n",
                 server,
-                f"ssh -- {server}",
+                "-P",
+                "-F",
+                "#{pane_id}",
+                "/bin/bash --noprofile --norc",
             ],
             capture_output=True,
             text=True,
         )
     else:
-        windows = _run_checked(
-            ["tmux", "list-windows", "-t", f"={session}", "-F", "#{window_name}"],
+        result = _run_checked(
+            [
+                "tmux",
+                "new-window",
+                "-d",
+                "-t",
+                f"={session}",
+                "-n",
+                server,
+                "-P",
+                "-F",
+                "#{pane_id}",
+                "/bin/bash --noprofile --norc",
+            ],
             capture_output=True,
             text=True,
-        ).stdout.splitlines()
-        if server not in windows:
-            _run_checked(
-                [
-                    "tmux",
-                    "new-window",
-                    "-d",
-                    "-t",
-                    f"={session}",
-                    "-n",
-                    server,
-                    f"ssh -- {server}",
-                ],
-                capture_output=True,
-                text=True,
-            )
+        )
+    target = result.stdout.strip()
+    if not re.fullmatch(r"%\d+", target):
+        raise RuntimeError("tmux did not return a concrete pane ID")
+    _write_state(
+        server, {"status": "ready", **_read_state(server), "tmux_pane": target}
+    )
     return target
 
 
@@ -342,7 +393,9 @@ def _tmux_capture(target: str) -> str:
     ).stdout
 
 
-def _run_tmux(config: Config, server: str, command: str, marker: str) -> int:
+def _run_tmux(
+    config: Config, server: str, command: str, marker: str, transport: SSHTransport
+) -> int:
     target = _ensure_tmux(config, server)
     ready = uuid.uuid4().hex
     _tmux_send(target, f"printf 'DIPPY_END_{ready}:0\\n'")
@@ -352,7 +405,7 @@ def _run_tmux(config: Config, server: str, command: str, marker: str) -> int:
         config.run_on_server_timeout,
         config.run_on_server_poll_interval,
     )
-    _tmux_send(target, _shell_payload(command, marker))
+    _tmux_send(target, _transport_payload(transport, command, marker))
     return _poll_capture(
         lambda: _tmux_capture(target),
         marker,
@@ -378,14 +431,6 @@ def _json_result(result: subprocess.CompletedProcess) -> dict[str, object]:
 
 
 def _ensure_herdr(config: Config, server: str) -> str:
-    state = _read_state(server)
-    pane = state.get("herdr_pane")
-    if isinstance(pane, str):
-        probe = subprocess.run(
-            _herdr_command(config, "pane", "get", pane), capture_output=True, text=True
-        )
-        if probe.returncode == 0:
-            return pane
     created = _run_checked(
         _herdr_command(
             config, "workspace", "create", "--label", f"dippy-{server}", "--no-focus"
@@ -400,11 +445,13 @@ def _ensure_herdr(config: Config, server: str) -> str:
     if not isinstance(pane, str):
         raise RuntimeError("Herdr create response omitted root pane")
     _run_checked(
-        _herdr_command(config, "pane", "run", pane, f"ssh -- {server}"),
+        _herdr_command(
+            config, "pane", "run", pane, "exec /bin/bash --noprofile --norc"
+        ),
         capture_output=True,
         text=True,
     )
-    _write_state(server, {"herdr_pane": pane, "status": "ready"})
+    _write_state(server, {"status": "ready", **_read_state(server), "herdr_pane": pane})
     return pane
 
 
@@ -434,7 +481,9 @@ def _herdr_capture(config: Config, pane: str) -> str:
     return result.stdout
 
 
-def _run_herdr(config: Config, server: str, command: str, marker: str) -> int:
+def _run_herdr(
+    config: Config, server: str, command: str, marker: str, transport: SSHTransport
+) -> int:
     pane = _ensure_herdr(config, server)
     ready = uuid.uuid4().hex
     _herdr_send(config, pane, f"printf 'DIPPY_END_{ready}:0\\n'")
@@ -444,7 +493,7 @@ def _run_herdr(config: Config, server: str, command: str, marker: str) -> int:
         config.run_on_server_timeout,
         config.run_on_server_poll_interval,
     )
-    _herdr_send(config, pane, _shell_payload(command, marker))
+    _herdr_send(config, pane, _transport_payload(transport, command, marker))
     return _poll_capture(
         lambda: _herdr_capture(config, pane),
         marker,
@@ -503,38 +552,52 @@ def execute(command: str, config: Config, cwd: Path, server: str | None = None) 
             return 1
     if server is None:
         return subprocess.run(["/bin/bash", "-c", command], cwd=cwd).returncode
-    with _server_lock(server):
-        state = _read_state(server)
-        if state.get("status") == "indeterminate":
+    try:
+        return _execute_remote(command, config, cwd, server)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        print(f"remote execution unavailable: {error}", file=sys.stderr)
+        return 1
+
+
+def _execute_remote(command: str, config: Config, cwd: Path, server: str) -> int:
+    key = _operation_key(cwd, server)
+    # Honor old versions' alias-only records under their lock during migration.
+    with _server_lock(server), _server_lock(key):
+        legacy = _read_state(server)
+        state = _read_state(key)
+        if any(
+            s.get("status") in ("running", "indeterminate") for s in (legacy, state)
+        ):
             print(
                 f"previous command on {server} is indeterminate; recover it before retrying",
                 file=sys.stderr,
             )
             return 1
+        transport = build_transport(config, server, cwd)
         marker = uuid.uuid4().hex
         _write_state(
-            server,
+            key,
             {
-                **state,
                 "status": "running",
                 "marker": marker,
                 "backend": config.run_on_server_backend,
                 "session": config.run_on_server_session,
+                "profile": transport.identity,
             },
         )
         try:
             if config.run_on_server_backend == "ssh":
-                code = _run_ssh(server, command, config.run_on_server_timeout)
+                code = _run_ssh(transport, command, config.run_on_server_timeout)
             elif config.run_on_server_backend == "tmux":
-                code = _run_tmux(config, server, command, marker)
+                code = _run_tmux(config, key, command, marker, transport)
             elif config.run_on_server_backend == "herdr":
-                code = _run_herdr(config, server, command, marker)
+                code = _run_herdr(config, key, command, marker, transport)
             else:
                 raise ValueError(f"unsupported backend: {config.run_on_server_backend}")
         except (KeyboardInterrupt, TimeoutError):
             _write_state(
-                server,
-                {**_read_state(server), "status": "indeterminate", "marker": marker},
+                key,
+                {**_read_state(key), "status": "indeterminate", "marker": marker},
             )
             print(
                 f"command status on {server} is INDETERMINATE; it was not retried",
@@ -543,9 +606,9 @@ def execute(command: str, config: Config, cwd: Path, server: str | None = None) 
             return 125
         except (OSError, RuntimeError, ValueError) as error:
             _write_state(
-                server,
+                key,
                 {
-                    **_read_state(server),
+                    **_read_state(key),
                     "status": "indeterminate",
                     "marker": marker,
                     "error": str(error),
@@ -556,38 +619,70 @@ def execute(command: str, config: Config, cwd: Path, server: str | None = None) 
                 file=sys.stderr,
             )
             return 125
-        _write_state(
-            server, {**_read_state(server), "status": "complete", "exit_code": code}
-        )
+        _write_state(key, {**_read_state(key), "status": "complete", "exit_code": code})
         return code
 
 
-def recover(server: str, config: Config, *, clear: bool = False) -> int:
+def recover(
+    server: str, config: Config, *, clear: bool = False, cwd: Path | None = None
+) -> int:
+    """Recover only the project and connection that started the operation."""
+    try:
+        return _recover(server, config, clear=clear, cwd=cwd or Path.cwd())
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        print(str(error), file=sys.stderr)
+        return 1
+
+
+def _recover(server: str, config: Config, *, clear: bool, cwd: Path) -> int:
     """Resolve or explicitly clear a target's indeterminate execution state."""
     server = validate_server(server)
     if server not in config.servers:
         print(f"server is not allowed: {server}", file=sys.stderr)
         return 1
-    with _server_lock(server):
-        state = _read_state(server)
-        if state.get("status") != "indeterminate":
+    key = _operation_key(cwd, server)
+    with _server_lock(server), _server_lock(key):
+        legacy = _read_state(server)
+        if legacy.get("status") in ("running", "indeterminate"):
+            if clear:
+                _write_state(server, {**legacy, "status": "cleared"})
+            else:
+                print(
+                    "legacy execution state requires manual inspection and --clear",
+                    file=sys.stderr,
+                )
+                return 1
+        state = _read_state(key)
+        if state.get("status") not in ("running", "indeterminate"):
             return 0
         if clear:
-            _write_state(server, {**state, "status": "cleared"})
+            _write_state(key, {**state, "status": "cleared"})
             return 0
         marker = state.get("marker")
         if not isinstance(marker, str):
             print("indeterminate state has no recovery marker", file=sys.stderr)
             return 1
-        if state.get("backend") != config.run_on_server_backend:
+        if (
+            state.get("backend") != config.run_on_server_backend
+            or state.get("session") != config.run_on_server_session
+        ):
             print(
-                "configured backend changed since the indeterminate command; restore it or use --clear",
+                "configured backend/session changed; restore it or inspect the server and use --clear",
+                file=sys.stderr,
+            )
+            return 1
+        if state.get("profile") != build_transport(config, server, cwd).identity:
+            print(
+                "SSH profile changed; restore it or inspect the server and use --clear",
                 file=sys.stderr,
             )
             return 1
         try:
             if config.run_on_server_backend == "tmux":
-                code = parse_marker(_tmux_capture(_tmux_target(config, server)), marker)
+                pane = state.get("tmux_pane")
+                if not isinstance(pane, str) or not re.fullmatch(r"%\d+", pane):
+                    raise ValueError("indeterminate tmux state has no concrete pane")
+                code = parse_marker(_tmux_capture(pane), marker)
             elif config.run_on_server_backend == "herdr":
                 pane = state.get("herdr_pane")
                 if not isinstance(pane, str):
@@ -603,7 +698,7 @@ def recover(server: str, config: Config, *, clear: bool = False) -> int:
         except (OSError, RuntimeError, ValueError) as error:
             print(str(error), file=sys.stderr)
             return 1
-        _write_state(server, {**state, "status": "complete", "exit_code": code})
+        _write_state(key, {**state, "status": "complete", "exit_code": code})
         return code
 
 

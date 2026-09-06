@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.5] - 2026-09-06
+
+### Added
+
+- Optional project SSH configuration and authentication socket settings for all `run-on-server` backends. Explicit profiles disable fallback to user authentication and use private per-operation control sockets; ordinary user SSH remains the default.
+
+### Fixed
+
+- Remote execution state is scoped to the project and server, and pending operations remain blocked after profile, backend or session changes and hard process termination. Corrupt state no longer silently clears the guard.
+- tmux and Herdr execute each operation through a fresh local transport pane and SSH stdin, avoiding reuse of disconnected remote shells or another project's selected terminal. Recovery uses the recorded pane and checks connection configuration.
+
 ## [0.3.4] - 2026-09-02
 
 ### Added
