@@ -968,7 +968,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
 
             elif directive in ("allow-web", "ask-web", "deny-web"):
                 if not rest:
-                    raise ValueError("requires a pattern")
+                    if directive != "allow-web":
+                        raise ValueError("requires a pattern")
+                    # Bare `allow-web` approves every query.
+                    rest = "*"
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
                 pattern, message = (
                     _extract_message(pattern_part)

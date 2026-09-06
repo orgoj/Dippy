@@ -26,6 +26,7 @@ from dippy.core.config import (
     match_command,
     match_mcp,
     match_redirect,
+    match_web,
     parse_config,
 )
 
@@ -2127,3 +2128,24 @@ class TestAlias:
         m = match_command(c, cfg, tmp_path)
         assert m is not None
         assert m.decision == "allow"
+
+
+class TestBareAllowWeb:
+    """`allow-web` without a pattern approves every web query."""
+
+    def test_bare_allow_web_matches_any_query(self, caplog):
+        cfg = parse_config("allow-web")
+        assert "requires a pattern" not in caplog.text
+        m = match_web("anything at all", cfg)
+        assert m is not None
+        assert m.decision == "allow"
+
+    def test_bare_allow_web_can_be_overridden_later(self):
+        cfg = parse_config('allow-web\ndeny-web *exploit* "blocked"')
+        assert match_web("docs", cfg).decision == "allow"
+        assert match_web("kernel exploit poc", cfg).decision == "deny"
+
+    def test_bare_ask_web_and_deny_web_still_require_a_pattern(self, caplog):
+        cfg = parse_config("ask-web\ndeny-web")
+        assert cfg.web_rules == []
+        assert caplog.text.count("requires a pattern") == 2
