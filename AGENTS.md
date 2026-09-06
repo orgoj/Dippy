@@ -24,8 +24,10 @@ just fmt     # ruff format --check
   `--config` adds an override; it does not replace `~/.dippy/config`.
 - Validate config changes in the complete file and final rule order; isolated
   snippets can miss a later last-match-wins override.
-- Run every direct-execution check with an empty temporary `HOME` and a fake
-  non-GUI askpass; never open the real approval dialog during verification.
+- Run every direct-execution and hook-mode check (`dippy --agy`, `--claude`,
+  `--codex`, `--gemini`) with an empty temporary `HOME` and a fake non-GUI
+  askpass; never open the real approval dialog during verification. In hook
+  modes an unmatched tool falls through to askpass, which prompts the live user.
 - Merge scalar settings by membership in `configured_settings`, never by
   comparing their value to the default. Test that a higher-priority scope can
   explicitly restore the default value.

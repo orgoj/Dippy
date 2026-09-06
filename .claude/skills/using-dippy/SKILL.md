@@ -16,6 +16,14 @@ project-specific agent workflows (such as reading `.dippy` rules during rule
 development) in that project's `.dippy` file rather than cluttering global
 `~/.dippy/config` with per-agent environment conditions.
 
+A pattern token containing `/` resolves against cwd, so `**/tool` never matches
+an absolute path and `/**/tool` matches every location, a planted binary
+included. Read Command Patterns in `docs/config.md` before writing a
+path-qualified rule and name the real locations instead: the PATH name and the
+install target (`~/go/bin/tool`). Never allow running a program from a directory
+the agent may write, such as a project `tmp/`; a tool downloaded there is the
+agent's mistake to fix, not a rule to add.
+
 For an audit entry, use its exact command and `cwd`. Read that project's
 instructions and inspect each config scope separately before choosing a code or
 config fix; an explicit project rule can override a handler. Replay the command

@@ -10,6 +10,10 @@ frequency alone is not enough: identify what repeated task the user is trying to
 complete, such as creating, populating, inspecting, and cleaning a project-local
 scratch directory.
 
+The `agent` field records the CLI (`claude`, `codex`, `agy`, `pi`), not the
+agent's name: identify one agent's session by its `cwd`. Web and file-tool
+entries carry `tool` instead of `cmd` and have no `cwd`.
+
 Prefer the narrowest rule that covers the workflow. Keep destructive commands,
 arbitrary code execution, remote execution, secret-bearing reads, and external
 side effects subject to approval unless the user explicitly accepts that scope.
@@ -26,6 +30,9 @@ allow rm -f tmp/**
 allow mkdir -p tmp
 allow mkdir -p tmp/**
 ```
+
+Never extend that bundle to executing a file from `tmp/`. The agent can write
+there, so an allowed binary in `tmp/` is a planted-binary path.
 
 Do not modify the user's configuration when they only ask for recommendations.
 When they explicitly request the change, edit the live configuration surgically
@@ -44,3 +51,5 @@ prompt.
 
 The intended workflow must return `allow`; the out-of-scope control must remain
 `ask` or `deny`.
+
+Follow the `using-dippy` skill when writing and verifying the rules themselves.
