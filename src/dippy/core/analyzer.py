@@ -631,6 +631,7 @@ def _analyze_command(
         context_flags,
         remote=remote,
         word_has_expansions=word_has_expansions,
+        redirects=tuple(getattr(node, "redirects", None) or ()),
     )
     decisions.append(cmd_decision)
 
@@ -716,6 +717,7 @@ def _analyze_simple_command(
     *,
     remote: bool = False,
     word_has_expansions: tuple[bool, ...] = (),
+    redirects: tuple = (),
 ) -> Decision:
     """Analyze a simple command (list of words)."""
     if not words:
@@ -826,6 +828,43 @@ def _analyze_simple_command(
         if context_value:
             wrapper_context.append(context_value)
         inner_flags = context_flags | frozenset(wrapper_context)
+
+        if info.script_stdin_marker:
+            try:
+                trigger_idx = tokens.index(info.trigger) if info.trigger else 0
+                marker_idx = tokens.index(info.script_stdin_marker, trigger_idx + 1)
+            except ValueError:
+                marker_idx = -1
+
+            if marker_idx >= 0:
+                canonical_marker_idx = trigger_idx + 1
+                heredocs = [
+                    redirect
+                    for redirect in redirects
+                    if getattr(redirect, "kind", None) == "heredoc"
+                ]
+                valid_input = (
+                    marker_idx == canonical_marker_idx
+                    and marker_idx == len(tokens) - 1
+                    and len(redirects) == 1
+                    and len(heredocs) == 1
+                    and getattr(heredocs[0], "quoted", False)
+                    and bool(getattr(heredocs[0], "content", "").strip())
+                )
+                if not valid_input:
+                    return Decision(
+                        "ask",
+                        f"{base} {info.script_stdin_marker}: "
+                        "requires one non-empty quoted heredoc",
+                        context_flags=inner_flags,
+                    )
+                return analyze(
+                    heredocs[0].content,
+                    config,
+                    cwd,
+                    inner_flags,
+                    remote=True,
+                )
 
         # We assume custom wrappers execute commands REMOTELY
         inner_decision = analyze(inner_cmd, config, cwd, inner_flags, remote=True)

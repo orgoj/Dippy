@@ -479,7 +479,7 @@ by it never matches (fail-closed).
 Define your own wrapper commands with the `wrapper` directive:
 
 ```
-wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag>] [--context-first]
+wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag>] [--context-first] [--script-stdin <marker>]
 ```
 
 | Option | Meaning |
@@ -488,6 +488,7 @@ wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag
 | `--flag <target_flag>` | Flag whose value is the destination (e.g. `-t`) |
 | `--context <flag>` | Flag whose value is added to the context flags |
 | `--context-first` | First positional arg is the destination and becomes a context flag |
+| `--script-stdin <marker>` | At the marker, analyze one directly attached quoted heredoc as the remote shell script |
 
 **Example:**
 
@@ -502,7 +503,7 @@ wrapper tokf --cmd run
 wrapper docker --cmd exec --flag -t
 
 # 'cca-tmux-cli -t SESSION run CMD' - SESSION becomes a context flag
-wrapper cca-tmux-cli --cmd run --context -t
+wrapper cca-tmux-cli --cmd run --context -t --script-stdin --script
 
 # 'ssh SERVER CMD' - first positional arg becomes a context flag
 wrapper ssh --context-first
@@ -522,6 +523,12 @@ cca-tmux-cli l2 run "ls"      # wrapper=cca-tmux-cli, dest=l2, cmd=ls
 
 # With trigger and target flag
 cca-tmux-cli -t l2 run "ls"   # wrapper=cca-tmux-cli, dest=l2, cmd=ls
+
+# Literal multiline script: no local expansion or indirect input
+cca-tmux-cli -t l2 run --script <<'REMOTE'
+free -h
+uname -a
+REMOTE
 ```
 
 **Rules:**
@@ -546,6 +553,13 @@ allow [cca-tmux-cli,l2] ls *
 3. **Context flags**: Sets both the wrapper name (`cca-tmux-cli`) and destination (`l2`) as flags.
 4. **Recursive analysis**: Analyzes the `inner_command` recursively.
 5. **Remote mode**: Inner commands are automatically analyzed with `remote=True`, which skips local path checks (ideal for SSH/containers).
+
+With `--script-stdin`, the marker must be the first and last word after the
+wrapper trigger, and the command must have exactly one non-empty quoted heredoc
+redirect. Dippy analyzes that literal body recursively in remote mode. Unquoted
+heredocs, pipelines, files, variables, inline arguments and additional redirects
+do not enter script mode and therefore remain on `ask`. This strict form keeps
+local shell expansion and indirect input out of auto-approved multiline scripts.
 
 **Wrapper flags only exist once the trigger is found.** `cca-tmux-cli -t host read`
 (no `run`) is analyzed as a plain command, so `[cca-tmux-cli]` rules do not apply

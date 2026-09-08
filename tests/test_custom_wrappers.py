@@ -74,6 +74,12 @@ class TestConfigParser:
         )
         assert set(config.wrappers.keys()) == {"wrap", "ssh", "tmux-cli"}
 
+    def test_parse_script_stdin_marker(self):
+        """A wrapper can declare a marker for literal heredoc scripts."""
+        config = parse_config("wrapper fictionalwrap --cmd run --script-stdin --script")
+
+        assert config.wrappers["fictionalwrap"].script_stdin_marker == "--script"
+
     def test_duplicate_wrapper_warning(self, caplog):
         """Duplicate wrapper definition logs warning."""
 
@@ -280,6 +286,139 @@ class TestWrapperConfigMerge:
 
         assert set(merged.wrappers.keys()) == {"wrap"}
         assert merged.wrappers["wrap"].trigger == "new"  # Overlay wins
+
+
+class TestWrapperScriptStdin:
+    """Quoted heredoc wrapper mode analyzes the literal remote script."""
+
+    @staticmethod
+    def config():
+        return parse_config(
+            """
+            wrapper fictionalwrap --cmd run --context -t --script-stdin --script
+            allow [fictionalwrap] fictionalread *
+            allow [fictionalwrap] fictionalpython *
+            ask [fictionalwrap] fictionalwrite *
+            """
+        )
+
+    def test_safe_multiline_script_is_allowed(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script <<'REMOTE'
+fictionalread /one
+fictionalread /two
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+
+    def test_unsafe_command_in_script_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script <<'REMOTE'
+fictionalread /one
+fictionalwrite /two
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_nested_quoted_heredoc_is_script_data(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script <<'REMOTE'
+fictionalpython - <<'PY'
+print("literal $HOME and `fictionalwrite /hidden`")
+PY
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+
+    def test_wrapper_options_before_script_marker_ask(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --timeout 3 --script <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_unquoted_heredoc_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script <<REMOTE
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_empty_heredoc_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script <<'REMOTE'
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_file_input_asks(self):
+        result = analyze(
+            "fictionalwrap -t server1 run --script < payload.sh",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_pipeline_input_asks(self):
+        result = analyze(
+            "printf payload | fictionalwrap -t server1 run --script",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_inline_payload_with_heredoc_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script extra <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_additional_redirect_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --script > output <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_legacy_string_mode_is_unchanged(self):
+        result = analyze(
+            'fictionalwrap -t server1 run "fictionalread /one"',
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
 
 
 class TestLnavWrapperValidation:

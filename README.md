@@ -15,7 +15,7 @@
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
 - **Scoped handler delegation** — `delegate [flags] command *` sends a matched command through its native safety handler instead of approving it outright, including per-target SSH context
 - **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, file edit/read operations, and web requests
-- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), with `--cmd`, `--flag`, `--context`, `--context-first` flags for flexible configuration
+- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), including literal quoted-heredoc script analysis with `--script-stdin`
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Tk Approval Provider (`dippy-askpass-gui`)** — standalone Tk GUI approval dialog with operation classification (Read File, Edit File, Command, Web Request, MCP Tool), single-key keyboard shortcuts (`y`/`Y`/`Enter` = allow, `n`/`N`/`Esc` = deny), and multi-monitor geometric centering via `xrandr`

@@ -118,6 +118,8 @@ class WrapperInfo:
     """Flag whose value should be included in context (e.g. '-t' for session)."""
     context_first: bool = False
     """If True, first positional arg (destination) is included in context flags."""
+    script_stdin_marker: str | None = None
+    """Marker after which one quoted heredoc is the remote shell script."""
 
 
 @dataclass
@@ -885,6 +887,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 target_flag = None
                 context_flag = None
                 context_first = False
+                script_stdin_marker = None
                 new_syntax_used = False
                 i = 1
                 while i < len(parts):
@@ -904,6 +907,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         new_syntax_used = True
                         context_first = True
                         i += 1
+                    elif parts[i] == "--script-stdin" and i + 1 < len(parts):
+                        new_syntax_used = True
+                        script_stdin_marker = parts[i + 1]
+                        i += 2
                     else:
                         i += 1
 
@@ -924,6 +931,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     target_flag=target_flag,
                     context_flag=context_flag,
                     context_first=context_first,
+                    script_stdin_marker=script_stdin_marker,
                 )
 
             elif directive in ("allow-edit", "ask-edit", "deny-edit"):
