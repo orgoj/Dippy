@@ -35,7 +35,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
-- **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify the unchanged Bash string before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
+- **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify a quoted argument or literal quoted-heredoc script before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
 - **Optional project SSH profiles** — SSH, tmux and Herdr share explicit SSH config/agent selection with no user-authentication fallback, private control sockets, and project-scoped recovery; ordinary user SSH settings remain the default
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, Antigravity CLI (AGY), pi-mono, Moltbot, Codex, Windsurf, PearAI
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
@@ -271,6 +271,12 @@ Changing hook config requires restarting the agent session. For Codex, both `hoo
 ```bash
 dippy run 'CMD'
 dippy run-on-server SERVER 'CMD'
+dippy run <<'DIPPY'               # literal multiline local script
+CMD
+DIPPY
+dippy run-on-server SERVER <<'DIPPY'
+CMD
+DIPPY
 dippy recover SERVER               # check an uncertain persistent run
 dippy recover SERVER --clear       # release after manual inspection
 ```

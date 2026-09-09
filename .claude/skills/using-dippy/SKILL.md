@@ -40,6 +40,21 @@ path decisions.
 Pass `--config` a persistent file, not process substitution such as `/dev/fd/*`,
 and use the project's documented Python runner for source checks.
 
+For multiline approved execution, use one directly attached quoted heredoc:
+
+```bash
+dippy run <<'DIPPY'
+CMD
+DIPPY
+dippy run-on-server SERVER <<'DIPPY'
+CMD
+DIPPY
+```
+
+Keep the delimiter quoted so the calling shell cannot expand parameters or
+command substitutions before classification. Do not pipe or redirect a script
+file into these subcommands. Keep `dippy run 'CMD'` for a single-line command.
+
 ## Codex `ask` Requires a Prompt Bridge
 
 Codex `PreToolUse` cannot force an approval prompt. It parses an `ask` response

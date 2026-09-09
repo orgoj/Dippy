@@ -44,6 +44,21 @@ def _redirect_target_is_safe(target: str) -> bool:
     return False
 
 
+def _quoted_heredoc_content(redirects: tuple) -> str | None:
+    """Return one non-empty literal heredoc body, or ``None``."""
+    if len(redirects) != 1:
+        return None
+    redirect = redirects[0]
+    content = getattr(redirect, "content", "")
+    if (
+        getattr(redirect, "kind", None) != "heredoc"
+        or not getattr(redirect, "quoted", False)
+        or not content.strip()
+    ):
+        return None
+    return content
+
+
 @dataclass
 class Decision:
     """Result of analyzing an AST node."""
@@ -769,7 +784,36 @@ def _analyze_simple_command(
         # analysis. Redirect asks/denies have already taken priority in
         # match_command().
 
-    # 2. Handle wrapper commands (time, timeout, etc.) - analyze inner command
+    # 2. Dippy execution subcommands can take one literal script on stdin.
+    if (
+        base == "dippy"
+        and len(tokens) > 1
+        and tokens[1]
+        in (
+            "run",
+            "run-on-server",
+        )
+    ):
+        content = _quoted_heredoc_content(redirects)
+        if tokens[1] == "run" and len(tokens) == 2 and content is not None:
+            return analyze(content, config, cwd, context_flags, remote=remote)
+        if (
+            tokens[1] == "run-on-server"
+            and len(tokens) == 3
+            and content is not None
+            and not (word_has_expansions and word_has_expansions[i + 2])
+        ):
+            server = tokens[2]
+            inner_flags = context_flags | frozenset({"run-on-server", server})
+            return analyze(content, config, cwd, inner_flags, remote=True)
+        return Decision(
+            "ask",
+            f"dippy {tokens[1]}: requires one non-empty quoted heredoc",
+            context_flags=context_flags,
+            suggestion=suggestion,
+        )
+
+    # 3. Handle wrapper commands (time, timeout, etc.) - analyze inner command
     if base in WRAPPER_COMMANDS and len(tokens) > 1:
         if base == "command" and len(tokens) > 1 and tokens[1] in ("-v", "-V"):
             return Decision("allow", "command -v", context_flags=context_flags)
@@ -801,15 +845,15 @@ def _analyze_simple_command(
             )
         return Decision("ask", base, context_flags=context_flags, suggestion=suggestion)
 
-    # 3. Simple safe commands
+    # 4. Simple safe commands
     if base in SIMPLE_SAFE:
         return Decision("allow", base, context_flags=context_flags)
 
-    # 4. Version/help checks
+    # 5. Version/help checks
     if _is_version_or_help(tokens):
         return Decision("allow", f"{base} --help", context_flags=context_flags)
 
-    # 5. Custom wrapper commands (configured via 'wrapper' directive)
+    # 6. Custom wrapper commands (configured via 'wrapper' directive)
     if base in config.wrappers:
         info = config.wrappers[base]
         dest, inner_cmd, context_value = _extract_wrapper_args(tokens, info)
@@ -838,18 +882,11 @@ def _analyze_simple_command(
 
             if marker_idx >= 0:
                 canonical_marker_idx = trigger_idx + 1
-                heredocs = [
-                    redirect
-                    for redirect in redirects
-                    if getattr(redirect, "kind", None) == "heredoc"
-                ]
+                content = _quoted_heredoc_content(redirects)
                 valid_input = (
                     marker_idx == canonical_marker_idx
                     and marker_idx == len(tokens) - 1
-                    and len(redirects) == 1
-                    and len(heredocs) == 1
-                    and getattr(heredocs[0], "quoted", False)
-                    and bool(getattr(heredocs[0], "content", "").strip())
+                    and content is not None
                 )
                 if not valid_input:
                     return Decision(
@@ -859,7 +896,7 @@ def _analyze_simple_command(
                         context_flags=inner_flags,
                     )
                 return analyze(
-                    heredocs[0].content,
+                    content,
                     config,
                     cwd,
                     inner_flags,
@@ -870,7 +907,7 @@ def _analyze_simple_command(
         inner_decision = analyze(inner_cmd, config, cwd, inner_flags, remote=True)
         return inner_decision
 
-    # 6. CLI-specific handlers
+    # 7. CLI-specific handlers
     handler = get_handler(base)
     if handler:
         result = handler.classify(

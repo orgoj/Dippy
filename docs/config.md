@@ -20,12 +20,24 @@ Dippy can validate commands from the command line without running as a hook. Thi
 ```bash
 dippy run 'CMD'
 dippy run-on-server SERVER 'CMD'
+dippy run <<'DIPPY'
+CMD
+DIPPY
+dippy run-on-server SERVER <<'DIPPY'
+CMD
+DIPPY
 ```
 
 These commands load the normal user and project configuration, classify the
 unchanged command string, and execute only an `allow` or an `ask` approved by
 the configured askpass provider. There is no terminal fallback: missing,
 broken, timed-out, or unexpected askpass responses deny execution.
+
+Omitting `CMD` reads the script from stdin. For automatic outer-command
+validation, use exactly one directly attached, non-empty quoted heredoc as
+shown above. Quoting prevents the calling shell from expanding parameters or
+command substitutions before Dippy can classify the script. Unquoted, piped,
+file-backed or mixed-input forms remain on approval.
 
 Approval is synchronous: the caller remains blocked while the dialog is open.
 The effective wait is therefore limited by both `askpass-timeout` and any

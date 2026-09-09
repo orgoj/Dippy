@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.8] - 2026-09-09
+
+### Added
+
+- `dippy run` and `dippy run-on-server` accept a command from one directly attached quoted heredoc. Dippy validates the literal script before local or remote execution; unquoted, empty, indirect or mixed-input forms remain on approval.
+
 ## [0.3.7] - 2026-09-08
 
 ### Added

@@ -967,14 +967,18 @@ Subcommands:
     run_parser = subparsers.add_parser(
         "run", help="Approve and execute one local Bash command string"
     )
-    run_parser.add_argument("command", help="Quoted Bash command string")
+    run_parser.add_argument(
+        "command", nargs="?", help="Quoted Bash command string (default: stdin)"
+    )
 
     remote_run_parser = subparsers.add_parser(
         "run-on-server",
         help="Approve and execute one Bash command on an allowed server",
     )
     remote_run_parser.add_argument("server", help="Allowed SSH-config alias")
-    remote_run_parser.add_argument("command", help="Quoted Bash command string")
+    remote_run_parser.add_argument(
+        "command", nargs="?", help="Quoted Bash command string (default: stdin)"
+    )
 
     recover_parser = subparsers.add_parser(
         "recover", help="Recover an indeterminate run-on-server target"
@@ -1261,6 +1265,15 @@ def _subcommand_config(args: argparse.Namespace) -> tuple[Path, Config]:
     return cwd, load_config(cwd, config_path=args.config)
 
 
+def _execution_command(args: argparse.Namespace) -> str | None:
+    """Return the command argument or a script read from stdin."""
+    command = args.command if args.command is not None else sys.stdin.read()
+    if not command.strip():
+        print("command is required as an argument or on stdin", file=sys.stderr)
+        return None
+    return command
+
+
 def handle_subcommand(args: argparse.Namespace) -> int:
     """Handle dippy subcommands.
 
@@ -1271,24 +1284,30 @@ def handle_subcommand(args: argparse.Namespace) -> int:
         Exit code: 0 for success, 1 for errors
     """
     if args.subcommand == "run":
+        command = _execution_command(args)
+        if command is None:
+            return 1
         try:
             cwd, config = _subcommand_config(args)
         except ConfigError as error:
             print(f"config error: {error}", file=sys.stderr)
             return 1
-        return configure_and_execute(args.command, cwd, config)
+        return configure_and_execute(command, cwd, config)
     elif args.subcommand == "run-on-server":
         try:
             validate_server(args.server)
         except ValueError as error:
             print(str(error), file=sys.stderr)
             return 1
+        command = _execution_command(args)
+        if command is None:
+            return 1
         try:
             cwd, config = _subcommand_config(args)
         except ConfigError as error:
             print(f"config error: {error}", file=sys.stderr)
             return 1
-        return configure_and_execute(args.command, cwd, config, args.server)
+        return configure_and_execute(command, cwd, config, args.server)
     elif args.subcommand == "recover":
         try:
             cwd, config = _subcommand_config(args)

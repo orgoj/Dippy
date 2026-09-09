@@ -1,10 +1,12 @@
 """Tests for Dippy's direct command execution pipeline."""
 
 import base64
+import io
 import json
 import re
 import subprocess
 import threading
+from argparse import Namespace
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 
@@ -30,6 +32,7 @@ from dippy.execution import (
     _write_state,
     _operation_key,
 )
+from dippy.dippy import handle_subcommand
 from dippy.ssh_transport import build_transport
 
 
@@ -250,6 +253,46 @@ def test_execute_allow_runs_original_string_once(tmp_path, monkeypatch):
     monkeypatch.setattr("dippy.execution.subprocess.run", fake_run)
     assert execute(command, config, tmp_path) == 17
     assert seen == [(["/bin/bash", "-c", command], {"cwd": tmp_path})]
+
+
+@pytest.mark.parametrize(
+    ("subcommand", "server"), [("run", None), ("run-on-server", "srv")]
+)
+def test_execution_subcommand_reads_missing_command_from_stdin(
+    subcommand, server, tmp_path, monkeypatch
+):
+    command = "fictionalread /one\nfictionalread /two\n"
+    args = Namespace(
+        subcommand=subcommand,
+        server=server,
+        command=None,
+        cwd=str(tmp_path),
+        config=None,
+    )
+    seen = {}
+    monkeypatch.setattr("sys.stdin", io.StringIO(command))
+    monkeypatch.setattr(
+        "dippy.dippy.configure_and_execute",
+        lambda value, cwd, config, target=None: seen.update(
+            command=value, cwd=cwd, server=target
+        )
+        or 17,
+    )
+
+    assert handle_subcommand(args) == 17
+    assert seen == {"command": command, "cwd": tmp_path, "server": server}
+
+
+def test_execution_subcommand_rejects_empty_stdin(tmp_path, monkeypatch, capsys):
+    args = Namespace(subcommand="run", command=None, cwd=str(tmp_path), config=None)
+    monkeypatch.setattr("sys.stdin", io.StringIO("\n"))
+    monkeypatch.setattr(
+        "dippy.dippy.configure_and_execute",
+        lambda *args, **kwargs: pytest.fail("empty command was executed"),
+    )
+
+    assert handle_subcommand(args) == 1
+    assert "command is required" in capsys.readouterr().err
 
 
 def test_execute_rule_deny_explains_that_command_was_not_executed(

@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+import pytest
+
 from dippy.core.config import parse_config, Config
 from dippy.core.analyzer import analyze, _extract_wrapper_args
 
@@ -419,6 +421,92 @@ REMOTE""",
         )
 
         assert result.action == "allow"
+
+
+class TestDippyScriptStdin:
+    """Direct execution accepts only literal heredoc scripts for delegation."""
+
+    @staticmethod
+    def config():
+        return parse_config(
+            """
+            allow fictionalread *
+            ask fictionalerase *
+            allow [run-on-server,server1] fictionalremote *
+            """
+        )
+
+    def test_run_analyzes_quoted_heredoc_locally(self):
+        result = analyze(
+            """dippy run <<'DIPPY'
+fictionalread /one
+fictionalread /two
+DIPPY""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+
+    def test_run_on_server_analyzes_quoted_heredoc_remotely(self):
+        result = analyze(
+            """dippy run-on-server server1 <<'DIPPY'
+fictionalremote /one
+DIPPY""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+        assert {"run-on-server", "server1"} <= result.context_flags
+
+    def test_destructive_command_in_script_asks(self):
+        result = analyze(
+            """dippy run <<'DIPPY'
+fictionalread /one
+fictionalerase --all
+DIPPY""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    @pytest.mark.parametrize("prefix", ["", "MODE=test "])
+    def test_expanded_server_asks(self, prefix):
+        result = analyze(
+            f"""{prefix}dippy run-on-server "$SERVER" <<'DIPPY'
+fictionalremote /one
+DIPPY""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    @pytest.mark.parametrize(
+        "command",
+        [
+            """dippy run <<DIPPY
+fictionalread /one
+DIPPY""",
+            """dippy run extra <<'DIPPY'
+fictionalread /one
+DIPPY""",
+            """dippy run > output <<'DIPPY'
+fictionalread /one
+DIPPY""",
+            """dippy run <<'DIPPY'
+DIPPY""",
+        ],
+    )
+    def test_noncanonical_input_asks(self, command):
+        assert analyze(command, self.config(), Path.cwd()).action == "ask"
+
+    def test_quoted_argument_mode_is_unchanged(self):
+        result = analyze("dippy run 'fictionalread /one'", self.config(), Path.cwd())
+
+        assert result.action == "ask"
 
 
 class TestLnavWrapperValidation:
