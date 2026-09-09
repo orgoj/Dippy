@@ -16,8 +16,10 @@ just fmt     # ruff format --check
 ## Development rules
 
 - Use TDD for every code fix: add a failing test first.
-- Treat an overly broad `allow` as a security bug. Test every new allow rule
-  against a destructive bypass string using `dippy --cmd` or
+- Treat an unintentionally broad `allow` as a safety bug. Dippy guides
+  non-adversarial agents; it is not a security boundary. Accept a broad trust
+  scope when the user explicitly chooses it. Test every new allow rule against
+  a destructive bypass string using `dippy --cmd` or
   `scripts/debug/try-rules.sh`; never execute the bypass.
 - Use fictional command names in rule tests; real names may hit `SIMPLE_SAFE`.
 - Isolate config tests with `tmp_path`, `monkeypatch` and an empty `HOME`.
