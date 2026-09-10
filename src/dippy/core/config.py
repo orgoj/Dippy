@@ -54,6 +54,7 @@ _HOME = Path.home()
 USER_CONFIG = _HOME / ".dippy" / "config"
 PROJECT_CONFIG_NAME = ".dippy"
 ENV_CONFIG = "DIPPY_CONFIG"
+ENV_CONFIG_ONLY = "DIPPY_CONFIG_ONLY"
 DEFAULT_APPROVAL_WAIT_MESSAGE = (
     "Stop work and wait for the user unless you can continue safely without "
     "this command."
@@ -524,17 +525,60 @@ def _rotate_logs(config: Config) -> None:
                 old_log.unlink()
 
 
-def load_config(cwd: Path, config_path: str | None = None) -> Config:
-    """Load config from ~/.dippy/config, .dippy, and $DIPPY_CONFIG.
+def load_config(
+    cwd: Path,
+    config_path: str | None = None,
+    config_only_path: str | None = None,
+) -> Config:
+    """Load the configured scopes, or one exclusive config file.
 
     Args:
         cwd: Current working directory (used to find project config).
         config_path: Optional explicit config file path (highest priority,
                      overrides $DIPPY_CONFIG).
+        config_only_path: Optional exclusive config file path (overrides
+                          $DIPPY_CONFIG_ONLY and skips all normal scopes).
 
-    Raises ConfigError if any config file exists but cannot be read or parsed.
-    Missing files are silently skipped.
+    Raises ConfigError if a required config is missing or a config cannot be
+    read. Missing files in the normal implicit scopes are silently skipped.
     """
+    exclusive_path = (
+        config_only_path
+        if config_only_path is not None
+        else os.environ.get(ENV_CONFIG_ONLY)
+    )
+    if exclusive_path is not None:
+        exclusive_config_path = Path(exclusive_path).expanduser()
+        try:
+            if not exclusive_config_path.is_file():
+                raise ConfigError(f"config file not found: {exclusive_config_path}")
+            config = _load_config_file(exclusive_config_path)
+            config = _tag_rules(config, str(exclusive_config_path), SCOPE_ENV)
+        except PermissionError:
+            raise ConfigError(
+                f"permission denied accessing {exclusive_config_path}"
+            ) from None
+    else:
+        config = _load_normal_config(cwd, config_path)
+
+    # Final config may only originate from the scopes loaded above.
+    if config.final:
+        try:
+            if config.final.is_file():
+                final_config = _load_config_file(config.final)
+                final_config = _tag_rules(final_config, str(config.final), SCOPE_FINAL)
+                config = _merge_configs(config, final_config)
+            else:
+                logging.warning(f"Final config not found: {config.final}")
+        except PermissionError:
+            raise ConfigError(f"permission denied accessing {config.final}") from None
+
+    _rotate_logs(config)
+    return config
+
+
+def _load_normal_config(cwd: Path, config_path: str | None) -> Config:
+    """Load and merge the user, project, and override config scopes."""
     config = Config()
 
     # 1. User config (lowest priority)
@@ -571,21 +615,6 @@ def load_config(cwd: Path, config_path: str | None = None) -> Config:
             raise ConfigError(
                 f"permission denied accessing {override_config_path}"
             ) from None
-
-    # 4. Final config (if configured via 'set final')
-    if config.final:
-        try:
-            if config.final.is_file():
-                final_config = _load_config_file(config.final)
-                final_config = _tag_rules(final_config, str(config.final), SCOPE_FINAL)
-                config = _merge_configs(config, final_config)
-            else:
-                logging.warning(f"Final config not found: {config.final}")
-        except PermissionError:
-            raise ConfigError(f"permission denied accessing {config.final}") from None
-
-    # Rotate logs at the end of config loading
-    _rotate_logs(config)
 
     return config
 

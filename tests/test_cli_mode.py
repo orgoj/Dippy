@@ -25,6 +25,7 @@ def run_dippy(*args, stdin_input=None):
     cmd = [sys.executable, str(DIPPY_HOOK)] + list(args)
     env = dict(os.environ)
     env.pop("DIPPY_CONFIG", None)
+    env.pop("DIPPY_CONFIG_ONLY", None)
     with tempfile.TemporaryDirectory() as sandbox:
         env["HOME"] = sandbox
         result = subprocess.run(
@@ -162,6 +163,65 @@ class TestCliModeConfig:
         assert code == 0  # allow
         data = json.loads(stdout)
         assert data["decision"] == "allow"
+
+    def test_config_only_ignores_project_config(self, tmp_path):
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".dippy").write_text("allow rolecmd *\n")
+        exclusive = tmp_path / "exclusive.cfg"
+        exclusive.write_text("deny rolecmd *\n")
+
+        stdout, _, code = run_dippy(
+            "--cmd",
+            "rolecmd mutate",
+            "--cwd",
+            str(project),
+            "--config-only",
+            str(exclusive),
+            "--json",
+        )
+
+        assert code == 1
+        assert json.loads(stdout)["decision"] == "deny"
+
+    def test_config_only_file_not_found(self, tmp_path):
+        missing = tmp_path / "missing.cfg"
+
+        stdout, _, code = run_dippy(
+            "--cmd", "rolecmd inspect", "--config-only", str(missing)
+        )
+
+        assert code == 2
+        assert "config file not found" in stdout
+
+    def test_config_and_config_only_are_mutually_exclusive(self, tmp_path):
+        config = tmp_path / "config"
+        config.write_text("allow rolecmd *\n")
+
+        _, stderr, code = run_dippy(
+            "--cmd",
+            "rolecmd inspect",
+            "--config",
+            str(config),
+            "--config-only",
+            str(config),
+        )
+
+        assert code == 2
+        assert "not allowed with argument" in stderr
+
+    def test_config_only_allow_does_not_allow_destructive_compound(self, tmp_path):
+        exclusive = tmp_path / "exclusive.cfg"
+        exclusive.write_text("allow rolecmd inspect\n")
+
+        _, _, code = run_dippy(
+            "--cmd",
+            "rolecmd inspect; rm -rf /",
+            "--config-only",
+            str(exclusive),
+        )
+
+        assert code != 0
 
 
 class TestCliModeExitCodes:

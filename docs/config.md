@@ -268,6 +268,9 @@ dippy --cmd 'make build' --cwd /path/to/project
 
 # Use custom config file
 dippy --cmd 'docker run nginx' --config ~/.dippy/strict.conf
+
+# Use one isolated config, without user or project rules
+dippy --cmd 'review-tool inspect' --config-only ~/.dippy/reviewer.conf
 ```
 
 ### Options
@@ -279,6 +282,7 @@ dippy --cmd 'docker run nginx' --config ~/.dippy/strict.conf
 | `--cwd PATH` | Working directory (default: current) |
 | `--json` | Output as JSON instead of text |
 | `--config PATH` | Config file override (highest priority) |
+| `--config-only PATH` | Load only this config, skipping user and project config |
 | `--agent NAME` | Force agent name in audit log |
 | `--remote` | Skip local path checks (for containers/SSH) |
 | `--version` | Show Dippy version |
@@ -340,7 +344,9 @@ dippy --cmd 'docker run --privileged nginx' --config .dippy
 | `~/.dippy/config` | User global      |
 | `.dippy`          | Project-specific |
 | `$DIPPY_CONFIG`   | Env override     |
+| `$DIPPY_CONFIG_ONLY` | Exclusive config |
 | `--config PATH`   | CLI mode only    |
+| `--config-only PATH` | Exclusive CLI config |
 
 **Load order** (last match wins):
 1. `~/.dippy/config` - user defaults
@@ -349,6 +355,14 @@ dippy --cmd 'docker run --privileged nginx' --config .dippy
 4. Final config via `set final <path>` (if configured, loaded last)
 
 Project config is found by walking up from cwd to filesystem root, stopping at the first `.dippy` found (like `.git` discovery).
+
+`DIPPY_CONFIG_ONLY=PATH` selects an isolated configuration for a process. It
+skips the user, project, `DIPPY_CONFIG`, and normal `--config` scopes entirely.
+The selected file must exist; otherwise Dippy reports a configuration error
+instead of falling back to the normal scopes. Its `include` directives remain
+available, and only a `set final` reached from this isolated configuration is
+loaded afterward. `--config-only PATH` provides the same behavior on the
+command line and is mutually exclusive with `--config`.
 
 **Final config:** Use `set final ~/.dippy/emergency` in your user config for emergency overrides. The final file is only loaded when it exists - create it when needed (e.g., `deny *` during emergencies), delete when done.
 

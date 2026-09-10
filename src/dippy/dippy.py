@@ -945,7 +945,15 @@ Subcommands:
     parser.add_argument(
         "--json", action="store_true", dest="json_output", help="Output as JSON"
     )
-    parser.add_argument("--config", metavar="PATH", help="Config file path override")
+    config_group = parser.add_mutually_exclusive_group()
+    config_group.add_argument(
+        "--config", metavar="PATH", help="Config file path override"
+    )
+    config_group.add_argument(
+        "--config-only",
+        metavar="PATH",
+        help="Load only this config file, skipping user and project config",
+    )
     parser.add_argument("--agent", metavar="NAME", help="Agent name for audit log")
     parser.add_argument("--version", action="version", version=f"dippy {__version__}")
     parser.add_argument(
@@ -1207,7 +1215,11 @@ def cli_mode(args: argparse.Namespace) -> int:
 
     # Load config
     try:
-        config = load_config(cwd, config_path=args.config)
+        config = load_config(
+            cwd,
+            config_path=args.config,
+            config_only_path=getattr(args, "config_only", None),
+        )
     except ConfigError as e:
         if args.json_output:
             print(json.dumps({"decision": "ask", "reason": f"config error: {e}"}))
@@ -1262,7 +1274,11 @@ def cli_mode(args: argparse.Namespace) -> int:
 
 def _subcommand_config(args: argparse.Namespace) -> tuple[Path, Config]:
     cwd = Path(args.cwd).resolve() if args.cwd else Path.cwd()
-    return cwd, load_config(cwd, config_path=args.config)
+    return cwd, load_config(
+        cwd,
+        config_path=args.config,
+        config_only_path=getattr(args, "config_only", None),
+    )
 
 
 def _execution_command(args: argparse.Namespace) -> str | None:

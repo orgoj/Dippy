@@ -201,9 +201,79 @@ class TestLoadConfig:
         assert len(config.rules) == 1
         assert config.rules[0].pattern == "docker *"
 
+    def test_env_config_only_skips_other_scopes(self, tmp_path, monkeypatch):
+        user_cfg = tmp_path / "user.cfg"
+        user_cfg.write_text("allow rolecmd user\nset default allow\n")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".dippy").write_text("allow rolecmd project\n")
+
+        overlay_cfg = tmp_path / "overlay.cfg"
+        overlay_cfg.write_text("allow rolecmd overlay\n")
+        monkeypatch.setenv("DIPPY_CONFIG", str(overlay_cfg))
+
+        exclusive_cfg = tmp_path / "exclusive.cfg"
+        exclusive_cfg.write_text("allow rolecmd exclusive\n")
+        monkeypatch.setenv("DIPPY_CONFIG_ONLY", str(exclusive_cfg))
+
+        config = load_config(project)
+
+        assert [rule.pattern for rule in config.rules] == ["rolecmd exclusive"]
+        assert config.rules[0].source == str(exclusive_cfg)
+        assert config.default == "ask"
+
+    def test_config_only_argument_skips_other_scopes(self, tmp_path, monkeypatch):
+        user_cfg = tmp_path / "user.cfg"
+        user_cfg.write_text("allow rolecmd user\n")
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", user_cfg)
+
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / ".dippy").write_text("allow rolecmd project\n")
+
+        exclusive_cfg = tmp_path / "exclusive.cfg"
+        exclusive_cfg.write_text("allow rolecmd exclusive\n")
+
+        config = load_config(project, config_only_path=str(exclusive_cfg))
+
+        assert [rule.pattern for rule in config.rules] == ["rolecmd exclusive"]
+
+    def test_env_config_only_missing_file_is_error(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", tmp_path / "user.cfg")
+        missing = tmp_path / "missing.cfg"
+        monkeypatch.setenv("DIPPY_CONFIG_ONLY", str(missing))
+
+        with pytest.raises(ConfigError, match=f"config file not found: {missing}"):
+            load_config(tmp_path)
+
+    def test_empty_env_config_only_is_error(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", tmp_path / "user.cfg")
+        monkeypatch.setenv("DIPPY_CONFIG_ONLY", "")
+
+        with pytest.raises(ConfigError, match="config file not found"):
+            load_config(tmp_path)
+
+    def test_env_config_only_honors_its_final_config(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("dippy.core.config.USER_CONFIG", tmp_path / "user.cfg")
+        final_cfg = tmp_path / "final.cfg"
+        final_cfg.write_text("allow rolecmd final\n")
+        exclusive_cfg = tmp_path / "exclusive.cfg"
+        exclusive_cfg.write_text(f"allow rolecmd exclusive\nset final {final_cfg}\n")
+        monkeypatch.setenv("DIPPY_CONFIG_ONLY", str(exclusive_cfg))
+
+        config = load_config(tmp_path)
+
+        assert [rule.pattern for rule in config.rules] == [
+            "rolecmd exclusive",
+            "rolecmd final",
+        ]
+
     def test_empty_when_no_configs(self, tmp_path, monkeypatch):
         monkeypatch.setattr("dippy.core.config.USER_CONFIG", tmp_path / "nonexistent")
         monkeypatch.delenv("DIPPY_CONFIG", raising=False)
+        monkeypatch.delenv("DIPPY_CONFIG_ONLY", raising=False)
 
         config = load_config(tmp_path)
         assert config.rules == []

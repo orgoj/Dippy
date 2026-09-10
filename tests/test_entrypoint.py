@@ -181,6 +181,34 @@ class TestEndToEnd:
             output = json.loads(result.stdout)
             assert get_decision(output) == "deny"
 
+    def test_config_only_env_ignores_project_and_overlay_configs(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            project = root / "project"
+            project.mkdir()
+            (project / ".dippy").write_text("allow rolecmd *\n")
+            overlay = root / "overlay.cfg"
+            overlay.write_text("allow rolecmd *\n")
+            exclusive = root / "exclusive.cfg"
+            exclusive.write_text("deny rolecmd *\n")
+
+            input_data = {
+                "tool_name": "Bash",
+                "tool_input": {"command": "rolecmd mutate"},
+                "cwd": str(project),
+            }
+            result = run_hook(
+                input_data,
+                extra_env={
+                    "HOME": str(root),
+                    "DIPPY_CONFIG": str(overlay),
+                    "DIPPY_CONFIG_ONLY": str(exclusive),
+                },
+            )
+
+        assert result.returncode == 0
+        assert get_decision(json.loads(result.stdout)) == "deny"
+
     def test_codex_deny_uses_exit_2_and_stderr(self, monkeypatch):
         """Codex blocks via exit code 2 with stderr, not JSON permissionDecision."""
         with tempfile.TemporaryDirectory() as tmpdir:

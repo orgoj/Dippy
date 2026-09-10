@@ -12,6 +12,7 @@
 
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
 - **Include directive** — `include <path-or-glob>` for composable config files
+- **Exclusive config** — `DIPPY_CONFIG_ONLY` and `--config-only` isolate role-specific processes from user and project configuration
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
 - **Scoped handler delegation** — `delegate [flags] command *` sends a matched command through its native safety handler instead of approving it outright, including per-target SSH context
 - **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, file edit/read operations, and web requests
@@ -349,6 +350,7 @@ echo 'ls -la' | dippy --stdin       # read command from stdin
 - `--cwd PATH` — working directory
 - `--json` — output as JSON
 - `--config PATH` — custom config file
+- `--config-only PATH` — load only this config, skipping user and project config
 - `--agent NAME` — force agent name in audit log
 - `--remote` — skip local path checks
 - `--version` — show version
