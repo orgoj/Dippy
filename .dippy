@@ -59,3 +59,8 @@ allow git checkout -- *
 allow export HCOM_INSTANCE_NAME=*
 allow HCOM_INSTANCE_NAME=* dippy *
 allow HCOM_INSTANCE_NAME=* ./scripts/debug/try-rules.sh *
+
+#---- dippy_dev bundle ----#
+# An exact path, not a glob over ~/.hcom/agents/**: allow-redirect ignores
+# context flags, so a glob would let every agent write to every other bundle.
+allow-redirect ~/.hcom/agents/dippy_dev/TODO.md
