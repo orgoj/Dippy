@@ -5,6 +5,9 @@ description: "Analyze Dippy user audit logs and propose narrowly scoped rules th
 
 # Analyzing the Dippy Audit Log
 
+Load the `using-dippy` skill first; it governs how rules are written and
+verified. This file only covers reading the log and choosing what to propose.
+
 Group `ask` entries by workflow, reason, working directory, and frequency. Command
 frequency alone is not enough: identify what repeated task the user is trying to
 complete, such as creating, populating, inspecting, and cleaning a project-local
@@ -17,6 +20,10 @@ entries carry `tool` instead of `cmd` and have no `cwd`.
 Prefer the narrowest rule that covers the workflow. Keep destructive commands,
 arbitrary code execution, remote execution, secret-bearing reads, and external
 side effects subject to approval unless the user explicitly accepts that scope.
+
+Choose the narrowest configuration file too, not only the narrowest pattern.
+A project's own `.dippy` beats `~/.dippy/config`, which widens every other
+workspace. A path outside the project is not a reason to move the rule up.
 
 For a project-local `tmp/**` workflow, consider the complete set:
 
@@ -51,5 +58,3 @@ prompt.
 
 The intended workflow must return `allow`; the out-of-scope control must remain
 `ask` or `deny`.
-
-Follow the `using-dippy` skill when writing and verifying the rules themselves.
