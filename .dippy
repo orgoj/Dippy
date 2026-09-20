@@ -51,3 +51,11 @@ allow ruff *
 allow git add *
 allow git commit *
 allow git checkout -- *
+
+#---- Agent context reproduction ----#
+# Rules are verified against the context flags of the agent being analysed, so
+# this variable has to be set before calling dippy. It only feeds
+# `set context-env HCOM_INSTANCE_NAME`; it changes nothing outside Dippy.
+allow export HCOM_INSTANCE_NAME=*
+allow HCOM_INSTANCE_NAME=* dippy *
+allow HCOM_INSTANCE_NAME=* ./scripts/debug/try-rules.sh *
