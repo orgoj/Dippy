@@ -403,6 +403,70 @@ class TestHooksInstallUninstall:
         config = json.loads(config_path.read_text())
         assert "hooks" in config
         assert "PreToolUse" in config["hooks"]
+        codex_config = (tmp_path / ".codex" / "config.toml").read_text()
+        assert 'approval_policy = "on-request"' in codex_config
+
+    def test_install_codex_repairs_policy_without_rewriting_existing_hooks(
+        self, tmp_path
+    ):
+        from dippy.cli.hooks import install
+
+        install(agent="codex", global_config=False, cwd=str(tmp_path))
+        hooks_path = tmp_path / ".codex" / "hooks.json"
+        original_hooks = hooks_path.read_bytes()
+        config_path = tmp_path / ".codex" / "config.toml"
+        config_path.write_text(
+            'approval_policy = "never" # keep comment\n\n'
+            '[profiles.safe]\napproval_policy = "never"\n\n'
+            "[features]\nhooks = true\n"
+        )
+
+        result = install(agent="codex", global_config=False, cwd=str(tmp_path))
+
+        assert result == 0
+        assert hooks_path.read_bytes() == original_hooks
+        assert config_path.read_text() == (
+            'approval_policy = "on-request" # keep comment\n\n'
+            '[profiles.safe]\napproval_policy = "never"\n\n'
+            "[features]\nhooks = true\n"
+        )
+
+    def test_install_codex_dry_run_reports_policy_without_writing(
+        self, tmp_path, capsys
+    ):
+        from dippy.cli.hooks import install
+
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        config_path = codex_dir / "config.toml"
+        original = '[profiles.safe]\napproval_policy = "never"\n'
+        config_path.write_text(original)
+
+        result = install(
+            agent="codex", global_config=False, cwd=str(tmp_path), dry_run=True
+        )
+
+        assert result == 0
+        assert config_path.read_text() == original
+        assert "approval_policy" in capsys.readouterr().out
+
+    def test_install_codex_no_backup_applies_to_config_toml(self, tmp_path):
+        from dippy.cli.hooks import install
+
+        codex_dir = tmp_path / ".codex"
+        codex_dir.mkdir()
+        config_path = codex_dir / "config.toml"
+        config_path.write_text('approval_policy = "never"\n')
+
+        result = install(
+            agent="codex",
+            global_config=False,
+            cwd=str(tmp_path),
+            no_backup=True,
+        )
+
+        assert result == 0
+        assert not list(codex_dir.glob("config.toml.dippy-backup-*"))
 
     def test_install_codex_fails_when_dot_codex_is_file(self, tmp_path, capsys):
         from dippy.cli.hooks import install

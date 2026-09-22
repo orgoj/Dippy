@@ -386,87 +386,128 @@ HOOK_COMMANDS = {
 MAX_BACKUPS = 5
 
 
-def _ensure_codex_feature_flag(
+def _read_text_preserving_newlines(path: Path) -> str:
+    with open(path, newline="") as config_file:
+        return config_file.read()
+
+
+def _codex_root_setting(config_path: Path, key: str) -> str | None:
+    """Return a root Codex TOML scalar without matching profile tables."""
+    if not config_path.exists():
+        return None
+    content = _read_text_preserving_newlines(config_path)
+    pattern = re.compile(rf'^\s*{re.escape(key)}\s*=\s*["\']([^"\']+)["\']')
+    for line in content.splitlines():
+        if line.lstrip().startswith("["):
+            break
+        match = pattern.match(line)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _set_codex_root_setting(content: str, key: str, value: str) -> str:
+    newline = "\r\n" if "\r\n" in content else "\n"
+    lines = content.splitlines(keepends=True)
+    pattern = re.compile(
+        rf'^(\s*{re.escape(key)}\s*=\s*)["\'][^"\']*["\'](\s*(?:#.*)?)(\r?\n)?$'
+    )
+    first_table = len(lines)
+    for index, line in enumerate(lines):
+        if line.lstrip().startswith("["):
+            first_table = index
+            break
+        match = pattern.match(line)
+        if match:
+            ending = match.group(3) or ""
+            lines[index] = f'{match.group(1)}"{value}"{match.group(2)}{ending}'
+            return "".join(lines)
+
+    setting = f'{key} = "{value}"{newline}'
+    if not lines:
+        return setting
+    if first_table == 0:
+        return setting + newline + content
+    if first_table > 0 and not lines[first_table - 1].endswith(("\n", "\r")):
+        lines[first_table - 1] += newline
+    lines.insert(first_table, setting)
+    return "".join(lines)
+
+
+def _set_codex_hooks_feature(content: str) -> str:
+    newline = "\r\n" if "\r\n" in content else "\n"
+    lines = content.splitlines(keepends=True)
+    section_start = None
+    section_end = len(lines)
+    for index, line in enumerate(lines):
+        stripped = line.strip()
+        if stripped == "[features]":
+            section_start = index
+            continue
+        if section_start is not None and stripped.startswith("["):
+            section_end = index
+            break
+
+    if section_start is not None:
+        if not lines[section_start].endswith(("\n", "\r")):
+            lines[section_start] += newline
+        pattern = re.compile(
+            r"^(\s*)(?:hooks|codex_hooks)\s*=\s*(?:true|false)(\s*(?:#.*)?)(\r?\n)?$"
+        )
+        for index in range(section_start + 1, section_end):
+            match = pattern.match(lines[index])
+            if match:
+                ending = match.group(3) or ""
+                lines[index] = f"{match.group(1)}hooks = true{match.group(2)}{ending}"
+                return "".join(lines)
+        lines.insert(section_start + 1, f"hooks = true{newline}")
+        return "".join(lines)
+
+    prefix = content
+    if prefix and not prefix.endswith(("\n", "\r")):
+        prefix += newline
+    if prefix and not prefix.endswith(newline * 2):
+        prefix += newline
+    return prefix + f"[features]{newline}hooks = true{newline}"
+
+
+def _prepare_codex_config(config_path: Path) -> tuple[str, bool]:
+    content = (
+        _read_text_preserving_newlines(config_path) if config_path.exists() else ""
+    )
+    updated = _set_codex_root_setting(content, "approval_policy", "on-request")
+    updated = _set_codex_hooks_feature(updated)
+    try:
+        import tomllib
+
+        tomllib.loads(updated)
+    except ImportError:  # pragma: no cover - Python 3.8-3.10
+        pass
+    except Exception as exc:
+        raise ValueError(f"Invalid Codex TOML at {config_path}: {exc}") from exc
+    return updated, updated != content
+
+
+def _ensure_codex_config(
     config_path: Path,
     dry_run: bool = False,
+    no_backup: bool = False,
 ) -> tuple[bool, str]:
-    """Ensure hooks = true is set in Codex config.toml.
-
-    Codex requires a feature flag in config.toml alongside hooks.json.
-    Current Codex uses `hooks`; older versions accepted the legacy alias
-    `codex_hooks`.
-    This handles creating/modifying the TOML file with simple text
-    manipulation (no TOML writer dependency needed).
-
-    Args:
-        config_path: Path to config.toml (e.g. ~/.codex/config.toml)
-        dry_run: If True, only report what would change
-
-    Returns:
-        Tuple of (was_modified, message)
-    """
-    if config_path.exists():
-        content = config_path.read_text()
-    else:
-        content = ""
-
-    # Check if feature flag already exists. Keep the legacy alias working for
-    # older configs, but write the current canonical key on new installs.
-    if _codex_feature_flag_enabled(config_path):
-        return False, "Feature flag already enabled"
-
-    has_any_hook_flag = re.search(r"(?m)^\s*(?:hooks|codex_hooks)\s*=", content)
-
+    """Ensure Codex hooks and interactive approval settings are compatible."""
+    new_content, modified = _prepare_codex_config(config_path)
+    if not modified:
+        return False, "Codex config already compatible"
     if dry_run:
-        if has_any_hook_flag:
-            return True, f"Would update hooks feature flag in {config_path}"
-        return True, f"Would add [features] hooks = true to {config_path}"
-
-    # Build the new content
-    if not content.strip():
-        # Empty or non-existent file
-        new_content = "[features]\nhooks = true\n"
-    elif re.search(r"(?m)^\s*hooks\s*=", content):
-        new_content = re.sub(
-            r"(?m)^(\s*)hooks\s*=\s*(?:true|false)(\s*(?:#.*)?)$",
-            r"\1hooks = true\2",
-            content,
-            count=1,
+        return (
+            True,
+            f'Would set approval_policy = "on-request" and hooks = true in {config_path}',
         )
-    elif re.search(r"(?m)^\s*codex_hooks\s*=", content):
-        new_content = re.sub(
-            r"(?m)^(\s*)codex_hooks\s*=\s*(?:true|false)(\s*(?:#.*)?)$",
-            r"\1hooks = true\2",
-            content,
-            count=1,
-        )
-    elif "[features]" in content:
-        # Features section exists, add hooks to it
-        lines = content.split("\n")
-        new_lines = []
-        inserted = False
-        for line in lines:
-            new_lines.append(line)
-            if line.strip() == "[features]" and not inserted:
-                new_lines.append("hooks = true")
-                inserted = True
-        if not inserted:
-            # [features] might have been on a line with other content
-            new_lines.append("hooks = true")
-        new_content = "\n".join(new_lines)
-        if not new_content.endswith("\n"):
-            new_content += "\n"
-    else:
-        # No [features] section, append it
-        new_content = content.rstrip("\n") + "\n\n[features]\nhooks = true\n"
-
-    # Backup config.toml if it exists
-    if config_path.exists():
+    if config_path.exists() and not no_backup:
         _create_backup(config_path)
-
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    config_path.write_text(new_content)
-    return True, f"Enabled hooks feature flag in {config_path}"
+    with open(config_path, "w", newline="") as config_file:
+        config_file.write(new_content)
+    return True, f"Configured Codex approval policy and hooks in {config_path}"
 
 
 class HookStatus(Enum):
@@ -794,6 +835,15 @@ def install(
     # Determine if the requested hook set is already installed
     requested_hook_types = set(hook_entry.get("hooks", {}).keys())
     installed_hook_types = _get_installed_dippy_hook_types(existing_config, agent)
+    codex_config_needs_update = False
+    if agent == "codex":
+        try:
+            _, codex_config_needs_update = _prepare_codex_config(
+                _codex_config_toml_path(global_config, cwd)
+            )
+        except (OSError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
 
     if has_hook and not force:
         if legacy_command:
@@ -809,23 +859,29 @@ def install(
         if not requested_hook_types.issubset(installed_hook_types):
             # Requesting hooks that aren't installed - proceed with upgrade
             pass
-        elif requested_hook_types == installed_hook_types:
+        elif (
+            requested_hook_types == installed_hook_types
+            and not codex_config_needs_update
+        ):
             # Same hooks already installed
             print(f"Dippy hook already installed for {agent_info.name}")
             print(f"Config: {config_path}")
             return 0
-        # else: requesting subset of installed hooks (downgrade) - require --force
-        print(f"Dippy hook already installed for {agent_info.name}")
-        print(f"Config: {config_path}")
-        print("Use --force to replace existing hooks")
-        return 0
+        elif requested_hook_types != installed_hook_types:
+            # Requesting a subset of installed hooks (downgrade) requires --force.
+            print(f"Dippy hook already installed for {agent_info.name}")
+            print(f"Config: {config_path}")
+            print("Use --force to replace existing hooks")
+            return 0
 
     # Merge hook entry into config
     updated_config = _merge_hook_entry(existing_config, hook_entry, agent)
+    hooks_modified = updated_config != existing_config
 
     # Dry run: show diff and exit
     if dry_run:
-        print(f"Would update: {config_path}")
+        if hooks_modified:
+            print(f"Would update: {config_path}")
         if legacy_command:
             print("\nRemoving legacy hook:")
             print(f"  - {legacy_command}")
@@ -842,8 +898,8 @@ def install(
         # Codex: show feature flag dry-run
         if agent == "codex":
             toml_path = _codex_config_toml_path(global_config, cwd)
-            flag_modified, flag_msg = _ensure_codex_feature_flag(
-                toml_path, dry_run=True
+            flag_modified, flag_msg = _ensure_codex_config(
+                toml_path, dry_run=True, no_backup=no_backup
             )
             if flag_modified:
                 print(f"\n{flag_msg}")
@@ -851,32 +907,40 @@ def install(
 
     # Create backup unless --no-backup
     backup_path = None
-    if not no_backup and config_path.exists():
+    if hooks_modified and not no_backup and config_path.exists():
         backup_path = _create_backup(config_path)
 
     # Write updated config
-    try:
-        with open(config_path, "w") as f:
-            json.dump(updated_config, f, indent=2, sort_keys=True)
-    except IOError as e:
-        print(f"Error: Could not write to {config_path}: {e}", file=sys.stderr)
-        return 1
+    if hooks_modified:
+        try:
+            with open(config_path, "w") as f:
+                json.dump(updated_config, f, indent=2, sort_keys=True)
+        except IOError as e:
+            print(f"Error: Could not write to {config_path}: {e}", file=sys.stderr)
+            return 1
 
     # Print success message
-    if legacy_command:
-        print(f"Upgraded Dippy hook for {agent_info.name}")
-    else:
-        print(f"Installed Dippy hook for {agent_info.name}")
-    print(f"Config: {config_path}")
-    if backup_path:
-        print(f"Backup: {backup_path}")
-    print()
-    _print_hook_summary(agent, updated_config)
+    if hooks_modified:
+        if legacy_command:
+            print(f"Upgraded Dippy hook for {agent_info.name}")
+        else:
+            print(f"Installed Dippy hook for {agent_info.name}")
+        print(f"Config: {config_path}")
+        if backup_path:
+            print(f"Backup: {backup_path}")
+        print()
+        _print_hook_summary(agent, updated_config)
 
     # Codex: enable feature flag in config.toml
     if agent == "codex":
         toml_path = _codex_config_toml_path(global_config, cwd)
-        flag_modified, flag_msg = _ensure_codex_feature_flag(toml_path)
+        try:
+            flag_modified, flag_msg = _ensure_codex_config(
+                toml_path, no_backup=no_backup
+            )
+        except (OSError, ValueError) as exc:
+            print(f"Error: {exc}", file=sys.stderr)
+            return 1
         print(f"\n{flag_msg}")
 
     return 0
@@ -1007,11 +1071,21 @@ def _codex_feature_flag_enabled(config_path: Path) -> bool:
         return False
 
     try:
-        content = config_path.read_text()
+        content = _read_text_preserving_newlines(config_path)
     except OSError:
         return False
 
-    return bool(re.search(r"(?m)^\s*(?:hooks|codex_hooks)\s*=\s*true\s*$", content))
+    in_features = False
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("["):
+            in_features = stripped == "[features]"
+            continue
+        if in_features and re.match(
+            r"^\s*(?:hooks|codex_hooks)\s*=\s*true\s*(?:#.*)?$", line
+        ):
+            return True
+    return False
 
 
 def uninstall(

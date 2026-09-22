@@ -21,6 +21,7 @@ from dippy.cli.hooks import (
     HOOK_COMMANDS,
     _codex_config_toml_path,
     _codex_feature_flag_enabled,
+    _codex_root_setting,
     _get_hook_command_for_agent,
     _has_dippy_hook,
 )
@@ -245,7 +246,7 @@ def apply_auto_fixes(checks: list[CheckResult], cwd_path: Path) -> bool:
                             agent=agent,
                             global_config=global_flag,
                             cwd=str(cwd_path),
-                            force=True,
+                            force="--force" in parts,
                             dry_run=False,
                         )
                         if result == 0:
@@ -481,6 +482,48 @@ def check_hook_status(cwd_path: Path, verbose: bool) -> list[CheckResult]:
                     matchers=matchers,
                 )
             )
+
+        if agent_id == "codex" and has_hook:
+            global_policy_path = _codex_config_toml_path(global_config=True)
+            global_policy = _codex_root_setting(global_policy_path, "approval_policy")
+            if global_config and _has_dippy_hook(global_config, "codex"):
+                compatible = global_policy == "on-request"
+                results.append(
+                    CheckResult(
+                        "Codex approval policy (global)",
+                        HealthStatus.OK if compatible else HealthStatus.WARNING,
+                        "Compatible (on-request)"
+                        if compatible
+                        else f"Incompatible ({global_policy or 'not configured'})",
+                        'Dippy PermissionRequest enforcement requires approval_policy = "on-request".',
+                        None if compatible else "dippy hooks install codex --global",
+                    )
+                )
+
+            if (
+                check_project
+                and project_config
+                and _has_dippy_hook(project_config, "codex")
+            ):
+                project_policy_path = _codex_config_toml_path(
+                    global_config=False, cwd=str(cwd_path)
+                )
+                project_policy = _codex_root_setting(
+                    project_policy_path, "approval_policy"
+                )
+                effective_policy = project_policy or global_policy
+                compatible = effective_policy == "on-request"
+                results.append(
+                    CheckResult(
+                        "Codex approval policy (project)",
+                        HealthStatus.OK if compatible else HealthStatus.WARNING,
+                        "Compatible (on-request)"
+                        if compatible
+                        else f"Incompatible ({effective_policy or 'not configured'})",
+                        "Project policy overrides global policy when configured.",
+                        None if compatible else "dippy hooks install codex",
+                    )
+                )
 
     # Check pi-mono extension
     pi_extension = Path.home() / ".pi" / "agent" / "extensions" / "dippy-extension.ts"

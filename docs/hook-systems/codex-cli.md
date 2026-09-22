@@ -126,7 +126,7 @@ Named configuration sets for different workflows:
 
 ```toml
 [profiles.safe]
-approval_policy = "untrusted"
+approval_policy = "on-request"
 sandbox_mode = "read-only"
 
 [profiles.yolo]
@@ -141,7 +141,7 @@ Usage: `codex --profile safe`
 Administrators can constrain settings via `requirements.toml`:
 
 ```toml
-allowed_approval_policies = ["untrusted", "on-failure"]
+allowed_approval_policies = ["on-request", "never"]
 allowed_sandbox_modes = ["read-only", "workspace-write"]
 ```
 
@@ -206,8 +206,6 @@ Controls when Codex pauses for human approval before executing commands:
 
 | Policy | Behavior | Risk Level |
 | ------ | -------- | ---------- |
-| `untrusted` | Always ask before any action | Safest |
-| `on-failure` | Ask only after command fails | Moderate |
 | `on-request` | Ask only when agent requests | Balanced |
 | `never` | Never ask for approval | Dangerous |
 
@@ -223,6 +221,11 @@ codex --full-auto
 # Config file
 approval_policy = "on-request"
 ```
+
+Dippy's enforced `PermissionRequest` flow requires `on-request`. With `never`,
+an execpolicy `prompt` decision is rejected before hooks can approve it.
+`dippy hooks install codex [--global]` writes the compatible policy and enables
+the hooks feature; `dippy doctor` diagnoses policy drift.
 
 ### Dangerous Mode
 
@@ -460,11 +463,11 @@ Exit 0 with no output = success.
 
 ### Enforcing `ask` for External Wrappers
 
-`PreToolUse` cannot create a Codex approval request. Dippy's `ask` response is
-therefore advisory unless Codex independently decides that the command needs
-approval. This is unsafe for wrappers that can change state outside the local
-sandbox: the wrapper process may be sandbox-safe even though its remote action
-is not.
+`PreToolUse` cannot create a Codex approval request. Commands that are not
+covered by a Codex execpolicy `prompt` rule therefore cannot receive enforced
+Dippy `ask` handling. This is unsafe for wrappers that can change state outside
+the local sandbox: the wrapper process may be sandbox-safe even though its
+remote action is not.
 
 Bridge such a wrapper into Codex's native approval flow with an execpolicy
 `prompt` rule:
@@ -488,6 +491,10 @@ The resulting flow is:
 2. The execpolicy rule forces Codex to emit `PermissionRequest`.
 3. Dippy auto-approves `allow`, returns no decision for `ask` so the native UI
    prompts the user, and blocks `deny`.
+
+This flow also requires `approval_policy = "on-request"`; the Dippy installer
+sets it automatically. `approval_policy = "never"` rejects step 2 before the
+`PermissionRequest` hook runs.
 
 Execpolicy patterns must be non-empty literal prefixes; there is no wildcard
 or default rule that forces `PermissionRequest` for every Bash command. Add one
@@ -1133,7 +1140,7 @@ show_tooltips = true
 
 # Profiles
 [profiles.safe]
-approval_policy = "untrusted"
+approval_policy = "on-request"
 sandbox_mode = "read-only"
 
 [profiles.fast]

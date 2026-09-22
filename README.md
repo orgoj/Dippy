@@ -142,7 +142,7 @@ dippy hooks install cursor --global
 # Install for Windsurf (global)
 dippy hooks install windsurf --global
 
-# Install for Codex CLI (global, requires hooks feature flag)
+# Install for Codex CLI (global; configures hooks and approval policy)
 dippy hooks install codex --global
 ```
 
@@ -202,7 +202,22 @@ If you prefer manual configuration or need project-specific settings:
 }
 ```
 
-**Codex CLI** - add to `~/.codex/hooks.json` and enable `hooks = true` in `~/.codex/config.toml`:
+**Codex CLI** - `dippy hooks install codex --global` manages both files. The
+required `~/.codex/config.toml` settings are:
+
+```toml
+approval_policy = "on-request"
+
+[features]
+hooks = true
+```
+
+`approval_policy = "never"` is incompatible with execpolicy `prompt` rules:
+Codex rejects the command before emitting `PermissionRequest`, so Dippy cannot
+approve it. The installer repairs this setting idempotently, and `dippy doctor`
+reports incompatible configurations.
+
+The corresponding `~/.codex/hooks.json` entries are:
 ```json
 {
   "hooks": {

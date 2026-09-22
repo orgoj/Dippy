@@ -295,6 +295,51 @@ class TestGeminiErrorBranches:
 
 
 class TestCodexDoctor:
+    def test_warns_when_installed_codex_hook_uses_never_policy(
+        self, tmp_path, monkeypatch
+    ):
+        from dippy.cli.hooks import install
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        (tmp_path / ".codex").mkdir()
+        install(agent="codex", global_config=True, cwd=str(workspace))
+        config_path = tmp_path / ".codex" / "config.toml"
+        config_path.write_text(
+            'approval_policy = "never"\n\n[features]\nhooks = true\n'
+        )
+
+        results = check_hook_status(workspace, verbose=False)
+
+        policy_result = next(
+            r for r in results if r.name == "Codex approval policy (global)"
+        )
+        assert policy_result.status == HealthStatus.WARNING
+        assert policy_result.fix_command == "dippy hooks install codex --global"
+
+    def test_project_policy_overrides_inherited_global_never(
+        self, tmp_path, monkeypatch
+    ):
+        from dippy.cli.hooks import install
+
+        monkeypatch.setattr(Path, "home", lambda: tmp_path)
+        monkeypatch.setenv("HOME", str(tmp_path))
+        global_dir = tmp_path / ".codex"
+        global_dir.mkdir()
+        (global_dir / "config.toml").write_text('approval_policy = "never"\n')
+        workspace = tmp_path / "workspace"
+        workspace.mkdir()
+        install(agent="codex", global_config=False, cwd=str(workspace))
+
+        results = check_hook_status(workspace, verbose=False)
+
+        project_result = next(
+            r for r in results if r.name == "Codex approval policy (project)"
+        )
+        assert project_result.status == HealthStatus.OK
+
     def test_check_hook_status_includes_codex_when_feature_flag_exists(
         self, tmp_path, monkeypatch
     ):
