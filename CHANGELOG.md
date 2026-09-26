@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.11] - 2026-09-26
+
+### Fixed
+
+- AGY hook project rules are selected from the agent's launch workspace instead of the working directory or file path supplied by a tool call.
+
 ## [0.3.10] - 2026-09-22
 
 ### Fixed

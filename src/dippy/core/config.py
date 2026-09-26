@@ -148,6 +148,9 @@ class Config:
     read_rules: list[Rule] = field(default_factory=list)
     """Read rules for Read tool."""
 
+    path_rule_cwd: Path | None = None
+    """Fixed base for relative file rules when tool cwd differs from policy cwd."""
+
     web_rules: list[Rule] = field(default_factory=list)
     """WebSearch tool rules in load order."""
 
@@ -1570,7 +1573,7 @@ def _resolve_alias(word: str, config: Config, cwd: Path) -> str:
     """Resolve command word through aliases."""
     normalized_word = _normalize_token(word, cwd)
     for alias_source, alias_target in config.aliases.items():
-        normalized_source = _normalize_token(alias_source, cwd)
+        normalized_source = _normalize_token(alias_source, config.path_rule_cwd or cwd)
         if normalized_word == normalized_source:
             return alias_target
     return word
@@ -1657,7 +1660,9 @@ def _match_words(
                 continue
             continue  # option rules don't use fnmatch
 
-        normalized_pattern = _normalize_pattern(rule.pattern, cwd)
+        normalized_pattern = _normalize_pattern(
+            rule.pattern, config.path_rule_cwd or cwd
+        )
         raw_matched = False
         stripped_matched = False
 
@@ -1749,7 +1754,9 @@ def _match_redirect(
     result: Match | None = None
     for rule in config.redirect_rules:
         # Patterns are always normalized as host paths (user's intent)
-        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        normalized_pattern = _normalize_redirect_pattern(
+            rule.pattern, config.path_rule_cwd or cwd
+        )
         if _glob_match(normalized_target, normalized_pattern):
             result = Match(
                 decision=rule.decision,
@@ -1854,7 +1861,9 @@ def match_after(words: list[str], config: Config, cwd: Path) -> str | None:
     normalized_cmd = _normalize_words(resolved_words, cwd)
     result: str | None = None
     for rule in config.after_rules:
-        normalized_pattern = _normalize_pattern(rule.pattern, cwd)
+        normalized_pattern = _normalize_pattern(
+            rule.pattern, config.path_rule_cwd or cwd
+        )
         matched = fnmatch.fnmatch(normalized_cmd, normalized_pattern)
         # Trailing ' *' also matches bare command (no args)
         if not matched and normalized_pattern.endswith(" *"):
@@ -2000,7 +2009,9 @@ def match_edit(
     for rule in config.edit_rules:
         if not _check_rule_context_flags(rule, context_flags):
             continue
-        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        normalized_pattern = _normalize_redirect_pattern(
+            rule.pattern, config.path_rule_cwd or cwd
+        )
         if _glob_match(normalized_path, normalized_pattern):
             result = Match(
                 decision=rule.decision,
@@ -2036,7 +2047,9 @@ def match_read(
     for rule in config.read_rules:
         if not _check_rule_context_flags(rule, context_flags):
             continue
-        normalized_pattern = _normalize_redirect_pattern(rule.pattern, cwd)
+        normalized_pattern = _normalize_redirect_pattern(
+            rule.pattern, config.path_rule_cwd or cwd
+        )
         if _glob_match(normalized_path, normalized_pattern):
             result = Match(
                 decision=rule.decision,
@@ -2057,6 +2070,7 @@ class _LogConfig:
 
     path: Path
     full: bool = False
+    policy_cwd: Path | None = None
 
 
 _log_config: _LogConfig | None = None
@@ -2094,7 +2108,9 @@ def configure_logging(config: Config) -> None:
         _log_disabled = True
         return
 
-    _log_config = _LogConfig(path=config.log, full=config.log_full)
+    _log_config = _LogConfig(
+        path=config.log, full=config.log_full, policy_cwd=config.path_rule_cwd
+    )
 
 
 def log_decision(
@@ -2129,6 +2145,8 @@ def log_decision(
         entry["command"] = command
     if cwd is not None:
         entry["cwd"] = str(cwd)
+    if _log_config.policy_cwd is not None:
+        entry["policy_cwd"] = str(_log_config.policy_cwd)
     if tool is not None:
         entry["tool"] = tool
     if file_path is not None:

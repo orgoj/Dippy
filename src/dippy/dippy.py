@@ -1560,50 +1560,75 @@ def main():
             if isinstance(input_data.get("toolCall"), dict)
             else {}
         )
-        cwd_str = (
-            input_data.get("cwd")
-            or tool_input.get("cwd")
-            or tool_args.get("Cwd")
-            or tool_args.get("cwd")
-            or tool_args.get("SearchDirectory")
-            or tool_args.get("DirectoryPath")
-        )
-        if not cwd_str and input_data.get("workspacePaths"):
-            target_file = (
-                tool_args.get("AbsolutePath")
-                or tool_args.get("TargetFile")
-                or tool_args.get("SearchPath")
-                or tool_args.get("file_path")
-                or tool_args.get("path")
-                or tool_args.get("filepath")
+        if MODE == "agy":
+            policy_value = os.environ.get("DIPPY_POLICY_CWD", "")
+            policy_path = Path(policy_value) if policy_value else None
+            if (
+                policy_path is None
+                or not policy_path.is_absolute()
+                or not policy_path.is_dir()
+            ):
+                reason = "AGY requires an absolute, existing DIPPY_POLICY_CWD"
+                logging.error(reason)
+                print(json.dumps(deny(reason)))
+                return
+            policy_cwd = policy_path.resolve()
+            operation_value = tool_args.get("Cwd") or tool_args.get("cwd")
+            operation_path = Path(operation_value) if operation_value else policy_cwd
+            cwd = (
+                operation_path.resolve()
+                if operation_path.is_absolute()
+                else (policy_cwd / operation_path).resolve()
             )
-            if target_file:
-                try:
-                    target_p = Path(target_file).resolve()
-                    for ws in input_data["workspacePaths"]:
-                        if ws:
-                            ws_p = Path(ws).resolve()
-                            if ws_p == target_p or ws_p in target_p.parents:
-                                cwd_str = str(ws_p)
-                                break
-                except Exception:
-                    pass
+            logging.info("AGY policy cwd: %s; operation cwd: %s", policy_cwd, cwd)
+        else:
+            cwd_str = (
+                input_data.get("cwd")
+                or tool_input.get("cwd")
+                or tool_args.get("Cwd")
+                or tool_args.get("cwd")
+                or tool_args.get("SearchDirectory")
+                or tool_args.get("DirectoryPath")
+            )
+            if not cwd_str and input_data.get("workspacePaths"):
+                target_file = (
+                    tool_args.get("AbsolutePath")
+                    or tool_args.get("TargetFile")
+                    or tool_args.get("SearchPath")
+                    or tool_args.get("file_path")
+                    or tool_args.get("path")
+                    or tool_args.get("filepath")
+                )
+                if target_file:
+                    try:
+                        target_p = Path(target_file).resolve()
+                        for ws in input_data["workspacePaths"]:
+                            if ws:
+                                ws_p = Path(ws).resolve()
+                                if ws_p == target_p or ws_p in target_p.parents:
+                                    cwd_str = str(ws_p)
+                                    break
+                    except Exception:
+                        pass
+                if not cwd_str:
+                    proc_cwd = Path.cwd().resolve()
+                    ws_resolved = [
+                        Path(w).resolve() for w in input_data["workspacePaths"] if w
+                    ]
+                    if proc_cwd in ws_resolved:
+                        cwd_str = str(proc_cwd)
+                    else:
+                        cwd_str = str(input_data["workspacePaths"][0])
             if not cwd_str:
-                proc_cwd = Path.cwd().resolve()
-                ws_resolved = [
-                    Path(w).resolve() for w in input_data["workspacePaths"] if w
-                ]
-                if proc_cwd in ws_resolved:
-                    cwd_str = str(proc_cwd)
-                else:
-                    cwd_str = str(input_data["workspacePaths"][0])
-        if not cwd_str:
-            cwd_str = os.getcwd()
-        cwd = Path(cwd_str).resolve()
+                cwd_str = os.getcwd()
+            cwd = Path(cwd_str).resolve()
+            policy_cwd = cwd
 
         # Load config (fails hard on errors)
         try:
-            config = load_config(cwd)
+            config = load_config(policy_cwd)
+            if MODE == "agy":
+                config.path_rule_cwd = policy_cwd
             configure_logging(config)
         except ConfigError as e:
             logging.error(f"Config error: {e}")

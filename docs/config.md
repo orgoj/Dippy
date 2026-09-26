@@ -1107,8 +1107,11 @@ In YOLO / bypass mode (`--dangerously-skip-permissions`), AGY automatically igno
 - When an operation matches an `ask` rule or falls through unclassified (`set default ask`), Dippy resolves the decision interactively through `dippy-askpass-gui`.
 - If approved, Dippy returns `allow`. If denied, dismissed, or timed out, Dippy returns `deny` to hard-block execution in AGY.
 
-#### Multi-Workspace Session Resolution
-In multi-workspace sessions (`workspacePaths`), AGY provides multiple root directories. Dippy matches target file paths against `workspacePaths` to locate the containing workspace and load the appropriate project `.dippy` configuration rules.
+#### Stable Project Policy for AGY
+
+Set `DIPPY_POLICY_CWD` to the absolute launch workspace before starting AGY. The hook inherits this value and loads that workspace's `.dippy` for every AGY tool call, including `search_web`. A host or launcher must set it; AGY tool arguments such as `Cwd`, target file paths, and `workspacePaths` cannot select another project's policy. If the variable is missing or does not name an existing absolute directory, Dippy denies the tool call.
+
+AGY may run a shell command in another directory through `toolCall.args.Cwd`. Dippy uses that directory to resolve the command's relative paths, while relative command and file rule patterns remain anchored to the launch workspace. For a relative `Cwd`, Dippy resolves it against `DIPPY_POLICY_CWD`.
 
 #### Recommended Global Rules for Antigravity
 Antigravity stores scratchpads, task plans, and conversation transcripts in `~/.gemini/antigravity-cli/brain/**`. To allow AGY to manage its workspace without approval prompts, configure global file rules in `~/.dippy/config`:
