@@ -22,7 +22,7 @@
 - **Tk Approval Provider (`dippy-askpass-gui`)** — standalone Tk GUI approval dialog with operation classification (Read File, Edit File, Command, Web Request, MCP Tool), single-key keyboard shortcuts (`y`/`Y`/`Enter` = allow, `n`/`N`/`Esc` = deny), and multi-monitor geometric centering via `xrandr`
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools
 - **Pure Dippy Control (Gemini & AGY)** — YOLO mode automation via `dippy hooks setup-gemini-yolo` and AGY `--dangerously-skip-permissions` binary enforcement with askpass GUI resolution
-- **Antigravity CLI (AGY) support** — native lifecycle hooks with project policy anchored by launch-provided `DIPPY_POLICY_CWD`, so per-tool `Cwd` and secondary workspaces cannot select another project's `.dippy`
+- **Antigravity CLI (AGY) support** — native lifecycle hooks with project policy anchored by optional launch-provided `DIPPY_POLICY_CWD` or the standalone AGY workspace, so per-tool `Cwd` cannot select another project's `.dippy`
 - **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PermissionRequest`/`PostToolUse` on `Bash`
 - **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*

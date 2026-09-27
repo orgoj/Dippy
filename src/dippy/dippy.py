@@ -1562,13 +1562,27 @@ def main():
         )
         if MODE == "agy":
             policy_value = os.environ.get("DIPPY_POLICY_CWD", "")
-            policy_path = Path(policy_value) if policy_value else None
-            if (
-                policy_path is None
-                or not policy_path.is_absolute()
-                or not policy_path.is_dir()
-            ):
-                reason = "AGY requires an absolute, existing DIPPY_POLICY_CWD"
+            if policy_value:
+                policy_path = Path(policy_value)
+            else:
+                workspaces = input_data.get("workspacePaths")
+                workspace_paths = (
+                    [
+                        Path(path)
+                        for path in workspaces
+                        if isinstance(path, str) and path
+                    ]
+                    if isinstance(workspaces, list)
+                    else []
+                )
+                process_cwd = Path.cwd().resolve()
+                policy_path = (
+                    process_cwd
+                    if process_cwd in workspace_paths or not workspace_paths
+                    else workspace_paths[0]
+                )
+            if not policy_path.is_absolute() or not policy_path.is_dir():
+                reason = "AGY policy workspace must be an absolute, existing directory"
                 logging.error(reason)
                 print(json.dumps(deny(reason)))
                 return

@@ -347,8 +347,74 @@ class TestAgyMainHookExecution:
         out, _ = capsys.readouterr()
         assert json.loads(out.strip())["decision"] == "deny"
 
-    @pytest.mark.parametrize("policy_value", [None, "relative/path", "/no/such/path"])
-    def test_missing_or_invalid_launch_policy_fails_closed(
+    def test_standalone_agy_uses_workspace_policy_not_tool_cwd(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        project = tmp_path / "project"
+        other = tmp_path / "other"
+        project.mkdir()
+        other.mkdir()
+        (project / ".dippy").write_text("allow fictional_safe_cmd *\n")
+        (other / ".dippy").write_text("deny fictional_safe_cmd *\n")
+        monkeypatch.delenv("DIPPY_POLICY_CWD")
+        monkeypatch.chdir(tmp_path)
+        payload = {
+            "toolCall": {
+                "name": "run_command",
+                "args": {"CommandLine": "fictional_safe_cmd x", "Cwd": str(other)},
+            },
+            "workspacePaths": [str(project)],
+        }
+        monkeypatch.setattr("sys.stdin", StringIO(json.dumps(payload)))
+        monkeypatch.setattr("sys.argv", ["dippy", "--agy"])
+
+        dippy_mod.main()
+
+        out, _ = capsys.readouterr()
+        assert json.loads(out.strip())["decision"] == "allow"
+
+    def test_standalone_agy_uses_process_cwd_without_workspace_paths(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        (tmp_path / ".dippy").write_text("allow-web *\n")
+        monkeypatch.delenv("DIPPY_POLICY_CWD")
+        monkeypatch.chdir(tmp_path)
+        payload = {
+            "toolCall": {"name": "search_web", "args": {"query": "fictional query"}}
+        }
+        monkeypatch.setattr("sys.stdin", StringIO(json.dumps(payload)))
+        monkeypatch.setattr("sys.argv", ["dippy", "--agy"])
+
+        dippy_mod.main()
+
+        out, _ = capsys.readouterr()
+        assert json.loads(out.strip())["decision"] == "allow"
+
+    def test_standalone_agy_prefers_process_cwd_in_workspace_paths(
+        self, tmp_path, monkeypatch, capsys
+    ):
+        project = tmp_path / "project"
+        other = tmp_path / "other"
+        project.mkdir()
+        other.mkdir()
+        (project / ".dippy").write_text("allow-web *\n")
+        (other / ".dippy").write_text("deny-web *\n")
+        monkeypatch.delenv("DIPPY_POLICY_CWD")
+        monkeypatch.chdir(project)
+        payload = {
+            "toolCall": {"name": "search_web", "args": {"query": "fictional query"}},
+            "workspacePaths": [str(other), str(project)],
+        }
+        monkeypatch.setattr("sys.stdin", StringIO(json.dumps(payload)))
+        monkeypatch.setattr("sys.argv", ["dippy", "--agy"])
+
+        dippy_mod.main()
+
+        out, _ = capsys.readouterr()
+        assert json.loads(out.strip())["decision"] == "allow"
+
+    @pytest.mark.parametrize("policy_value", ["relative/path", "/no/such/path"])
+    def test_invalid_launch_policy_fails_closed(
         self, policy_value, tmp_path, monkeypatch, capsys
     ):
         (tmp_path / ".dippy").write_text("allow fictional_safe_cmd *\n")
