@@ -14,6 +14,8 @@ TESTS = [
     ("duckdb -readonly mydb.db 'DROP TABLE users'", False),
     ("duckdb -safe mydb.db", False),
     ("duckdb -safe mydb.db 'DROP TABLE users'", False),
+    ("duckdb -readonly mydb.db 'SELECT 1'", True),
+    ("duckdb -safe mydb.db 'SELECT 1'", True),
     # Read-only SQL (positional)
     ("duckdb mydb.db 'SELECT * FROM users'", True),
     ("duckdb mydb.db 'SELECT * FROM users;'", True),
@@ -141,6 +143,11 @@ def test_database_redirect_rule_does_not_allow_external_writes(
         "duckdb -readonly -cmd 'SELECT 1' work.db 'DROP TABLE items'",
         "duckdb work.db 'SELECT 1' 'DROP TABLE items'",
         "duckdb -readonly work.db \"SELECT 1; -- a comment\nCOPY (SELECT 1) TO '/tmp/output.csv'\"",
+        "duckdb -readonly work.db \"SELECT [']']; INSTALL httpfs; --'\"",
+        "duckdb -readonly work.db \"SELECT [']']; COPY (SELECT 1) TO '/tmp/output.csv'; --'\"",
+        "duckdb -readonly work.db \"SELECT [']']\" '.tables'",
+        "duckdb -readonly work.db \"SELECT E'\\\\' x '; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
+        "duckdb -readonly work.db \"SELECT $$'$$; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
     ],
 )
 def test_readonly_flags_do_not_approve_external_side_effects(check, command):
@@ -154,6 +161,9 @@ def test_readonly_flags_do_not_approve_external_side_effects(check, command):
         "duckdb -readonly work.db \"SELECT 'COPY; EXPORT; INSTALL; LOAD'\"",
         "duckdb -readonly work.db \"/* EXPORT DATABASE '/tmp/no' */ SELECT 1\"",
         "duckdb -readonly work.db \"WITH x AS (SELECT 'INSTALL') SELECT * FROM x\"",
+        "duckdb -readonly work.db 'SELECT [1, 2]'",
+        "duckdb -readonly work.db 'SELECT [\"export\"]'",
+        'duckdb -readonly work.db "SELECT $$export$$"',
     ],
 )
 def test_readonly_query_mentions_side_effect_words_as_data(check, command):

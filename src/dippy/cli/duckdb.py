@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from dippy.cli import Classification, HandlerContext
-from dippy.core.sql import _skip_cte, _strip_quoted, is_readonly_sql
+from dippy.core.sql import _skip_cte, is_readonly_sql
 
 COMMANDS = ["duckdb"]
 
@@ -27,10 +27,63 @@ _DUCKDB_WRITE = frozenset(
 _EXTERNAL_COMMANDS = frozenset({"COPY", "EXPORT", "IMPORT", "INSTALL", "LOAD"})
 
 
+def _strip_duckdb_quoted(sql: str) -> str | None:
+    """Blank DuckDB literals and comments; return None for ambiguous quoting."""
+    stripped = list(sql)
+    i = 0
+    while i < len(sql):
+        if sql.startswith("--", i):
+            end = sql.find("\n", i)
+            if end < 0:
+                end = len(sql)
+        elif sql.startswith("/*", i):
+            end = sql.find("*/", i + 2)
+            if end < 0 or "/*" in sql[i + 2 : end]:
+                return None
+            end += 2
+        elif sql[i] in "'\"":
+            quote = sql[i]
+            if quote == "'" and i > 0 and sql[i - 1] in "Ee":
+                return None
+            end = i + 1
+            while end < len(sql):
+                if sql[end] == "\\":
+                    return None
+                if sql[end] == quote:
+                    if end + 1 < len(sql) and sql[end + 1] == quote:
+                        end += 2
+                        continue
+                    end += 1
+                    break
+                end += 1
+            else:
+                return None
+        elif sql[i] == "$":
+            delimiter = re.match(r"\$(?:[A-Za-z_]\w*)?\$", sql[i:])
+            if not delimiter:
+                return None
+            end = sql.find(delimiter.group(), i + delimiter.end())
+            if end < 0:
+                return None
+            end += delimiter.end()
+        elif sql[i] in "[]":
+            # DuckDB uses brackets for lists and indexing, not quoted names.
+            stripped[i] = " "
+            i += 1
+            continue
+        elif sql[i] == "`":
+            return None
+        else:
+            i += 1
+            continue
+        stripped[i:end] = " " * (end - i)
+        i = end
+    return "".join(stripped)
+
+
 def _needs_external_approval(sql: str) -> bool:
     """Find executable DuckDB commands without matching words in SQL data."""
-    stripped = _strip_quoted(sql)
-    for statement in stripped.split(";"):
+    for statement in sql.split(";"):
         match = re.match(r"\s*([A-Za-z_]\w*)", statement)
         if not match:
             continue
@@ -185,13 +238,18 @@ def classify(ctx: HandlerContext) -> Classification:
     if not sql_parts:
         return Classification("ask", description="duckdb (interactive)")
 
+    # Quote state cannot safely span CLI arguments. Reject ambiguous fragments
+    # before a generic SQL classifier could hide later statements.
+    stripped_parts = [_strip_duckdb_quoted(part) for part in sql_parts]
+    if any(part is None for part in stripped_parts):
+        return Classification("ask", description="duckdb (ambiguous SQL quoting)")
+    if any(part.lstrip().startswith(".") for part in sql_parts):
+        return Classification("ask", description="duckdb (dot-command)")
     # Separate SQL arguments conservatively. A space can hide a later write
     # behind an initial SELECT during statement classification.
-    sql = ";\n".join(sql_parts)
+    sql = ";\n".join(part for part in stripped_parts if part is not None)
 
-    if any(
-        _needs_external_approval(part) for part in sql_parts
-    ) or _needs_external_approval(sql):
+    if _needs_external_approval(sql):
         return Classification("ask", description="duckdb (external operation)")
 
     if "-readonly" in tokens or "-safe" in tokens:
