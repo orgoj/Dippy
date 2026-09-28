@@ -57,8 +57,13 @@ TESTS = [
     ("duckdb", False),
     ("duckdb mydb.db", False),
     ("duckdb -json mydb.db", False),
-    # Multiple SQL statements - unsafe
-    ("duckdb mydb.db 'SELECT 1; SELECT 2'", False),
+    # Multiple verified read-only statements
+    ("duckdb mydb.db 'SELECT 1; SELECT 2'", True),
+    ("duckdb -readonly -csv mydb.db 'SELECT 1; SELECT 2;'", True),
+    ("duckdb -readonly mydb.db 'SELECT 1; -- comment\nSELECT 2'", True),
+    ("duckdb -readonly mydb.db \"SELECT ';' AS delimiter; SELECT 2\"", True),
+    ("duckdb -readonly mydb.db 'SELECT 1; INSERT INTO items VALUES (2)'", False),
+    ("duckdb mydb.db 'SELECT 1; ; SELECT 2'", False),
     # File input - unsafe
     ("duckdb -init script.sql mydb.db", False),
     ("duckdb -f script.sql", False),
@@ -171,6 +176,17 @@ def test_readonly_flags_do_not_approve_external_side_effects(check, command):
 )
 def test_readonly_query_mentions_side_effect_words_as_data(check, command):
     assert is_approved(check(command))
+
+
+def test_readonly_aggregate_queries_in_one_invocation(check):
+    sql = (
+        "SELECT 'alpha' t, substr(time_local,13,5) m, count(*) n FROM alpha "
+        "WHERE time_local LIKE '28/Sep/2026:%' GROUP BY 1,2 ORDER BY 2 DESC LIMIT 2; "
+        "SELECT 'beta' t, substr(time_local,13,5) m, count(*) n FROM beta "
+        "WHERE time_local LIKE '28/Sep/2026:%' GROUP BY 1,2 ORDER BY 2 DESC LIMIT 2;"
+    )
+
+    assert is_approved(check(f'duckdb -readonly -csv data.db "{sql}"'))
 
 
 def test_dollar_delimiter_inside_identifier_is_ambiguous():

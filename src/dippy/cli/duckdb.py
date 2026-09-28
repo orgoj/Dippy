@@ -160,6 +160,18 @@ def _writes_only_to_main_database(sql: str) -> bool:
     return True
 
 
+def _all_readonly_statements(sql: str) -> bool:
+    """Require every nonempty SQL statement to be independently read-only."""
+    statements = sql.split(";")
+    if any(not statement.strip() for statement in statements[:-1]):
+        return False
+    return all(
+        is_readonly_sql(statement, extra_write=_DUCKDB_WRITE) is True
+        for statement in statements
+        if statement.strip()
+    ) and any(statement.strip() for statement in statements)
+
+
 def classify(ctx: HandlerContext) -> Classification:
     tokens = ctx.tokens
 
@@ -278,14 +290,14 @@ def classify(ctx: HandlerContext) -> Classification:
     if _needs_external_approval(sql):
         return Classification("ask", description="duckdb (external operation)")
 
+    readonly = _all_readonly_statements(sql)
     if "-readonly" in tokens or "-safe" in tokens:
-        if is_readonly_sql(sql, extra_write=_DUCKDB_WRITE) is True:
+        if readonly:
             return Classification("allow", description="duckdb (read-only query)")
         return Classification("ask", description="duckdb (unverified read-only query)")
 
     # Analyze SQL
-    readonly = is_readonly_sql(sql, extra_write=_DUCKDB_WRITE)
-    if readonly is True:
+    if readonly:
         return Classification("allow", description="duckdb (read-only query)")
     if filename and not filename_has_expansions and _writes_only_to_main_database(sql):
         return Classification(
@@ -293,7 +305,7 @@ def classify(ctx: HandlerContext) -> Classification:
             description="duckdb (database write)",
             redirect_targets=(filename,),
         )
-    if readonly is False:
+    if is_readonly_sql(sql, extra_write=_DUCKDB_WRITE) is False:
         return Classification("ask", description="duckdb (write query)")
     # Unknown - ask
     return Classification("ask", description="duckdb (unknown query)")
