@@ -5,14 +5,56 @@ from __future__ import annotations
 import re
 
 from dippy.cli import Classification, HandlerContext
-from dippy.core.sql import is_readonly_sql
+from dippy.core.sql import _skip_cte, _strip_quoted, is_readonly_sql
 
 COMMANDS = ["duckdb"]
 
 # DuckDB-specific keywords that perform writes or modifications
 _DUCKDB_WRITE = frozenset(
-    {"PRAGMA", "ATTACH", "DETACH", "VACUUM", "COPY", "EXPORT", "IMPORT"}
+    {
+        "PRAGMA",
+        "ATTACH",
+        "DETACH",
+        "VACUUM",
+        "COPY",
+        "EXPORT",
+        "IMPORT",
+        "INSTALL",
+        "LOAD",
+    }
 )
+
+_EXTERNAL_COMMANDS = frozenset({"COPY", "EXPORT", "IMPORT", "INSTALL", "LOAD"})
+
+
+def _needs_external_approval(sql: str) -> bool:
+    """Find executable DuckDB commands without matching words in SQL data."""
+    stripped = _strip_quoted(sql)
+    for statement in stripped.split(";"):
+        match = re.match(r"\s*([A-Za-z_]\w*)", statement)
+        if not match:
+            continue
+        keyword = match.group(1).upper()
+        if keyword == "WITH":
+            match = re.match(
+                r"([A-Za-z_]\w*)", statement[_skip_cte(statement, match.end()) :]
+            )
+            if not match:
+                return True
+            keyword = match.group(1).upper()
+        if keyword == "EXPLAIN":
+            # ANALYZE executes the explained statement; plain EXPLAIN stays on ask
+            # when it names an external command, matching the old project guard.
+            if re.search(
+                r"\bANALYZE\b|\b(?:COPY|EXPORT|IMPORT|INSTALL|LOAD)\b", statement, re.I
+            ):
+                return True
+        if keyword in _EXTERNAL_COMMANDS:
+            return True
+        if keyword == "ATTACH" and not re.search(r"\bREAD_ONLY\b", statement, re.I):
+            return True
+    return False
+
 
 _LOCAL_WRITE = re.compile(
     r"^(?:"
@@ -56,10 +98,6 @@ def classify(ctx: HandlerContext) -> Classification:
     # Help/version
     if any(t in ("-help", "--help", "-version") for t in tokens):
         return Classification("allow", description="duckdb help/version")
-
-    # Check for -readonly or -safe flags - always safe
-    if "-readonly" in tokens or "-safe" in tokens:
-        return Classification("allow", description="duckdb (read-only mode)")
 
     # Check for -init (runs a script file - unknown content)
     if "-init" in tokens:
@@ -147,8 +185,19 @@ def classify(ctx: HandlerContext) -> Classification:
     if not sql_parts:
         return Classification("ask", description="duckdb (interactive)")
 
-    # Combine SQL parts
-    sql = " ".join(sql_parts)
+    # Separate SQL arguments conservatively. A space can hide a later write
+    # behind an initial SELECT during statement classification.
+    sql = ";\n".join(sql_parts)
+
+    if any(
+        _needs_external_approval(part) for part in sql_parts
+    ) or _needs_external_approval(sql):
+        return Classification("ask", description="duckdb (external operation)")
+
+    if "-readonly" in tokens or "-safe" in tokens:
+        if is_readonly_sql(sql, extra_write=_DUCKDB_WRITE) is True:
+            return Classification("allow", description="duckdb (read-only query)")
+        return Classification("ask", description="duckdb (unverified read-only query)")
 
     # Analyze SQL
     readonly = is_readonly_sql(sql, extra_write=_DUCKDB_WRITE)

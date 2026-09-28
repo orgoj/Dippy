@@ -9,12 +9,11 @@ TESTS = [
     ("duckdb --help", True),
     ("duckdb -help", True),
     ("duckdb -version", True),
-    # Read-only mode - always safe
-    ("duckdb -readonly mydb.db", True),
-    ("duckdb -readonly mydb.db 'DROP TABLE users'", True),  # readonly flag wins
-    # Safe mode - always safe
-    ("duckdb -safe mydb.db", True),
-    ("duckdb -safe mydb.db 'DROP TABLE users'", True),  # safe flag wins
+    # Read-only and safe flags do not prove an interactive or write query safe
+    ("duckdb -readonly mydb.db", False),
+    ("duckdb -readonly mydb.db 'DROP TABLE users'", False),
+    ("duckdb -safe mydb.db", False),
+    ("duckdb -safe mydb.db 'DROP TABLE users'", False),
     # Read-only SQL (positional)
     ("duckdb mydb.db 'SELECT * FROM users'", True),
     ("duckdb mydb.db 'SELECT * FROM users;'", True),
@@ -125,3 +124,37 @@ def test_database_redirect_rule_does_not_allow_external_writes(
     result = check(command, config, tmp_path)
 
     assert needs_confirmation(result)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "duckdb -readonly work.db \"COPY (SELECT 1) TO '/tmp/output.csv'\"",
+        "duckdb -readonly work.db \"EXPORT DATABASE '/tmp/backup'\"",
+        'duckdb -safe work.db "INSTALL httpfs"',
+        'duckdb -readonly work.db "LOAD httpfs"',
+        "duckdb -readonly work.db \"SELECT 1; EXPORT DATABASE '/tmp/backup'\"",
+        "duckdb -readonly work.db \"EXPLAIN ANALYZE COPY (SELECT 1) TO '/tmp/output.csv'\"",
+        'duckdb -readonly work.db "EXPLAIN ANALYZE INSERT INTO items VALUES (1)"',
+        "duckdb -readonly work.db \"ATTACH 'other.db' AS other\"",
+        "duckdb -cmd 'SELECT 1' work.db \"EXPORT DATABASE '/tmp/backup'\"",
+        "duckdb -readonly -cmd 'SELECT 1' work.db 'DROP TABLE items'",
+        "duckdb work.db 'SELECT 1' 'DROP TABLE items'",
+        "duckdb -readonly work.db \"SELECT 1; -- a comment\nCOPY (SELECT 1) TO '/tmp/output.csv'\"",
+    ],
+)
+def test_readonly_flags_do_not_approve_external_side_effects(check, command):
+    assert needs_confirmation(check(command))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "duckdb -readonly work.db \"SELECT * FROM access WHERE uri LIKE '%export%'\"",
+        "duckdb -readonly work.db \"SELECT 'COPY; EXPORT; INSTALL; LOAD'\"",
+        "duckdb -readonly work.db \"/* EXPORT DATABASE '/tmp/no' */ SELECT 1\"",
+        "duckdb -readonly work.db \"WITH x AS (SELECT 'INSTALL') SELECT * FROM x\"",
+    ],
+)
+def test_readonly_query_mentions_side_effect_words_as_data(check, command):
+    assert is_approved(check(command))
