@@ -32,6 +32,8 @@ class HandlerContext:
     config: Config | None = None
     word_has_expansions: tuple[bool, ...] = ()
     """Per-token flag: True if the original word contained bash expansions."""
+    raw_words: tuple[str, ...] = ()
+    """Unmodified shell word values, aligned with tokens when available."""
 
 
 @dataclass(frozen=True)

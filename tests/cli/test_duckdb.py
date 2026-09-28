@@ -2,6 +2,7 @@
 
 import pytest
 from conftest import is_approved, needs_confirmation
+from dippy.cli.duckdb import _strip_duckdb_quoted
 from dippy.core.config import Config, Rule
 
 TESTS = [
@@ -148,6 +149,8 @@ def test_database_redirect_rule_does_not_allow_external_writes(
         "duckdb -readonly work.db \"SELECT [']']\" '.tables'",
         "duckdb -readonly work.db \"SELECT E'\\\\' x '; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
         "duckdb -readonly work.db \"SELECT $$'$$; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
+        'duckdb -readonly work.db "SELECT 1 -- comment\rINSTALL httpfs"',
+        'duckdb -readonly work.db "SELECT "\'1\'""',
     ],
 )
 def test_readonly_flags_do_not_approve_external_side_effects(check, command):
@@ -163,8 +166,12 @@ def test_readonly_flags_do_not_approve_external_side_effects(check, command):
         "duckdb -readonly work.db \"WITH x AS (SELECT 'INSTALL') SELECT * FROM x\"",
         "duckdb -readonly work.db 'SELECT [1, 2]'",
         "duckdb -readonly work.db 'SELECT [\"export\"]'",
-        'duckdb -readonly work.db "SELECT $$export$$"',
+        "duckdb -readonly work.db 'SELECT $$export$$'",
     ],
 )
 def test_readonly_query_mentions_side_effect_words_as_data(check, command):
     assert is_approved(check(command))
+
+
+def test_dollar_delimiter_inside_identifier_is_ambiguous():
+    assert _strip_duckdb_quoted("SELECT x$$y$$") is None

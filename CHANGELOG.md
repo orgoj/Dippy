@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
-- DuckDB SQL classification now handles DuckDB quoting and refuses ambiguous SQL fragments that could hide external operations.
+- DuckDB SQL classification handles DuckDB and shell quoting conservatively, so ambiguous input cannot hide external operations.
 
 ## [0.3.13] - 2026-09-28
 

@@ -541,6 +541,7 @@ def _analyze_command(
 
     # Get base command for injection check
     words = [_get_word_value(w) for w in node.words]
+    raw_words = tuple(getattr(w, "value", str(w)) for w in node.words)
     # Track which words contain bash expansions (param, cmdsub, procsub)
     word_has_expansions = tuple(bool(getattr(w, "parts", [])) for w in node.words)
     # Skip env var assignments to find base command
@@ -646,6 +647,7 @@ def _analyze_command(
         context_flags,
         remote=remote,
         word_has_expansions=word_has_expansions,
+        raw_words=raw_words,
         redirects=tuple(getattr(node, "redirects", None) or ()),
     )
     decisions.append(cmd_decision)
@@ -732,6 +734,7 @@ def _analyze_simple_command(
     *,
     remote: bool = False,
     word_has_expansions: tuple[bool, ...] = (),
+    raw_words: tuple[str, ...] = (),
     redirects: tuple = (),
 ) -> Decision:
     """Analyze a simple command (list of words)."""
@@ -839,9 +842,10 @@ def _analyze_simple_command(
                 cwd,
                 context_flags,
                 remote=remote,
-                word_has_expansions=word_has_expansions[j:]
+                word_has_expansions=word_has_expansions[i + j :]
                 if word_has_expansions
                 else (),
+                raw_words=raw_words[i + j :] if raw_words else (),
             )
         return Decision("ask", base, context_flags=context_flags, suggestion=suggestion)
 
@@ -916,7 +920,10 @@ def _analyze_simple_command(
                 remote=remote,
                 cwd=cwd,
                 config=config,
-                word_has_expansions=word_has_expansions,
+                word_has_expansions=word_has_expansions[i:]
+                if word_has_expansions
+                else (),
+                raw_words=raw_words[i:] if raw_words else (),
             )
         )
         desc = result.description or get_description(tokens, base)

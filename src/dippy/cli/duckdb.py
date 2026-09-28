@@ -27,15 +27,28 @@ _DUCKDB_WRITE = frozenset(
 _EXTERNAL_COMMANDS = frozenset({"COPY", "EXPORT", "IMPORT", "INSTALL", "LOAD"})
 
 
+def _literal_shell_word(raw: str) -> bool:
+    """Accept only one plain shell word with no concatenated quoting."""
+    if len(raw) >= 2 and raw[0] in "'\"" and raw[-1] == raw[0]:
+        quote = raw[0]
+        inner = raw[1:-1]
+        if quote == "'":
+            return "'" not in inner
+        return not any(char in inner for char in '"\\$`')
+    return not any(char in raw for char in "'\"\\$`")
+
+
 def _strip_duckdb_quoted(sql: str) -> str | None:
     """Blank DuckDB literals and comments; return None for ambiguous quoting."""
+    if "\r" in sql:
+        return None
     stripped = list(sql)
     i = 0
     while i < len(sql):
         if sql.startswith("--", i):
-            end = sql.find("\n", i)
-            if end < 0:
-                end = len(sql)
+            end = i + 2
+            while end < len(sql) and sql[end] not in "\r\n":
+                end += 1
         elif sql.startswith("/*", i):
             end = sql.find("*/", i + 2)
             if end < 0 or "/*" in sql[i + 2 : end]:
@@ -59,6 +72,8 @@ def _strip_duckdb_quoted(sql: str) -> str | None:
             else:
                 return None
         elif sql[i] == "$":
+            if i > 0 and (sql[i - 1].isalnum() or sql[i - 1] in "_$"):
+                return None
             delimiter = re.match(r"\$(?:[A-Za-z_]\w*)?\$", sql[i:])
             if not delimiter:
                 return None
@@ -160,6 +175,7 @@ def classify(ctx: HandlerContext) -> Classification:
     # duckdb [OPTIONS] [FILENAME [SQL...]]
     # Also check -c, -s, -cmd options
     sql_parts: list[str] = []
+    sql_indices: list[int] = []
     i = 1
     filename_seen = False
     filename: str | None = None
@@ -209,11 +225,13 @@ def classify(ctx: HandlerContext) -> Classification:
         ):
             if token == "-cmd" and i + 1 < len(tokens):
                 sql_parts.append(tokens[i + 1])
+                sql_indices.append(i + 1)
             i += 2
             continue
         # -c and -s run SQL and exit
         if token in ("-c", "-s") and i + 1 < len(tokens):
             sql_parts.append(tokens[i + 1])
+            sql_indices.append(i + 1)
             i += 2
             continue
         # This should be either filename or SQL
@@ -232,11 +250,19 @@ def classify(ctx: HandlerContext) -> Classification:
             continue
         # Everything after filename is SQL
         sql_parts.append(token)
+        sql_indices.append(i)
         i += 1
 
     # No SQL found - interactive mode
     if not sql_parts:
         return Classification("ask", description="duckdb (interactive)")
+
+    if len(ctx.raw_words) != len(tokens) or any(
+        not _literal_shell_word(ctx.raw_words[i])
+        or (ctx.word_has_expansions and ctx.word_has_expansions[i])
+        for i in sql_indices
+    ):
+        return Classification("ask", description="duckdb (ambiguous shell quoting)")
 
     # Quote state cannot safely span CLI arguments. Reject ambiguous fragments
     # before a generic SQL classifier could hide later statements.
