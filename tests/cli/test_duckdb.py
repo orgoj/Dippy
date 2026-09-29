@@ -2,7 +2,6 @@
 
 import pytest
 from conftest import is_approved, needs_confirmation
-from dippy.cli.duckdb import _strip_duckdb_quoted
 from dippy.core.config import Config, Rule
 
 TESTS = [
@@ -155,7 +154,6 @@ def test_database_redirect_rule_does_not_allow_external_writes(
         "duckdb -readonly work.db \"SELECT E'\\\\' x '; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
         "duckdb -readonly work.db \"SELECT $$'$$; COPY (SELECT 1) TO '/tmp/output.csv' --'\"",
         'duckdb -readonly work.db "SELECT 1 -- comment\rINSTALL httpfs"',
-        'duckdb -readonly work.db "SELECT "\'1\'""',
     ],
 )
 def test_readonly_flags_do_not_approve_external_side_effects(check, command):
@@ -172,6 +170,7 @@ def test_readonly_flags_do_not_approve_external_side_effects(check, command):
         "duckdb -readonly work.db 'SELECT [1, 2]'",
         "duckdb -readonly work.db 'SELECT [\"export\"]'",
         "duckdb -readonly work.db 'SELECT $$export$$'",
+        'duckdb -readonly work.db "SELECT "\'1\'""',
     ],
 )
 def test_readonly_query_mentions_side_effect_words_as_data(check, command):
@@ -189,5 +188,22 @@ def test_readonly_aggregate_queries_in_one_invocation(check):
     assert is_approved(check(f'duckdb -readonly -csv data.db "{sql}"'))
 
 
-def test_dollar_delimiter_inside_identifier_is_ambiguous():
-    assert _strip_duckdb_quoted("SELECT x$$y$$") is None
+def test_shell_escaped_sql_literals_reach_shared_checker(check):
+    sql = (
+        "SELECT domain, regexp_extract(cs_uri_query,'action=([A-Za-z_.]+)',1) akce, "
+        "(cs_uri_query LIKE '%\\%27%' ESCAPE '\\' OR "
+        "cs_uri_query LIKE '%\\%2F\\%2A%' ESCAPE '\\' OR "
+        "cs_uri_query LIKE '%library_version=%.&%' ESCAPE '\\') payload, "
+        "sc_status, sc_bytes, count(*) n FROM wdt "
+        "WHERE time_local LIKE '28/Sep/2026:%' AND c_ip='89.163.154.141' "
+        "GROUP BY ALL ORDER BY akce, payload, sc_status"
+    )
+    command = f'duckdb -readonly -csv server-logs/ferda7/ferda7.db "{sql}"'
+
+    assert is_approved(check(command))
+
+
+def test_shell_decoding_does_not_hide_sql_write(check):
+    assert needs_confirmation(
+        check('duckdb -readonly data.db "SELECT 1; \\INSTALL httpfs"')
+    )

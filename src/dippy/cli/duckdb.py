@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 
 from dippy.cli import Classification, HandlerContext
-from dippy.core.sql import _skip_cte, is_readonly_sql
+from dippy.core.sql import is_readonly_sql, split_sql_statements
 
 COMMANDS = ["duckdb"]
 
@@ -24,104 +24,39 @@ _DUCKDB_WRITE = frozenset(
     }
 )
 
-_EXTERNAL_COMMANDS = frozenset({"COPY", "EXPORT", "IMPORT", "INSTALL", "LOAD"})
 
-
-def _literal_shell_word(raw: str) -> bool:
-    """Accept only one plain shell word with no concatenated quoting."""
-    if len(raw) >= 2 and raw[0] in "'\"" and raw[-1] == raw[0]:
-        quote = raw[0]
-        inner = raw[1:-1]
-        if quote == "'":
-            return "'" not in inner
-        return not any(char in inner for char in '"\\$`')
-    return not any(char in raw for char in "'\"\\$`")
-
-
-def _strip_duckdb_quoted(sql: str) -> str | None:
-    """Blank DuckDB literals and comments; return None for ambiguous quoting."""
-    if "\r" in sql:
-        return None
-    stripped = list(sql)
+def _decode_shell_word(raw: str) -> str | None:
+    """Apply Bash quote removal to a literal word; reject shell expansion."""
+    output: list[str] = []
+    quote = ""
     i = 0
-    while i < len(sql):
-        if sql.startswith("--", i):
-            end = i + 2
-            while end < len(sql) and sql[end] not in "\r\n":
-                end += 1
-        elif sql.startswith("/*", i):
-            end = sql.find("*/", i + 2)
-            if end < 0 or "/*" in sql[i + 2 : end]:
-                return None
-            end += 2
-        elif sql[i] in "'\"":
-            quote = sql[i]
-            if quote == "'" and i > 0 and sql[i - 1] in "Ee":
-                return None
-            end = i + 1
-            while end < len(sql):
-                if sql[end] == "\\":
-                    return None
-                if sql[end] == quote:
-                    if end + 1 < len(sql) and sql[end + 1] == quote:
-                        end += 2
-                        continue
-                    end += 1
-                    break
-                end += 1
+    while i < len(raw):
+        char = raw[i]
+        if quote == "'":
+            if char == "'":
+                quote = ""
             else:
-                return None
-        elif sql[i] == "$":
-            if i > 0 and (sql[i - 1].isalnum() or sql[i - 1] in "_$"):
-                return None
-            delimiter = re.match(r"\$(?:[A-Za-z_]\w*)?\$", sql[i:])
-            if not delimiter:
-                return None
-            end = sql.find(delimiter.group(), i + delimiter.end())
-            if end < 0:
-                return None
-            end += delimiter.end()
-        elif sql[i] in "[]":
-            # DuckDB uses brackets for lists and indexing, not quoted names.
-            stripped[i] = " "
-            i += 1
-            continue
-        elif sql[i] == "`":
+                output.append(char)
+        elif char == quote and quote:
+            quote = ""
+        elif char in "'\"" and not quote:
+            quote = char
+        elif char in "$`":
             return None
+        elif char == "\\":
+            if i + 1 >= len(raw):
+                return None
+            following = raw[i + 1]
+            if quote == '"' and following not in '"\\$`\n':
+                output.append(char)
+            else:
+                if following != "\n":
+                    output.append(following)
+                i += 1
         else:
-            i += 1
-            continue
-        stripped[i:end] = " " * (end - i)
-        i = end
-    return "".join(stripped)
-
-
-def _needs_external_approval(sql: str) -> bool:
-    """Find executable DuckDB commands without matching words in SQL data."""
-    for statement in sql.split(";"):
-        match = re.match(r"\s*([A-Za-z_]\w*)", statement)
-        if not match:
-            continue
-        keyword = match.group(1).upper()
-        if keyword == "WITH":
-            match = re.match(
-                r"([A-Za-z_]\w*)", statement[_skip_cte(statement, match.end()) :]
-            )
-            if not match:
-                return True
-            keyword = match.group(1).upper()
-        if keyword == "EXPLAIN":
-            # ANALYZE executes the explained statement; plain EXPLAIN stays on ask
-            # when it names an external command, matching the old project guard.
-            if re.search(
-                r"\bANALYZE\b|\b(?:COPY|EXPORT|IMPORT|INSTALL|LOAD)\b", statement, re.I
-            ):
-                return True
-        if keyword in _EXTERNAL_COMMANDS:
-            return True
-        if keyword == "ATTACH" and not re.search(r"\bREAD_ONLY\b", statement, re.I):
-            return True
-    return False
+            output.append(char)
+        i += 1
+    return "".join(output) if not quote else None
 
 
 _LOCAL_WRITE = re.compile(
@@ -138,14 +73,14 @@ _LOCAL_WRITE = re.compile(
 
 def _writes_only_to_main_database(sql: str) -> bool:
     """Return whether every statement is read-only or writes only main DB state."""
-    statements = [
-        statement.strip() for statement in sql.split(";") if statement.strip()
-    ]
+    statements = split_sql_statements(sql, bracket_identifiers=False)
     if not statements:
         return False
 
     for statement in statements:
-        readonly = is_readonly_sql(statement, extra_write=_DUCKDB_WRITE)
+        readonly = is_readonly_sql(
+            statement, extra_write=_DUCKDB_WRITE, bracket_identifiers=False
+        )
         if readonly is True:
             continue
         if re.match(r"^ATTACH(?:\s+DATABASE)?\b", statement, re.IGNORECASE):
@@ -154,22 +89,10 @@ def _writes_only_to_main_database(sql: str) -> bool:
             ):
                 continue
             return False
-        if readonly is False and _LOCAL_WRITE.match(statement):
+        if readonly is False and _LOCAL_WRITE.match(statement.strip()):
             continue
         return False
     return True
-
-
-def _all_readonly_statements(sql: str) -> bool:
-    """Require every nonempty SQL statement to be independently read-only."""
-    statements = sql.split(";")
-    if any(not statement.strip() for statement in statements[:-1]):
-        return False
-    return all(
-        is_readonly_sql(statement, extra_write=_DUCKDB_WRITE) is True
-        for statement in statements
-        if statement.strip()
-    ) and any(statement.strip() for statement in statements)
 
 
 def classify(ctx: HandlerContext) -> Classification:
@@ -270,27 +193,20 @@ def classify(ctx: HandlerContext) -> Classification:
         return Classification("ask", description="duckdb (interactive)")
 
     if len(ctx.raw_words) != len(tokens) or any(
-        not _literal_shell_word(ctx.raw_words[i])
-        or (ctx.word_has_expansions and ctx.word_has_expansions[i])
-        for i in sql_indices
+        ctx.word_has_expansions and ctx.word_has_expansions[i] for i in sql_indices
     ):
         return Classification("ask", description="duckdb (ambiguous shell quoting)")
-
-    # Quote state cannot safely span CLI arguments. Reject ambiguous fragments
-    # before a generic SQL classifier could hide later statements.
-    stripped_parts = [_strip_duckdb_quoted(part) for part in sql_parts]
-    if any(part is None for part in stripped_parts):
-        return Classification("ask", description="duckdb (ambiguous SQL quoting)")
+    sql_parts = [_decode_shell_word(ctx.raw_words[i]) for i in sql_indices]
+    if any(part is None for part in sql_parts):
+        return Classification("ask", description="duckdb (ambiguous shell quoting)")
     if any(part.lstrip().startswith(".") for part in sql_parts):
         return Classification("ask", description="duckdb (dot-command)")
     # Separate SQL arguments conservatively. A space can hide a later write
     # behind an initial SELECT during statement classification.
-    sql = ";\n".join(part for part in stripped_parts if part is not None)
-
-    if _needs_external_approval(sql):
-        return Classification("ask", description="duckdb (external operation)")
-
-    readonly = _all_readonly_statements(sql)
+    sql = ";\n".join(part for part in sql_parts if part is not None)
+    readonly = is_readonly_sql(
+        sql, extra_write=_DUCKDB_WRITE, allow_multiple=True, bracket_identifiers=False
+    )
     if "-readonly" in tokens or "-safe" in tokens:
         if readonly:
             return Classification("allow", description="duckdb (read-only query)")
@@ -305,7 +221,7 @@ def classify(ctx: HandlerContext) -> Classification:
             description="duckdb (database write)",
             redirect_targets=(filename,),
         )
-    if is_readonly_sql(sql, extra_write=_DUCKDB_WRITE) is False:
+    if readonly is False:
         return Classification("ask", description="duckdb (write query)")
     # Unknown - ask
     return Classification("ask", description="duckdb (unknown query)")

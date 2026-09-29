@@ -201,6 +201,26 @@ class TestMultipleStatements:
         sql = "SELECT * FROM users; DELETE FROM users"
         assert is_readonly_sql(sql) is None
 
+    def test_verified_batch(self):
+        assert is_readonly_sql("SELECT 1; SELECT 2", allow_multiple=True) is True
+
+    def test_batch_with_write(self):
+        assert (
+            is_readonly_sql("SELECT 1; DELETE FROM users", allow_multiple=True) is False
+        )
+
+    def test_batch_with_semicolon_in_literal(self):
+        assert is_readonly_sql("SELECT ';'; SELECT 2", allow_multiple=True) is True
+
+    def test_trailing_comment_after_semicolon(self):
+        assert is_readonly_sql("SELECT 1; -- done", allow_multiple=True) is True
+
+    def test_bracket_list_cannot_hide_later_statement(self):
+        sql = "SELECT [']']; INSTALL httpfs; --'"
+        assert (
+            is_readonly_sql(sql, allow_multiple=True, bracket_identifiers=False) is None
+        )
+
     def test_trailing_semicolon_ok(self):
         # Single statement with trailing semicolon is fine
         sql = "SELECT * FROM users;"
@@ -365,6 +385,12 @@ class TestExplainVariants:
 
     def test_explain_plan(self):
         assert is_readonly_sql("EXPLAIN PLAN FOR SELECT * FROM users") is True
+
+    def test_explain_analyze_write(self):
+        assert is_readonly_sql("EXPLAIN ANALYZE INSERT INTO t VALUES (1)") is False
+
+    def test_explain_analyze_write_after_newline(self):
+        assert is_readonly_sql("EXPLAIN ANALYZE\nINSERT INTO t VALUES (1)") is False
 
 
 class TestAthenaDialect:
