@@ -207,3 +207,65 @@ def test_shell_decoding_does_not_hide_sql_write(check):
     assert needs_confirmation(
         check('duckdb -readonly data.db "SELECT 1; \\INSTALL httpfs"')
     )
+
+
+def test_readonly_batch_with_temp_table_and_select(check):
+    sql = (
+        "CREATE TEMP TABLE n AS SELECT unnest(['200.162.155','151.240.46']) net; "
+        "WITH a AS (SELECT 'access' t, rid, time_local, c_ip FROM access "
+        "WHERE time_local LIKE '29/Sep/2026:%') "
+        "SELECT t, count(DISTINCT rid) FILTER (WHERE "
+        "regexp_extract(c_ip,'^(\\d+\\.\\d+\\.\\d+)\\.',1) "
+        "IN (SELECT net FROM n)) flood_req FROM a GROUP BY ALL"
+    )
+
+    assert is_approved(check(f'duckdb -readonly -csv data.db "{sql}"'))
+
+
+def test_readonly_select_with_literal_regex_dollar(check):
+    sql = (
+        "SELECT DISTINCT ON (rid) regexp_extract(domain,'([^ ]+)$',1) dom "
+        "FROM access WHERE time_local LIKE '29/Sep/2026:%'"
+    )
+
+    assert is_approved(check(f'duckdb -readonly -csv data.db "{sql}"'))
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "CREATE TABLE n AS SELECT 1; SELECT * FROM n",
+        "CREATE TEMP TABLE main.n AS SELECT 1; SELECT * FROM n",
+        "CREATE TEMP TABLE n (id INT); SELECT * FROM n",
+        "CREATE TEMP TABLE n AS DELETE FROM data; SELECT * FROM n",
+        "CREATE TEMP TABLE n AS SELECT 1; COPY (SELECT 1) TO '/tmp/out.csv'",
+        "CREATE TEMP TABLE n AS SELECT 1; INSTALL httpfs",
+    ],
+)
+def test_readonly_temp_table_batch_rejects_writes(check, sql):
+    assert needs_confirmation(check(f'duckdb -readonly -csv data.db "{sql}"'))
+
+
+@pytest.mark.parametrize(
+    "expansion",
+    [
+        "$(touch /tmp/dippy-bypass)",
+        "$((1+2))",
+        "${HOME}",
+        "$[1+2]",
+        "$HOME",
+        "$0",
+        "$_",
+        "$$",
+        "$?",
+        "$!",
+        "$@",
+        "$*",
+        "$#",
+        "$-",
+    ],
+)
+def test_readonly_sql_rejects_shell_expansion(check, expansion):
+    assert needs_confirmation(
+        check(f"duckdb -readonly data.db \"SELECT '{expansion}'\"")
+    )

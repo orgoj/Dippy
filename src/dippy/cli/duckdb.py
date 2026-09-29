@@ -41,7 +41,14 @@ def _decode_shell_word(raw: str) -> str | None:
             quote = ""
         elif char in "'\"" and not quote:
             quote = char
-        elif char in "$`":
+        elif char == "$":
+            if quote != '"' or (
+                i + 1 < len(raw)
+                and (raw[i + 1].isalnum() or raw[i + 1] in "_({[*@#?-$!")
+            ):
+                return None
+            output.append(char)
+        elif char == "`":
             return None
         elif char == "\\":
             if i + 1 >= len(raw):
@@ -205,7 +212,11 @@ def classify(ctx: HandlerContext) -> Classification:
     # behind an initial SELECT during statement classification.
     sql = ";\n".join(part for part in sql_parts if part is not None)
     readonly = is_readonly_sql(
-        sql, extra_write=_DUCKDB_WRITE, allow_multiple=True, bracket_identifiers=False
+        sql,
+        extra_write=_DUCKDB_WRITE,
+        allow_multiple=True,
+        allow_temp_tables="-readonly" in tokens or "-safe" in tokens,
+        bracket_identifiers=False,
     )
     if "-readonly" in tokens or "-safe" in tokens:
         if readonly:

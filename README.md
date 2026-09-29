@@ -28,7 +28,7 @@
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **`cp`/`mv` through redirect rules** — destinations (and `mv` sources, which get removed) are checked against `allow-redirect`/`ask-redirect`/`deny-redirect`, so `deny-redirect **/.dippy` also stops `mv .dippy /tmp/saved`
-- **DuckDB writes through redirect rules** — writes to the main database follow `allow-redirect`; file exports and extension commands require approval even with `-readonly`. DuckDB passes shell-decoded SQL to the shared SQL checker, which handles quoted strings and read-only statement batches.
+- **DuckDB writes through redirect rules** — writes to the main database follow `allow-redirect`; file exports and extension commands require approval even with `-readonly`. DuckDB passes shell-decoded SQL to the shared SQL checker, which handles quoted strings, literal regex anchors, read-only statement batches, and verified temporary table creation under `-readonly` or `-safe`.
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Notifier (Sidekick)** — `set notifier-command "CMD"` for external notifications (mail check). Supports long-polling via `--idle` in stop hooks. Use `set notifier-include "tool1, tool2"` to limit when it triggers.
 - **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input

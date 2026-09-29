@@ -26,6 +26,11 @@ _WRITE_KEYWORDS = frozenset(
         "REPLACE",
     }
 )
+_TEMP_TABLE_AS_SELECT = re.compile(
+    r"CREATE\s+(?:OR\s+REPLACE\s+)?TEMP(?:ORARY)?\s+TABLE\s+"
+    r"(?:IF\s+NOT\s+EXISTS\s+)?(?:temp\.)?[A-Za-z_]\w*\s+AS\s+",
+    re.IGNORECASE,
+)
 
 
 def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:
@@ -186,6 +191,7 @@ def is_readonly_sql(
     extra_readonly: frozenset[str] = frozenset(),
     extra_write: frozenset[str] = frozenset(),
     allow_multiple: bool = False,
+    allow_temp_tables: bool = False,
     bracket_identifiers: bool = True,
 ) -> bool | None:
     """
@@ -196,6 +202,7 @@ def is_readonly_sql(
         extra_readonly: Additional keywords to treat as read-only (dialect-specific).
         extra_write: Additional keywords to treat as write operations (dialect-specific).
         allow_multiple: Verify every statement in a batch independently.
+        allow_temp_tables: Verify session-local CREATE TEMP TABLE AS SELECT.
         bracket_identifiers: Interpret brackets as SQL Server quoted identifiers.
 
     Returns:
@@ -217,6 +224,7 @@ def is_readonly_sql(
                 statement,
                 extra_readonly=extra_readonly,
                 extra_write=extra_write,
+                allow_temp_tables=allow_temp_tables,
                 bracket_identifiers=bracket_identifiers,
             )
             for statement in statements
@@ -229,6 +237,21 @@ def is_readonly_sql(
     stripped = _mask_sql(statements[0], bracket_identifiers=bracket_identifiers)
     if stripped is None:
         return None
+
+    if allow_temp_tables:
+        match = _TEMP_TABLE_AS_SELECT.match(stripped.lstrip())
+        if match:
+            offset = len(stripped) - len(stripped.lstrip())
+            query = statements[0][offset + match.end() :]
+            query_start = stripped[offset + match.end() :].lstrip()
+            if not re.match(r"(?:SELECT|WITH)\b", query_start, re.IGNORECASE):
+                return False
+            return is_readonly_sql(
+                query,
+                extra_readonly=extra_readonly,
+                extra_write=extra_write,
+                bracket_identifiers=bracket_identifiers,
+            )
 
     readonly_keywords = _READONLY_KEYWORDS | extra_readonly
     write_keywords = _WRITE_KEYWORDS | extra_write

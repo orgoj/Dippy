@@ -331,7 +331,7 @@ toml = [
 
 [[package]]
 name = "dippy"
-version = "0.3.16"
+version = "0.3.17"
 source = { editable = "." }
 
 [package.optional-dependencies]

@@ -3,6 +3,19 @@
 from dippy.core.sql import is_readonly_sql
 
 
+def test_temp_table_as_select_is_readonly_only_when_enabled():
+    sql = "CREATE TEMP TABLE n AS SELECT 1; SELECT * FROM n"
+
+    assert is_readonly_sql(sql, allow_multiple=True) is False
+    assert is_readonly_sql(sql, allow_multiple=True, allow_temp_tables=True) is True
+
+
+def test_temp_table_embedded_write_is_rejected():
+    sql = "CREATE TEMP TABLE n AS DELETE FROM data; SELECT * FROM n"
+
+    assert is_readonly_sql(sql, allow_multiple=True, allow_temp_tables=True) is False
+
+
 class TestBasicReadOnly:
     """Basic read-only statements."""
 
