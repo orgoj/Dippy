@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dippy.cli import Classification, HandlerContext
+from dippy.cli.sql_args import literal_sql_arg
 from dippy.core.sql import is_readonly_sql
 
 COMMANDS = ["sqlcmd"]
@@ -14,8 +15,9 @@ _SAFE_SUBCOMMANDS = frozenset({"config", "open", "help", "completion"})
 _UNSAFE_SUBCOMMANDS = frozenset({"create", "install", "delete", "start", "stop"})
 
 
-def _extract_query_sql(tokens: list[str]) -> str | None:
+def _extract_query_sql(ctx: HandlerContext) -> str | None:
     """Extract SQL from query subcommand."""
+    tokens = ctx.tokens
     # Find 'query' subcommand
     try:
         query_idx = tokens.index("query")
@@ -28,7 +30,7 @@ def _extract_query_sql(tokens: list[str]) -> str | None:
         token = tokens[i]
         # Check for flag options
         if token in ("-q", "--query", "-t", "--text") and i + 1 < len(tokens):
-            return tokens[i + 1]
+            return literal_sql_arg(ctx, i + 1)
         if token in ("-d", "--database", "-h", "--help"):
             i += 2 if token in ("-d", "--database") else 1
             continue
@@ -36,7 +38,7 @@ def _extract_query_sql(tokens: list[str]) -> str | None:
             i += 1
             continue
         # This should be the SQL text (positional argument)
-        return token
+        return literal_sql_arg(ctx, i)
     return None
 
 
@@ -67,11 +69,11 @@ def classify(ctx: HandlerContext) -> Classification:
 
     # Query subcommand - analyze SQL
     if subcommand == "query":
-        sql = _extract_query_sql(tokens)
+        sql = _extract_query_sql(ctx)
         if sql is None:
             return Classification("ask", description="sqlcmd query (no SQL)")
 
-        readonly = is_readonly_sql(sql)
+        readonly = is_readonly_sql(sql, dialect="tsql")
         if readonly is True:
             return Classification("allow", description="sqlcmd query (read-only)")
         if readonly is False:

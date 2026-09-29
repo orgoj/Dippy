@@ -6,6 +6,11 @@ Provides dialect-agnostic detection of read-only vs write SQL statements.
 from __future__ import annotations
 
 import re
+from collections import Counter
+
+import sqlglot
+from sqlglot import exp
+from sqlglot.errors import ParseError, UnsupportedError
 
 _WHITESPACE_PATTERN = re.compile(r"\s+")
 _KEYWORD_PATTERN = re.compile(r"[A-Za-z_]\w*")
@@ -31,6 +36,172 @@ _TEMP_TABLE_AS_SELECT = re.compile(
     r"(?:IF\s+NOT\s+EXISTS\s+)?(?:temp\.)?[A-Za-z_]\w*\s+AS\s+",
     re.IGNORECASE,
 )
+_UNSAFE_TOKENS = frozenset(
+    {
+        "ALTER",
+        "ATTACH",
+        "CALL",
+        "COPY",
+        "CREATE",
+        "DELETE",
+        "DETACH",
+        "DROP",
+        "DUMPFILE",
+        "EXECUTE",
+        "EXPORT",
+        "GRANT",
+        "IMPORT",
+        "INSERT",
+        "INSTALL",
+        "INTO",
+        "KILL",
+        "LOAD",
+        "MERGE",
+        "OUTFILE",
+        "PRAGMA",
+        "REINDEX",
+        "REPLACE",
+        "REVOKE",
+        "TRUNCATE",
+        "UNLOAD",
+        "UPDATE",
+        "VACUUM",
+    }
+)
+_MAIN_WRITE_PREFIXES = {
+    "CREATE": (exp.Create, frozenset({"CREATE", "REPLACE"})),
+    "INSERT": (exp.Insert, frozenset({"INSERT", "INTO"})),
+    "UPDATE": (exp.Update, frozenset({"UPDATE"})),
+    "DELETE": (exp.Delete, frozenset({"DELETE"})),
+    "DROP": (exp.Drop, frozenset({"DROP"})),
+    "ALTER": (exp.Alter, frozenset({"ALTER"})),
+    "TRUNCATE": (exp.TruncateTable, frozenset({"TRUNCATE"})),
+}
+
+
+def _semantic_words(masked: str) -> Counter[str]:
+    """Count words except function names, which dialect generators may rename."""
+    words: Counter[str] = Counter()
+    for match in _KEYWORD_PATTERN.finditer(masked):
+        if masked[match.end() :].lstrip().startswith("("):
+            continue
+        words[match.group().upper()] += 1
+    return words
+
+
+def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
+    """Require a complete read-only query tree, not just a SELECT prefix."""
+    parser_dialect = dialect or ("mysql" if "`" in sql else None)
+    masked = _mask_sql(sql, bracket_identifiers=dialect != "duckdb")
+    if masked is None:
+        return None
+    words = _semantic_words(masked)
+    if words.keys() & _UNSAFE_TOKENS:
+        return False
+    try:
+        statements = sqlglot.parse(sql, read=parser_dialect, error_level="RAISE")
+        if len(statements) != 1 or statements[0] is None:
+            return None
+        tree = statements[0]
+        if not isinstance(
+            tree, (exp.Select, exp.Union, exp.Intersect, exp.Except, exp.Values)
+        ):
+            return None
+        if any(
+            isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.Anonymous))
+            for node in tree.walk()
+        ):
+            return False
+        regenerated = tree.sql(dialect=parser_dialect)
+    except (ParseError, UnsupportedError, ValueError):
+        return None
+    regenerated_masked = _mask_sql(regenerated, bracket_identifiers=dialect != "duckdb")
+    if regenerated_masked is None:
+        return None
+    regenerated_words = _semantic_words(regenerated_masked)
+    if words - regenerated_words:
+        return None
+    return True
+
+
+def _main_table_target(node: exp.Expression) -> bool:
+    """Check that a mutation target belongs to the invoked database."""
+    if isinstance(node, exp.Schema):
+        node = node.this
+    if isinstance(node, exp.Index):
+        node = node.args.get("table")
+    if not isinstance(node, exp.Table) or node.catalog:
+        return False
+    return not node.db or node.db.lower() == "main"
+
+
+def _verified_main_write(statement: str) -> bool:
+    masked = _mask_sql(statement, bracket_identifiers=False)
+    if masked is None:
+        return False
+    words = _semantic_words(masked)
+    first = _KEYWORD_PATTERN.match(masked.lstrip())
+    if first is None:
+        return False
+    root_keyword = first.group().upper()
+    root = _MAIN_WRITE_PREFIXES.get(root_keyword)
+    if root is None:
+        return False
+    expected_type, allowed_tokens = root
+    if words.keys() & (_UNSAFE_TOKENS - allowed_tokens):
+        return False
+    try:
+        tree = sqlglot.parse_one(statement, read="duckdb", error_level="RAISE")
+        if type(tree) is not expected_type:
+            return False
+        if isinstance(tree, (exp.Create, exp.Drop, exp.Alter)) and tree.args.get(
+            "kind"
+        ) not in {"TABLE", "VIEW", "INDEX"}:
+            return False
+        if isinstance(tree, exp.TruncateTable):
+            if not tree.expressions or not all(
+                _main_table_target(table) for table in tree.expressions
+            ):
+                return False
+        elif not _main_table_target(tree.this):
+            return False
+        if any(
+            isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.Anonymous))
+            for node in tree.walk()
+            if node is not tree
+        ):
+            return False
+        source = tree.args.get("expression")
+        if isinstance(source, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
+            if _verify_query_ast(source.sql(dialect="duckdb"), "duckdb") is not True:
+                return False
+        regenerated = tree.sql(dialect="duckdb")
+    except (ParseError, UnsupportedError, ValueError):
+        return False
+    regenerated_masked = _mask_sql(regenerated, bracket_identifiers=False)
+    return bool(
+        regenerated_masked is not None
+        and not words - _semantic_words(regenerated_masked)
+    )
+
+
+def duckdb_writes_only_main(sql: str) -> bool:
+    """Verify each DuckDB statement reads or mutates only the main database."""
+    statements = split_sql_statements(sql, bracket_identifiers=False)
+    if not statements:
+        return False
+    for statement in statements:
+        if is_readonly_sql(statement, dialect="duckdb", bracket_identifiers=False):
+            continue
+        if re.match(r"^ATTACH(?:\s+DATABASE)?\b", statement, re.IGNORECASE):
+            if re.search(
+                r"\(\s*[^()]*\bREAD_ONLY\b[^()]*\)\s*$", statement, re.IGNORECASE
+            ):
+                continue
+            return False
+        if not _verified_main_write(statement):
+            return False
+    return True
 
 
 def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:
@@ -193,6 +364,7 @@ def is_readonly_sql(
     allow_multiple: bool = False,
     allow_temp_tables: bool = False,
     bracket_identifiers: bool = True,
+    dialect: str | None = None,
 ) -> bool | None:
     """
     Determine if a SQL statement is read-only.
@@ -204,6 +376,7 @@ def is_readonly_sql(
         allow_multiple: Verify every statement in a batch independently.
         allow_temp_tables: Verify session-local CREATE TEMP TABLE AS SELECT.
         bracket_identifiers: Interpret brackets as SQL Server quoted identifiers.
+        dialect: SQLGlot source dialect for structural verification.
 
     Returns:
         True: Statement is definitely read-only (safe to auto-approve).
@@ -213,7 +386,8 @@ def is_readonly_sql(
     Notes:
         - Multiple statements return None unless allow_multiple is enabled.
         - CTEs (WITH ... AS) are handled by analyzing the main statement.
-        - Side-effect functions (e.g., SQLite's writefile) are NOT detected.
+        - Unknown functions ask; named database functions may still have effects
+          that cannot be inferred from SQL syntax alone.
     """
     statements = split_sql_statements(sql, bracket_identifiers=bracket_identifiers)
     if statements is None or (len(statements) > 1 and not allow_multiple):
@@ -226,6 +400,7 @@ def is_readonly_sql(
                 extra_write=extra_write,
                 allow_temp_tables=allow_temp_tables,
                 bracket_identifiers=bracket_identifiers,
+                dialect=dialect,
             )
             for statement in statements
         ]
@@ -246,11 +421,29 @@ def is_readonly_sql(
             query_start = stripped[offset + match.end() :].lstrip()
             if not re.match(r"(?:SELECT|WITH)\b", query_start, re.IGNORECASE):
                 return False
+            try:
+                created = sqlglot.parse_one(
+                    statements[0], read=dialect, error_level="RAISE"
+                )
+            except (ParseError, ValueError):
+                return None
+            if (
+                not isinstance(created, exp.Create)
+                or created.args.get("kind") != "TABLE"
+            ):
+                return None
+            properties = created.args.get("properties")
+            if not properties or not any(
+                isinstance(prop, exp.TemporaryProperty)
+                for prop in properties.expressions
+            ):
+                return None
             return is_readonly_sql(
                 query,
                 extra_readonly=extra_readonly,
                 extra_write=extra_write,
                 bracket_identifiers=bracket_identifiers,
+                dialect=dialect,
             )
 
     readonly_keywords = _READONLY_KEYWORDS | extra_readonly
@@ -268,28 +461,33 @@ def is_readonly_sql(
         if kw == "WITH":
             pos = _skip_cte(stripped, m.end())
             continue
+        if kw in {"FROM", "VALUES"} and dialect == "duckdb":
+            return _verify_query_ast(statements[0], dialect)
         if kw == "SELECT":
             # Check for SELECT INTO (write operation)
             if _check_select_into(stripped, m.end()):
                 return False
-            return True
+            return _verify_query_ast(statements[0], dialect)
         if kw == "EXPLAIN":
-            rest = stripped[m.end() :].lstrip()
+            rest = statements[0][m.end() :].lstrip()
             analyze = re.match(r"ANALYZE\b", rest, re.IGNORECASE)
             if analyze:
-                return is_readonly_sql(
-                    rest[analyze.end() :],
-                    extra_readonly=extra_readonly,
-                    extra_write=extra_write,
-                    bracket_identifiers=bracket_identifiers,
-                )
-            if any(
-                re.search(rf"\b{re.escape(word)}\b", rest, re.IGNORECASE)
-                for word in extra_write
-            ):
-                return None
-            return True
+                rest = rest[analyze.end() :].lstrip()
+            plan = re.match(r"PLAN\s+FOR\b", rest, re.IGNORECASE)
+            if plan:
+                rest = rest[plan.end() :].lstrip()
+            return is_readonly_sql(
+                rest,
+                extra_readonly=extra_readonly,
+                extra_write=extra_write,
+                bracket_identifiers=bracket_identifiers,
+                dialect=dialect,
+            )
         if kw in readonly_keywords:
+            if kw in {"SHOW", "DESCRIBE"} and (
+                _semantic_words(stripped).keys() & _UNSAFE_TOKENS
+            ):
+                return False
             return True
         if kw in write_keywords:
             return False

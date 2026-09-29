@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from dippy.cli import Classification, HandlerContext
+from dippy.cli.sql_args import literal_sql_arg
 from dippy.core.sql import is_readonly_sql
 
 COMMANDS = ["sqlite3"]
@@ -20,10 +21,6 @@ def classify(ctx: HandlerContext) -> Classification:
     if any(t in ("-help", "--help", "-version") for t in tokens):
         return Classification("allow", description="sqlite3 help/version")
 
-    # Check for -readonly or -safe flags - always safe
-    if "-readonly" in tokens or "-safe" in tokens:
-        return Classification("allow", description="sqlite3 (read-only mode)")
-
     # Check for -init (runs a script file - unknown content)
     if "-init" in tokens:
         return Classification("ask", description="sqlite3 (init script)")
@@ -31,7 +28,7 @@ def classify(ctx: HandlerContext) -> Classification:
     # Extract SQL from command line
     # sqlite3 [OPTIONS] [FILENAME [SQL...]]
     # Also check -cmd COMMAND
-    sql_parts: list[str] = []
+    sql_indices: list[int] = []
     i = 1
     filename_seen = False
     while i < len(tokens):
@@ -87,7 +84,7 @@ def classify(ctx: HandlerContext) -> Classification:
             "-A",
         ):
             if token == "-cmd" and i + 1 < len(tokens):
-                sql_parts.append(tokens[i + 1])
+                sql_indices.append(i + 1)
             i += 2
             continue
         # -lookaside takes TWO arguments: SIZE N
@@ -105,18 +102,22 @@ def classify(ctx: HandlerContext) -> Classification:
             i += 1
             continue
         # Everything after filename is SQL
-        sql_parts.append(token)
+        sql_indices.append(i)
         i += 1
 
     # No SQL found - interactive mode
-    if not sql_parts:
+    if not sql_indices:
         return Classification("ask", description="sqlite3 (interactive)")
 
-    # Combine SQL parts (multiple arguments are separate statements)
-    sql = " ".join(sql_parts)
+    sql_parts = [literal_sql_arg(ctx, i) for i in sql_indices]
+    if any(part is None for part in sql_parts):
+        return Classification("ask", description="sqlite3 (ambiguous SQL argument)")
+    if any(part.lstrip().startswith(".") for part in sql_parts if part is not None):
+        return Classification("ask", description="sqlite3 (dot-command)")
+    sql = ";\n".join(part for part in sql_parts if part is not None)
 
     # Analyze SQL
-    readonly = is_readonly_sql(sql, extra_write=_SQLITE_WRITE)
+    readonly = is_readonly_sql(sql, extra_write=_SQLITE_WRITE, dialect="sqlite")
     if readonly is True:
         return Classification("allow", description="sqlite3 (read-only query)")
     if readonly is False:

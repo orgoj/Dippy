@@ -3,6 +3,50 @@
 from dippy.core.sql import is_readonly_sql
 
 
+def test_mysql_select_into_outfile_is_not_readonly():
+    assert (
+        is_readonly_sql("SELECT * FROM t INTO OUTFILE '/tmp/output'", dialect="mysql")
+        is False
+    )
+
+
+def test_postgres_modifying_cte_is_not_readonly():
+    sql = "WITH changed AS (DELETE FROM t RETURNING *) SELECT * FROM changed"
+
+    assert is_readonly_sql(sql, dialect="postgres") is False
+
+
+def test_sqlite_side_effect_function_is_not_verified_readonly():
+    assert is_readonly_sql("SELECT writefile('x', 'data')", dialect="sqlite") is False
+
+
+def test_sql_keywords_in_literals_do_not_change_readonly_result():
+    assert is_readonly_sql("SELECT 'DROP INTO OUTFILE'", dialect="mysql") is True
+
+
+def test_unparsed_sql_fragment_is_not_verified_readonly():
+    assert (
+        is_readonly_sql("SELECT * FROM t INTO OUTFILE path", dialect="mysql") is False
+    )
+
+
+def test_silently_dropped_sql_tokens_are_not_verified_readonly():
+    assert is_readonly_sql("SELECT 1 FOO BAR", dialect="mysql") is None
+
+
+def test_dynamic_sql_function_is_not_verified_readonly():
+    assert is_readonly_sql("SELECT query('DELETE FROM t')", dialect="duckdb") is False
+
+
+def test_show_with_output_sink_is_not_readonly():
+    assert is_readonly_sql("SHOW TABLES INTO OUTFILE x", dialect="mysql") is False
+
+
+def test_duckdb_read_only_shorthand_forms():
+    assert is_readonly_sql("FROM t", dialect="duckdb") is True
+    assert is_readonly_sql("VALUES (1), (2)", dialect="duckdb") is True
+
+
 def test_temp_table_as_select_is_readonly_only_when_enabled():
     sql = "CREATE TEMP TABLE n AS SELECT 1; SELECT * FROM n"
 
@@ -388,13 +432,13 @@ class TestExplainVariants:
 
     def test_explain_insert(self):
         # EXPLAIN doesn't execute, so this is still safe
-        assert is_readonly_sql("EXPLAIN INSERT INTO t VALUES (1)") is True
+        assert is_readonly_sql("EXPLAIN INSERT INTO t VALUES (1)") is False
 
     def test_explain_delete(self):
-        assert is_readonly_sql("EXPLAIN DELETE FROM users") is True
+        assert is_readonly_sql("EXPLAIN DELETE FROM users") is False
 
     def test_explain_update(self):
-        assert is_readonly_sql("EXPLAIN UPDATE users SET x = 1") is True
+        assert is_readonly_sql("EXPLAIN UPDATE users SET x = 1") is False
 
     def test_explain_plan(self):
         assert is_readonly_sql("EXPLAIN PLAN FOR SELECT * FROM users") is True

@@ -1,6 +1,6 @@
 [project]
 name = "dippy"
-version = "0.3.17"
+version = "0.4.0"
 description = "Approval autopilot for Claude Code — stay in the flow by automatically allowing safe commands"
 readme = "README.md"
 license = { file = "LICENSE" }
@@ -22,7 +22,7 @@ classifiers = [
     "Programming Language :: Python :: 3.14",
     "Topic :: Software Development :: Build Tools",
 ]
-dependencies = []
+dependencies = ["sqlglot==26.31.1"]
 
 [project.urls]
 Homepage = "https://github.com/ldayton/Dippy"

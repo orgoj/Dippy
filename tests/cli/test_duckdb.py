@@ -121,6 +121,10 @@ def test_readonly_attach_and_writes_to_allowed_database(check, tmp_path):
         ),
         "duckdb tmp/work.db \"COPY (SELECT 1) TO '/etc/dippy-bypass'\"",
         "duckdb tmp/work.db 'DROP SECRET production_credentials'",
+        "duckdb tmp/work.db 'CREATE TABLE other_db.t AS SELECT 1'",
+        "duckdb tmp/work.db 'INSERT INTO other_db.t SELECT 1'",
+        "duckdb tmp/work.db \"CREATE TABLE t AS SELECT query('COPY (SELECT 1) TO /tmp/out')\"",
+        "duckdb tmp/work.db \"CREATE TABLE t AS SELECT writefile('/tmp/out','x')\"",
     ],
 )
 def test_database_redirect_rule_does_not_allow_external_writes(
@@ -131,6 +135,20 @@ def test_database_redirect_rule_does_not_allow_external_writes(
     result = check(command, config, tmp_path)
 
     assert needs_confirmation(result)
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "CREATE TABLE main.t AS SELECT 1",
+        "INSERT INTO t SELECT 1",
+        "UPDATE t SET x = 1",
+    ],
+)
+def test_database_redirect_rule_allows_verified_main_writes(check, tmp_path, sql):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+
+    assert is_approved(check(f'duckdb tmp/work.db "{sql}"', config, tmp_path))
 
 
 @pytest.mark.parametrize(

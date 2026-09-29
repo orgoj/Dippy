@@ -3,6 +3,47 @@
 from __future__ import annotations
 
 
+def decode_literal_word(raw: str) -> str | None:
+    """Apply Bash quote removal to one word; reject shell expansion."""
+    output: list[str] = []
+    quote = ""
+    i = 0
+    while i < len(raw):
+        char = raw[i]
+        if quote == "'":
+            if char == "'":
+                quote = ""
+            else:
+                output.append(char)
+        elif char == quote and quote:
+            quote = ""
+        elif char in "'\"" and not quote:
+            quote = char
+        elif char == "$":
+            if quote != '"' or (
+                i + 1 < len(raw)
+                and (raw[i + 1].isalnum() or raw[i + 1] in "_({[*@#?-$!")
+            ):
+                return None
+            output.append(char)
+        elif char == "`":
+            return None
+        elif char == "\\":
+            if i + 1 >= len(raw):
+                return None
+            following = raw[i + 1]
+            if quote == '"' and following not in '"\\$`\n':
+                output.append(char)
+            else:
+                if following != "\n":
+                    output.append(following)
+                i += 1
+        else:
+            output.append(char)
+        i += 1
+    return "".join(output) if not quote else None
+
+
 def bash_quote(s: str) -> str:
     """Quote a string for safe use in bash.
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from dippy.cli import Classification, HandlerContext
+from dippy.cli.sql_args import literal_sql_arg
 from dippy.core.sql import is_readonly_sql
 
 COMMANDS = ["mysql"]
@@ -12,22 +13,18 @@ COMMANDS = ["mysql"]
 _MYSQL_WRITE = frozenset({"LOAD"})
 
 
-def _extract_execute_sql(tokens: list[str]) -> str | None:
+def _extract_execute_sql(ctx: HandlerContext) -> str | None:
     """Extract SQL from -e or --execute option."""
+    tokens = ctx.tokens
     i = 0
     while i < len(tokens):
         token = tokens[i]
         if token in ("-e", "--execute") and i + 1 < len(tokens):
-            return tokens[i + 1]
+            return literal_sql_arg(ctx, i + 1)
         if token.startswith("--execute="):
-            val = token[len("--execute=") :]
-            # Strip surrounding quotes if present
-            if len(val) >= 2 and val[0] in ("'", '"') and val[-1] == val[0]:
-                val = val[1:-1]
-            return val
+            return literal_sql_arg(ctx, i, prefix="--execute=")
         if token.startswith("-e") and len(token) > 2:
-            # -e'SQL' without space
-            return token[2:]
+            return literal_sql_arg(ctx, i, prefix="-e")
         i += 1
     return None
 
@@ -40,14 +37,14 @@ def classify(ctx: HandlerContext) -> Classification:
         return Classification("allow", description="mysql help/version")
 
     # Extract SQL from -e/--execute
-    sql = _extract_execute_sql(tokens)
+    sql = _extract_execute_sql(ctx)
 
     # No SQL found - interactive mode
     if sql is None:
         return Classification("ask", description="mysql (interactive)")
 
     # Analyze SQL
-    readonly = is_readonly_sql(sql, extra_write=_MYSQL_WRITE)
+    readonly = is_readonly_sql(sql, extra_write=_MYSQL_WRITE, dialect="mysql")
     if readonly is True:
         return Classification("allow", description="mysql (read-only query)")
     if readonly is False:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 
 from dippy.cli import Classification, HandlerContext
+from dippy.cli.sql_args import literal_sql_arg
 from dippy.core.sql import is_readonly_sql
 
 COMMANDS = ["psql"]
@@ -12,22 +13,19 @@ COMMANDS = ["psql"]
 _POSTGRES_WRITE = frozenset({"COPY", "VACUUM", "CLUSTER", "REINDEX", "ANALYZE"})
 
 
-def _extract_command_sql(tokens: list[str]) -> list[str]:
+def _extract_command_sql(ctx: HandlerContext) -> list[str | None]:
     """Extract SQL from -c or --command options. Returns list of SQL strings."""
-    sql_list: list[str] = []
+    tokens = ctx.tokens
+    sql_list: list[str | None] = []
     i = 0
     while i < len(tokens):
         token = tokens[i]
         if token in ("-c", "--command") and i + 1 < len(tokens):
-            sql_list.append(tokens[i + 1])
+            sql_list.append(literal_sql_arg(ctx, i + 1))
             i += 2
             continue
         if token.startswith("--command="):
-            val = token[len("--command=") :]
-            # Strip surrounding quotes if present
-            if len(val) >= 2 and val[0] in ("'", '"') and val[-1] == val[0]:
-                val = val[1:-1]
-            sql_list.append(val)
+            sql_list.append(literal_sql_arg(ctx, i, prefix="--command="))
             i += 1
             continue
         i += 1
@@ -60,7 +58,7 @@ def classify(ctx: HandlerContext) -> Classification:
         return Classification("ask", description="psql (file input)")
 
     # Extract SQL from -c/--command options
-    sql_list = _extract_command_sql(tokens)
+    sql_list = _extract_command_sql(ctx)
 
     # No SQL found - interactive mode
     if not sql_list:
@@ -68,7 +66,9 @@ def classify(ctx: HandlerContext) -> Classification:
 
     # Analyze all SQL commands - all must be read-only
     for sql in sql_list:
-        readonly = is_readonly_sql(sql, extra_write=_POSTGRES_WRITE)
+        if sql is None:
+            return Classification("ask", description="psql (ambiguous SQL argument)")
+        readonly = is_readonly_sql(sql, extra_write=_POSTGRES_WRITE, dialect="postgres")
         if readonly is False:
             return Classification("ask", description="psql (write query)")
         if readonly is None:

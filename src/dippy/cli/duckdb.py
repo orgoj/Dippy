@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import re
-
 from dippy.cli import Classification, HandlerContext
-from dippy.core.sql import is_readonly_sql, split_sql_statements
+from dippy.core.bash import decode_literal_word
+from dippy.core.sql import duckdb_writes_only_main, is_readonly_sql
 
 COMMANDS = ["duckdb"]
 
@@ -23,83 +22,6 @@ _DUCKDB_WRITE = frozenset(
         "LOAD",
     }
 )
-
-
-def _decode_shell_word(raw: str) -> str | None:
-    """Apply Bash quote removal to a literal word; reject shell expansion."""
-    output: list[str] = []
-    quote = ""
-    i = 0
-    while i < len(raw):
-        char = raw[i]
-        if quote == "'":
-            if char == "'":
-                quote = ""
-            else:
-                output.append(char)
-        elif char == quote and quote:
-            quote = ""
-        elif char in "'\"" and not quote:
-            quote = char
-        elif char == "$":
-            if quote != '"' or (
-                i + 1 < len(raw)
-                and (raw[i + 1].isalnum() or raw[i + 1] in "_({[*@#?-$!")
-            ):
-                return None
-            output.append(char)
-        elif char == "`":
-            return None
-        elif char == "\\":
-            if i + 1 >= len(raw):
-                return None
-            following = raw[i + 1]
-            if quote == '"' and following not in '"\\$`\n':
-                output.append(char)
-            else:
-                if following != "\n":
-                    output.append(following)
-                i += 1
-        else:
-            output.append(char)
-        i += 1
-    return "".join(output) if not quote else None
-
-
-_LOCAL_WRITE = re.compile(
-    r"^(?:"
-    r"CREATE\s+(?:OR\s+REPLACE\s+)?(?:TEMP(?:ORARY)?\s+)?"
-    r"(?:TABLE|VIEW|INDEX|SCHEMA|SEQUENCE|TYPE|MACRO)\b"
-    r"|(?:ALTER|DROP)\s+(?:TABLE|VIEW|INDEX|SCHEMA|SEQUENCE|TYPE|MACRO)\b"
-    r"|INSERT\b|UPDATE\b|DELETE\b|TRUNCATE\b|MERGE\b|REPLACE\b"
-    r"|VACUUM\b|DETACH\b"
-    r")",
-    re.IGNORECASE,
-)
-
-
-def _writes_only_to_main_database(sql: str) -> bool:
-    """Return whether every statement is read-only or writes only main DB state."""
-    statements = split_sql_statements(sql, bracket_identifiers=False)
-    if not statements:
-        return False
-
-    for statement in statements:
-        readonly = is_readonly_sql(
-            statement, extra_write=_DUCKDB_WRITE, bracket_identifiers=False
-        )
-        if readonly is True:
-            continue
-        if re.match(r"^ATTACH(?:\s+DATABASE)?\b", statement, re.IGNORECASE):
-            if re.search(
-                r"\(\s*[^()]*\bREAD_ONLY\b[^()]*\)\s*$", statement, re.IGNORECASE
-            ):
-                continue
-            return False
-        if readonly is False and _LOCAL_WRITE.match(statement.strip()):
-            continue
-        return False
-    return True
 
 
 def classify(ctx: HandlerContext) -> Classification:
@@ -203,7 +125,7 @@ def classify(ctx: HandlerContext) -> Classification:
         ctx.word_has_expansions and ctx.word_has_expansions[i] for i in sql_indices
     ):
         return Classification("ask", description="duckdb (ambiguous shell quoting)")
-    sql_parts = [_decode_shell_word(ctx.raw_words[i]) for i in sql_indices]
+    sql_parts = [decode_literal_word(ctx.raw_words[i]) for i in sql_indices]
     if any(part is None for part in sql_parts):
         return Classification("ask", description="duckdb (ambiguous shell quoting)")
     if any(part.lstrip().startswith(".") for part in sql_parts):
@@ -217,6 +139,7 @@ def classify(ctx: HandlerContext) -> Classification:
         allow_multiple=True,
         allow_temp_tables="-readonly" in tokens or "-safe" in tokens,
         bracket_identifiers=False,
+        dialect="duckdb",
     )
     if "-readonly" in tokens or "-safe" in tokens:
         if readonly:
@@ -226,7 +149,7 @@ def classify(ctx: HandlerContext) -> Classification:
     # Analyze SQL
     if readonly:
         return Classification("allow", description="duckdb (read-only query)")
-    if filename and not filename_has_expansions and _writes_only_to_main_database(sql):
+    if filename and not filename_has_expansions and duckdb_writes_only_main(sql):
         return Classification(
             "allow",
             description="duckdb (database write)",

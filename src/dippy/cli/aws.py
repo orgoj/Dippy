@@ -7,19 +7,21 @@ Handles aws, aws-vault, and similar AWS tools.
 from __future__ import annotations
 
 from dippy.cli import Classification, HandlerContext
+from dippy.cli.sql_args import literal_sql_arg
 from dippy.core.sql import is_readonly_sql
 
 # Athena-specific write keywords
 _ATHENA_WRITE = frozenset({"MSCK", "VACUUM", "UNLOAD"})
 
 
-def _extract_athena_query_string(tokens: list[str]) -> str | None:
+def _extract_athena_query_string(ctx: HandlerContext) -> str | None:
     """Extract --query-string value from Athena command tokens."""
+    tokens = ctx.tokens
     for i, token in enumerate(tokens):
         if token == "--query-string" and i + 1 < len(tokens):
-            return tokens[i + 1]
+            return literal_sql_arg(ctx, i + 1)
         if token.startswith("--query-string="):
-            return token[len("--query-string=") :]
+            return literal_sql_arg(ctx, i, prefix="--query-string=")
     return None
 
 
@@ -346,9 +348,11 @@ def classify(ctx: HandlerContext) -> Classification:
 
     # Athena special handling - analyze SQL for read-only queries
     if service == "athena" and action == "start-query-execution":
-        query_string = _extract_athena_query_string(tokens)
+        query_string = _extract_athena_query_string(ctx)
         if query_string is not None:
-            readonly = is_readonly_sql(query_string, extra_write=_ATHENA_WRITE)
+            readonly = is_readonly_sql(
+                query_string, extra_write=_ATHENA_WRITE, dialect="athena"
+            )
             if readonly is True:
                 return Classification("allow", description=f"{desc} (read-only)")
             if readonly is False:

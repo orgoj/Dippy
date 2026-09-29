@@ -8,12 +8,11 @@ TESTS = [
     ("sqlite3 --help", True),
     ("sqlite3 -help", True),
     ("sqlite3 -version", True),
-    # Read-only mode - always safe
-    ("sqlite3 -readonly mydb.db", True),
-    ("sqlite3 -readonly mydb.db 'DROP TABLE users'", True),  # readonly flag wins
-    # Safe mode - always safe
-    ("sqlite3 -safe mydb.db", True),
-    ("sqlite3 -safe mydb.db 'DROP TABLE users'", True),  # safe flag wins
+    # Flags do not make interactive input or write SQL verifiably read-only
+    ("sqlite3 -readonly mydb.db", False),
+    ("sqlite3 -readonly mydb.db 'DROP TABLE users'", False),
+    ("sqlite3 -safe mydb.db", False),
+    ("sqlite3 -safe mydb.db 'DROP TABLE users'", False),
     # Read-only SQL
     ("sqlite3 mydb.db 'SELECT * FROM users'", True),
     ("sqlite3 mydb.db 'SELECT * FROM users;'", True),
