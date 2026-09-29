@@ -36,7 +36,13 @@ just fmt     # ruff format --check
 - Use `monkeypatch.setattr` for module globals; bare assignment leaks state
   between tests.
 - Never modify the user's live Dippy configuration during repository work.
-- Use `dippy.core.parser.tokenize`, never `shlex`.
+- Use `dippy.core.parser.tokenize`, never `shlex`. Parable `Word.value` retains
+  shell quoting and is not the runtime argument value. When a handler inspects
+  literal argument contents, remove Bash quoting conservatively, reject
+  expansions, and test the decoded value against the reported command.
+- Keep SQL string/comment lexing and statement splitting in `dippy.core.sql`.
+  SQL CLI handlers pass shell-decoded SQL to that shared checker; do not add a
+  second SQL lexer in a handler.
 - Never import inside a function or duplicate a list derivable from code.
 - Propagate `context_flags` through every `Decision` and delegated
   `Classification`; preserve `remote=ctx.remote`.
