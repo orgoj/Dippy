@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] - 2026-09-30
+
+### Fixed
+
+- MySQL and MariaDB executable comments require approval instead of hiding operations inside comments.
+- SQL Server sequence increments (`NEXT VALUE FOR`) require approval, including nested expressions.
+- DuckDB recognizes unqualified pure `stats` and `list_sum` functions while continuing to check their arguments for side effects.
+
 ## [0.4.2] - 2026-09-30
 
 ### Fixed

@@ -52,3 +52,35 @@ def test_shell_expansion_in_sql_asks(check, command):
 )
 def test_plain_literal_reads_allow(check, command):
     assert is_approved(check(command))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "mysql -e \"SELECT 1 /*!50000 INTO OUTFILE 'tmp/out' */\"",
+        "mysql --execute=\"SELECT 1 /*M!50000 INTO OUTFILE 'tmp/out' */\"",
+        'sqlcmd query -q "SELECT NEXT VALUE FOR dbo.seq"',
+        'sqlcmd query -q "WITH x AS (SELECT NEXT VALUE FOR dbo.seq n) SELECT * FROM x"',
+        "duckdb -readonly data.db \"SELECT stats(query('DROP TABLE t'))\"",
+        "duckdb -readonly data.db 'SELECT list_sum([1]); DROP TABLE t'",
+        "duckdb -readonly data.db \"SELECT list_sum([1]); COPY (SELECT 1) TO 'elsewhere/out'\"",
+        'duckdb -readonly data.db "SELECT stats($SQL)"',
+        "duckdb -readonly data.db '.shell touch tmp/out'",
+    ],
+)
+def test_three_sql_fixes_preserve_confirmation_boundaries(check, command):
+    assert needs_confirmation(check(command))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        'duckdb -readonly data.db "SELECT stats(x) FROM t"',
+        "duckdb -readonly data.db 'SELECT list_sum([1, 2, 3])'",
+        "duckdb -readonly data.db 'SELECT list_sum([1]); SELECT stats(x) FROM t'",
+        "sqlcmd query -q \"SELECT 'NEXT VALUE FOR seq'\"",
+        "mysql -e \"SELECT '/*! INTO OUTFILE */'\"",
+    ],
+)
+def test_three_sql_fixes_allow_literal_reads(check, command):
+    assert is_approved(check(command))

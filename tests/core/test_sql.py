@@ -6,7 +6,111 @@ from dippy.core.sql import (
     duckdb_copy_export_target,
     duckdb_writes_only_main,
     is_readonly_sql,
+    split_sql_statements,
 )
+
+
+def test_mysql_double_dash_without_whitespace_cannot_hide_executable_comment():
+    sql = "SELECT 1--1 /*!50000 INTO OUTFILE 'tmp/out' */"
+    assert split_sql_statements(sql, reject_executable_comments=True) is None
+
+
+@pytest.mark.parametrize("marker", ["!", "M!", "m!"])
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT 1 /*{marker}50000 INTO OUTFILE 'tmp/out' */",
+        "SELECT 1 /*{marker}50000 , fictional_effect() */",
+        "WITH x AS (SELECT 1 /*{marker}50000 , fictional_effect() */) SELECT * FROM x",
+        "EXPLAIN SELECT 1 /*{marker}50000 INTO OUTFILE 'tmp/out' */",
+        "SHOW TABLES /*{marker}50000 INTO OUTFILE 'tmp/out' */",
+        "SELECT 1; SELECT 2 /*{marker}50000 INTO OUTFILE 'tmp/out' */",
+    ],
+)
+def test_mysql_executable_comments_are_not_readonly(marker, sql):
+    assert (
+        is_readonly_sql(sql.format(marker=marker), dialect="mysql", allow_multiple=True)
+        is not True
+    )
+
+
+def test_inferred_mysql_dialect_also_rejects_executable_comments():
+    assert (
+        is_readonly_sql("SELECT `x` FROM t /*!50000 INTO OUTFILE 'tmp/out' */")
+        is not True
+    )
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT '/*!50000 INTO OUTFILE */'",
+        "SELECT '/*M!50000 INTO OUTFILE */'",
+        "SELECT 1 /* ordinary INTO OUTFILE 'tmp/out' */",
+        "SELECT 1 -- ordinary INTO OUTFILE 'tmp/out'",
+    ],
+)
+def test_mysql_literal_comment_markers_and_ordinary_comments_allow(sql):
+    assert is_readonly_sql(sql, dialect="mysql") is True
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT NEXT VALUE FOR dbo.seq",
+        "SELECT NEXT VALUE FOR dbo.seq OVER (ORDER BY id) FROM t",
+        "SELECT (SELECT NEXT VALUE FOR dbo.seq)",
+        "WITH x AS (SELECT NEXT VALUE FOR dbo.seq n) SELECT * FROM x",
+        "EXPLAIN SELECT NEXT VALUE FOR dbo.seq",
+    ],
+)
+def test_sequence_increment_is_not_readonly(sql):
+    assert is_readonly_sql(sql, dialect="tsql") is False
+
+
+def test_sequence_words_in_literal_allow():
+    assert is_readonly_sql("SELECT 'NEXT VALUE FOR dbo.seq'", dialect="tsql") is True
+
+
+@pytest.mark.parametrize("expression", ["stats(x)", "list_sum([1,2,3])"])
+def test_duckdb_pure_builtins_in_all_query_contexts(expression):
+    sql = f"SELECT {expression} FROM t"
+    assert is_readonly_sql(sql, dialect="duckdb") is True
+    assert duckdb_writes_only_main(f"CREATE TABLE main.result AS {sql}") is True
+    assert (
+        is_readonly_sql(
+            f"CREATE TEMP TABLE result AS {sql}",
+            dialect="duckdb",
+            allow_temp_tables=True,
+        )
+        is True
+    )
+    assert duckdb_copy_export_target(f"COPY ({sql}) TO 'tmp/out.csv'") == "tmp/out.csv"
+
+
+@pytest.mark.parametrize("name", ["stats", "list_sum"])
+@pytest.mark.parametrize(
+    "expression",
+    [
+        "evil.{name}(1)",
+        '"evil"."{name}"(1)',
+        "{name}(query('DROP TABLE t'))",
+        "{name}(writefile('tmp/out','data'))",
+    ],
+)
+def test_duckdb_pure_builtin_names_do_not_hide_effects(name, expression):
+    sql = f"SELECT {expression.format(name=name)}"
+    assert is_readonly_sql(sql, dialect="duckdb") is not True
+    assert duckdb_writes_only_main(f"CREATE TABLE main.result AS {sql}") is False
+    assert duckdb_copy_export_target(f"COPY ({sql}) TO 'tmp/out.csv'") is None
+
+
+@pytest.mark.parametrize(
+    "dialect", [None, "mysql", "postgres", "sqlite", "tsql", "athena"]
+)
+@pytest.mark.parametrize("name", ["stats", "list_sum"])
+def test_pure_builtin_allow_is_duckdb_only(dialect, name):
+    assert is_readonly_sql(f"SELECT {name}(x) FROM t", dialect=dialect) is not True
 
 
 @pytest.mark.parametrize(

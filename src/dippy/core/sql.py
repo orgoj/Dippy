@@ -81,8 +81,12 @@ _MAIN_WRITE_PREFIXES = {
 
 # Pure DuckDB built-ins missing from SQLGlot's typed function expressions.
 # https://duckdb.org/docs/stable/sql/functions/interval
-_DUCKDB_INTERVAL_CONSTRUCTORS = frozenset(
+# https://duckdb.org/docs/stable/sql/functions/utility
+# https://duckdb.org/docs/stable/sql/functions/list
+_DUCKDB_READONLY_FUNCTIONS = frozenset(
     {
+        "stats",
+        "list_sum",
         "to_centuries",
         "to_days",
         "to_decades",
@@ -100,14 +104,14 @@ _DUCKDB_INTERVAL_CONSTRUCTORS = frozenset(
 
 
 def _unverified_operation(node: exp.Expression, dialect: str | None) -> bool:
-    if isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into)):
+    if isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.NextValueFor)):
         return True
     if isinstance(node, exp.Anonymous):
         return not (
             dialect == "duckdb"
             and isinstance(node.this, (str, exp.Identifier, exp.Var))
             and not isinstance(node.parent, exp.Dot)
-            and node.name.lower() in _DUCKDB_INTERVAL_CONSTRUCTORS
+            and node.name.lower() in _DUCKDB_READONLY_FUNCTIONS
         )
     return False
 
@@ -125,7 +129,11 @@ def _semantic_words(masked: str) -> Counter[str]:
 def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
     """Require a complete read-only query tree, not just a SELECT prefix."""
     parser_dialect = dialect or ("mysql" if "`" in sql else None)
-    masked = _mask_sql(sql, bracket_identifiers=dialect != "duckdb")
+    masked = _mask_sql(
+        sql,
+        bracket_identifiers=dialect != "duckdb",
+        reject_executable_comments=parser_dialect == "mysql",
+    )
     if masked is None:
         return None
     words = _semantic_words(masked)
@@ -145,7 +153,11 @@ def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
         regenerated = tree.sql(dialect=parser_dialect)
     except (ParseError, UnsupportedError, ValueError):
         return None
-    regenerated_masked = _mask_sql(regenerated, bracket_identifiers=dialect != "duckdb")
+    regenerated_masked = _mask_sql(
+        regenerated,
+        bracket_identifiers=dialect != "duckdb",
+        reject_executable_comments=parser_dialect == "mysql",
+    )
     if regenerated_masked is None:
         return None
     regenerated_words = _semantic_words(regenerated_masked)
@@ -330,7 +342,9 @@ def duckdb_copy_export_target(sql: str) -> str | None:
     return target
 
 
-def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:
+def _mask_sql(
+    sql: str, *, bracket_identifiers: bool, reject_executable_comments: bool = False
+) -> str | None:
     """Blank quoted data and comments, preserving separator positions."""
     if "\r" in sql:
         return None
@@ -338,11 +352,17 @@ def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:
     i = 0
     while i < len(sql):
         start = i
-        if sql.startswith("--", i):
+        if sql.startswith("--", i) and (
+            not reject_executable_comments or i + 2 == len(sql) or sql[i + 2] <= " "
+        ):
             i = sql.find("\n", i)
             if i < 0:
                 i = len(sql)
         elif sql.startswith("/*", i):
+            if reject_executable_comments and (
+                sql.startswith("/*!", i) or sql[i : i + 4].upper() == "/*M!"
+            ):
+                return None
             i = sql.find("*/", i + 2)
             if i < 0 or "/*" in sql[start + 2 : i]:
                 return None
@@ -385,10 +405,17 @@ def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:
 
 
 def split_sql_statements(
-    sql: str, *, bracket_identifiers: bool = True
+    sql: str,
+    *,
+    bracket_identifiers: bool = True,
+    reject_executable_comments: bool = False,
 ) -> list[str] | None:
     """Split SQL on executable semicolons; return None for ambiguous syntax."""
-    masked = _mask_sql(sql, bracket_identifiers=bracket_identifiers)
+    masked = _mask_sql(
+        sql,
+        bracket_identifiers=bracket_identifiers,
+        reject_executable_comments=reject_executable_comments,
+    )
     if masked is None:
         return None
     ends = [i for i, char in enumerate(masked) if char == ";"]
@@ -515,7 +542,12 @@ def is_readonly_sql(
         - Unknown functions ask; named database functions may still have effects
           that cannot be inferred from SQL syntax alone.
     """
-    statements = split_sql_statements(sql, bracket_identifiers=bracket_identifiers)
+    reject_executable_comments = dialect == "mysql" or (dialect is None and "`" in sql)
+    statements = split_sql_statements(
+        sql,
+        bracket_identifiers=bracket_identifiers,
+        reject_executable_comments=reject_executable_comments,
+    )
     if statements is None or (len(statements) > 1 and not allow_multiple):
         return None
     if len(statements) > 1:
@@ -535,7 +567,11 @@ def is_readonly_sql(
         return all(results)
 
     # Strip quoted content for keyword detection
-    stripped = _mask_sql(statements[0], bracket_identifiers=bracket_identifiers)
+    stripped = _mask_sql(
+        statements[0],
+        bracket_identifiers=bracket_identifiers,
+        reject_executable_comments=reject_executable_comments,
+    )
     if stripped is None:
         return None
 
