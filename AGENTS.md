@@ -43,6 +43,10 @@ just fmt     # ruff format --check
 - Keep SQL string/comment lexing and statement splitting in `dippy.core.sql`.
   SQL CLI handlers pass shell-decoded SQL to that shared checker; do not add a
   second SQL lexer in a handler.
+- For any SQL approval change, inspect every SQL CLI handler using the shared
+  checker. Test literal reads, shell expansion, file output, nested writes,
+  batches, and CLI metacommands in each affected dialect. Unrecognized syntax
+  must ask; a read-only prefix or CLI flag alone does not prove safety.
 - Never import inside a function or duplicate a list derivable from code.
 - Propagate `context_flags` through every `Decision` and delegated
   `Classification`; preserve `remote=ctx.remote`.
