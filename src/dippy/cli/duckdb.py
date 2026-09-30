@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from dippy.cli import Classification, HandlerContext
 from dippy.core.bash import decode_literal_word
-from dippy.core.sql import duckdb_writes_only_main, is_readonly_sql
+from dippy.core.sql import (
+    duckdb_copy_export_target,
+    duckdb_writes_only_main,
+    is_readonly_sql,
+    split_sql_statements,
+)
 
 COMMANDS = ["duckdb"]
 
@@ -133,6 +138,31 @@ def classify(ctx: HandlerContext) -> Classification:
     # Separate SQL arguments conservatively. A space can hide a later write
     # behind an initial SELECT during statement classification.
     sql = ";\n".join(part for part in sql_parts if part is not None)
+    statements = split_sql_statements(sql, bracket_identifiers=False)
+    export_targets: list[str] = []
+    unverified_statement = False
+    for statement in statements or []:
+        if is_readonly_sql(
+            statement,
+            extra_write=_DUCKDB_WRITE,
+            allow_temp_tables="-readonly" in tokens or "-safe" in tokens,
+            bracket_identifiers=False,
+            dialect="duckdb",
+        ):
+            continue
+        target = duckdb_copy_export_target(statement)
+        if target is None:
+            unverified_statement = True
+        else:
+            export_targets.append(target)
+    if export_targets:
+        if unverified_statement:
+            return Classification("ask", description="duckdb (unverified export batch)")
+        return Classification(
+            "allow",
+            description="duckdb (query export)",
+            redirect_targets=tuple(export_targets),
+        )
     readonly = is_readonly_sql(
         sql,
         extra_write=_DUCKDB_WRITE,

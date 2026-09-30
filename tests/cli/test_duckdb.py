@@ -23,6 +23,86 @@ SELECT s.c_ip, any_value(rq.host) host, any_value(rq.reqs) reqs, max(mc) max_con
 quantile_disc(mc,0.99) p99_conc FROM s JOIN rq USING (c_ip) GROUP BY s.c_ip
 ORDER BY max_conc DESC, reqs DESC LIMIT 15"""
 
+POOL_EXPORT_SQL = """COPY (SELECT c_ip, count(DISTINCT rid) n,
+count(DISTINCT cs_user_agent) uas FROM access_mp2
+WHERE substr(time_local,4,8)='Sep/2026' AND substr(time_local,1,2) BETWEEN '16' AND '30'
+AND cs_uri LIKE '/_/v1/elasticsearch%' GROUP BY c_ip
+HAVING count(DISTINCT cs_user_agent) >= 10 ORDER BY n DESC)
+TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')"""
+
+
+@pytest.mark.parametrize("flags", ["", "-readonly", "-safe"])
+def test_reported_pool_export_obeys_redirect_rules(check, tmp_path, flags):
+    command = (
+        f'duckdb {flags} -noheader -separator " " -list data.db "{POOL_EXPORT_SQL}"'
+    )
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    assert is_approved(check(command, config, tmp_path))
+    assert needs_confirmation(check(command, Config(), tmp_path))
+    denied = Config(redirect_rules=[Rule("allow", "tmp/**"), Rule("deny", "tmp/**")])
+    assert (
+        check(command, denied, tmp_path)["hookSpecificOutput"]["permissionDecision"]
+        == "deny"
+    )
+
+
+@pytest.mark.parametrize("flags", ["", "-readonly", "-safe"])
+@pytest.mark.parametrize(
+    "extra", ["DROP TABLE t", "INSTALL httpfs", "SELECT writefile('x','y')"]
+)
+@pytest.mark.parametrize("first", [True, False])
+def test_export_cannot_hide_other_effects(check, tmp_path, flags, extra, first):
+    sql = f"{extra}; {POOL_EXPORT_SQL}" if first else f"{POOL_EXPORT_SQL}; {extra}"
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    assert needs_confirmation(
+        check(f'duckdb {flags} tmp/data.db "{sql}"', config, tmp_path)
+    )
+
+
+@pytest.mark.parametrize(
+    "suffix,approved",
+    [
+        ("; SELECT 2", True),
+        ("; COPY (SELECT 2) TO 'tmp/second.csv'", True),
+        ("; COPY (SELECT 2) TO 'elsewhere/second.csv'", False),
+    ],
+)
+def test_export_checks_all_output_targets(check, tmp_path, suffix, approved):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    result = check(
+        f'duckdb -readonly data.db "{POOL_EXPORT_SQL}{suffix}"', config, tmp_path
+    )
+    assert is_approved(result) if approved else needs_confirmation(result)
+
+
+def test_exports_in_separate_sql_arguments(check, tmp_path):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    command = "duckdb -readonly -cmd \"COPY (SELECT 1) TO 'tmp/one'\" data.db \"COPY (SELECT 2) TO 'elsewhere/two'\""
+    assert needs_confirmation(check(command, config, tmp_path))
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "COPY t TO 'tmp/out'",
+        "COPY t FROM 'tmp/in'",
+        "COPY (SELECT 1) TO /tmp/dippy-out",
+        "COPY (SELECT 1) TO 'https://example.com/out'",
+        "COPY (SELECT 1) TO 'tmp/out' (PARTITION_BY (x))",
+        "COPY (SELECT 1) TO 'tmp/out' (PER_THREAD_OUTPUT true)",
+        "COPY (SELECT query('DELETE FROM t')) TO 'tmp/out'",
+        "COPY (SELECT 1) TO 'tmp/$FILE'",
+        "COPY (SELECT 1) TO 'tmp/$(touch /tmp/dippy-bypass)'",
+        ".output tmp/out",
+        ".shell touch tmp/out",
+    ],
+)
+def test_unsupported_exports_ask(check, tmp_path, sql):
+    config = Config(redirect_rules=[Rule("allow", "tmp/**")])
+    assert needs_confirmation(
+        check(f'duckdb -readonly data.db "{sql}"', config, tmp_path)
+    )
+
 
 @pytest.mark.parametrize(
     "suffix,approved",

@@ -10,7 +10,8 @@ from collections import Counter
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError, UnsupportedError
+from sqlglot.errors import ParseError, TokenError, UnsupportedError
+from sqlglot.tokens import TokenType
 
 _WHITESPACE_PATTERN = re.compile(r"\s+")
 _KEYWORD_PATTERN = re.compile(r"[A-Za-z_]\w*")
@@ -231,6 +232,102 @@ def duckdb_writes_only_main(sql: str) -> bool:
         if not _verified_main_write(statement):
             return False
     return True
+
+
+def duckdb_copy_export_target(sql: str) -> str | None:
+    """Verify a single-file CSV query export; its target still needs approval."""
+    statements = split_sql_statements(sql, bracket_identifiers=False)
+    if statements is None or len(statements) != 1:
+        return None
+    masked = _mask_sql(statements[0], bracket_identifiers=False)
+    if (
+        masked is None
+        or not re.match(r"\s*COPY\s*\(", masked, re.IGNORECASE)
+        or _semantic_words(masked).keys() & (_UNSAFE_TOKENS - {"COPY"})
+    ):
+        return None
+    try:
+        # Gate unsupported COPY targets before parsing: SQLGlot can loop on
+        # unquoted paths. Tokenization also handles comments between TO/path.
+        tokens = sqlglot.tokenize(statements[0], read="duckdb")
+        depth = 0
+        for i, token in enumerate(tokens[1:], start=1):
+            if token.token_type == TokenType.L_PAREN:
+                depth += 1
+            elif token.token_type == TokenType.R_PAREN:
+                depth -= 1
+                if depth == 0:
+                    if (
+                        i + 2 >= len(tokens)
+                        or tokens[i + 1].text.upper() != "TO"
+                        or tokens[i + 2].token_type != TokenType.STRING
+                    ):
+                        return None
+                    break
+        else:
+            return None
+        tree = sqlglot.parse_one(statements[0], read="duckdb", error_level="RAISE")
+        if not isinstance(tree, exp.Copy) or tree.args.get("kind") is not False:
+            return None
+        if set(tree.args) - {"this", "kind", "credentials", "files", "params"}:
+            return None
+        credentials = tree.args.get("credentials")
+        if credentials is not None and credentials.args:
+            return None
+        if not isinstance(tree.this, exp.Subquery):
+            return None
+        if (
+            _verify_query_ast(tree.this.this.sql(dialect="duckdb"), "duckdb")
+            is not True
+        ):
+            return None
+        files = tree.args.get("files") or []
+        if (
+            len(files) != 1
+            or not isinstance(files[0], exp.Literal)
+            or not files[0].is_string
+        ):
+            return None
+        target = files[0].this
+        if (
+            not target.strip()
+            or target == "-"
+            or any(char in target for char in ":*?[]")
+            or any(ord(char) < 32 or ord(char) == 127 for char in target)
+            or target.startswith(("/dev/", "/proc/"))
+        ):
+            return None
+        seen = set()
+        for param in tree.args.get("params") or []:
+            if not isinstance(param, exp.CopyParameter) or not isinstance(
+                param.this, exp.Var
+            ):
+                return None
+            name = param.this.name.upper()
+            value = param.args.get("expression")
+            if name in seen:
+                return None
+            seen.add(name)
+            if name == "HEADER":
+                if not isinstance(value, exp.Boolean):
+                    return None
+            elif name == "FORMAT":
+                if (
+                    not isinstance(value, (exp.Var, exp.Literal))
+                    or value.name.upper() != "CSV"
+                ):
+                    return None
+            elif name in {"DELIMITER", "QUOTE", "ESCAPE", "NULL"}:
+                if not isinstance(value, exp.Literal) or not value.is_string:
+                    return None
+            else:
+                return None
+        regenerated = _mask_sql(tree.sql(dialect="duckdb"), bracket_identifiers=False)
+    except (ParseError, TokenError, UnsupportedError, ValueError):
+        return None
+    if regenerated is None or _semantic_words(masked) - _semantic_words(regenerated):
+        return None
+    return target
 
 
 def _mask_sql(sql: str, *, bracket_identifiers: bool) -> str | None:

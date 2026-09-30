@@ -2,7 +2,68 @@
 
 import pytest
 
-from dippy.core.sql import duckdb_writes_only_main, is_readonly_sql
+from dippy.core.sql import (
+    duckdb_copy_export_target,
+    duckdb_writes_only_main,
+    is_readonly_sql,
+)
+
+
+@pytest.mark.parametrize(
+    "options",
+    [
+        "",
+        "(HEADER false, DELIMITER ' ')",
+        "(FORMAT CSV, HEADER true, NULL 'none', QUOTE '\"', ESCAPE '\"')",
+        "(FORMAT 'csv')",
+    ],
+)
+def test_copy_export_is_a_write_with_a_separate_verified_target(options):
+    sql = f"COPY (SELECT to_milliseconds(1)) TO 'tmp/out.csv' {options}"
+    assert duckdb_copy_export_target(sql) == "tmp/out.csv"
+    assert is_readonly_sql(sql, dialect="duckdb") is not True
+
+
+def test_copy_export_handles_comments_and_escaped_literal_path():
+    sql = "/* COPY */ COPY (SELECT '; DROP TABLE t' v) TO /* path */ 'tmp/a''b.csv' (HEADER false)"
+    assert duckdb_copy_export_target(sql) == "tmp/a'b.csv"
+
+
+@pytest.mark.parametrize(
+    "tail",
+    [
+        "TO ''",
+        "TO '-'",
+        "TO '/dev/stdout'",
+        "TO 's3://bucket/out'",
+        "TO 'tmp/*.csv'",
+        "TO 'tmp/out\nfile'",
+        "TO /tmp/out",
+        "FROM 'tmp/in'",
+        "TO 'tmp/out' (FORMAT PARQUET)",
+        "TO 'tmp/out' (PARTITION_BY (x))",
+        "TO 'tmp/out' (PER_THREAD_OUTPUT true)",
+        "TO 'tmp/out' (HEADER true, HEADER false)",
+        "TO 'tmp/out' (HEADER query('DELETE FROM t'))",
+        "TO 'tmp/out'; INSTALL httpfs",
+        "TO 'tmp/out' FOO BAR",
+    ],
+)
+def test_copy_export_rejects_unsupported_effects_and_targets(tail):
+    assert duckdb_copy_export_target(f"COPY (SELECT 1) {tail}") is None
+
+
+@pytest.mark.parametrize(
+    "inner",
+    [
+        "SELECT evil.to_milliseconds(1)",
+        "SELECT query('DROP TABLE t')",
+        "SELECT 1 FOO BAR",
+        "WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x",
+    ],
+)
+def test_copy_export_validates_original_query(inner):
+    assert duckdb_copy_export_target(f"COPY ({inner}) TO 'tmp/out'") is None
 
 
 @pytest.mark.parametrize(
