@@ -78,6 +78,38 @@ _MAIN_WRITE_PREFIXES = {
     "TRUNCATE": (exp.TruncateTable, frozenset({"TRUNCATE"})),
 }
 
+# Pure DuckDB built-ins missing from SQLGlot's typed function expressions.
+# https://duckdb.org/docs/stable/sql/functions/interval
+_DUCKDB_INTERVAL_CONSTRUCTORS = frozenset(
+    {
+        "to_centuries",
+        "to_days",
+        "to_decades",
+        "to_hours",
+        "to_microseconds",
+        "to_milliseconds",
+        "to_minutes",
+        "to_months",
+        "to_nanoseconds",
+        "to_seconds",
+        "to_weeks",
+        "to_years",
+    }
+)
+
+
+def _unverified_operation(node: exp.Expression, dialect: str | None) -> bool:
+    if isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into)):
+        return True
+    if isinstance(node, exp.Anonymous):
+        return not (
+            dialect == "duckdb"
+            and isinstance(node.this, (str, exp.Identifier, exp.Var))
+            and not isinstance(node.parent, exp.Dot)
+            and node.name.lower() in _DUCKDB_INTERVAL_CONSTRUCTORS
+        )
+    return False
+
 
 def _semantic_words(masked: str) -> Counter[str]:
     """Count words except function names, which dialect generators may rename."""
@@ -107,10 +139,7 @@ def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
             tree, (exp.Select, exp.Union, exp.Intersect, exp.Except, exp.Values)
         ):
             return None
-        if any(
-            isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.Anonymous))
-            for node in tree.walk()
-        ):
+        if any(_unverified_operation(node, dialect) for node in tree.walk()):
             return False
         regenerated = tree.sql(dialect=parser_dialect)
     except (ParseError, UnsupportedError, ValueError):
@@ -166,7 +195,7 @@ def _verified_main_write(statement: str) -> bool:
         elif not _main_table_target(tree.this):
             return False
         if any(
-            isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.Anonymous))
+            _unverified_operation(node, "duckdb")
             for node in tree.walk()
             if node is not tree
         ):

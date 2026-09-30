@@ -4,6 +4,41 @@ import pytest
 from conftest import is_approved, needs_confirmation
 from dippy.core.config import Config, Rule
 
+CONCURRENCY_SQL = """WITH b AS (SELECT c_ip FROM access_mp2
+WHERE substr(time_local,4,8)='Sep/2026' AND substr(time_local,1,2) BETWEEN '16' AND '30'
+AND cs_uri LIKE '/_/v1/elasticsearch%' GROUP BY c_ip HAVING count(DISTINCT cs_user_agent) >= 10),
+r AS (SELECT DISTINCT ON (rid) c_ip, regexp_extract(domain,'([^ ]+)$',1) host,
+strptime(substr(time_local,1,20),'%d/%b/%Y:%H:%M:%S') t_end, TRY_CAST(request_time AS DOUBLE) rt
+FROM access_mp2 WHERE substr(time_local,4,8)='Sep/2026'
+AND substr(time_local,1,2) BETWEEN '16' AND '30' AND cs_uri LIKE '/_/v1/elasticsearch%'
+AND c_ip NOT IN (SELECT c_ip FROM b) AND NOT (c_ip LIKE '158.173.3.%'
+OR c_ip LIKE '158.173.20.%' OR c_ip LIKE '158.173.21.%' OR c_ip LIKE '158.173.75.%'
+OR c_ip LIKE '158.173.79.%' OR c_ip LIKE '212.56.48.%')),
+e AS (SELECT c_ip, t_end - to_milliseconds(CAST(coalesce(rt,0)*1000 AS BIGINT)) ts, 1 d
+FROM r UNION ALL SELECT c_ip, t_end, -1 FROM r),
+c AS (SELECT c_ip, ts, sum(d) OVER (PARTITION BY c_ip ORDER BY ts, d ROWS UNBOUNDED PRECEDING) conc FROM e),
+s AS (SELECT c_ip, date_trunc('second', ts) sec, max(conc) mc FROM c GROUP BY c_ip, date_trunc('second', ts)),
+rq AS (SELECT c_ip, count(*) reqs, arg_max(host,1) host FROM r GROUP BY c_ip)
+SELECT s.c_ip, any_value(rq.host) host, any_value(rq.reqs) reqs, max(mc) max_conc,
+quantile_disc(mc,0.99) p99_conc FROM s JOIN rq USING (c_ip) GROUP BY s.c_ip
+ORDER BY max_conc DESC, reqs DESC LIMIT 15"""
+
+
+@pytest.mark.parametrize(
+    "suffix,approved",
+    [
+        ("", True),
+        ("; COPY (SELECT 1) TO 'tmp/output'", False),
+        ("; INSTALL httpfs", False),
+        ("; DELETE FROM access_mp2", False),
+    ],
+)
+def test_reported_concurrency_query(check, suffix, approved):
+    sql = (CONCURRENCY_SQL + suffix).replace("$", r"\$")
+    result = check(f'duckdb -readonly -csv server-logs/gate2/gate2.db "{sql}"')
+    assert is_approved(result) if approved else needs_confirmation(result)
+
+
 TESTS = [
     # Help/version - safe
     ("duckdb --help", True),

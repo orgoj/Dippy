@@ -1,6 +1,59 @@
 """Comprehensive tests for SQL statement classification."""
 
-from dippy.core.sql import is_readonly_sql
+import pytest
+
+from dippy.core.sql import duckdb_writes_only_main, is_readonly_sql
+
+
+@pytest.mark.parametrize(
+    "unit",
+    [
+        "centuries",
+        "days",
+        "decades",
+        "hours",
+        "microseconds",
+        "milliseconds",
+        "minutes",
+        "months",
+        "nanoseconds",
+        "seconds",
+        "weeks",
+        "years",
+    ],
+)
+def test_duckdb_interval_constructors(unit):
+    sql = f"SELECT to_{unit}(CAST(coalesce(rt, 0)*1000 AS BIGINT)) FROM r"
+    assert is_readonly_sql(sql, dialect="duckdb") is True
+    assert duckdb_writes_only_main(f"CREATE TABLE main.t AS {sql}") is True
+    assert (
+        is_readonly_sql(
+            f"CREATE TEMP TABLE t AS {sql}", dialect="duckdb", allow_temp_tables=True
+        )
+        is True
+    )
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "SELECT evil.to_milliseconds(1)",
+        'SELECT "evil"."to_milliseconds"(1)',
+        "SELECT to_milliseconds(query('DELETE FROM t'))",
+        "SELECT to_milliseconds(writefile('x','data'))",
+        "SELECT to_milliseconds(1), fictional_effect()",
+    ],
+)
+def test_interval_constructor_does_not_hide_unknown_effects(sql):
+    assert is_readonly_sql(sql, dialect="duckdb") is not True
+    assert duckdb_writes_only_main(f"CREATE TABLE main.t AS {sql}") is False
+
+
+@pytest.mark.parametrize(
+    "dialect", [None, "sqlite", "postgres", "mysql", "tsql", "athena"]
+)
+def test_interval_constructor_allow_is_duckdb_only(dialect):
+    assert is_readonly_sql("SELECT to_milliseconds(1)", dialect=dialect) is not True
 
 
 def test_mysql_select_into_outfile_is_not_readonly():
