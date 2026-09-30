@@ -1,7 +1,41 @@
 """Cross-handler SQL classification boundaries."""
 
+from pathlib import Path
+
 import pytest
 from conftest import is_approved, needs_confirmation
+
+
+def test_reported_duckdb_traffic_command(check):
+    sql = (Path(__file__).parents[1] / "fixtures/sql/duckdb_traffic.sql").read_text()
+    assert is_approved(
+        check(f'duckdb -readonly -csv server-logs/gate2/gate2.db "{sql}"')
+    )
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "duckdb -readonly data.db",
+        "psql -c",
+        "mysql -e",
+        "sqlite3 data.db",
+        "sqlcmd query -q",
+        "aws athena start-query-execution --query-string",
+    ],
+)
+def test_casts_preserve_handler_boundaries(check, prefix):
+    assert is_approved(check(f'{prefix} "SELECT CAST(x AS INTEGER) FROM t"'))
+    for sql in [
+        "SELECT CAST(fictional_effect() AS INTEGER)",
+        "WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS INTEGER) FROM x",
+        "SELECT CAST(a AS INTEGER) FROM t; DROP TABLE t",
+        "SELECT CAST(a AS INTEGER) INTO outfile FROM t",
+        "SELECT CAST($SQL AS INTEGER)",
+        ".shell touch tmp/out",
+        "SELECT CAST(a AS INTEGER) FROM t; .output tmp/out",
+    ]:
+        assert needs_confirmation(check(f'{prefix} "{sql}"')), sql
 
 
 @pytest.mark.parametrize(

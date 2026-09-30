@@ -10,7 +10,7 @@ from collections import Counter
 
 import sqlglot
 from sqlglot import exp
-from sqlglot.errors import ParseError, TokenError, UnsupportedError
+from sqlglot.errors import ErrorLevel, ParseError, TokenError, UnsupportedError
 from sqlglot.tokens import TokenType
 
 _WHITESPACE_PATTERN = re.compile(r"\s+")
@@ -103,8 +103,76 @@ _DUCKDB_READONLY_FUNCTIONS = frozenset(
 )
 
 
+class _TypeSpanParserMixin:
+    """Record actual type grammar, excluding speculative nodes discarded by SQLGlot."""
+
+    def _parse_types(self, *args, **kwargs):
+        start = self._index
+        node = super()._parse_types(*args, **kwargs)
+        if isinstance(node, exp.DataType) and self._index > start:
+            node.meta["dippy_type_span"] = (
+                self._tokens[start].start,
+                self._tokens[self._index - 1].end + 1,
+            )
+        return node
+
+
+def _parse_sql(sql: str, dialect: str | None) -> list[exp.Expression | None]:
+    source = sqlglot.Dialect.get_or_raise(dialect)
+    parser_class = type(
+        "_TypeSpanParser", (_TypeSpanParserMixin, source.parser_class), {}
+    )
+    return parser_class(dialect=source, error_level=ErrorLevel.RAISE).parse(
+        source.tokenize(sql), sql
+    )
+
+
+def _normalized_type_words(
+    masked: str, tree: exp.Expression, dialect: str | None
+) -> Counter[str] | None:
+    """Canonicalize only final-AST type spans for the syntax-retention check."""
+    spans = sorted(
+        (start, -end, node)
+        for node in tree.find_all(exp.DataType)
+        if "dippy_type_span" in node.meta
+        for start, end in [node.meta["dippy_type_span"]]
+    )
+    replacements = []
+    previous_end = -1
+    for start, negative_end, node in spans:
+        end = -negative_end
+        if start >= previous_end:
+            replacements.append((start, end, " __DIPPY_DATA_TYPE__ "))
+            previous_end = end
+    for start, end, replacement in reversed(replacements):
+        masked = masked[:start] + replacement + masked[end:]
+    normalized = _mask_sql(masked, bracket_identifiers=dialect != "duckdb")
+    return _semantic_words(normalized) if normalized is not None else None
+
+
+def _retains_syntax(masked: str, tree: exp.Expression, dialect: str | None) -> bool:
+    # Parse the generated SQL too: CAST generators may render a type differently
+    # from the standalone type generator (e.g. MySQL INT becomes SIGNED).
+    regenerated = tree.sql(dialect=dialect)
+    parsed = _parse_sql(regenerated, dialect)
+    if len(parsed) != 1 or parsed[0] is None:
+        return False
+    regenerated_masked = _mask_sql(regenerated, bracket_identifiers=dialect != "duckdb")
+    if regenerated_masked is None:
+        return False
+    original_words = _normalized_type_words(masked, tree, dialect)
+    regenerated_words = _normalized_type_words(regenerated_masked, parsed[0], dialect)
+    return (
+        original_words is not None
+        and regenerated_words is not None
+        and not original_words - regenerated_words
+    )
+
+
 def _unverified_operation(node: exp.Expression, dialect: str | None) -> bool:
     if isinstance(node, (exp.DML, exp.DDL, exp.Command, exp.Into, exp.NextValueFor)):
+        return True
+    if isinstance(node, exp.DataType) and node.this == exp.DataType.Type.USERDEFINED:
         return True
     if isinstance(node, exp.Anonymous):
         return not (
@@ -128,7 +196,9 @@ def _semantic_words(masked: str) -> Counter[str]:
 
 def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
     """Require a complete read-only query tree, not just a SELECT prefix."""
-    parser_dialect = dialect or ("mysql" if "`" in sql else None)
+    parser_dialect = dialect or (
+        "mysql" if "`" in sql else "tsql" if "[" in sql else None
+    )
     masked = _mask_sql(
         sql,
         bracket_identifiers=dialect != "duckdb",
@@ -140,7 +210,7 @@ def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
     if words.keys() & _UNSAFE_TOKENS:
         return False
     try:
-        statements = sqlglot.parse(sql, read=parser_dialect, error_level="RAISE")
+        statements = _parse_sql(sql, parser_dialect)
         if len(statements) != 1 or statements[0] is None:
             return None
         tree = statements[0]
@@ -150,20 +220,9 @@ def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
             return None
         if any(_unverified_operation(node, dialect) for node in tree.walk()):
             return False
-        regenerated = tree.sql(dialect=parser_dialect)
-    except (ParseError, UnsupportedError, ValueError):
+        return True if _retains_syntax(masked, tree, parser_dialect) else None
+    except (ParseError, TokenError, UnsupportedError, ValueError):
         return None
-    regenerated_masked = _mask_sql(
-        regenerated,
-        bracket_identifiers=dialect != "duckdb",
-        reject_executable_comments=parser_dialect == "mysql",
-    )
-    if regenerated_masked is None:
-        return None
-    regenerated_words = _semantic_words(regenerated_masked)
-    if words - regenerated_words:
-        return None
-    return True
 
 
 def _main_table_target(node: exp.Expression) -> bool:
@@ -193,7 +252,10 @@ def _verified_main_write(statement: str) -> bool:
     if words.keys() & (_UNSAFE_TOKENS - allowed_tokens):
         return False
     try:
-        tree = sqlglot.parse_one(statement, read="duckdb", error_level="RAISE")
+        statements = _parse_sql(statement, "duckdb")
+        if len(statements) != 1 or statements[0] is None:
+            return False
+        tree = statements[0]
         if type(tree) is not expected_type:
             return False
         if isinstance(tree, (exp.Create, exp.Drop, exp.Alter)) and tree.args.get(
@@ -217,14 +279,9 @@ def _verified_main_write(statement: str) -> bool:
         if isinstance(source, (exp.Select, exp.Union, exp.Intersect, exp.Except)):
             if _verify_query_ast(source.sql(dialect="duckdb"), "duckdb") is not True:
                 return False
-        regenerated = tree.sql(dialect="duckdb")
-    except (ParseError, UnsupportedError, ValueError):
+        return _retains_syntax(masked, tree, "duckdb")
+    except (ParseError, TokenError, UnsupportedError, ValueError):
         return False
-    regenerated_masked = _mask_sql(regenerated, bracket_identifiers=False)
-    return bool(
-        regenerated_masked is not None
-        and not words - _semantic_words(regenerated_masked)
-    )
 
 
 def duckdb_writes_only_main(sql: str) -> bool:
@@ -278,7 +335,10 @@ def duckdb_copy_export_target(sql: str) -> str | None:
                     break
         else:
             return None
-        tree = sqlglot.parse_one(statements[0], read="duckdb", error_level="RAISE")
+        parsed = _parse_sql(statements[0], "duckdb")
+        if len(parsed) != 1 or parsed[0] is None:
+            return None
+        tree = parsed[0]
         if not isinstance(tree, exp.Copy) or tree.args.get("kind") is not False:
             return None
         if set(tree.args) - {"this", "kind", "credentials", "files", "params"}:
@@ -334,10 +394,9 @@ def duckdb_copy_export_target(sql: str) -> str | None:
                     return None
             else:
                 return None
-        regenerated = _mask_sql(tree.sql(dialect="duckdb"), bracket_identifiers=False)
+        if not _retains_syntax(masked, tree, "duckdb"):
+            return None
     except (ParseError, TokenError, UnsupportedError, ValueError):
-        return None
-    if regenerated is None or _semantic_words(masked) - _semantic_words(regenerated):
         return None
     return target
 
@@ -585,7 +644,7 @@ def is_readonly_sql(
                 return False
             try:
                 created = sqlglot.parse_one(
-                    statements[0], read=dialect, error_level="RAISE"
+                    statements[0], read=dialect, error_level=ErrorLevel.RAISE
                 )
             except (ParseError, ValueError):
                 return None

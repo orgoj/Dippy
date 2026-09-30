@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] - 2026-09-30
+
+### Fixed
+
+- SQL validation distinguishes parser-normalized data types from lost query syntax. Read-only casts using type aliases, including DuckDB `VARCHAR`, no longer require approval solely because the parser renders another spelling. Aliases and identifiers remain checked, as do nested operations and every statement.
+- SQL parser errors are raised correctly, so malformed queries require approval rather than being accepted as partial trees. Unknown user-defined cast types also require approval.
+
 ## [0.4.3] - 2026-09-30
 
 ### Fixed
