@@ -10,6 +10,55 @@ from dippy.core.sql import (
 )
 
 
+@pytest.mark.parametrize(
+    "dialect", ["duckdb", "postgres", "mysql", "sqlite", "tsql", "athena"]
+)
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "(SELECT 1)",
+        "((SELECT 1))",
+        "(SELECT 1) UNION ALL (SELECT 2)",
+        "((SELECT 1) UNION ALL (SELECT 2))",
+        "(WITH x AS (SELECT 1 a) SELECT a FROM x)",
+    ],
+)
+def test_parenthesized_reads(sql, dialect):
+    assert is_readonly_sql(sql, dialect=dialect) is True
+
+
+@pytest.mark.parametrize(
+    "dialect", ["duckdb", "postgres", "mysql", "sqlite", "tsql", "athena"]
+)
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "(SELECT fictional_effect())",
+        "(SELECT 1) UNION ALL (SELECT fictional_effect())",
+        "(WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x)",
+        "(SELECT 1 INTO outfile)",
+        "(SELECT 1); DROP TABLE t",
+        "(DELETE FROM t)",
+        "(1 + 1)",
+        "(SELECT 1) fictional_unknown_clause",
+        "(SELECT 1",
+    ],
+)
+def test_parenthesized_unverified_operations(sql, dialect):
+    assert is_readonly_sql(sql, dialect=dialect, allow_multiple=True) is not True
+
+
+def test_duckdb_sampled_union_is_readonly():
+    assert (
+        is_readonly_sql(
+            "(SELECT * FROM t USING SAMPLE 8 ROWS) UNION ALL "
+            "(SELECT * FROM t USING SAMPLE 5 ROWS)",
+            dialect="duckdb",
+        )
+        is True
+    )
+
+
 def test_mysql_double_dash_without_whitespace_cannot_hide_executable_comment():
     sql = "SELECT 1--1 /*!50000 INTO OUTFILE 'tmp/out' */"
     assert split_sql_statements(sql, reject_executable_comments=True) is None

@@ -13,6 +13,48 @@ def test_reported_duckdb_traffic_command(check):
     )
 
 
+def test_reported_duckdb_sampled_union_command(check):
+    sql = (
+        "(SELECT 'serazene' typ, time_local, c_ip, sc_status, sc_bytes, "
+        "http_referer, cs_uri FROM vvbox WHERE domain='d.vvbox.cz' "
+        "AND cs_uri LIKE '/vv_show_url.php?idc=%' "
+        "AND substr(time_local,1,11)='01/Oct/2026' USING SAMPLE 8 ROWS) UNION ALL "
+        "(SELECT 'bezne', time_local, c_ip, sc_status, sc_bytes, http_referer, "
+        "cs_uri FROM vvbox WHERE domain='d.vvbox.cz' "
+        "AND cs_uri LIKE '/vv_show_url.php?idk=%' "
+        "AND substr(time_local,1,11)='01/Oct/2026' USING SAMPLE 5 ROWS)"
+    )
+    assert is_approved(
+        check(f'duckdb -readonly server-logs/gate2/gate2.db "{sql}" -line')
+    )
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        "duckdb -readonly data.db",
+        "psql -c",
+        "mysql -e",
+        "sqlite3 data.db",
+        "sqlcmd query -q",
+        "aws athena start-query-execution --query-string",
+    ],
+)
+def test_parenthesized_queries_preserve_handler_boundaries(check, prefix):
+    assert is_approved(check(f'{prefix} "(SELECT 1) UNION ALL (SELECT 2)"'))
+    for sql in [
+        "(SELECT fictional_effect())",
+        "(SELECT 1) UNION ALL (SELECT fictional_effect())",
+        "(WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x)",
+        "(SELECT 1 INTO outfile)",
+        "(SELECT 1); DROP TABLE t",
+        "(SELECT $SQL)",
+        ".shell touch tmp/out",
+        "(SELECT 1); .output tmp/out",
+    ]:
+        assert needs_confirmation(check(f'{prefix} "{sql}"')), sql
+
+
 @pytest.mark.parametrize(
     "prefix",
     [

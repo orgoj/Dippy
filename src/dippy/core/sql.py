@@ -215,7 +215,8 @@ def _verify_query_ast(sql: str, dialect: str | None) -> bool | None:
             return None
         tree = statements[0]
         if not isinstance(
-            tree, (exp.Select, exp.Union, exp.Intersect, exp.Except, exp.Values)
+            tree.unnest(),
+            (exp.Select, exp.Union, exp.Intersect, exp.Except, exp.Values),
         ):
             return None
         if any(_unverified_operation(node, dialect) for node in tree.walk()):
@@ -669,6 +670,9 @@ def is_readonly_sql(
 
     readonly_keywords = _READONLY_KEYWORDS | extra_readonly
     write_keywords = _WRITE_KEYWORDS | extra_write
+
+    if stripped.lstrip().startswith("("):
+        return _verify_query_ast(statements[0], dialect)
 
     pos = 0
     while pos < len(stripped):
