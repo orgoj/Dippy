@@ -45,17 +45,43 @@ def _redirect_target_is_safe(target: str) -> bool:
 
 
 def _quoted_heredoc_content(redirects: tuple) -> str | None:
-    """Return one non-empty literal heredoc body, or ``None``."""
-    if len(redirects) != 1:
+    """Return one literal stdin heredoc, allowing separately checked output."""
+    heredocs = [r for r in redirects if getattr(r, "kind", None) == "heredoc"]
+    if len(heredocs) != 1:
         return None
-    redirect = redirects[0]
+    redirect = heredocs[0]
     content = getattr(redirect, "content", "")
     if (
-        getattr(redirect, "kind", None) != "heredoc"
+        getattr(redirect, "fd", None) not in (None, 0)
         or not getattr(redirect, "quoted", False)
         or not content.strip()
     ):
         return None
+    for other in redirects:
+        if other is redirect:
+            continue
+        op = getattr(other, "op", "")
+        operator = op.lstrip("0123456789")
+        descriptor = op[: len(op) - len(operator)]
+        # Output is checked by _analyze_redirects before script delegation.
+        # Reject input operators, variable descriptors and writes to stdin.
+        if (
+            not _redirect_writes_file(op)
+            or operator == "<>"
+            or op.startswith("{")
+            or (descriptor and int(descriptor) == 0)
+            or getattr(other, "fd", None) == 0
+        ):
+            return None
+        target = _get_word_value(other.target) if other.target else ""
+        # Moving fd 0 closes stdin; dynamic duplication can hide such a move.
+        if target.startswith("&") or operator == ">&":
+            fd_target = target.removeprefix("&")
+            if fd_target != "-" and not fd_target.removesuffix("-").isdigit():
+                return None
+            if fd_target.endswith("-") and fd_target[:-1].isdigit():
+                if int(fd_target[:-1]) == 0:
+                    return None
     return content
 
 

@@ -37,7 +37,9 @@ Omitting `CMD` reads the script from stdin. For automatic outer-command
 validation, use exactly one directly attached, non-empty quoted heredoc as
 shown above. Quoting prevents the calling shell from expanding parameters or
 command substitutions before Dippy can classify the script. Unquoted, piped,
-file-backed or mixed-input forms remain on approval.
+file-backed or mixed-input forms remain on approval. Additional output redirects
+are permitted when their targets pass the normal redirect rules; redirects that
+change stdin or use variable file descriptors remain on approval.
 
 Approval is synchronous: the caller remains blocked while the dialog is open.
 The effective wait is therefore limited by both `askpass-timeout` and any
@@ -583,8 +585,11 @@ allow [cca-tmux-cli,l2] ls *
 With `--script-stdin`, the marker must be the first and last word after the
 wrapper trigger, and the command must have exactly one non-empty quoted heredoc
 redirect. Dippy analyzes that literal body recursively in remote mode. Unquoted
-heredocs, pipelines, files, variables, inline arguments and additional redirects
-do not enter script mode and therefore remain on `ask`. This strict form keeps
+heredocs, pipelines, files, variables and inline arguments do not enter script
+mode and therefore remain on `ask`. Additional output redirects are checked
+against the normal redirect rules, so an allowed log target does not prevent
+script analysis. Redirects that change stdin or use variable file descriptors
+remain on `ask`. This strict form keeps
 local shell expansion and indirect input out of auto-approved multiline scripts.
 
 **Wrapper flags only exist once the trigger is found.** `cca-tmux-cli -t host read`

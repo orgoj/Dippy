@@ -509,6 +509,137 @@ DIPPY""",
         assert result.action == "ask"
 
 
+class TestScriptOutputRedirects:
+    @pytest.fixture
+    def config(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("HOME", str(tmp_path))
+        return parse_config(
+            """
+            wrapper fictionalwrap --cmd run --context -t --script-stdin --script
+            allow fictionalread *
+            ask fictionalerase *
+            allow-redirect tmp/**
+            deny-redirect protected/**
+            """
+        )
+
+    @pytest.fixture(
+        params=[
+            "fictionalwrap -t server1 run --script",
+            "dippy run",
+            "dippy run-on-server server1",
+        ]
+    )
+    def invocation(self, request):
+        return request.param
+
+    @pytest.mark.parametrize(
+        "redirect",
+        [
+            "> tmp/output.log",
+            ">> tmp/output.log",
+            "2> tmp/error.log",
+            "2>> tmp/error.log",
+            "&> tmp/output.log",
+            "&>> tmp/output.log",
+            ">| tmp/output.log",
+            "> tmp/output.log 2>&1",
+        ],
+    )
+    @pytest.mark.parametrize("before", [True, False])
+    def test_allowed_output(self, config, invocation, redirect, before, tmp_path):
+        suffix = f"{redirect} <<'REMOTE'" if before else f"<<'REMOTE' {redirect}"
+        result = analyze(
+            f"{invocation} {suffix}\nfictionalread /one\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == "allow"
+
+    @pytest.mark.parametrize(
+        ("redirect", "action"),
+        [("> unknown/output.log", "ask"), ("> protected/output.log", "deny")],
+    )
+    def test_output_policy(self, config, invocation, redirect, action, tmp_path):
+        result = analyze(
+            f"{invocation} {redirect} <<'REMOTE'\nfictionalread /one\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == action
+
+    def test_unsafe_body_with_allowed_output(self, config, invocation, tmp_path):
+        result = analyze(
+            f"{invocation} > tmp/output.log <<'REMOTE'\nfictionalerase --all\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == "ask"
+
+    @pytest.mark.parametrize(
+        "redirect",
+        [
+            "< payload.sh",
+            "<<< 'fictionalerase --all'",
+            "0<&3",
+            "0> tmp/output.log",
+            "0>&3",
+            "<> tmp/output.log",
+            "{fd}> tmp/output.log",
+            "2>&0-",
+            "2>&00-",
+            "2>&$FD",
+        ],
+    )
+    @pytest.mark.parametrize("before", [True, False])
+    def test_input_or_ambiguous_redirect_asks(
+        self, config, invocation, redirect, before, tmp_path
+    ):
+        suffix = f"{redirect} <<'REMOTE'" if before else f"<<'REMOTE' {redirect}"
+        result = analyze(
+            f"{invocation} {suffix}\nfictionalread /one\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == "ask"
+
+    def test_non_stdin_heredoc_asks(self, config, invocation, tmp_path):
+        result = analyze(
+            f"{invocation} 3<<'REMOTE'\nfictionalread /one\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == "ask"
+
+    def test_multiple_heredocs_ask(self, config, invocation, tmp_path):
+        result = analyze(
+            f"{invocation} <<'ONE' <<'TWO'\nfictionalread /one\nONE\n"
+            "fictionalerase --all\nTWO",
+            config,
+            tmp_path,
+        )
+        assert result.action == "ask"
+
+    @pytest.mark.parametrize(
+        "heredoc",
+        ["<<REMOTE\nfictionalread /one\nREMOTE", "<<'REMOTE'\nREMOTE"],
+    )
+    def test_invalid_heredoc_with_output_asks(
+        self, config, invocation, heredoc, tmp_path
+    ):
+        result = analyze(f"{invocation} > tmp/output.log {heredoc}", config, tmp_path)
+        assert result.action == "ask"
+
+    def test_output_expansion_is_checked(self, config, invocation, tmp_path):
+        result = analyze(
+            f"{invocation} > tmp/$(fictionalerase --all) <<'REMOTE'\n"
+            "fictionalread /one\nREMOTE",
+            config,
+            tmp_path,
+        )
+        assert result.action == "ask"
+
+
 class TestLnavWrapperValidation:
     """Test run-on-server wrapper with lnav command validation."""
 
