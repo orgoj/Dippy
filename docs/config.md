@@ -764,6 +764,62 @@ allow hcom * agent show *    # also allows: hcom kill boom agent show x
 Spell out the intervening tokens instead - one rule per option form is verbose
 but cannot be walked through.
 
+### Option-aware Command Patterns
+
+Add an optional `[opts: ...]` block before the command pattern, after any
+context flags, to match individual arguments instead of a joined command string:
+
+```text
+allow [opts: -s, -H="Host: *", --header="Host: *"] curl http://10.*
+allow [$HCOM_INSTANCE_NAME=bot1,remote-run] [opts: -s, -H="Host: *"] curl http://10.*
+allow [opts: --format=json, --verbose] report-cli inspect *
+allow [opts:] report-cli inspect *
+```
+
+This block is supported by `allow`, `ask`, `deny`, and `delegate`. Existing
+rules without an `opts` block keep their original matching behavior.
+
+| Declaration | Permitted invocation forms |
+|-------------|----------------------------|
+| `-s` | `-s`, or part of a bundle of declared short options |
+| `-H="Host: *"` | `-H 'Host: example'`, `-H"Host: example"` |
+| `--header="Host: *"` | `--header 'Host: example'`, `--header="Host: example"` |
+
+The `=` in a declaration means that the option takes exactly one value. Its
+glob matches that value alone, including spaces inside a quoted argument;
+it cannot absorb another argument. Single quotes, double quotes, escaped spaces
+and joined quoting are decoded as literal Bash words. Shell expansions,
+unquoted pathname globs, brace expansion and tilde expansion do not match.
+Quoted literal glob characters are accepted in invocations. Quote declaration
+values containing spaces, commas or complex bracket globs.
+
+Declared options are optional, may appear before or after positional arguments,
+and may occur at most once per declared name. Short bundles such as `-sv` are
+accepted only when every option is declared. A short option taking a value
+consumes the rest of the bundle, or the following argument if there is no
+remainder. In `-H=value`, the value is `=value`; the equals sign is not stripped
+from short options. Long options accept both a separate value and `=value`.
+Aliases must be declared separately; long-option abbreviations are not inferred.
+The `--` delimiter ends option parsing and is removed from the positional list.
+An unknown/repeated option or missing/mismatched value makes the rule not match.
+Other rules and built-in handlers can still decide, so retain an `ask` reset
+when these rules should form an exclusive allowlist.
+
+The command name and each remaining positional argument must match one pattern
+token, in order, with exactly the same number of tokens. `*` matches exactly one
+argument, including an empty quoted argument, rather than zero or many. No
+implicit prefix match applies, and the final `|` anchor is unnecessary. Local
+positional paths retain path normalization; remote paths are matched literally.
+Option value globs always match literal values without local path normalization.
+
+This is a fixed CLI convention, not a parser inferred from the program's help.
+Use it for programs following these conventions. Repeated options, variadic
+positional arguments and other option syntaxes remain expressible with legacy
+rules. A safety-mandatory flag such as `--dry-run` must not be declared as an
+optional `opts` entry; retain a separate policy requiring it. The existing
+`allow-opt`/`ask-opt`/`deny-opt` directives match the presence of an option and
+do not declare a complete permitted argument shape.
+
 ### Path Patterns
 
 For redirect and file rules (`*-redirect`, `*-edit`, `*-mcp`), patterns match paths:

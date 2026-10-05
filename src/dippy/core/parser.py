@@ -9,13 +9,21 @@ from __future__ import annotations
 from dippy.vendor.parable import parse
 
 
-def tokenize(command: str) -> list[str]:
-    """Tokenize a bash command into a list of tokens."""
+def tokenize(command: str, *, raw: bool = False) -> list[str]:
+    """Tokenize bash; raw mode requires one simple command without redirects."""
     if not command or not command.strip():
         return []
 
     try:
         nodes = parse(command)
+        if raw:
+            if (
+                len(nodes) != 1
+                or nodes[0].kind != "command"
+                or getattr(nodes[0], "redirects", None)
+            ):
+                return []
+            return [word.value for word in nodes[0].words]
         tokens = _extract_tokens(nodes)
         if tokens:
             return tokens

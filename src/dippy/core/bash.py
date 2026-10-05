@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-def decode_literal_word(raw: str) -> str | None:
+def decode_literal_word(raw: str, *, reject_globs: bool = False) -> str | None:
     """Apply Bash quote removal to one word; reject shell expansion."""
     output: list[str] = []
     quote = ""
@@ -27,6 +27,10 @@ def decode_literal_word(raw: str) -> str | None:
                 return None
             output.append(char)
         elif char == "`":
+            return None
+        elif (
+            reject_globs and not quote and (char in "*?[{}" or (char == "~" and i == 0))
+        ):
             return None
         elif char == "\\":
             if i + 1 >= len(raw):

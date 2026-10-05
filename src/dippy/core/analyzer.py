@@ -787,7 +787,9 @@ def _analyze_simple_command(
     # 1. Check config rules first (highest priority)
     from dippy.core.config import SimpleCommand, match_command
 
-    cmd = SimpleCommand(words=words)
+    cmd = SimpleCommand(
+        words=words, raw_words=raw_words, word_has_expansions=word_has_expansions
+    )
     config_match = match_command(cmd, config, cwd, context_flags, remote=remote)
     if config_match:
         if config_match.decision == "allow":

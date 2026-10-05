@@ -8,6 +8,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from dippy.core.bash import decode_literal_word
+from dippy.core.options import extract_options, pattern_words, positional_words
 from dippy.core.parser import tokenize
 
 # Valid Python module path: dotted identifiers (e.g. "numpy", "http.server")
@@ -89,6 +91,8 @@ class Rule:
     negated_flags: frozenset[str] | None = (
         None  # context flags that must NOT be present
     )
+    options: dict[str, str | None] | None = None
+    """Permitted optional switches/value globs; None keeps legacy matching."""
 
 
 @dataclass(frozen=True)
@@ -233,6 +237,12 @@ class SimpleCommand:
 
     redirects: list[str] = field(default_factory=list)
     """Redirect target paths, e.g. ["/tmp/log.txt", "~/.cache/out"]."""
+
+    raw_words: tuple[str, ...] = ()
+    """Original shell words, before quote removal."""
+
+    word_has_expansions: tuple[bool, ...] = ()
+    """Per-word shell expansion flags from the parser."""
 
 
 # === Config Loading ===
@@ -648,6 +658,8 @@ def _extract_context_flags(
     Returns (remaining_pattern, required_flags, negated_flags).
     """
     s = s.strip()
+    if s.startswith("[opts:"):
+        return s, None, None
     if not s.startswith("["):
         return s, None, None
 
@@ -754,16 +766,22 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern_part, options = extract_options(pattern_part)
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern_part, exact = _strip_exact_anchor(pattern_part)
+                if options is not None:
+                    pattern_words(pattern_part)
                 rules.append(
                     Rule(
                         "allow",
-                        _expand_pattern_tildes(pattern_part),
+                        pattern_part
+                        if options is not None
+                        else _expand_pattern_tildes(pattern_part),
                         exact=exact,
                         required_flags=flags,
                         negated_flags=neg_flags,
+                        options=options,
                     )
                 )
 
@@ -771,18 +789,24 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern_part, options = extract_options(pattern_part)
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
                 pattern, exact = _strip_exact_anchor(pattern)
+                if options is not None:
+                    pattern_words(pattern)
                 rules.append(
                     Rule(
                         "ask",
-                        _expand_pattern_tildes(pattern),
+                        pattern
+                        if options is not None
+                        else _expand_pattern_tildes(pattern),
                         exact=exact,
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
+                        options=options,
                     )
                 )
 
@@ -790,18 +814,24 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern_part, options = extract_options(pattern_part)
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
                 pattern, exact = _strip_exact_anchor(pattern)
+                if options is not None:
+                    pattern_words(pattern)
                 rules.append(
                     Rule(
                         "deny",
-                        _expand_pattern_tildes(pattern),
+                        pattern
+                        if options is not None
+                        else _expand_pattern_tildes(pattern),
                         exact=exact,
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
+                        options=options,
                     )
                 )
 
@@ -809,16 +839,22 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern_part, options = extract_options(pattern_part)
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern_part, exact = _strip_exact_anchor(pattern_part)
+                if options is not None:
+                    pattern_words(pattern_part)
                 rules.append(
                     Rule(
                         "delegate",
-                        _expand_pattern_tildes(pattern_part),
+                        pattern_part
+                        if options is not None
+                        else _expand_pattern_tildes(pattern_part),
                         exact=exact,
                         required_flags=flags,
                         negated_flags=neg_flags,
+                        options=options,
                     )
                 )
 
@@ -1586,6 +1622,8 @@ def _match_words(
     context_flags: frozenset[str] | None = None,
     *,
     remote: bool = False,
+    raw_words: tuple[str, ...] = (),
+    word_has_expansions: tuple[bool, ...] = (),
 ) -> Match | None:
     """Match command words against rules. Returns last matching rule."""
     if words and not remote:
@@ -1600,6 +1638,19 @@ def _match_words(
         normalized_cmd = _normalize_words(resolved_words, cwd)
     result: Match | None = None
     active_flags = context_flags or frozenset()
+    literal_words = None
+    if any(rule.options is not None for rule in config.rules):
+        if raw_words and len(raw_words) == len(words):
+            decoded = [
+                decode_literal_word(word, reject_globs=True) for word in raw_words
+            ]
+            if not any(word_has_expansions) and all(
+                word is not None for word in decoded
+            ):
+                literal_words = decoded
+        elif not raw_words and not any(word_has_expansions):
+            # Programmatic SimpleCommand callers supply already-decoded argv.
+            literal_words = words
 
     # Pre-compute env-stripped form for fallback matching.
     # This allows rules like 'allow uv run *' to match 'ENV=val uv run ...'.
@@ -1631,6 +1682,26 @@ def _match_words(
         if rule.negated_flags is not None:
             if rule.negated_flags & active_flags:  # intersection is non-empty
                 continue
+
+        if rule.options is not None:
+            raw_matched = _match_option_block(
+                rule, literal_words, config, cwd, remote=remote
+            )
+            stripped_matched = (
+                i > 0
+                and literal_words is not None
+                and not raw_deny_set
+                and _match_option_block(
+                    rule, literal_words[i:], config, cwd, remote=remote
+                )
+            )
+            if raw_matched or stripped_matched:
+                result = Match(
+                    rule.decision, rule.pattern, rule.message, rule.source, rule.scope
+                )
+                if raw_matched:
+                    raw_deny_set = rule.decision == "deny"
+            continue
 
         # Option rules use different matching logic
         if rule.items is not None:
@@ -1719,6 +1790,35 @@ def _match_words(
     return result
 
 
+def _match_option_block(
+    rule: Rule,
+    words: list[str] | None,
+    config: Config,
+    cwd: Path,
+    *,
+    remote: bool,
+) -> bool:
+    """Match declared options and an exact number of positional argv globs."""
+    if not words:
+        return False
+    positionals = positional_words(words, rule.options)
+    if positionals is None:
+        return False
+    patterns = pattern_words(rule.pattern)
+    if len(positionals) != len(patterns):
+        return False
+    if not remote:
+        positionals[0] = _resolve_alias(positionals[0], config, cwd)
+        positionals = [_normalize_token(word, cwd) for word in positionals]
+        patterns = tuple(
+            _normalize_token(word, config.path_rule_cwd or cwd) for word in patterns
+        )
+    return all(
+        fnmatch.fnmatchcase(word, pattern)
+        for word, pattern in zip(positionals, patterns)
+    )
+
+
 def _normalize_redirect_pattern(pattern: str, cwd: Path) -> str:
     """Normalize a redirect pattern, handling ** specially.
 
@@ -1795,7 +1895,15 @@ def match_command(
     matches: list[Match] = []
 
     # Match command words
-    cmd_match = _match_words(cmd.words, config, cwd, context_flags, remote=remote)
+    cmd_match = _match_words(
+        cmd.words,
+        config,
+        cwd,
+        context_flags,
+        remote=remote,
+        raw_words=cmd.raw_words,
+        word_has_expansions=cmd.word_has_expansions,
+    )
     if cmd_match:
         matches.append(cmd_match)
 
