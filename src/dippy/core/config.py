@@ -1623,6 +1623,32 @@ def _resolve_alias(word: str, config: Config, cwd: Path) -> str:
     return word
 
 
+def _flag_pattern_matches(pattern: str, active_flags: frozenset[str]) -> bool:
+    """Check if a context flag pattern matches any active flag.
+
+    Supports literal flags as well as glob wildcards (*, ?, []).
+    """
+    if pattern in active_flags:
+        return True
+    if any(c in pattern for c in "*?[]"):
+        return any(fnmatch.fnmatch(f, pattern) for f in active_flags)
+    return False
+
+
+def _check_rule_context_flags(rule: Rule, active_flags: frozenset[str] | None) -> bool:
+    """Check whether a rule's required and negated context flags are satisfied."""
+    flags = active_flags or frozenset()
+    if rule.required_flags is not None:
+        for req in rule.required_flags:
+            if not _flag_pattern_matches(req, flags):
+                return False
+    if rule.negated_flags is not None:
+        for neg in rule.negated_flags:
+            if _flag_pattern_matches(neg, flags):
+                return False
+    return True
+
+
 def _match_words(
     words: list[str],
     config: Config,
@@ -1682,14 +1708,8 @@ def _match_words(
 
     for rule in config.rules:
         # Check context flags first - rule only applies if all required flags are present
-        if rule.required_flags is not None:
-            if not rule.required_flags.issubset(active_flags):
-                continue
-
-        # Check negated flags - rule only applies if NONE of negated flags are present
-        if rule.negated_flags is not None:
-            if rule.negated_flags & active_flags:  # intersection is non-empty
-                continue
+        if not _check_rule_context_flags(rule, active_flags):
+            continue
 
         if rule.options is not None:
             raw_matched = _match_option_block(
@@ -1739,8 +1759,10 @@ def _match_words(
                 continue
             continue  # option rules don't use fnmatch
 
-        normalized_pattern = _normalize_pattern(
-            rule.pattern, config.path_rule_cwd or cwd
+        normalized_pattern = (
+            rule.pattern
+            if remote
+            else _normalize_pattern(rule.pattern, config.path_rule_cwd or cwd)
         )
         raw_matched = False
         stripped_matched = False
@@ -2036,18 +2058,6 @@ def match_after_mcp(tool_name: str, config: Config) -> str | None:
         if fnmatch.fnmatch(tool_name, rule.pattern):
             result = rule.message if rule.message is not None else ""
     return result
-
-
-def _check_rule_context_flags(rule: Rule, active_flags: frozenset[str] | None) -> bool:
-    """Check whether a rule's required and negated context flags are satisfied."""
-    flags = active_flags or frozenset()
-    if rule.required_flags is not None:
-        if not rule.required_flags.issubset(flags):
-            return False
-    if rule.negated_flags is not None:
-        if rule.negated_flags & flags:
-            return False
-    return True
 
 
 def match_web(

@@ -231,6 +231,19 @@ class TestWrapperAnalysis:
         assert decision.action == "allow"
         assert "id" in decision.reason
 
+    def test_remote_relative_path_rule_matching(self):
+        """Relative path rules in remote wrappers match literally without local cwd expansion."""
+        config_text = """
+            wrapper cca-tmux-cli --cmd run --flag -t --context-first
+            allow [cca-tmux-cli,mp] ./node_modules/.bin/jest *
+        """
+        config = parse_config(config_text)
+        cwd = Path("/home/michael/local_project")
+
+        cmd = 'cca-tmux-cli -t mp run "./node_modules/.bin/jest --ci"'
+        decision = analyze(cmd, config, cwd)
+        assert decision.action == "allow"
+
 
 class TestExistingWrappersStillWork:
     """Ensure existing ssh/sudo wrappers continue working."""

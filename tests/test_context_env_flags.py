@@ -221,3 +221,55 @@ def test_web_rule_respects_context_env(monkeypatch):
     flags = env_context_flags(config)
     assert match_web("python docs", config, context_flags=flags) is not None
     assert match_web("python docs", config, context_flags=None) is None
+
+
+def test_env_flag_wildcard_matching(monkeypatch):
+    """Wildcards in context flags (e.g. [$VAR=prefix*]) match values."""
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow [${ENV_VAR}=wdt_mp2*] fictionalcmd *
+    """
+    )
+    monkeypatch.setenv(ENV_VAR, "wdt_mp2_fix")
+    assert analyze("fictionalcmd x", config, Path.cwd()).action == "allow"
+
+    monkeypatch.setenv(ENV_VAR, "wdt_mp2")
+    assert analyze("fictionalcmd x", config, Path.cwd()).action == "allow"
+
+    monkeypatch.setenv(ENV_VAR, "wdt_mp1")
+    assert analyze("fictionalcmd x", config, Path.cwd()).action == "ask"
+
+
+def test_env_flag_wildcard_negated(monkeypatch):
+    """Negated wildcards (e.g. [!$VAR=prefix*]) exclude matching agents."""
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        deny [!${ENV_VAR}=wdt_mp2*] fictionalcmd *
+    """
+    )
+    monkeypatch.setenv(ENV_VAR, "wdt_mp2_fix")
+    assert analyze("fictionalcmd x", config, Path.cwd()).action == "ask"
+
+    monkeypatch.setenv(ENV_VAR, "other_agent")
+    assert analyze("fictionalcmd x", config, Path.cwd()).action == "deny"
+
+
+def test_user_remote_wrapper_with_env_wildcard_and_relative_path(monkeypatch):
+    """allow [$HCOM_INSTANCE_NAME=wdt_mp2*] ./node_modules/.bin/jest * with remote wrapper."""
+    monkeypatch.setenv("HCOM_INSTANCE_NAME", "wdt_mp2_fix")
+    config = parse_config(
+        """
+        set context-env HCOM_INSTANCE_NAME
+        wrapper fictionalwrap --cmd run --context -t --script-stdin --script
+        allow [$HCOM_INSTANCE_NAME=wdt_mp2*] ./node_modules/.bin/jest *
+        """
+    )
+    cmd = (
+        "fictionalwrap -t mpaheca run --script <<'REMOTE'\n"
+        "timeout 500 ./node_modules/.bin/jest --ci\n"
+        "REMOTE"
+    )
+    decision = analyze(cmd, config, Path("/home/michael/work/wdt/ansible-wdt"))
+    assert decision.action == "allow"
