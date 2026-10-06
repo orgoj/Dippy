@@ -517,10 +517,14 @@ wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag
 | `--context <flag>` | Flag whose value is added to the context flags |
 | `--context-first` | First positional arg is the destination and becomes a context flag |
 | `--script-stdin <marker>` | At the marker, analyze one directly attached quoted heredoc as the remote shell script |
+| `--transparent` | Skip options and analyze inner command directly without altering context (like `timeout`, `nice`) |
 
 **Example:**
 
 ```
+# Transparent wrapper: unwrap options to inner command
+wrapper custom-runner --transparent
+
 # Everything after the wrapper name is the inner command
 wrapper rtk
 

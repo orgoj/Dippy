@@ -270,6 +270,11 @@ WRAPPER_COMMANDS = frozenset(
         "timeout",  # run command with time limit
         "nice",  # run command with altered priority
         "nohup",  # run command immune to hangups
+        "ionice",  # run command with altered I/O scheduling priority
+        "taskset",  # run command with CPU affinity
+        "chrt",  # run command with real-time scheduling attributes
+        "stdbuf",  # run command with modified standard stream buffering
+        "flock",  # run command holding file lock
         "strace",  # trace system calls
         "ltrace",  # trace library calls
         "command",  # run command ignoring functions

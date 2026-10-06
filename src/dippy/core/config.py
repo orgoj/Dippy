@@ -125,6 +125,8 @@ class WrapperInfo:
     """If True, first positional arg (destination) is included in context flags."""
     script_stdin_marker: str | None = None
     """Marker after which one quoted heredoc is the remote shell script."""
+    transparent: bool = False
+    """If True, wrapper options are skipped and inner command is analyzed directly."""
 
 
 @dataclass
@@ -956,10 +958,15 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 context_flag = None
                 context_first = False
                 script_stdin_marker = None
+                transparent = False
                 new_syntax_used = False
                 i = 1
                 while i < len(parts):
-                    if parts[i] == "--cmd" and i + 1 < len(parts):
+                    if parts[i] == "--transparent":
+                        new_syntax_used = True
+                        transparent = True
+                        i += 1
+                    elif parts[i] == "--cmd" and i + 1 < len(parts):
                         new_syntax_used = True
                         trigger = parts[i + 1]
                         i += 2
@@ -1000,6 +1007,7 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     context_flag=context_flag,
                     context_first=context_first,
                     script_stdin_marker=script_stdin_marker,
+                    transparent=transparent,
                 )
 
             elif directive in ("allow-edit", "ask-edit", "deny-edit"):

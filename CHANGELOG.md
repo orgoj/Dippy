@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.8] - 2026-10-06
+
+### Fixed
+
+- Transparent wrapper commands (`time`, `timeout`, `nice`, `nohup`, `strace`, `ltrace`, `taskset`, `chrt`, `stdbuf`, `flock`, `ionice`) unwrap recursively before catch-all and context rules evaluate, preserving context flags and correctly parsing unit suffixes, flags with arguments, and stacked wrappers.
+- Custom transparent wrappers can be defined in configuration via `wrapper <name> --transparent`.
+
 ## [0.4.7] - 2026-10-05
 
 ### Added

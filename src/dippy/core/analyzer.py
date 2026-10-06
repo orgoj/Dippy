@@ -7,6 +7,7 @@ Unknown constructs default to ask. Decisions bubble up (deny > ask > allow).
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
@@ -554,6 +555,273 @@ def _extract_wrapper_args(
     return dest, inner_cmd, context_value
 
 
+def _is_catch_all_pattern(pattern: str) -> bool:
+    """Check if a pattern is a generic catch-all (like '*' or '**')."""
+    return pattern.strip() in ("*", "**")
+
+
+def _find_transparent_inner_idx(tokens: list[str], config: Config | None = None) -> int:
+    """Find index where the inner command starts for a transparent wrapper.
+
+    Returns 0 if tokens[0] is not a transparent wrapper or no inner command was found.
+    """
+    if len(tokens) < 2:
+        return 0
+    base = tokens[0]
+
+    is_transparent = base in WRAPPER_COMMANDS or (
+        config is not None
+        and base in config.wrappers
+        and config.wrappers[base].transparent
+    )
+    if not is_transparent:
+        return 0
+
+    if base == "command":
+        if len(tokens) > 1 and tokens[1] in ("-v", "-V"):
+            return 0
+        k = 1
+        while k < len(tokens) and tokens[k].startswith("-"):
+            if tokens[k] == "--":
+                k += 1
+                break
+            k += 1
+        return k if k < len(tokens) else 0
+
+    if base in ("nohup", "builtin"):
+        k = 1
+        if k < len(tokens) and tokens[k] == "--":
+            k += 1
+        return k if k < len(tokens) else 0
+
+    if base == "timeout":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-s", "--signal", "-k", "--kill-after"):
+                k += 2
+                continue
+            if (tok.startswith("-s") or tok.startswith("-k")) and len(tok) > 2:
+                k += 1
+                continue
+            if tok.startswith(("--signal=", "--kill-after=")):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        # Consume duration token: e.g. 10, 500s, 10m, 2h, 1d, 0.5s
+        if k < len(tokens):
+            tok = tokens[k]
+            if re.match(r"^\d+(\.\d+)?[smhdSMHD]?$", tok):
+                k += 1
+                if k < len(tokens) and tokens[k] == "--":
+                    k += 1
+                return k if k < len(tokens) else 0
+        return 0
+
+    if base == "nice":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-n", "--adjustment"):
+                k += 2
+                continue
+            if tok.startswith("-n") and len(tok) > 2:
+                k += 1
+                continue
+            if tok.startswith("--adjustment="):
+                k += 1
+                continue
+            if re.match(r"^[+-]\d+$", tok):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        return k if k < len(tokens) else 0
+
+    if base == "ionice":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-c", "--class", "-n", "--classdata", "-p", "--pid"):
+                k += 2
+                continue
+            if (
+                tok.startswith("-c") or tok.startswith("-n") or tok.startswith("-p")
+            ) and len(tok) > 2:
+                k += 1
+                continue
+            if tok.startswith(("--class=", "--classdata=", "--pid=")):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        return k if k < len(tokens) else 0
+
+    if base == "time":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-f", "--format", "-o", "--output"):
+                k += 2
+                continue
+            if tok.startswith(("--format=", "--output=")):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        return k if k < len(tokens) else 0
+
+    if base == "taskset":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-c", "--cpu-list"):
+                k += 2
+                continue
+            if tok.startswith(("-c", "--cpu-list=")) and len(tok) > 2:
+                k += 1
+                continue
+            if tok in ("-p", "--pid"):
+                return 0
+            if tok.startswith("-"):
+                k += 1
+                continue
+            if re.match(r"^(0x[0-9a-fA-F]+|\d+([,-]\d+)*)$", tok):
+                k += 1
+            break
+        if k < len(tokens) and tokens[k] == "--":
+            k += 1
+        return k if k < len(tokens) else 0
+
+    if base == "chrt":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-p", "--pid"):
+                return 0
+            if tok.startswith("-"):
+                k += 1
+                continue
+            if tok.isdigit():
+                k += 1
+            break
+        if k < len(tokens) and tokens[k] == "--":
+            k += 1
+        return k if k < len(tokens) else 0
+
+    if base == "stdbuf":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-i", "--input", "-o", "--output", "-e", "--error"):
+                k += 2
+                continue
+            if tok.startswith(("-i", "-o", "-e", "--input=", "--output=", "--error=")):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        return k if k < len(tokens) else 0
+
+    if base == "flock":
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-w", "--wait", "--timeout", "-E", "--conflict-exit-code"):
+                k += 2
+                continue
+            if tok.startswith(("--wait=", "--timeout=", "--conflict-exit-code=")):
+                k += 1
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            # Non-option is file/dir/descriptor
+            k += 1
+            break
+        if k < len(tokens) and tokens[k] == "--":
+            k += 1
+        return k if k < len(tokens) else 0
+
+    if base in ("strace", "ltrace"):
+        k = 1
+        while k < len(tokens):
+            tok = tokens[k]
+            if tok == "--":
+                k += 1
+                break
+            if tok in ("-e", "-o", "-p", "-s", "-u", "-E", "-P", "-y", "-Y"):
+                k += 2
+                continue
+            if tok.startswith("-"):
+                k += 1
+                continue
+            break
+        return k if k < len(tokens) else 0
+
+    # Custom transparent wrapper
+    k = 1
+    while k < len(tokens) and tokens[k].startswith("-"):
+        if tokens[k] == "--":
+            k += 1
+            break
+        k += 1
+    return k if k < len(tokens) else 0
+
+
+def _unwrap_all_transparent_wrappers(
+    tokens: list[str], config: Config | None = None
+) -> int:
+    """Recursively unwrap transparent wrappers until reaching the inner command.
+
+    Returns the total offset of tokens consumed, or 0 if no unwrapping occurred.
+    """
+    offset = 0
+    current = tokens
+    while len(current) > 1:
+        inner_idx = _find_transparent_inner_idx(current, config)
+        if inner_idx <= 0:
+            break
+        offset += inner_idx
+        current = current[inner_idx:]
+    return offset
+
+
 def _analyze_command(
     node,
     config: Config,
@@ -781,8 +1049,54 @@ def _analyze_simple_command(
     # Compute suggestion for ask decisions: env-stripped command.
     # Always set — _analyze_simple_command is ONLY reached from command-matching.
     # Redirect/substitution asks come from _analyze_command and skip this function.
-    # So suggestion is not None iff ask came from command matching.
     suggestion = " ".join(tokens)
+
+    # Check if this command begins with transparent wrapper(s) (timeout, nohup, nice, ionice, etc.)
+    wrapper_offset = _unwrap_all_transparent_wrappers(tokens, config)
+    if wrapper_offset > 0:
+        # Check if the outer wrapper command itself is explicitly matched by a non-catch-all rule
+        from dippy.core.config import SimpleCommand, match_command
+
+        cmd = SimpleCommand(
+            words=words, raw_words=raw_words, word_has_expansions=word_has_expansions
+        )
+        config_match = match_command(cmd, config, cwd, context_flags, remote=remote)
+        if config_match and not _is_catch_all_pattern(config_match.pattern):
+            if config_match.decision == "deny":
+                msg = config_match.message or config_match.pattern
+                return Decision("deny", f"{base}: {msg}", context_flags=context_flags)
+            elif config_match.decision == "ask":
+                msg = config_match.message or config_match.pattern
+                return Decision(
+                    "ask",
+                    f"{base}: {msg}",
+                    context_flags=context_flags,
+                    suggestion=suggestion,
+                )
+            elif config_match.decision == "allow":
+                pattern = config_match.pattern
+                if pattern.startswith(base + " "):
+                    reason = pattern
+                else:
+                    reason = f"{base} ({pattern})"
+                return Decision("allow", reason, context_flags=context_flags)
+
+        # Unwrapped: analyze inner command directly
+        inner_words = words[i + wrapper_offset :]
+        inner_raw = raw_words[i + wrapper_offset :] if raw_words else ()
+        inner_exp = (
+            word_has_expansions[i + wrapper_offset :] if word_has_expansions else ()
+        )
+        return _analyze_simple_command(
+            inner_words,
+            config,
+            cwd,
+            context_flags,
+            remote=remote,
+            word_has_expansions=inner_exp,
+            raw_words=inner_raw,
+            redirects=redirects,
+        )
 
     # 1. Check config rules first (highest priority)
     from dippy.core.config import SimpleCommand, match_command
@@ -888,6 +1202,10 @@ def _analyze_simple_command(
     # 6. Custom wrapper commands (configured via 'wrapper' directive)
     if base in config.wrappers:
         info = config.wrappers[base]
+        if info.transparent:
+            return Decision(
+                "ask", base, context_flags=context_flags, suggestion=suggestion
+            )
         dest, inner_cmd, context_value = _extract_wrapper_args(tokens, info)
 
         if not inner_cmd:
