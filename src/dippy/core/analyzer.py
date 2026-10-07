@@ -1231,11 +1231,30 @@ def _analyze_simple_command(
                 marker_idx = -1
 
             if marker_idx >= 0:
-                canonical_marker_idx = trigger_idx + 1
                 content = _quoted_heredoc_content(redirects)
+                has_expansions = bool(
+                    word_has_expansions
+                    and any(word_has_expansions[i + k] for k in range(marker_idx + 1))
+                )
+                intermediate = tokens[trigger_idx + 1 : marker_idx]
+                valid_options = True
+                prev_was_flag = False
+                for opt in intermediate:
+                    if opt == "--":
+                        valid_options = False
+                        break
+                    if opt.startswith("-"):
+                        prev_was_flag = True
+                    elif prev_was_flag:
+                        prev_was_flag = False
+                    else:
+                        valid_options = False
+                        break
+
                 valid_input = (
-                    marker_idx == canonical_marker_idx
-                    and marker_idx == len(tokens) - 1
+                    marker_idx == len(tokens) - 1
+                    and not has_expansions
+                    and valid_options
                     and content is not None
                 )
                 if not valid_input:

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.10] - 2026-10-07
+
+### Fixed
+
+- Wrapper commands with `--script-stdin` permit wrapper options (such as `--timeout <N>`) between the trigger subcommand and the script marker, validating that the marker remains the final token and intermediate options contain no shell expansions.
+
 ## [0.4.9] - 2026-10-06
 
 ### Fixed

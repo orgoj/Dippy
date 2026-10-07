@@ -586,15 +586,16 @@ allow [cca-tmux-cli,l2] ls *
 4. **Recursive analysis**: Analyzes the `inner_command` recursively.
 5. **Remote mode**: Inner commands are automatically analyzed with `remote=True`, which skips local path checks (ideal for SSH/containers).
 
-With `--script-stdin`, the marker must be the first and last word after the
-wrapper trigger, and the command must have exactly one non-empty quoted heredoc
-redirect. Dippy analyzes that literal body recursively in remote mode. Unquoted
-heredocs, pipelines, files, variables and inline arguments do not enter script
-mode and therefore remain on `ask`. Additional output redirects are checked
-against the normal redirect rules, so an allowed log target does not prevent
-script analysis. Redirects that change stdin or use variable file descriptors
-remain on `ask`. This strict form keeps
-local shell expansion and indirect input out of auto-approved multiline scripts.
+With `--script-stdin`, the marker must be the final word of the wrapper command
+after the trigger (preceded only by valid wrapper option flags and their values),
+and the command must have exactly one non-empty quoted heredoc redirect. Dippy
+analyzes that literal body recursively in remote mode. Unquoted heredocs,
+pipelines, files, variables and inline arguments do not enter script mode and
+therefore remain on `ask`. Additional output redirects are checked against the
+normal redirect rules, so an allowed log target does not prevent script analysis.
+Redirects that change stdin or use variable file descriptors remain on `ask`.
+This strict form keeps local shell expansion and indirect input out of
+auto-approved multiline scripts.
 
 **Wrapper flags only exist once the trigger is found.** `cca-tmux-cli -t host read`
 (no `run`) is analyzed as a plain command, so `[cca-tmux-cli]` rules do not apply

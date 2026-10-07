@@ -354,9 +354,42 @@ REMOTE""",
 
         assert result.action == "allow"
 
-    def test_wrapper_options_before_script_marker_ask(self):
+    def test_wrapper_options_before_script_marker_allowed(self):
         result = analyze(
             """fictionalwrap -t server1 run --timeout 3 --script <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+
+    def test_multiple_wrapper_options_before_script_marker_allowed(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --timeout 600 --interval 2 --script <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "allow"
+
+    def test_wrapper_options_with_expansion_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run --timeout $(fictionalread /one) --script <<'REMOTE'
+fictionalread /one
+REMOTE""",
+            self.config(),
+            Path.cwd(),
+        )
+
+        assert result.action == "ask"
+
+    def test_wrapper_positional_command_before_script_marker_asks(self):
+        result = analyze(
+            """fictionalwrap -t server1 run extra_cmd --script <<'REMOTE'
 fictionalread /one
 REMOTE""",
             self.config(),
@@ -539,6 +572,7 @@ class TestScriptOutputRedirects:
     @pytest.fixture(
         params=[
             "fictionalwrap -t server1 run --script",
+            "fictionalwrap -t server1 run --timeout 600 --script",
             "dippy run",
             "dippy run-on-server server1",
         ]
