@@ -22,6 +22,7 @@ TESTS = [
     ("psql -U postgres -c 'SELECT 1'", True),
     ("psql -c 'SHOW search_path'", True),
     ("psql -c 'EXPLAIN SELECT * FROM users'", True),
+    ("psql -c \"SELECT '192.168.1.5'::INET <<= '192.168.1.0/24'::INET\"", True),
     # Output format options with read-only
     ("psql -A -c 'SELECT 1'", True),
     ("psql -H -c 'SELECT 1'", True),

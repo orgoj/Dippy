@@ -12,6 +12,7 @@ import sqlglot
 from sqlglot import exp
 from sqlglot.errors import ErrorLevel, ParseError, TokenError, UnsupportedError
 from sqlglot.tokens import TokenType
+from sqlglot.trie import new_trie
 
 _WHITESPACE_PATTERN = re.compile(r"\s+")
 _KEYWORD_PATTERN = re.compile(r"[A-Za-z_]\w*")
@@ -115,6 +116,70 @@ class _TypeSpanParserMixin:
                 self._tokens[self._index - 1].end + 1,
             )
         return node
+
+    def _parse_comparison(self):
+        this = self._parse_range()
+        while True:
+            if self._match_set(self.COMPARISON):
+                this = self.expression(
+                    self.COMPARISON[self._prev.token_type],
+                    this=this,
+                    comments=self._prev_comments,
+                    expression=self._parse_range(),
+                )
+            elif self._match(TokenType.OPERATOR) and self._prev.text in {"<<=", ">>="}:
+                op = self._prev.text
+                this = exp.Operator(
+                    this=this,
+                    expression=self._parse_range(),
+                    operator=op,
+                )
+            else:
+                break
+        return this
+
+
+def _register_inet_operators(dialect_class: type[sqlglot.Dialect]) -> None:
+    dialect_class.Tokenizer.KEYWORDS["<<="] = TokenType.OPERATOR
+    dialect_class.Tokenizer.KEYWORDS[">>="] = TokenType.OPERATOR
+    dialect_class.Tokenizer._KEYWORD_TRIE = new_trie(
+        key.upper()
+        for key in (
+            *dialect_class.Tokenizer.KEYWORDS,
+            *dialect_class.Tokenizer._COMMENTS,
+            *dialect_class.Tokenizer._QUOTES,
+            *dialect_class.Tokenizer._FORMAT_STRINGS,
+        )
+        if " " in key
+        or any(single in key for single in dialect_class.Tokenizer.SINGLE_TOKENS)
+    )
+    dialect_class.Generator.TRANSFORMS[exp.Operator] = (
+        lambda self,
+        e: f"{self.sql(e, 'this')} {e.args['operator']} {self.sql(e, 'expression')}"
+    )
+    if (
+        hasattr(dialect_class.Parser, "RANGE_PARSERS")
+        and TokenType.OPERATOR in dialect_class.Parser.RANGE_PARSERS
+    ):
+        orig_op = dialect_class.Parser.RANGE_PARSERS[TokenType.OPERATOR]
+
+        def _custom_range_operator(
+            self, this: exp.Expression | None
+        ) -> exp.Expression | None:
+            if self._prev and self._prev.text in {"<<=", ">>="}:
+                op_text = self._prev.text
+                return exp.Operator(
+                    this=this,
+                    expression=self._parse_bitwise(),
+                    operator=op_text,
+                )
+            return orig_op(self, this)
+
+        dialect_class.Parser.RANGE_PARSERS[TokenType.OPERATOR] = _custom_range_operator
+
+
+_register_inet_operators(sqlglot.dialects.DuckDB)
+_register_inet_operators(sqlglot.dialects.Postgres)
 
 
 def _parse_sql(sql: str, dialect: str | None) -> list[exp.Expression | None]:

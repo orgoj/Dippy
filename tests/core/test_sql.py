@@ -893,3 +893,25 @@ class TestIdentifierQuoting:
     def test_bracket_table_name(self):
         sql = "SELECT * FROM [INSERT]"
         assert is_readonly_sql(sql) is True
+
+
+class TestInetOperators:
+    """Test network / INET subnet containment operators (DuckDB and PostgreSQL)."""
+
+    @pytest.mark.parametrize("dialect", ["duckdb", "postgres"])
+    @pytest.mark.parametrize(
+        "op",
+        ["<<=", ">>="],
+    )
+    def test_inet_subnet_containment_operators(self, dialect, op):
+        sql = f"SELECT '192.168.1.5'::INET {op} '192.168.1.0/24'::INET"
+        assert is_readonly_sql(sql, dialect=dialect) is True
+
+    def test_duckdb_inet_subnet_containment_in_cte_query(self):
+        sql = (
+            "WITH ips AS (SELECT DISTINCT c_ip FROM access WHERE substr(time_local,1,11) IN "
+            "('04/Oct/2026','05/Oct/2026') AND (cs_user_agent LIKE '%WP-Safe-Scanner%')) "
+            "SELECT count(*) ips_celkem, count(il.label) ips_v_ip_labels "
+            "FROM ips LEFT JOIN ip_labels il ON TRY_CAST(ips.c_ip AS INET) <<= il.cidr::INET"
+        )
+        assert is_readonly_sql(sql, dialect="duckdb") is True

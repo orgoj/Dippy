@@ -402,3 +402,15 @@ def test_readonly_sql_rejects_shell_expansion(check, expansion):
     assert needs_confirmation(
         check(f"duckdb -readonly data.db \"SELECT '{expansion}'\"")
     )
+
+
+def test_duckdb_readonly_inet_subnet_containment_auto_approves(check):
+    command = (
+        'duckdb -readonly -csv server-logs/gate2/gate2.db "WITH ips AS ('
+        "SELECT DISTINCT c_ip FROM access WHERE substr(time_local,1,11) IN "
+        "('04/Oct/2026','05/Oct/2026','06/Oct/2026','07/Oct/2026','08/Oct/2026') "
+        "AND (cs_user_agent LIKE '%WP-Safe-Scanner%' OR cs_user_agent LIKE 'Hello from Palo Alto Networks%')) "
+        "SELECT count(*) ips_celkem, count(il.label) ips_v_ip_labels, string_agg(DISTINCT il.label, ',') labels "
+        'FROM ips LEFT JOIN ip_labels il ON TRY_CAST(ips.c_ip AS INET) <<= il.cidr::INET"'
+    )
+    assert is_approved(check(command))
