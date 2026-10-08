@@ -626,9 +626,12 @@ Later definitions of the same wrapper name override earlier ones.
 
 **Built-in wrappers vs custom:**
 
-Built-in wrappers (`ssh`, `sudo`) work the same way but are predefined. SSH
-adds both `ssh` and the exact target token as context flags, so
-`allow [ssh,ferda7] tail *` does not apply to another host. Custom wrappers let
+Built-in wrappers (`ssh`, `sudo`, `docker exec`, `podman exec`) work the same way
+but are predefined. SSH adds both `ssh` and the exact target host as context flags,
+so `allow [ssh,ferda7] tail *` does not apply to another host. Similarly,
+`docker exec` and `podman exec` add `docker`/`podman` and the exact container
+name as context flags, so `allow [docker,mycontainer] grep *` or
+`deny [prod_db] *` apply specifically to that container. Custom wrappers let
 you define project-specific tools with the same context-aware control.
 
 **Flag syntax:**

@@ -570,3 +570,136 @@ class TestDockerExecRemoteMode:
         )
         # sh -c delegates, and the inner command should not resolve paths against host
         assert is_approved(result)
+
+
+class TestDockerWrapperContext:
+    """Test that docker exec and podman exec set wrapper_context for context-aware rules."""
+
+    def test_docker_exec_sets_wrapper_context(self):
+        from dippy.cli.docker import classify, HandlerContext
+
+        result = classify(
+            HandlerContext(["docker", "exec", "mycontainer", "fictional_cmd"])
+        )
+        assert result.action == "delegate"
+        assert result.inner_command == "fictional_cmd"
+        assert result.wrapper_context == ["docker", "mycontainer"]
+        assert result.description == "docker exec mycontainer"
+
+    def test_docker_exec_with_flags_sets_wrapper_context(self):
+        from dippy.cli.docker import classify, HandlerContext
+
+        result = classify(
+            HandlerContext(
+                [
+                    "docker",
+                    "exec",
+                    "-it",
+                    "-u",
+                    "root",
+                    "--env",
+                    "FOO=bar",
+                    "mycontainer",
+                    "fictional_cmd",
+                    "arg",
+                ]
+            )
+        )
+        assert result.action == "delegate"
+        assert result.inner_command == "fictional_cmd arg"
+        assert result.wrapper_context == ["docker", "mycontainer"]
+        assert result.description == "docker exec mycontainer"
+
+    def test_docker_exec_with_double_dash_sets_wrapper_context(self):
+        from dippy.cli.docker import classify, HandlerContext
+
+        result = classify(
+            HandlerContext(
+                ["docker", "exec", "-it", "--", "mycontainer", "fictional_cmd"]
+            )
+        )
+        assert result.action == "delegate"
+        assert result.inner_command == "fictional_cmd"
+        assert result.wrapper_context == ["docker", "mycontainer"]
+
+    def test_podman_exec_sets_wrapper_context(self):
+        from dippy.cli.docker import classify, HandlerContext
+
+        result = classify(
+            HandlerContext(["podman", "exec", "mycontainer", "fictional_cmd"])
+        )
+        assert result.action == "delegate"
+        assert result.inner_command == "fictional_cmd"
+        assert result.wrapper_context == ["podman", "mycontainer"]
+        assert result.description == "podman exec mycontainer"
+
+    def test_docker_exec_without_inner_command_no_wrapper_context(self):
+        from dippy.cli.docker import classify, HandlerContext
+
+        result = classify(HandlerContext(["docker", "exec", "mycontainer"]))
+        assert result.action == "ask"
+        assert result.wrapper_context is None
+
+    def test_docker_exec_context_flag_matching(self, check, tmp_path):
+        """Rules using [docker, container] and [container] flags match inner command."""
+        from dippy.core.config import parse_config
+
+        config = parse_config(
+            """
+            deny [bad_container] fictional_cmd *
+            allow [docker,good_container] fictional_cmd *
+            allow [podman_container] fictional_cmd *
+            """
+        )
+        # 1. Allowed on good_container with [docker,good_container]
+        res1 = check("docker exec good_container fictional_cmd run", config, tmp_path)
+        assert is_approved(res1)
+
+        # 2. Denied on bad_container with [bad_container]
+        res2 = check("docker exec bad_container fictional_cmd run", config, tmp_path)
+        assert not is_approved(res2)
+
+        # 3. Unmatched container asks
+        res3 = check("docker exec other_container fictional_cmd run", config, tmp_path)
+        assert needs_confirmation(res3)
+
+        # 4. Podman container matching [podman_container]
+        res4 = check("podman exec podman_container fictional_cmd run", config, tmp_path)
+        assert is_approved(res4)
+
+    def test_docker_exec_inside_remote_wrapper(self, check, tmp_path):
+        """docker exec inside cca-tmux-cli inherits wrapper context and passes remote allowlist."""
+        from dippy.core.config import parse_config
+
+        config = parse_config(
+            """
+            wrapper cca-tmux-cli --cmd run --context -t --script-stdin --script
+            ask [cca-tmux-cli] * "Not in remote allowlist"
+            delegate [cca-tmux-cli] docker *
+            allow [cca-tmux-cli,mp2a2] fictional_cmd *
+            """
+        )
+        cmd_allowed = """cca-tmux-cli -t ryzen2 run --script <<'REMOTE'
+docker exec mp2a2 fictional_cmd --arg
+REMOTE"""
+        res_allowed = check(cmd_allowed, config, tmp_path)
+        assert is_approved(res_allowed)
+
+        cmd_other = """cca-tmux-cli -t ryzen2 run --script <<'REMOTE'
+docker exec other_cont fictional_cmd --arg
+REMOTE"""
+        res_other = check(cmd_other, config, tmp_path)
+        assert needs_confirmation(res_other)
+
+    def test_docker_exec_bypass_protection(self, check, tmp_path):
+        """Unapproved or destructive commands inside container stay on ask/deny."""
+        from dippy.core.config import parse_config
+
+        config = parse_config(
+            """
+            allow [docker,good_container] fictional_cmd *
+            """
+        )
+        # Destructive bypass command is not allowed
+        res = check("docker exec good_container rm -rf /", config, tmp_path)
+        assert not is_approved(res)

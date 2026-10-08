@@ -192,13 +192,19 @@ EXEC_FLAGS_NO_ARG = frozenset(
 )
 
 
-def _extract_exec_inner_command(tokens: list[str]) -> list[str] | None:
-    """Extract command from docker exec args (after container name)."""
+def _extract_exec_container_and_command(
+    tokens: list[str],
+) -> tuple[str | None, list[str] | None]:
+    """Extract container name and inner command from docker exec args."""
     i = 0
+    container = None
     while i < len(tokens):
         token = tokens[i]
         if token == "--":
             i += 1
+            if container is None and i < len(tokens):
+                container = tokens[i]
+                i += 1
             break
         if token in EXEC_FLAGS_WITH_ARG:
             i += 2
@@ -211,10 +217,22 @@ def _extract_exec_inner_command(tokens: list[str]) -> list[str] | None:
             # Boolean flag or unknown flag with arg
             i += 1
             continue
-        # First non-flag is container name, skip it
+        # First non-flag is container name
+        container = token
         i += 1
         break
-    return tokens[i:] if i < len(tokens) else None
+
+    if i < len(tokens) and tokens[i] == "--":
+        i += 1
+
+    inner_tokens = tokens[i:] if i < len(tokens) else None
+    return container, inner_tokens
+
+
+def _extract_exec_inner_command(tokens: list[str]) -> list[str] | None:
+    """Extract command from docker exec args (after container name)."""
+    _, inner_tokens = _extract_exec_container_and_command(tokens)
+    return inner_tokens
 
 
 def _get_description(tokens: list[str]) -> str:
@@ -290,12 +308,22 @@ def classify(ctx: HandlerContext) -> Classification:
 
     # Handle exec - delegate to inner command with remote mode
     if action == "exec":
-        inner_tokens = _extract_exec_inner_command(rest)
+        container, inner_tokens = _extract_exec_container_and_command(rest)
         if inner_tokens:
             inner_cmd = bash_join(inner_tokens)
+            wrapper_name = "podman" if "podman" in tokens[0] else "docker"
+            wrapper_context = [wrapper_name]
+            if container:
+                wrapper_context.append(container)
+            desc = f"{tokens[0]} exec {container}" if container else desc
             return Classification(
-                "delegate", inner_command=inner_cmd, description=desc, remote=True
+                "delegate",
+                inner_command=inner_cmd,
+                description=desc,
+                wrapper_context=wrapper_context,
+                remote=True,
             )
+        desc = f"{tokens[0]} exec {container}" if container else desc
         return Classification("ask", description=desc)
 
     # Unsafe actions or unknown
