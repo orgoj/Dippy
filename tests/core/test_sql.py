@@ -939,3 +939,15 @@ class TestCteColumnAliases:
     def test_cte_with_column_alias_write_is_rejected(self):
         sql = "WITH n(net) AS (VALUES ('147.45.142')) DELETE FROM n"
         assert is_readonly_sql(sql, dialect="duckdb") is False
+
+
+class TestDuckDbAggregates:
+    """Test DuckDB aggregate functions that parse as Anonymous expressions."""
+
+    @pytest.mark.parametrize(
+        "func",
+        ["mode", "entropy", "kurtosis", "skewness", "mad", "bit_xor", "product"],
+    )
+    def test_duckdb_pure_aggregates_are_readonly(self, func):
+        sql = f"SELECT {func}(host) FROM t GROUP BY ua"
+        assert is_readonly_sql(sql, dialect="duckdb") is True

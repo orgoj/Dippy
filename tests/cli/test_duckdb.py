@@ -424,3 +424,15 @@ def test_duckdb_cte_with_column_aliases_auto_approves(check):
         'SELECT u.c_ip, n.kdo FROM u LEFT JOIN nase n ON u.c_ip=n.ip"'
     )
     assert is_approved(check(command))
+
+
+def test_duckdb_mode_aggregate_auto_approves(check):
+    command = (
+        'duckdb -readonly -markdown server-logs/gate2/gate2.db "WITH u AS ('
+        "SELECT DISTINCT ON (rid) rid, c_ip, sid, cs_user_agent ua, http_referer, "
+        "regexp_extract(domain,'([^ ]+)$',1) host FROM access WHERE isrobot='0'), "
+        "sc AS (SELECT sid, count(*) n FROM access GROUP BY 1) "
+        "SELECT count(*) reqs, count(DISTINCT c_ip) ips, mode(host) top_host "
+        'FROM u LEFT JOIN sc USING (sid) GROUP BY ROLLUP (ua)"'
+    )
+    assert is_approved(check(command))

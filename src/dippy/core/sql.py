@@ -84,6 +84,7 @@ _MAIN_WRITE_PREFIXES = {
 # https://duckdb.org/docs/stable/sql/functions/interval
 # https://duckdb.org/docs/stable/sql/functions/utility
 # https://duckdb.org/docs/stable/sql/functions/list
+# https://duckdb.org/docs/stable/sql/functions/aggregates
 _DUCKDB_READONLY_FUNCTIONS = frozenset(
     {
         "stats",
@@ -100,6 +101,31 @@ _DUCKDB_READONLY_FUNCTIONS = frozenset(
         "to_seconds",
         "to_weeks",
         "to_years",
+        # Pure aggregate functions missing from SQLGlot's dialect mapping
+        "bit_and",
+        "bit_or",
+        "bit_xor",
+        "entropy",
+        "fsum",
+        "geometric_mean",
+        "histogram",
+        "kahan_sum",
+        "kurtosis",
+        "kurtosis_pop",
+        "mad",
+        "mode",
+        "product",
+        "regr_avgx",
+        "regr_avgy",
+        "regr_count",
+        "regr_intercept",
+        "regr_r2",
+        "regr_slope",
+        "regr_sxx",
+        "regr_sxy",
+        "regr_syy",
+        "reservoir_quantile",
+        "skewness",
     }
 )
 
