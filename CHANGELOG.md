@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.13] - 2026-10-08
+
+### Fixed
+
+- SQL statement splitting and read-only classification in `dippy.core.sql` supports CTE definitions with column aliases (e.g. `WITH name(c1, c2) AS (VALUES ...)`), correctly resolving the root query keyword instead of halting on `AS`.
+
 ## [0.4.12] - 2026-10-08
 
 ### Fixed

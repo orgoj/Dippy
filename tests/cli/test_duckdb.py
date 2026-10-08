@@ -414,3 +414,13 @@ def test_duckdb_readonly_inet_subnet_containment_auto_approves(check):
         'FROM ips LEFT JOIN ip_labels il ON TRY_CAST(ips.c_ip AS INET) <<= il.cidr::INET"'
     )
     assert is_approved(check(command))
+
+
+def test_duckdb_cte_with_column_aliases_auto_approves(check):
+    command = (
+        'duckdb -readonly -csv server-logs/gate2/gate2.db "WITH u AS ('
+        "SELECT DISTINCT ON (rid) rid, c_ip FROM access), "
+        "nase(ip, kdo) AS (VALUES ('145.239.12.84','gate2')) "
+        'SELECT u.c_ip, n.kdo FROM u LEFT JOIN nase n ON u.c_ip=n.ip"'
+    )
+    assert is_approved(check(command))

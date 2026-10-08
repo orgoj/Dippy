@@ -915,3 +915,27 @@ class TestInetOperators:
             "FROM ips LEFT JOIN ip_labels il ON TRY_CAST(ips.c_ip AS INET) <<= il.cidr::INET"
         )
         assert is_readonly_sql(sql, dialect="duckdb") is True
+
+
+class TestCteColumnAliases:
+    """Test CTE definitions with column aliases: WITH name(col1, col2) AS (...)."""
+
+    def test_cte_with_column_alias_is_readonly(self):
+        sql = "WITH n(net) AS (VALUES ('147.45.142')) SELECT * FROM n"
+        assert is_readonly_sql(sql, dialect="duckdb") is True
+
+    def test_multiple_ctes_with_column_aliases_is_readonly(self):
+        sql = (
+            "WITH u AS (SELECT 1 a), "
+            "nase(ip, kdo) AS (VALUES ('145.239.12.84', 'gate2')) "
+            "SELECT u.a, n.kdo FROM u LEFT JOIN nase n ON u.a = 1"
+        )
+        assert is_readonly_sql(sql, dialect="duckdb") is True
+
+    def test_recursive_cte_with_column_aliases_is_readonly(self):
+        sql = "WITH RECURSIVE t(n) AS (VALUES (1)) SELECT * FROM t"
+        assert is_readonly_sql(sql, dialect="duckdb") is True
+
+    def test_cte_with_column_alias_write_is_rejected(self):
+        sql = "WITH n(net) AS (VALUES ('147.45.142')) DELETE FROM n"
+        assert is_readonly_sql(sql, dialect="duckdb") is False

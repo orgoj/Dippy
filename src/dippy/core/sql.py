@@ -571,15 +571,23 @@ def _skip_whitespace(sql: str, pos: int) -> int:
 
 
 def _skip_cte(sql: str, pos: int) -> int:
-    """Skip over CTE definitions (name AS (...), ...) to find main statement."""
+    """Skip over CTE definitions (name [(cols)] AS (...), ...) to find main statement."""
     length = len(sql)
-    expect_as = True  # After WITH/comma, expect: name AS (...)
     while pos < length:
         pos = _skip_whitespace(sql, pos)
         if pos >= length:
             break
-        # Check for opening paren - skip balanced parens
-        if sql[pos] == "(":
+        m = _KEYWORD_PATTERN.match(sql, pos)
+        if not m:
+            break
+        kw = m.group().upper()
+        if kw == "RECURSIVE":
+            pos = _skip_whitespace(sql, m.end())
+            continue
+        # CTE name
+        pos = _skip_whitespace(sql, m.end())
+        # Optional column list: (col1, col2, ...)
+        if pos < length and sql[pos] == "(":
             depth = 1
             pos += 1
             while pos < length and depth > 0:
@@ -588,27 +596,30 @@ def _skip_cte(sql: str, pos: int) -> int:
                 elif sql[pos] == ")":
                     depth -= 1
                 pos += 1
-            expect_as = False
-            continue
-        # Check for comma (another CTE follows)
-        if sql[pos] == ",":
+            pos = _skip_whitespace(sql, pos)
+        # Expect AS
+        m_as = _KEYWORD_PATTERN.match(sql, pos)
+        if not m_as or m_as.group().upper() != "AS":
+            break
+        pos = _skip_whitespace(sql, m_as.end())
+        # Expect CTE body in parens
+        if pos < length and sql[pos] == "(":
+            depth = 1
             pos += 1
-            expect_as = True
+            while pos < length and depth > 0:
+                if sql[pos] == "(":
+                    depth += 1
+                elif sql[pos] == ")":
+                    depth -= 1
+                pos += 1
+            pos = _skip_whitespace(sql, pos)
+        else:
+            break
+        # If comma, another CTE follows
+        if pos < length and sql[pos] == ",":
+            pos += 1
             continue
-        # Check for identifier/keyword
-        m = _KEYWORD_PATTERN.match(sql, pos)
-        if m:
-            kw = m.group().upper()
-            if expect_as:
-                pos = m.end()
-                if kw == "AS":
-                    expect_as = False
-                elif kw == "RECURSIVE":
-                    pass  # WITH RECURSIVE - still expect CTE name
-                continue
-            # Not expecting AS - this should be the main statement keyword
-            return pos
-        pos += 1
+        return pos
     return pos
 
 
