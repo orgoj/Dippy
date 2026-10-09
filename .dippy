@@ -2,6 +2,9 @@
 
 include .dippy-yolo
 
+allow rm tmp/*
+allow debug/check-rule.py*
+
 #---- File Operations ----#
 allow-read ./**
 allow-edit ./**
