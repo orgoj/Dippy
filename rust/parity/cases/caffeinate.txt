@@ -1,0 +1,25 @@
+# Commands from tests/cli/test_caffeinate.py
+caffeinate
+caffeinate -d
+caffeinate -i
+caffeinate -m
+caffeinate -s
+caffeinate -u
+caffeinate -disu
+caffeinate -t 3600
+caffeinate -w 1234
+caffeinate -u -t 3600
+caffeinate -i ls -la
+caffeinate ls
+caffeinate -i rm -rf /
+caffeinate rm foo
+caffeinate -i make
+caffeinate -i echo '(a)'
+caffeinate -i echo 'a;zonk'
+# Edge cases
+caffeinate -
+caffeinate -dix ls
+caffeinate -t
+caffeinate -w 1 -t 5
+caffeinate -sm sh -c 'rm -rf /'
+caffeinate -- ls

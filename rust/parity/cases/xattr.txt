@@ -1,0 +1,18 @@
+# Commands from tests/cli/test_xattr.py
+xattr file.txt
+xattr -l file.txt
+xattr -p com.apple.quarantine file.txt
+xattr -pl com.apple.quarantine file.txt
+xattr -lx file.txt
+xattr -px com.apple.metadata file.txt
+xattr -w com.apple.quarantine 0 file.txt
+xattr -d com.apple.quarantine file.txt
+xattr -c file.txt
+xattr -wd com.apple.quarantine file.txt
+xattr -cd file.txt
+xattr -cr /path/to/dir
+# Edge cases
+xattr -
+xattr --delete f
+xattr -lr f
+xattr -cr f

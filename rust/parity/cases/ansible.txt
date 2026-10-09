@@ -1,0 +1,160 @@
+# Commands from tests/cli/test_ansible.py
+ansible --help
+ansible -h
+ansible --version
+ansible all --list-hosts
+ansible webservers --list-hosts
+ansible all -m ping --check
+ansible all -C -m command -a 'uptime'
+ansible all --check -m shell -a 'df -h'
+ansible all -m ping
+ansible all -m command -a 'uptime'
+ansible all -m shell -a 'df -h'
+ansible webservers -m setup
+ansible all -b -m apt -a 'name=nginx state=present'
+ansible all -i inventory.ini -m ping
+ansible all -m debug -a 'var=groups.keys()'
+ansible-playbook --help
+ansible-playbook -h
+ansible-playbook --version
+ansible-playbook playbook.yml --syntax-check
+ansible-playbook playbook.yml --list-hosts
+ansible-playbook playbook.yml --list-tasks
+ansible-playbook playbook.yml --list-tags
+ansible-playbook playbook.yml --check
+ansible-playbook playbook.yml -C
+ansible-playbook playbook.yml --check --diff
+ansible-playbook playbook.yml -C -D
+ansible-playbook -i inventory.ini playbook.yml --syntax-check
+ansible-playbook playbook.yml
+ansible-playbook site.yml -i inventory.ini
+ansible-playbook playbook.yml -e 'var=value'
+ansible-playbook playbook.yml --tags deploy
+ansible-playbook playbook.yml --skip-tags tests
+ansible-playbook playbook.yml --start-at-task 'Install nginx'
+ansible-playbook playbook.yml --step
+ansible-playbook playbook.yml --diff
+ansible-vault --help
+ansible-vault -h
+ansible-vault view secrets.yml
+ansible-vault view --vault-password-file pass.txt secrets.yml
+ansible-vault create secrets.yml
+ansible-vault create --vault-password-file pass.txt secrets.yml
+ansible-vault edit secrets.yml
+ansible-vault encrypt secrets.yml
+ansible-vault encrypt --vault-password-file pass.txt secrets.yml
+ansible-vault encrypt_string
+ansible-vault encrypt_string 'secret' --name 'my_secret'
+ansible-vault decrypt secrets.yml
+ansible-vault rekey secrets.yml
+ansible-vault rekey --vault-password-file old.txt --new-vault-password-file new.txt secrets.yml
+ansible-galaxy --help
+ansible-galaxy -h
+ansible-galaxy role --help
+ansible-galaxy collection --help
+ansible-galaxy role list
+ansible-galaxy role search nginx
+ansible-galaxy role search nginx -v
+ansible-galaxy role info geerlingguy.nginx
+ansible-galaxy collection list
+ansible-galaxy collection verify community.general
+ansible-galaxy role init my_role
+ansible-galaxy role install geerlingguy.nginx
+ansible-galaxy role install -r requirements.yml
+ansible-galaxy role remove geerlingguy.nginx
+ansible-galaxy role delete namespace role_name
+ansible-galaxy role import github_user repo_name
+ansible-galaxy role setup integration_id github_user secret
+ansible-galaxy collection init my_namespace.my_collection
+ansible-galaxy collection install community.general
+ansible-galaxy collection install -r requirements.yml
+ansible-galaxy collection download community.general
+ansible-galaxy collection build
+ansible-galaxy collection publish ./my_collection-1.0.0.tar.gz
+ansible-inventory --help
+ansible-inventory -h
+ansible-inventory --list
+ansible-inventory --list -i inventory.ini
+ansible-inventory --list --yaml
+ansible-inventory --list -y
+ansible-inventory --host webserver1
+ansible-inventory --graph
+ansible-inventory --graph --vars
+ansible-inventory --graph all
+ansible-inventory --list --output inventory.json
+ansible-inventory --list -i hosts --output out.json
+ansible-doc --help
+ansible-doc -h
+ansible-doc -l
+ansible-doc --list
+ansible-doc -t callback -l
+ansible-doc -t connection -l
+ansible-doc ping
+ansible-doc file
+ansible-doc -t callback debug
+ansible-doc -s ping
+ansible-doc --snippet ping
+ansible-doc -j ping
+ansible-doc --json ping
+ansible-doc -F
+ansible-doc --list_files
+ansible-pull --help
+ansible-pull -h
+ansible-pull -U https://github.com/user/repo --list-hosts
+ansible-pull -U https://github.com/user/repo --check
+ansible-pull -U https://github.com/user/repo -C playbook.yml
+ansible-pull -U https://github.com/user/repo
+ansible-pull -U https://github.com/user/repo playbook.yml
+ansible-pull -U https://github.com/user/repo -C main playbook.yml
+ansible-pull -U https://github.com/user/repo -i hosts playbook.yml
+ansible-config --help
+ansible-config -h
+ansible-config list
+ansible-config dump
+ansible-config dump --only-changed
+ansible-config view
+ansible-config validate
+ansible-config init
+ansible-config init --disabled
+ansible-console --help
+ansible-console -h
+ansible-console --list-hosts
+ansible-console all --list-hosts
+ansible-console
+ansible-console all
+ansible-console webservers
+ansible-console all -i inventory.ini
+ansible-lint --help
+ansible-lint -h
+ansible-lint playbook.yml
+ansible-lint playbook.yml roles/
+ansible-lint -x rule1,rule2 playbook.yml
+ansible-lint --exclude-rules rule1 playbook.yml
+ansible-lint -o playbook.yml
+ansible-lint --offline playbook.yml
+ansible-lint -p playbook.yml
+ansible-lint --parseable playbook.yml
+ansible-lint -r custom_rules/ playbook.yml
+ansible-lint .
+ansible-test --help
+ansible-test -h
+ansible-test env
+ansible-test sanity
+ansible-test sanity --test pep8
+ansible-test units
+ansible-test units --python 3.10
+ansible-test integration
+ansible-test network-integration
+ansible-test windows-integration
+ansible-test shell
+ansible-test coverage
+# Edge cases
+ansible-galaxy collection
+ansible-galaxy --force role install x
+ansible-vault -h
+ansible-inventory --host h --output o
+ansible-config
+ansible-test
+ansible-vault
+ansible-pull --check -U u
+ansible-playbook --list-tags p.yml

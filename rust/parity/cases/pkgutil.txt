@@ -1,0 +1,28 @@
+# Commands from tests/cli/test_pkgutil.py
+pkgutil --packages
+pkgutil --pkgs
+pkgutil --pkgs-plist
+pkgutil --pkgs=com.apple.*
+pkgutil --files com.apple.pkg.Safari
+pkgutil --export-plist com.apple.pkg.Safari
+pkgutil --pkg-info com.apple.pkg.Safari
+pkgutil --pkg-info-plist com.apple.pkg.Safari
+pkgutil --pkg-groups com.apple.pkg.Safari
+pkgutil --groups
+pkgutil --groups-plist
+pkgutil --group-pkgs com.apple.base
+pkgutil --file-info /usr/bin/zip
+pkgutil --file-info-plist /usr/bin/zip
+pkgutil --payload-files package.pkg
+pkgutil --check-signature package.pkg
+pkgutil --help
+pkgutil -h
+pkgutil --forget com.example.pkg
+pkgutil --learn /path/to/file --edit-pkg com.example.pkg
+pkgutil --expand package.pkg /tmp/expanded
+pkgutil --flatten /tmp/expanded package.pkg
+pkgutil --bom package.pkg
+# Edge cases
+pkgutil --pkgs=
+pkgutil --volume / --pkgs
+pkgutil --bom x --pkgs

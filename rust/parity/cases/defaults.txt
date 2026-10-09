@@ -1,0 +1,21 @@
+# Commands from tests/cli/test_defaults.py
+defaults read
+defaults read com.apple.Finder
+defaults read com.apple.Finder ShowPathbar
+defaults read -app Safari
+defaults read-type com.apple.Finder ShowPathbar
+defaults domains
+defaults find keyword
+defaults help
+defaults -currentHost read
+defaults -host localhost read com.apple.Finder
+defaults write com.apple.Finder ShowPathbar -bool true
+defaults write com.apple.Dock expose-animation-duration -float 0.1
+defaults rename com.apple.Finder old_key new_key
+defaults delete com.apple.Finder
+defaults delete com.apple.Finder ShowPathbar
+# Edge cases
+defaults -currentHost read
+defaults -host
+defaults -host h
+defaults -currentHost -host h write d k v

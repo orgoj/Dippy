@@ -1,0 +1,25 @@
+# Commands from tests/cli/test_profiles.py
+profiles help
+profiles status
+profiles status -type configuration
+profiles list
+profiles list -verbose
+profiles list -type provisioning
+profiles list -user alice
+profiles show
+profiles show -type configuration
+profiles show -all
+profiles validate -path /path/to/profile.mobileconfig
+profiles validate -type enrollment
+profiles version
+profiles remove -identifier com.example.profile
+profiles remove -all
+profiles remove -forced -identifier com.example.profile
+profiles sync
+profiles sync -type configuration
+profiles renew -identifier com.example.profile
+profiles renew -type configuration
+profiles
+# Edge cases
+profiles show -type enrollment
+profiles renew -type enrollment

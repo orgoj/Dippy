@@ -1,0 +1,33 @@
+# Commands from tests/cli/test_hdiutil.py
+hdiutil help
+hdiutil info
+hdiutil info -plist
+hdiutil verify image.dmg
+hdiutil verify -verbose image.dmg
+hdiutil checksum -type SHA256 image.dmg
+hdiutil imageinfo image.dmg
+hdiutil imageinfo -plist image.dmg
+hdiutil isencrypted image.dmg
+hdiutil plugins
+hdiutil pmap image.dmg
+hdiutil attach image.dmg
+hdiutil attach -readonly image.dmg
+hdiutil detach /dev/disk2
+hdiutil eject /dev/disk2
+hdiutil mount image.dmg
+hdiutil mountvol /dev/disk2s1
+hdiutil unmount /Volumes/MyDisk
+hdiutil create -size 100m output.dmg
+hdiutil create -srcfolder /path output.dmg
+hdiutil convert -format UDZO -o output.dmg input.dmg
+hdiutil compact sparse.sparseimage
+hdiutil resize -size 200m image.dmg
+hdiutil burn image.dmg
+hdiutil makehybrid -o output.iso /path
+hdiutil chpass image.dmg
+hdiutil erasekeys image.dmg
+hdiutil segment -segmentSize 100m -o output image.dmg
+hdiutil
+# Edge cases
+hdiutil pmap x
+hdiutil detach /Volumes/x

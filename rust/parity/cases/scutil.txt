@@ -1,0 +1,22 @@
+# Commands from tests/cli/test_scutil.py
+scutil --get ComputerName
+scutil --get HostName
+scutil --get LocalHostName
+scutil --dns
+scutil --proxy
+scutil -r example.com
+scutil -r 192.168.1.1
+scutil -r -W example.com
+scutil -w State:/Network/Global/IPv4
+scutil -w State:/Network/Global/IPv4 -t 10
+scutil --set ComputerName MyMac
+scutil --set HostName myhost.local
+scutil --set LocalHostName mylocal
+scutil --renew en0
+scutil
+scutil --prefs
+scutil --nc list
+scutil --nc start MyVPN
+# Edge cases
+scutil -r host
+scutil --nc list

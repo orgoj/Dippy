@@ -1,0 +1,406 @@
+# Commands from tests/cli/test_brew.py
+brew info
+brew info python
+brew info python@3.11
+brew info --json python
+brew info --json=v2 python
+brew info --installed
+brew info --all
+brew info --analytics
+brew info --cask firefox
+brew info --formula python
+brew info --github python
+brew info --verbose python
+brew info -v python
+brew list
+brew ls
+brew list python
+brew list --formula
+brew list --formulae
+brew list --cask
+brew list --casks
+brew list --full-name
+brew list --versions
+brew list --pinned
+brew list --multiple
+brew list -1
+brew list -l
+brew list -r
+brew list -t
+brew list --installed-on-request
+brew list --installed-as-dependency
+brew list --poured-from-bottle
+brew list --built-from-source
+brew list --verbose
+brew list -v
+brew search
+brew search python
+brew search /python/
+brew search --formula python
+brew search --formulae python
+brew search --cask firefox
+brew search --casks firefox
+brew search --desc python
+brew search --eval-all python
+brew search --pull-request python
+brew search --open python
+brew search --closed python
+brew -S python
+brew deps
+brew deps python
+brew deps --tree python
+brew deps --graph python
+brew deps --dot python
+brew deps --installed
+brew deps --all
+brew deps --direct python
+brew deps -1 python
+brew deps --union python ruby
+brew deps --full-name python
+brew deps --topological python
+brew deps -n python
+brew deps --include-build python
+brew deps --include-optional python
+brew deps --include-test python
+brew deps --skip-recommended python
+brew deps --missing python
+brew deps --annotate python
+brew deps --formula python
+brew deps --cask firefox
+brew deps --for-each python ruby
+brew deps --eval-all
+brew desc
+brew desc python
+brew desc --search python
+brew desc -s python
+brew desc --name python
+brew desc -n python
+brew desc --description python
+brew desc -d python
+brew desc --eval-all
+brew desc --formula python
+brew desc --cask firefox
+brew leaves
+brew leaves --installed-on-request
+brew leaves -r
+brew leaves --installed-as-dependency
+brew leaves -p
+brew leaves --verbose
+brew leaves -v
+brew uses
+brew uses python
+brew uses --recursive python
+brew uses --installed python
+brew uses --missing python
+brew uses --eval-all python
+brew uses --include-build python
+brew uses --include-optional python
+brew uses --include-test python
+brew uses --skip-recommended python
+brew uses --formula python
+brew uses --cask python
+brew outdated
+brew outdated python
+brew outdated --formula
+brew outdated --formulae
+brew outdated --cask
+brew outdated --casks
+brew outdated --json
+brew outdated --json=v2
+brew outdated --greedy
+brew outdated -g
+brew outdated --greedy-latest
+brew outdated --greedy-auto-updates
+brew outdated --fetch-HEAD
+brew outdated --verbose
+brew outdated -v
+brew outdated --quiet
+brew outdated -q
+brew missing
+brew missing python
+brew missing --hide=python
+brew missing --verbose
+brew missing -v
+brew config
+brew --config
+brew config --verbose
+brew config -v
+brew doctor
+brew dr
+brew doctor --list-checks
+brew doctor --audit-debug
+brew doctor -D
+brew doctor --verbose
+brew doctor -v
+brew options
+brew options python
+brew options --installed
+brew options --all
+brew tap-info
+brew tap-info homebrew/cask
+brew tap-info --installed
+brew tap-info --json
+brew tap-info --json=v1
+brew formulae
+brew casks
+brew --cache
+brew --cache python
+brew --cache --formula python
+brew --cache --cask firefox
+brew --cache --build-from-source python
+brew --cache -s python
+brew --cache --force-bottle python
+brew --cache --HEAD python
+brew --cellar
+brew --cellar python
+brew --caskroom
+brew --caskroom firefox
+brew --prefix
+brew --prefix python
+brew --prefix --installed python
+brew --prefix --unbrewed
+brew --repository
+brew --repo
+brew --version
+brew -v
+brew --env
+brew --taps
+brew log
+brew log python
+brew log -p python
+brew log --patch python
+brew log --stat python
+brew log --oneline python
+brew log -1 python
+brew log -n 10 python
+brew log --max-count 5 python
+brew log --formula python
+brew log --cask firefox
+brew cat python
+brew cat --formula python
+brew cat --cask firefox
+brew commands
+brew commands --quiet
+brew commands --include-aliases
+brew help
+brew help install
+brew --help
+brew -h
+brew fetch python
+brew fetch --deps python
+brew fetch --force python
+brew fetch -f python
+brew fetch --retry python
+brew fetch --HEAD python
+brew fetch --build-from-source python
+brew fetch -s python
+brew fetch --formula python
+brew fetch --cask firefox
+brew home
+brew home python
+brew home --formula python
+brew home --cask firefox
+brew homepage
+brew homepage python
+brew docs
+brew shellenv
+brew shellenv bash
+brew shellenv zsh
+brew shellenv fish
+brew analytics
+brew analytics state
+brew analytics on
+brew analytics off
+brew install python
+brew install python@3.11
+brew install --cask firefox
+brew install --formula python
+brew install --force python
+brew install -f python
+brew install --verbose python
+brew install -v python
+brew install --dry-run python
+brew install -n python
+brew install --HEAD python
+brew install --build-from-source python
+brew install -s python
+brew install --interactive python
+brew install -i python
+brew install --only-dependencies python
+brew install --overwrite python
+brew install --skip-post-install python
+brew install --skip-link python
+brew install python ruby node
+brew uninstall python
+brew remove python
+brew rm python
+brew uninstall --force python
+brew uninstall -f python
+brew uninstall --zap firefox
+brew uninstall --ignore-dependencies python
+brew uninstall --formula python
+brew uninstall --cask firefox
+brew uninstall python ruby
+brew reinstall python
+brew reinstall --force python
+brew reinstall -f python
+brew reinstall --cask firefox
+brew reinstall --formula python
+brew reinstall --build-from-source python
+brew reinstall -s python
+brew reinstall --interactive python
+brew reinstall -i python
+brew upgrade
+brew upgrade python
+brew upgrade --formula
+brew upgrade --cask
+brew upgrade --force python
+brew upgrade -f python
+brew upgrade --dry-run
+brew upgrade -n python
+brew upgrade --greedy
+brew upgrade -g
+brew upgrade --greedy-latest
+brew upgrade --greedy-auto-updates
+brew upgrade --fetch-HEAD python
+brew upgrade --interactive python
+brew upgrade -i python
+brew update
+brew up
+brew update --force
+brew update -f
+brew update --merge
+brew update --auto-update
+brew update --verbose
+brew update -v
+brew tap
+brew tap homebrew/cask
+brew tap homebrew/cask-versions
+brew tap user/repo https://github.com/user/repo
+brew tap --custom-remote homebrew/cask
+brew tap --repair
+brew tap --force homebrew/core
+brew tap --eval-all homebrew/cask
+brew untap homebrew/cask
+brew untap --force homebrew/cask
+brew untap -f homebrew/cask
+brew link python
+brew ln python
+brew link --overwrite python
+brew link --force python
+brew link -f python
+brew link --dry-run python
+brew link -n python
+brew link --HEAD python
+brew unlink python
+brew unlink --dry-run python
+brew unlink -n python
+brew pin python
+brew pin python ruby
+brew unpin python
+brew unpin python ruby
+brew cleanup
+brew cleanup python
+brew cleanup --prune=7
+brew cleanup --prune=all
+brew cleanup --dry-run
+brew cleanup -n
+brew cleanup --scrub
+brew cleanup -s
+brew cleanup --prune-prefix
+brew autoremove
+brew autoremove --dry-run
+brew autoremove -n
+brew migrate python
+brew migrate --force python
+brew migrate -f python
+brew migrate --dry-run python
+brew migrate -n python
+brew migrate --formula python
+brew migrate --cask firefox
+brew postinstall python
+brew post_install python
+brew edit
+brew edit python
+brew edit --formula python
+brew edit --cask firefox
+brew edit --print-path python
+brew create https://example.com/package.tar.gz
+brew create --no-fetch https://example.com/package.tar.gz
+brew gist-logs python
+brew gist-logs --private python
+brew gist-logs -p python
+brew gist-logs --new-issue python
+brew gist-logs -n python
+brew services
+brew services list
+brew services info postgresql
+brew services start postgresql
+brew services stop postgresql
+brew services restart postgresql
+brew services run postgresql
+brew services kill postgresql
+brew services cleanup
+brew services start --all
+brew services stop --all
+brew services restart --all
+brew bundle
+brew bundle install
+brew bundle upgrade
+brew bundle dump
+brew bundle dump --force
+brew bundle dump --describe
+brew bundle cleanup
+brew bundle cleanup --force
+brew bundle check
+brew bundle check --verbose
+brew bundle list
+brew bundle list --all
+brew bundle list --formula
+brew bundle list --cask
+brew bundle edit
+brew bundle add python
+brew bundle remove python
+brew bundle exec python script.py
+brew bundle sh
+brew bundle env
+brew developer
+brew developer on
+brew developer off
+brew readall
+brew readall --aliases
+brew audit
+brew audit python
+brew audit --strict python
+brew audit --new python
+brew bottle python
+brew bottle --no-rebuild python
+brew bump python
+brew bump-formula-pr python
+brew bump-cask-pr firefox
+brew test python
+brew test --HEAD python
+brew style
+brew style --fix
+brew style python
+brew vendor-install
+brew install --help
+brew install -h
+brew uninstall --help
+brew upgrade --help
+brew tap --help
+brew services --help
+brew bundle --help
+brew
+brew unknown-command
+brew some-new-command arg1 arg2
+# Edge cases
+brew cask -v
+brew services -h start
+brew bundle --file x dump
+brew analytics -q
+brew analytics --x on
+brew bundle --global
+brew --env
+brew -v
+brew dr

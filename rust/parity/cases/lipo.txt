@@ -1,0 +1,19 @@
+# Commands from tests/cli/test_lipo.py
+lipo -info binary
+lipo -archs binary
+lipo -detailed_info binary
+lipo binary -verify_arch x86_64 arm64
+lipo -info fat.o
+lipo -create x86.o arm64.o -output universal.o
+lipo -extract x86_64 universal.o -output x86.o
+lipo -extract_family arm64 universal.o -output arm.o
+lipo -remove x86_64 universal.o -output arm_only.o
+lipo -replace x86_64 new_x86.o universal.o -output updated.o
+lipo -thin arm64 universal.o -output thin.o
+lipo -create x86.o arm64.o
+# Edge cases
+lipo -create a.o b.o -output ''
+lipo -create a.o -o out.o
+lipo -thin arm64 a.o -info
+lipo -create a.o -output
+lipo

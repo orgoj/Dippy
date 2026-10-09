@@ -1,0 +1,62 @@
+# Commands from tests/cli/test_security.py
+security help
+security help find-certificate
+security show-keychain-info login.keychain
+security dump-keychain login.keychain
+security find-generic-password -s service
+security find-generic-password -a account -s service
+security find-internet-password -s server
+security find-key -t public
+security find-certificate -a
+security find-certificate -c CommonName
+security find-identity -v
+security find-identity -p codesigning
+security get-identity-preference -s https://example.com
+security dump-trust-settings
+security dump-trust-settings -d
+security verify-cert -c cert.pem
+security error -h
+security error 25293
+security leaks
+security list-smartcards
+security translocate-policy-check /path/to/app
+security translocate-status-check /path/to/app
+security translocate-original-path /path/to/app
+security requirement-evaluate anchor apple
+security list-keychains
+security list-keychains -s keychain.keychain
+security default-keychain
+security default-keychain -s keychain.keychain
+security login-keychain
+security create-keychain newkeychain.keychain
+security delete-keychain keychain.keychain
+security lock-keychain
+security unlock-keychain
+security set-keychain-settings keychain.keychain
+security set-keychain-password keychain.keychain
+security create-keypair
+security add-generic-password -s service -a account -w pass
+security add-internet-password -s server -a account -w pass
+security add-certificates cert.pem
+security delete-generic-password -s service
+security delete-internet-password -s server
+security delete-certificate -c CommonName
+security delete-identity -c CommonName
+security set-identity-preference -s https://example.com -c CN
+security export -k keychain.keychain -o output.pem
+security import cert.pem
+security cms -S -i msg.txt
+security add-trusted-cert cert.pem
+security remove-trusted-cert cert.pem
+security trust-settings-export output.plist
+security trust-settings-import settings.plist
+security authorize -u
+security authorizationdb read system.login.console
+security execute-with-privileges /usr/bin/id
+security user-trust-settings-enable
+security smartcards token -l
+security create-filevaultmaster-keychain
+security
+# Edge cases
+security find-certificate -a
+security unlock-keychain

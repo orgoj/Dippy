@@ -1,0 +1,18 @@
+# Commands from tests/cli/test_sysctl.py
+sysctl -a
+sysctl kern.maxfiles
+sysctl -n hw.model
+sysctl -n machdep.cpu.brand_string
+sysctl hw.memsize hw.ncpu
+sysctl -e kern.hostname
+sysctl -d kern.maxfiles
+sysctl kern.maxfiles=12345
+sysctl -w kern.maxfiles=12345
+sysctl kern.maxfiles=12345,67890
+sysctl -f /etc/sysctl.conf
+sysctl kern.hostname kern.maxfiles=100
+# Edge cases
+sysctl -n kern.x
+sysctl -wa
+sysctl -a=b
+sysctl kern.hostname=x -n

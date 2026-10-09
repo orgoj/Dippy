@@ -1,0 +1,16 @@
+# Commands from tests/cli/test_mdimport.py
+mdimport -t file.txt
+mdimport -t -d1 file.txt
+mdimport -t -d2 file.txt
+mdimport -t -d3 file.txt
+mdimport -L
+mdimport -A
+mdimport -X
+mdimport file.txt
+mdimport -i file.txt
+mdimport -r plugin.mdimporter
+mdimport /path/to/directory
+# Edge cases
+mdimport -A -L
+mdimport -X
+mdimport -i f

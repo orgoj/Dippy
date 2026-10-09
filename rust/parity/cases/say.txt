@@ -1,0 +1,18 @@
+# Commands from tests/cli/test_say.py
+say hello
+say 'Hello, world!'
+say -v Alex hello
+say -r 200 hello
+say -f input.txt
+say --voice=Samantha hello
+say --rate=150 hello
+say -o output.aiff hello
+say --output-file output.aiff hello
+say --output-file=output.aiff hello
+say -v Alex -o speech.aiff hello
+# Edge cases
+say -o '' hi
+say --output-file= hi
+say --output-file out.aiff hi
+say -o
+say --output-file='a b.aiff' hi

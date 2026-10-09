@@ -1,0 +1,23 @@
+# Commands from tests/cli/test_codesign.py
+codesign -d /path/to/app
+codesign --display /path/to/app
+codesign -v /path/to/app
+codesign --verify /path/to/app
+codesign -dv /path/to/app
+codesign -dvv /path/to/app
+codesign -h 1234
+codesign --validate-constraint /path/to/app
+codesign -d --entitlements - /path/to/app
+codesign -v --deep /path/to/app
+codesign -s 'Developer ID' /path/to/app
+codesign --sign 'Developer ID' /path/to/app
+codesign -s - /path/to/app
+codesign -fs 'Developer ID' /path/to/app
+codesign --remove-signature /path/to/app
+codesign -s 'Developer ID' --deep /path/to/app
+# Edge cases
+codesign -
+codesign --sign=id app
+codesign -vvv --deep app
+codesign -fs - app
+codesign --display --verbose=4 app
