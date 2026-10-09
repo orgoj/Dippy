@@ -1,0 +1,267 @@
+gcloud --project delete compute instances list
+gcloud --format delete compute instances list
+gcloud --project myproj compute instances delete foo
+gcloud compute instances list
+gcloud compute instances list --project foo
+gcloud compute backend-services describe k8s-be --global --project foo
+gcloud iap settings get --project foo --resource-type=compute
+gcloud auth list
+gcloud compute instances delete foo
+gcloud compute instances delete list
+gcloud compute instances create foo
+gcloud container clusters get-credentials foo
+gcloud run services list
+gcloud run services describe myservice --region us-central1
+gcloud run services update myservice --region us-central1
+gcloud run services delete myservice
+gcloud compute backend-services list --project foo
+gcloud compute ssl-certificates describe mycert --global
+gcloud iap web get-iam-policy --resource-type=backend-services
+gcloud artifacts docker images list us-central1-docker.pkg.dev/proj/repo
+gcloud iam service-accounts list
+gcloud iam service-accounts delete sa@proj.iam.gserviceaccount.com
+gcloud secrets list --project foo
+gcloud secrets describe mysecret
+gcloud secrets create newsecret
+gcloud dns record-sets list --zone myzone
+gcloud functions list --project foo
+gcloud config get-value project
+gcloud config set project foo
+gcloud logging read 'resource.type=cloud_run_revision'
+gcloud storage buckets describe gs://mybucket
+gcloud beta run services describe myservice
+gcloud beta run services update myservice
+gcloud certificate-manager trust-configs describe myconfig
+gcloud network-security server-tls-policies describe mypolicy
+gcloud container images list-tags gcr.io/proj/image
+gcloud projects list
+gcloud projects describe myproject
+gcloud projects get-iam-policy myproject
+gcloud projects add-iam-policy-binding myproject --member=user:foo
+gcloud config list
+gcloud config get project
+gcloud config get compute/zone
+gcloud config set project my-project
+gcloud config set compute/zone us-central1-a
+gcloud config configurations list
+gcloud config configurations create new-config
+gcloud config configurations activate new-config
+gcloud auth login
+gcloud auth activate-service-account
+gcloud auth application-default login
+gcloud auth print-access-token
+gcloud auth revoke
+gcloud auth configure-docker
+gcloud components list
+gcloud components install kubectl
+gcloud components update
+gcloud components update --version=1.2.3
+gcloud components update --quiet
+gcloud compute zones list
+gcloud compute instances create my-instance
+gcloud compute instances describe my-instance
+gcloud compute instances list --filter='status=RUNNING'
+gcloud compute instances delete my-instance
+gcloud compute instances start my-instance
+gcloud compute instances stop my-instance
+gcloud compute disks list
+gcloud compute disks describe my-disk
+gcloud compute disks snapshot my-disk --snapshot-names=my-snapshot
+gcloud compute disks create my-disk
+gcloud compute disks delete my-disk
+gcloud compute snapshots list
+gcloud compute snapshots describe my-snapshot
+gcloud compute snapshots delete my-snapshot
+gcloud compute ssh my-instance
+gcloud compute ssh user@my-instance --zone=us-central1-a
+gcloud compute regions list
+gcloud compute regions describe us-central1
+gcloud compute zones describe us-central1-a
+gcloud compute networks list
+gcloud compute networks describe my-network
+gcloud compute networks create my-network
+gcloud compute networks delete my-network
+gcloud compute firewall-rules list
+gcloud compute firewall-rules describe my-rule
+gcloud compute firewall-rules create my-rule --allow=tcp:22
+gcloud compute firewall-rules delete my-rule
+gcloud container clusters list
+gcloud container clusters describe my-cluster
+gcloud container clusters get-credentials my-cluster
+gcloud container clusters create my-cluster
+gcloud container clusters delete my-cluster
+gcloud container clusters update my-cluster
+gcloud container clusters resize my-cluster --size=5
+gcloud container images list
+gcloud container images describe gcr.io/my-project/my-image
+gcloud container images list-tags gcr.io/my-project/my-image
+gcloud container images delete gcr.io/my-project/my-image
+gcloud container node-pools list --cluster=my-cluster
+gcloud container node-pools describe my-pool --cluster=my-cluster
+gcloud container node-pools create my-pool --cluster=my-cluster
+gcloud container node-pools delete my-pool --cluster=my-cluster
+gcloud iam roles list
+gcloud iam roles describe roles/editor
+gcloud iam roles create my-role --project=my-project --file=role.yaml
+gcloud iam roles delete my-role --project=my-project
+gcloud iam list-grantable-roles //cloudresourcemanager.googleapis.com/projects/my-project
+gcloud iam service-accounts describe sa@project.iam.gserviceaccount.com
+gcloud iam service-accounts create my-sa
+gcloud iam service-accounts delete sa@project.iam.gserviceaccount.com
+gcloud iam service-accounts add-iam-policy-binding sa@project.iam.gserviceaccount.com --member=user:foo --role=roles/iam.serviceAccountUser
+gcloud iam service-accounts set-iam-policy sa@project.iam.gserviceaccount.com policy.json
+gcloud iam service-accounts keys list --iam-account=sa@project.iam.gserviceaccount.com
+gcloud iam service-accounts keys create key.json --iam-account=sa@project.iam.gserviceaccount.com
+gcloud app deploy
+gcloud app deploy app.yaml
+gcloud app versions list
+gcloud app versions describe v1 --service=default
+gcloud app versions delete v1 --service=default
+gcloud app browse
+gcloud app create
+gcloud app logs read
+gcloud app describe
+gcloud app services list
+gcloud app services describe default
+gcloud projects create my-new-project
+gcloud projects delete my-project
+gcloud projects undelete my-project
+gcloud secrets versions list my-secret
+gcloud secrets versions describe 1 --secret=my-secret
+gcloud secrets versions access 1 --secret=my-secret
+gcloud secrets versions destroy 1 --secret=my-secret
+gcloud secrets add-iam-policy-binding my-secret --member=user:foo --role=roles/secretmanager.secretAccessor
+gcloud functions describe my-function
+gcloud functions logs read my-function
+gcloud functions deploy my-function
+gcloud functions delete my-function
+gcloud functions call my-function
+gcloud logging read 'severity>=ERROR'
+gcloud logging logs list
+gcloud logging logs list --bucket=my-bucket --location=us-central1
+gcloud logging logs list --filter='logName:syslog'
+gcloud logging logs list --limit=100
+gcloud logging logs list --sort-by='timestamp'
+gcloud logging logs list --verbosity=debug
+gcloud logging logs delete my-log
+gcloud logging write my-log 'message'
+gcloud dns managed-zones list
+gcloud dns managed-zones describe my-zone
+gcloud dns managed-zones create my-zone --dns-name=example.com
+gcloud dns managed-zones delete my-zone
+gcloud dns record-sets list --zone=my-zone
+gcloud dns record-sets describe www --zone=my-zone --type=A
+gcloud dns record-sets create www --zone=my-zone --type=A --rrdatas=1.2.3.4
+gcloud dns record-sets delete www --zone=my-zone --type=A
+gcloud storage buckets list
+gcloud storage buckets describe gs://my-bucket
+gcloud storage buckets create gs://my-bucket
+gcloud storage buckets delete gs://my-bucket
+gcloud storage objects list gs://my-bucket
+gcloud storage objects describe gs://my-bucket/my-object
+gcloud storage cp gs://src/file gs://dst/file
+gcloud storage rm gs://my-bucket/my-object
+gcloud run services describe my-service --region=us-central1
+gcloud run services update my-service --region=us-central1 --memory=512Mi
+gcloud run services delete my-service --region=us-central1
+gcloud run deploy my-service --image=gcr.io/my-project/my-image
+gcloud run revisions list --service=my-service
+gcloud run revisions describe my-revision
+gcloud artifacts repositories list
+gcloud artifacts repositories describe my-repo --location=us-central1
+gcloud artifacts repositories create my-repo --location=us-central1
+gcloud artifacts repositories delete my-repo --location=us-central1
+gcloud artifacts docker images list us-central1-docker.pkg.dev/my-project/my-repo
+gcloud artifacts docker tags list us-central1-docker.pkg.dev/my-project/my-repo/my-image
+gcloud artifacts docker tags delete us-central1-docker.pkg.dev/my-project/my-repo/my-image:v1
+gcloud beta run services list
+gcloud beta run services describe my-service
+gcloud beta run services update my-service
+gcloud beta run services delete my-service
+gcloud beta compute instances list
+gcloud beta compute instances describe my-instance
+gcloud certificate-manager certificates list
+gcloud certificate-manager certificates describe my-cert
+gcloud certificate-manager certificates create my-cert
+gcloud certificate-manager trust-configs list
+gcloud certificate-manager trust-configs describe my-config
+gcloud network-security server-tls-policies list
+gcloud network-security server-tls-policies describe my-policy
+gcloud network-security server-tls-policies create my-policy
+gcloud network-security gateway-security-policies list
+gcloud network-security gateway-security-policies describe my-policy
+gcloud iap settings get --project=my-project
+gcloud iap settings set iap-settings.yaml --project=my-project
+gcloud iap web get-iam-policy --resource-type=backend-services --service=my-service
+gcloud iap web set-iam-policy policy.json --resource-type=backend-services
+gcloud iap tcp tunnels list
+gcloud sql instances list
+gcloud sql instances describe my-instance
+gcloud sql instances create my-instance
+gcloud sql instances delete my-instance
+gcloud sql databases list --instance=my-instance
+gcloud sql databases describe my-db --instance=my-instance
+gcloud sql databases create my-db --instance=my-instance
+gcloud sql backups list --instance=my-instance
+gcloud sql backups describe 12345 --instance=my-instance
+gcloud sql backups create --instance=my-instance
+gcloud sql export sql my-instance gs://my-bucket/dump.sql
+gcloud sql export sql my-instance gs://my-bucket/dump.sql --async
+gcloud sql export sql my-instance gs://my-bucket/dump.sql --database=mydb
+gcloud sql import sql my-instance gs://my-bucket/dump.sql
+gcloud kms keyrings list --location=global
+gcloud kms keyrings describe my-keyring --location=global
+gcloud kms keyrings create my-keyring --location=global
+gcloud kms keys list --keyring=my-keyring --location=global
+gcloud kms keys describe my-key --keyring=my-keyring --location=global
+gcloud kms keys create my-key --keyring=my-keyring --location=global --purpose=encryption
+gcloud kms decrypt --key=my-key --keyring=my-keyring --location=global --ciphertext-file=cipher.enc --plaintext-file=plain.txt
+gcloud kms encrypt --key=my-key --keyring=my-keyring --location=global --plaintext-file=plain.txt --ciphertext-file=cipher.enc
+gcloud pubsub topics list
+gcloud pubsub topics describe my-topic
+gcloud pubsub topics create my-topic
+gcloud pubsub topics delete my-topic
+gcloud pubsub topics publish my-topic --message='hello'
+gcloud pubsub subscriptions list
+gcloud pubsub subscriptions describe my-sub
+gcloud pubsub subscriptions create my-sub --topic=my-topic
+gcloud pubsub subscriptions pull my-sub
+gcloud --project=my-project compute instances list
+gcloud --format=json compute instances list
+gcloud --account=user@example.com compute instances list
+gcloud --configuration=my-config compute instances list
+gcloud --region=us-central1 compute instances list
+gcloud --zone=us-central1-a compute instances list
+gcloud --project=my-project --format=json compute instances describe my-instance
+gcloud --project=my-project compute instances delete my-instance
+gcloud help
+gcloud help compute
+gcloud help compute instances
+gcloud info
+gcloud info --run-diagnostics
+gcloud info --show-log
+gcloud version
+gcloud version --help
+gcloud init
+gcloud init --skip-diagnostics
+gcloud feedback
+gcloud topic configurations
+gcloud compute instances
+gcloud compute
+gcloud
+gsutil ''
+gsutil -m
+gsutil -m rm gs://x
+gcloud ²
+gcloud compute instances ² list
+gcloud --project
+gcloud beta run deploy
+gcloud config
+gcloud config configurations
+gcloud config configurations activate x
+gcloud projects
+gcloud projects add-iam-policy-binding p
+gcloud a b c d e f g list
+gcloud user@x list
+gcloud "'x" delete
+gcloud ''
