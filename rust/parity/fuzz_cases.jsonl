@@ -1,0 +1,3578 @@
+{"cmd": "timeout 5 cdk list"}
+{"cmd": "timeout 5 7z a -p archive.7z file.txt"}
+{"cmd": "timeout 5 sudo -i"}
+{"cmd": "timeout 5 aws lambda list-functions"}
+{"cmd": "timeout 5 xargs -P 4"}
+{"cmd": "timeout 5 sqlcmd query 'DROP TABLE users'"}
+{"cmd": "timeout 5 caffeinate -w 1234"}
+{"cmd": "timeout 5 tmutil listlocalsnapshotdates /"}
+{"cmd": "timeout 5 env -u PATH ls"}
+{"cmd": "timeout 5 docker import export.tar myimage"}
+{"cmd": "timeout 5 gcloud container images delete gcr.io/my-project/my-image"}
+{"cmd": "timeout 5 aws secretsmanager list-secret-version-ids --secret-id mysecret"}
+{"cmd": "timeout 5 ansible-lint ."}
+{"cmd": "timeout 5 dmesg -TcH"}
+{"cmd": "timeout 5 curl -sSL https://example.com"}
+{"cmd": "timeout 5 aws lambda publish-version --function-name myfunc"}
+{"cmd": "timeout 5 tar -xJf archive.tar.xz"}
+{"cmd": "timeout 5 brew search python"}
+{"cmd": "timeout 5 uv python dir"}
+{"cmd": "timeout 5 az acr repository show-manifests --name myacr --repository myrepo"}
+{"cmd": "timeout 5 gzip -dc file.gz"}
+{"cmd": "timeout 5 security find-certificate -a"}
+{"cmd": "timeout 5 7zz u archive.7z newfile.txt"}
+{"cmd": "timeout 5 uv python find 3.11"}
+{"cmd": "timeout 5 az webapp config show --name myapp -g mygroup"}
+{"cmd": "timeout 5 iconv -f UTF-8 -t ASCII input.txt"}
+{"cmd": "timeout 5 bash -c 'cat /etc/passwd'"}
+{"cmd": "timeout 5 bash -x -c 'echo'"}
+{"cmd": "timeout 5 ruff format --line-length 100"}
+{"cmd": "timeout 5 docker plugin ls"}
+{"cmd": "timeout 5 plutil -replace key -string newvalue file.plist"}
+{"cmd": "timeout 5 <<< 'fictionalerase --all'"}
+{"cmd": "timeout 5 cargo info serde"}
+{"cmd": "timeout 5 rm foo && mv bar baz"}
+{"cmd": "timeout 5 sample -e 1234"}
+{"cmd": "timeout 5 gh project item-delete 1 --id item-id"}
+{"cmd": "timeout 5 gh rs list"}
+{"cmd": "timeout 5 gawk -V"}
+{"cmd": "timeout 5 docker network inspect bridge"}
+{"cmd": "timeout 5 openssl rand -out random.bin 256"}
+{"cmd": "timeout 5 kubectl delete --help"}
+{"cmd": "timeout 5 hdiutil mount image.dmg"}
+{"cmd": "timeout 5 hdiutil erasekeys image.dmg"}
+{"cmd": "timeout 5 ansible-test coverage"}
+{"cmd": "timeout 5 python -c 'import json; d=json.loads('{\"a\":1}'); print(d['a'])'"}
+{"cmd": "timeout 5 {fd}> tmp/output.log"}
+{"cmd": "timeout 5 fzf --walker-root=/home"}
+{"cmd": "timeout 5 git checkout HEAD~1 -- file.txt"}
+{"cmd": "timeout 5 curl --trace trace.txt https://example.com"}
+{"cmd": "timeout 5 bash -c 'rm -rf /'"}
+{"cmd": "timeout 5 az storage container set-permission --name mycontainer --account-name myaccount --public-access blob"}
+{"cmd": "timeout 5 helm dep build ./mychart"}
+{"cmd": "timeout 5 git bisect view"}
+{"cmd": "timeout 5 aws dynamodb put-item --table-name mytable --item file://item.json"}
+{"cmd": "timeout 5 /srv/d/a/b/c"}
+{"cmd": "timeout 5 find -x . -name '*.py'"}
+{"cmd": "timeout 5 python /tmp/pytest-of-root/pytest-3/popen-gw0/test_print_allowed_by_default0/print_test.py"}
+{"cmd": "timeout 5 pip lock requests"}
+{"cmd": "timeout 5 gh pr list --base main"}
+{"cmd": "timeout 5 curl http://example.com/api/users"}
+{"cmd": "timeout 5 curl --quote 'DELE file.txt' ftp://example.com"}
+{"cmd": "timeout 5 gcloud compute ssh my-instance"}
+{"cmd": "timeout 5 az apim list"}
+{"cmd": "timeout 5 yarn install"}
+{"cmd": "timeout 5 xargs chmod 777"}
+{"cmd": "timeout 5 kubectl --help"}
+{"cmd": "timeout 5 gcloud compute instances list --filter='status=RUNNING'"}
+{"cmd": "timeout 5 brew --cache --build-from-source python"}
+{"cmd": "timeout 5 networksetup -deleteBond bond0"}
+{"cmd": "timeout 5 [[ -f $(rm x) ]]"}
+{"cmd": "timeout 5 pip config list"}
+{"cmd": "timeout 5 gh issue list --state open"}
+{"cmd": "timeout 5 git log main..feature"}
+{"cmd": "timeout 5 scutil"}
+{"cmd": "timeout 5 bash -lc 'rm foo'"}
+{"cmd": "timeout 5 brew leaves"}
+{"cmd": "timeout 5 cdk ls -l"}
+{"cmd": "timeout 5 npm find-dupes"}
+{"cmd": "timeout 5 git merge-base --is-ancestor main feature"}
+{"cmd": "timeout 5 npm install-ci-test"}
+{"cmd": "timeout 5 duckdb -json mydb.db 'SELECT * FROM users'"}
+{"cmd": "timeout 5 duckdb -readonly data.db \"SELECT CAST(fictional_effect() AS INTEGER)\""}
+{"cmd": "timeout 5 fzf --scheme=history"}
+{"cmd": "timeout 5 git format-patch -o patches/ HEAD~5"}
+{"cmd": "timeout 5 gcloud beta run services update myservice"}
+{"cmd": "timeout 5 aws dynamodb describe-backup --backup-arn arn"}
+{"cmd": "timeout 5 az tag create -n mytag"}
+{"cmd": "timeout 5 yq --inplace '.key = \"value\"' file.yaml"}
+{"cmd": "timeout 5 aws cloudformation validate-template --template-body file://t.yaml"}
+{"cmd": "timeout 5 symbols -symbolsPackageDir /tmp/pkg /usr/bin/ls"}
+{"cmd": "nice -n 10 aws athena start-query-execution --query-string 'SELECT 1' --result-configuration OutputLocation=s3://bucket/"}
+{"cmd": "nice -n 10 aws athena start-query-execution --query-string '-- just a comment'"}
+{"cmd": "nice -n 10 sqlcmd query 'SELECT @@VERSION'"}
+{"cmd": "nice -n 10 aws rds delete-db-instance --db-instance-identifier mydb --skip-final-snapshot"}
+{"cmd": "nice -n 10 rtk discover"}
+{"cmd": "nice -n 10 aws athena get-session --session-id sess"}
+{"cmd": "nice -n 10 python -c 'open('/etc/passwd').read()'"}
+{"cmd": "nice -n 10 tee file1.txt file2.txt"}
+{"cmd": "nice -n 10 gh release create v1.0.0 ./dist/*"}
+{"cmd": "nice -n 10 auth0 ap bpd show"}
+{"cmd": "nice -n 10 git name-rev HEAD"}
+{"cmd": "nice -n 10 auth0 ul update"}
+{"cmd": "nice -n 10 sips --verify profile.icc"}
+{"cmd": "nice -n 10 docker compose watch"}
+{"cmd": "nice -n 10 uv pip show requests"}
+{"cmd": "nice -n 10 auth0 -t mytenant apps list"}
+{"cmd": "nice -n 10 git rerere status"}
+{"cmd": "nice -n 10 kubectl run -it busybox --image=busybox -- sh"}
+{"cmd": "nice -n 10 spctl --global-enable"}
+{"cmd": "nice -n 10 auth0 email templates show"}
+{"cmd": "nice -n 10 docker restart mycontainer"}
+{"cmd": "nice -n 10 duckdb mydb.db 'DROP TABLE users'"}
+{"cmd": "nice -n 10 /app/.env.local"}
+{"cmd": "nice -n 10 yarn outdated"}
+{"cmd": "nice -n 10 az tag delete -n mytag"}
+{"cmd": "nice -n 10 aws s3 ls s3://mybucket"}
+{"cmd": "nice -n 10 aws ssm delete-parameter --name /my/param"}
+{"cmd": "nice -n 10 docker swarm leave"}
+{"cmd": "nice -n 10 duckdb mydb.db 'UPDATE users SET name = 1'"}
+{"cmd": "nice -n 10 ansible-vault rekey --vault-password-file old.txt --new-vault-password-file new.txt secrets.yml"}
+{"cmd": "nice -n 10 textutil -convert txt -stdout foo.rtf"}
+{"cmd": "nice -n 10 aws sns subscribe --topic-arn arn --protocol email --notification-endpoint email@example.com"}
+{"cmd": "nice -n 10 pip3 inspect"}
+{"cmd": "nice -n 10 la"}
+{"cmd": "nice -n 10 aws cognito-idp create-user-pool --pool-name newpool"}
+{"cmd": "nice -n 10 az network vnet subnet show --name mysubnet --vnet-name myvnet -g mygroup"}
+{"cmd": "nice -n 10 aws lambda get-function --function-name myfunc"}
+{"cmd": "nice -n 10 bash -c 'rm -rf /'"}
+{"cmd": "nice -n 10 python /tmp/pytest-of-root/pytest-3/popen-gw0/test_globals_blocked0/globals_bypass.py"}
+{"cmd": "nice -n 10 duckdb -readonly work.db \"SELECT [']']\" '.tables'"}
+{"cmd": "nice -n 10 7zz -h"}
+{"cmd": "nice -n 10 ip link set eth0 up"}
+{"cmd": "nice -n 10 git stash pop"}
+{"cmd": "nice -n 10 az keyvault secret set --name newsecret --vault-name myvault --value 'mysecretvalue'"}
+{"cmd": "nice -n 10 COPY (SELECT 1) TO 'tmp/$FILE'"}
+{"cmd": "nice -n 10 az monitor diagnostic-settings create --name newdiag --resource /subscriptions/.../... --logs '[]' --metrics '[]'"}
+{"cmd": "nice -n 10 a b"}
+{"cmd": "nice -n 10 gcloud run services describe myservice --region us-central1"}
+{"cmd": "nice -n 10 download"}
+{"cmd": "nice -n 10 uv python find 3.11"}
+{"cmd": "nice -n 10 gh api --method GET repos/owner/repo"}
+{"cmd": "nice -n 10 TO 'tmp/out' (PARTITION_BY (x))"}
+{"cmd": "nice -n 10 auth0 actions create"}
+{"cmd": "nice -n 10 az eventhubs eventhub list --namespace-name mynamespace -g mygroup"}
+{"cmd": "nice -n 10 cargo uninstall ripgrep"}
+{"cmd": "nice -n 10 gcloud secrets versions access 1 --secret=my-secret"}
+{"cmd": "nice -n 10 terraform plan -refresh-only"}
+{"cmd": "nice -n 10 aws ec2 describe-route-tables"}
+{"cmd": "nice -n 10 auth0 users import --connection myconn"}
+{"cmd": "nice -n 10 curl -F 'file=@test.txt' https://example.com"}
+{"cmd": "nice -n 10 pip index versions requests"}
+{"cmd": "nice -n 10 psql -c 'CREATE TABLE users (id INT)'"}
+{"cmd": "nice -n 10 gh repo list --language python"}
+{"cmd": "nice -n 10 fzf --header-border"}
+{"cmd": "nice -n 10 ifconfig eth0 192.168.1.1 netmask 255.255.255.0"}
+{"cmd": "nice -n 10 gcloud container clusters update my-cluster"}
+{"cmd": "nice -n 10 brew search --formula python"}
+{"cmd": "nice -n 10 yarn why lodash"}
+{"cmd": "nice -n 10 FOO='val with spaces' someunknowncmd --flag"}
+{"cmd": "nice -n 10 profiles list -verbose"}
+{"cmd": "nice -n 10 7za l archive.7z"}
+{"cmd": "nice -n 10 spctl --master-enable"}
+{"cmd": "nice -n 10 zsh script.sh"}
+{"cmd": "nice -n 10 gcloud secrets list --project foo"}
+{"cmd": "nice -n 10 docker context update mycontext"}
+{"cmd": "nice -n 10 auth0 tenants ls"}
+{"cmd": "nice -n 10 kubectl top nodes"}
+{"cmd": "nice -n 10 pip install --force-reinstall requests"}
+{"cmd": "nice -n 10 docker ps | grep foo"}
+{"cmd": "nice -n 10 kubectl -n kube-system describe pod foo"}
+{"cmd": "nice -n 10 textutil -info foo.rtf"}
+{"cmd": "nice -n 10 aws kinesis get-records --shard-iterator iter"}
+{"cmd": "nice -n 10 find -X . -name '*.py'"}
+{"cmd": "nice -n 10 unzip -q archive.zip"}
+{"cmd": "nice -n 10 git maintenance stop"}
+{"cmd": "nice -n 10 for f in a b; do break; done"}
+{"cmd": "nice -n 10 ansible-config list"}
+{"cmd": "nice -n 10 fzf --read0"}
+{"cmd": "nice -n 10 kubectl expose deployment nginx --port=80 --target-port=8080"}
+{"cmd": "nice -n 10 ls -lah /tmp"}
+{"cmd": "command az vm start myvm"}
+{"cmd": "command gh ext install owner/gh-ext"}
+{"cmd": "command az monitor log-analytics workspace show --workspace-name myworkspace -g mygroup"}
+{"cmd": "command script -q /dev/null pwd"}
+{"cmd": "command pnpm outdated"}
+{"cmd": "command brew list -1"}
+{"cmd": "command az pipelines show --id 123 -p myproject"}
+{"cmd": "command brew autoremove -n"}
+{"cmd": "command gh api repos/owner/repo --raw-field=foo=bar"}
+{"cmd": "command kubectl auth can-i '*' '*' -n default"}
+{"cmd": "command source ~/venvs/myenv/bin/activate"}
+{"cmd": "command gh issue list --limit 100"}
+{"cmd": "command -H 'Host: demo' http://10.*"}
+{"cmd": "command openssl rand -base64 32"}
+{"cmd": "command tar -cjf archive.tar.bz2 file.txt"}
+{"cmd": "command duckdb work.db 'SELECT 1' 'DROP TABLE items'"}
+{"cmd": "command SELECT '/*!50000 INTO OUTFILE */'"}
+{"cmd": "command docker history myimage"}
+{"cmd": "command gcloud compute"}
+{"cmd": "command git cherry main"}
+{"cmd": "command xargs git commit"}
+{"cmd": "command security create-filevaultmaster-keychain"}
+{"cmd": "command kubectl version"}
+{"cmd": "command az storage blob list -c mycontainer --account-name mystorageaccount"}
+{"cmd": "command pip -V"}
+{"cmd": "command networksetup -createpppoeservice en0 MyPPPoE user pass"}
+{"cmd": "command docker context create mycontext"}
+{"cmd": "command launchctl load ~/Library/LaunchAgents/my.plist"}
+{"cmd": "command gzip -dt file.gz"}
+{"cmd": "command podman kill mycontainer"}
+{"cmd": "command aws athena list-calculation-executions --session-id sess"}
+{"cmd": "command gh auth status"}
+{"cmd": "command xattr -w com.apple.quarantine 0 file.txt"}
+{"cmd": "command gh issue list --label 'help wanted'"}
+{"cmd": "command xargs git checkout"}
+{"cmd": "command pytest tests/test_foo.py"}
+{"cmd": "command az functionapp show --name myfunc -g mygroup"}
+{"cmd": "command journalctl -u nginx --rotate"}
+{"cmd": "command brew bundle sh"}
+{"cmd": "command docker build ."}
+{"cmd": "command git worktree add ../new-worktree feature"}
+{"cmd": "command podman ps -a"}
+{"cmd": "command brew fetch python"}
+{"cmd": "command fzf --bind=ctrl-u:clear-query"}
+{"cmd": "command http://10.1.2.3/ http://outside.example/"}
+{"cmd": "command aws logs tail --log-group-name mygroup"}
+{"cmd": "command git format-patch origin"}
+{"cmd": "command (FORMAT CSV, HEADER true, NULL 'none', QUOTE '\"', ESCAPE '\"')"}
+{"cmd": "command helm search repo nginx --version ^2.0.0"}
+{"cmd": "command ansible-doc -F"}
+{"cmd": "command find . -exec chown user {} \\;"}
+{"cmd": "command security error 25293"}
+{"cmd": "command helm pull nginx/nginx --destination ./charts"}
+{"cmd": "command az sshkey list"}
+{"cmd": "command podman system prune"}
+{"cmd": "command isort -d"}
+{"cmd": "command sudo rm -rf /tmp/test"}
+{"cmd": "command pip index versions requests --platform linux_x86_64"}
+{"cmd": "command base64 -e file.txt"}
+{"cmd": "command git show-ref --heads"}
+{"cmd": "command az group update --name mygroup --tags env=prod"}
+{"cmd": "command python3.11 --version"}
+{"cmd": "command gh status"}
+{"cmd": "command bash -exc 'pwd'"}
+{"cmd": "command terraform output my_output"}
+{"cmd": "command docker container rm mycontainer"}
+{"cmd": "command aws logs describe-log-streams --log-group-name mygroup"}
+{"cmd": "command awk 'BEGIN {FS=\":\"} {print $1}' file.txt"}
+{"cmd": "command ruff check --watch"}
+{"cmd": "command auth0 apis scopes list api_12345"}
+{"cmd": "command extract"}
+{"cmd": "command gh run download 12345 --dir ./artifacts"}
+{"cmd": "command gh cs create"}
+{"cmd": "command gh repo create"}
+{"cmd": "command aws logs tail --log-group-name mygroup --follow"}
+{"cmd": "command env -C /tmp ls"}
+{"cmd": "command ip addr replace 192.168.1.100/24 dev eth0"}
+{"cmd": "command sh -ec 'pwd'"}
+{"cmd": "command /srv/d/out.log"}
+{"cmd": "command for (( i=`rm foo`; i<10; i++ )); do echo $i; done"}
+{"cmd": "command pip show --files requests"}
+{"cmd": "command az account list"}
+{"cmd": "command sort --field-separator=: file.txt"}
+{"cmd": "command git remote prune origin"}
+{"cmd": "command gh project mark-template 1"}
+{"cmd": "command aws athena stop-query-execution --query-execution-id abc123"}
+{"cmd": "command helm lint ./mychart --set key=value"}
+{"cmd": "command az group exists -n mygroup"}
+{"cmd": "command python /tmp/pytest-of-root/pytest-3/popen-gw0/test_telnetlib_blocked0/telnetlib_dangerous.py"}
+{"cmd": "command echo `rm -rf /`"}
+{"cmd": "nohup run &"}
+{"cmd": "nohup ansible-lint -r custom_rules/ playbook.yml &"}
+{"cmd": "nohup bash -c 'echo foo && ls' &"}
+{"cmd": "nohup fd -S +1m pattern &"}
+{"cmd": "nohup kubectl logs $(echo \"nginx\") &"}
+{"cmd": "nohup kubectl config $(echo \"set-context\") production &"}
+{"cmd": "nohup az webapp log tail -g mygroup -n myapp &"}
+{"cmd": "nohup python /tmp/pytest-of-root/pytest-3/popen-gw0/test_commands_blocked0/commands_dangerous.py &"}
+{"cmd": "nohup gh config clear-cache &"}
+{"cmd": "nohup awk -v var=value '{print var, $1}' file.txt &"}
+{"cmd": "nohup cargo pkgid &"}
+{"cmd": "nohup git fetch --prune &"}
+{"cmd": "nohup x=`rm y` ls &"}
+{"cmd": "nohup -s -s http://10.1.2.3/ &"}
+{"cmd": "nohup sort --ignore-case file.txt &"}
+{"cmd": "nohup brew migrate --dry-run python &"}
+{"cmd": "nohup fzf --query=foo &"}
+{"cmd": "nohup aws logs tail --log-group-name mygroup &"}
+{"cmd": "nohup openssl crl -in crl.pem -text &"}
+{"cmd": "nohup 7zr x archive.7z &"}
+{"cmd": "nohup kubectl --context delete get pods &"}
+{"cmd": "nohup docker compose build web &"}
+{"cmd": "nohup aws sts assume-role --role-arn arn:aws:iam::123:role/myrole --role-session-name sess &"}
+{"cmd": "nohup sqlite3 mydb.db 'ATTACH DATABASE other.db AS other' &"}
+{"cmd": "nohup sqlite3 -separator '|' mydb.db 'SELECT 1' &"}
+{"cmd": "nohup gcloud compute firewall-rules create my-rule --allow=tcp:22 &"}
+{"cmd": "nohup git ls-files --others &"}
+{"cmd": "nohup docker compose --project-name myproject logs &"}
+{"cmd": "nohup bash -c 'rm file.txt' &"}
+{"cmd": "nohup aws iam create-login-profile --user-name myuser --password pass &"}
+{"cmd": "nohup gh release create v1.0.0 --prerelease &"}
+{"cmd": "nohup sqlcmd query -d master 'SELECT 1' &"}
+{"cmd": "nohup > tmp/output.log &"}
+{"cmd": "nohup networksetup -printcommands &"}
+{"cmd": "nohup kubectl completion zsh &"}
+{"cmd": "nohup wget -O - https://example.com &"}
+{"cmd": "nohup scutil &"}
+{"cmd": "nohup brew link python &"}
+{"cmd": "nohup wrong &"}
+{"cmd": "nohup seconds &"}
+{"cmd": "nohup git submodule init &"}
+{"cmd": "nohup ansible-vault decrypt secrets.yml &"}
+{"cmd": "nohup npm pkg fix &"}
+{"cmd": "nohup gh pr checks &"}
+{"cmd": "nohup git show HEAD:file.txt &"}
+{"cmd": "nohup auth0 email provider update &"}
+{"cmd": "nohup arch -32 ls &"}
+{"cmd": "nohup gcloud run services list &"}
+{"cmd": "nohup docker swarm leave --force &"}
+{"cmd": "nohup uv tool run ruff check &"}
+{"cmd": "nohup helm install myrelease nginx/nginx --set key=value &"}
+{"cmd": "nohup docker secret inspect --pretty mysecret &"}
+{"cmd": "nohup source ~/.nvm/nvm.sh &"}
+{"cmd": "nohup uv --help &"}
+{"cmd": "nohup openssl dgst -sha256 -verify pubkey.pem -signature sig.bin file.txt &"}
+{"cmd": "nohup env FOO=bar BAZ=qux ls &"}
+{"cmd": "nohup aws eks delete-nodegroup --cluster-name mycluster --nodegroup-name mynodegroup &"}
+{"cmd": "nohup kubectl get all &"}
+{"cmd": "nohup node --version && ls &"}
+{"cmd": "nohup journalctl --sync &"}
+{"cmd": "nohup test &"}
+{"cmd": "nohup sqlite3 :memory: 'SELECT 1' &"}
+{"cmd": "nohup brew services cleanup &"}
+{"cmd": "nohup gh codespace cp file.txt remote: &"}
+{"cmd": "nohup curl --mail-from sender@example.com --mail-rcpt recipient@example.com smtp://mail.example.com &"}
+{"cmd": "nohup gh issue develop 123 --checkout &"}
+{"cmd": "nohup rtk git status && rtk git log --oneline -5 &"}
+{"cmd": "nohup helm help &"}
+{"cmd": "nohup scutil -r -W example.com &"}
+{"cmd": "nohup echo 'single $(rm x)' &"}
+{"cmd": "nohup python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_requests0/dangerous_requests.py &"}
+{"cmd": "nohup pre-commit install &"}
+{"cmd": "nohup python -c 'import json; json.dumps({'x': 1})' &"}
+{"cmd": "nohup cdk deploy --all &"}
+{"cmd": "nohup cargo clippy &"}
+{"cmd": "nohup az storage blob download --name myblob --container-name mycontainer --account-name myaccount --file localfile &"}
+{"cmd": "nohup env -i ls &"}
+{"cmd": "nohup gh api -X POST repos/owner/repo/issues &"}
+{"cmd": "nohup auth0 api get tenants/settings &"}
+{"cmd": "nohup gh workflow run build.yml &"}
+{"cmd": "nohup wget --recursive https://example.com &"}
+{"cmd": "nohup helm history myrelease --max 10 &"}
+{"cmd": "nohup fzf --bind='enter:execute(vim {})' &"}
+{"cmd": "nohup ansible all -m ping --check &"}
+{"cmd": "nohup diskutil unmountDisk disk0 &"}
+{"cmd": "nohup dmesg -TH &"}
+{"cmd": "nohup gh search repos --topic cli --limit 50 &"}
+{"cmd": "nohup aws rds describe-db-clusters --db-cluster-identifier mycluster &"}
+{"cmd": "nohup python --version | grep 3 &"}
+{"cmd": "nohup gh label list --limit 100 &"}
+{"cmd": "time psql -c 'SHOW search_path'"}
+{"cmd": "time auth0 users show user123"}
+{"cmd": "time helm test myrelease -n production"}
+{"cmd": "time npm run test"}
+{"cmd": "time DOCKER_HOST=tcp://localhost:2375 docker ps"}
+{"cmd": "time helm dep list ./mychart"}
+{"cmd": "time auth0 apps list"}
+{"cmd": "time symbols /usr/bin/ls"}
+{"cmd": "time docker create ubuntu"}
+{"cmd": "time hdiutil verify -verbose image.dmg"}
+{"cmd": "time gh repo fork owner/repo"}
+{"cmd": "time bash -x -c 'echo'"}
+{"cmd": "time kubectl top pods -n kube-system"}
+{"cmd": "time ip tuntap show"}
+{"cmd": "time az sql server list --resource-group mygroup"}
+{"cmd": "time npm deprecate lodash@1.0.0 'use v2'"}
+{"cmd": "time aws logs describe-export-tasks"}
+{"cmd": "time time rm x"}
+{"cmd": "time sort --check=quiet file.txt"}
+{"cmd": "time security find-key -t public"}
+{"cmd": "time import json; d=json.loads('{\"a\":1}'); print(d['a'])"}
+{"cmd": "time docker context update mycontext"}
+{"cmd": "time aws lambda update-function-configuration --function-name myfunc --timeout 30"}
+{"cmd": "time kubectl get ingress"}
+{"cmd": "time cdk deploy --require-approval never"}
+{"cmd": "time journalctl _PID=1234"}
+{"cmd": "time xargs -I {} -P 4 head -10 {}"}
+{"cmd": "time git rerere status"}
+{"cmd": "time psql -c 'ALTER TABLE users ADD COLUMN x INT'"}
+{"cmd": "time base64 -d file.txt"}
+{"cmd": "time fd -x echo"}
+{"cmd": "time docker attach mycontainer"}
+{"cmd": "time git prune"}
+{"cmd": "time npm bin"}
+{"cmd": "time uv export"}
+{"cmd": "time script -p typescript"}
+{"cmd": "time gh api /user"}
+{"cmd": "time SELECT 1 /* ordinary INTO OUTFILE 'tmp/out' */"}
+{"cmd": "time fzf --bind='enter:print-query'"}
+{"cmd": "time brew list -t"}
+{"cmd": "time qlmanage -r"}
+{"cmd": "time fzf --preview-window=right:50%"}
+{"cmd": "time az ad sp credential reset --id spid"}
+{"cmd": "time docker plugin rm myplugin"}
+{"cmd": "time f() { rm x; }; f"}
+{"cmd": "time ansible-vault encrypt secrets.yml"}
+{"cmd": "time git checkout feature"}
+{"cmd": "time fd --print0 pattern"}
+{"cmd": "time aws athena list-query-executions --work-group primary"}
+{"cmd": "time aws athena list-named-queries --work-group primary"}
+{"cmd": "time for i in $(rm foo); do echo $i; done"}
+{"cmd": "time docker network create mynet"}
+{"cmd": "time ip -s -s link"}
+{"cmd": "time cargo +stable test"}
+{"cmd": "time xargs aws ec2 terminate-instances"}
+{"cmd": "time networksetup -listdevicesthatsupportVLAN"}
+{"cmd": "time aws logs filter-log-events --log-group-name mygroup --filter-pattern ERROR"}
+{"cmd": "time /app/x.env"}
+{"cmd": "time gcloud secrets add-iam-policy-binding my-secret --member=user:foo --role=roles/secretmanager.secretAccessor"}
+{"cmd": "time aws ec2 create-snapshot --volume-id vol-123"}
+{"cmd": "time aws cloudformation get-stack-policy --stack-name mystack"}
+{"cmd": "time az vm image show --urn Canonical:UbuntuServer:18.04-LTS:latest"}
+{"cmd": "time kubectl get secret my-secret -o name"}
+{"cmd": "time brew bundle"}
+{"cmd": "time awk 'NR == 1 || /pattern/' file.txt"}
+{"cmd": "time docker run -d nginx"}
+{"cmd": "time ip tuntap list"}
+{"cmd": "time gh extension remove ext-name"}
+{"cmd": "time INTEGER"}
+{"cmd": "time bash -c 'rm -rf /tmp/test'"}
+{"cmd": "time unzip -o archive.zip"}
+{"cmd": "time helm search repo nginx --version ^2.0.0"}
+{"cmd": "time gcloud info"}
+{"cmd": "time git submodule init"}
+{"cmd": "time python /tmp/pytest-of-root/pytest-3/popen-gw0/test_os_popen_method_blocked0/os_popen.py"}
+{"cmd": "time script -q /dev/null bash -c 'rm -rf /'"}
+{"cmd": "time gh api repos --help"}
+{"cmd": "time python /tmp/pytest-of-root/pytest-3/popen-gw0/test_subprocess_check_output_b0/subprocess_check_output.py"}
+{"cmd": "time az vm create myvm --resource-group mygroup"}
+{"cmd": "time env -u PATH ls"}
+{"cmd": "time helm fetch mychart"}
+{"cmd": "time auth0 users delete user123"}
+{"cmd": "time docker compose pull"}
+{"cmd": "time docker system prune"}
+{"cmd": "time auth0 universal-login templates show"}
+{"cmd": "time dippy config set askpass x"}
+{"cmd": "time brew untap --force homebrew/cask"}
+{"cmd": "time pip list --exclude requests"}
+{"cmd": "time curl --proxy-user user:pass https://example.com"}
+{"cmd": "time az storage account show --name myaccount -g mygroup"}
+{"cmd": "kubectl get pods -A | head -5"}
+{"cmd": "packer plugins install github.com/hashicorp/amazon | head -5"}
+{"cmd": "gh search code 'import os' --language python | head -5"}
+{"cmd": "ssh user@host rm file.txt | head -5"}
+{"cmd": "ansible all -m command -a 'uptime' | head -5"}
+{"cmd": "symbols -lookup main /usr/bin/ls | head -5"}
+{"cmd": "brew deps --direct python | head -5"}
+{"cmd": "gcloud app versions describe v1 --service=default | head -5"}
+{"cmd": "gh browse src/main.go | head -5"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_class_bases_blocked0/class_bases.py | head -5"}
+{"cmd": "grep -r pattern . | head -5"}
+{"cmd": "xargs -n 1 rm | head -5"}
+{"cmd": "git grep --count pattern | head -5"}
+{"cmd": "defaults read | head -5"}
+{"cmd": "uv pip | head -5"}
+{"cmd": "brew cleanup -n | head -5"}
+{"cmd": "find . -iname '*.PY' | head -5"}
+{"cmd": "journalctl --vacuum-files=10 | head -5"}
+{"cmd": "find . -newerat '2024-01-01' | head -5"}
+{"cmd": "brew migrate --formula python | head -5"}
+{"cmd": "helm upgrade --install myrelease nginx/nginx | head -5"}
+{"cmd": "pip3 --version | head -5"}
+{"cmd": "TO '-' | head -5"}
+{"cmd": "networksetup -listpreferredwirelessnetworks en0 | head -5"}
+{"cmd": "test | head -5"}
+{"cmd": "$[1+2] | head -5"}
+{"cmd": "( ls; ) | head -5"}
+{"cmd": "lipo -extract x86_64 universal.o -output x86.o | head -5"}
+{"cmd": "pip cache list | head -5"}
+{"cmd": "for (( i=$(rm foo); i<10; i++ )); do echo $i; done | head -5"}
+{"cmd": "echo data >& /tmp/out | head -5"}
+{"cmd": "xargs --max-chars=2048 grep pattern | head -5"}
+{"cmd": "az aks get-versions --location eastus | head -5"}
+{"cmd": "uniq file.txt | head -5"}
+{"cmd": "caffeinate -i | head -5"}
+{"cmd": "gawk -f script.awk file.txt | head -5"}
+{"cmd": "git hash-object --stdin | head -5"}
+{"cmd": "az ad group create --display-name 'New Group' --mail-nickname newgroup | head -5"}
+{"cmd": "delete | head -5"}
+{"cmd": "7z rn archive.7z old.txt new.txt | head -5"}
+{"cmd": "sqlcmd query -q \"(SELECT $SQL)\" | head -5"}
+{"cmd": "git branch --list | head -5"}
+{"cmd": "auth0 orgs show org_12345 | head -5"}
+{"cmd": "docker --context mycontext ps | head -5"}
+{"cmd": "gzip -t file.gz | head -5"}
+{"cmd": "aws --profile prod ec2 describe-instances | head -5"}
+{"cmd": "aws athena list-named-queries | head -5"}
+{"cmd": "ansible-vault encrypt --vault-password-file pass.txt secrets.yml | head -5"}
+{"cmd": "pytest | head -5"}
+{"cmd": "sqlcmd query 'SELECT 1' --database master | head -5"}
+{"cmd": "awk 'BEGIN {print sin(0.5)}' | head -5"}
+{"cmd": "ansible-lint --help | head -5"}
+{"cmd": "az vm start -g mygroup -n myvm | head -5"}
+{"cmd": "aws cloudwatch describe-anomaly-detectors | head -5"}
+{"cmd": "git sparse-checkout list | head -5"}
+{"cmd": "xxd -revert file.hex | head -5"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_generator_gi_frame_blocke0/gi_frame.py | head -5"}
+{"cmd": "ls -la /tmp | head -5"}
+{"cmd": "fzf --no-bold | head -5"}
+{"cmd": "docker compose up --build | head -5"}
+{"cmd": "aws iam list-roles | head -5"}
+{"cmd": "docker stats --no-stream | head -5"}
+{"cmd": "networksetup -setairportpower en0 on | head -5"}
+{"cmd": "duckdb -readonly data.db \"(SELECT 1) UNION ALL (SELECT 2)\" | head -5"}
+{"cmd": "cargo test -- --test-threads=1 | head -5"}
+{"cmd": "pip hash package.whl | head -5"}
+{"cmd": "gh search repos cli --owner github | head -5"}
+{"cmd": "xargs --null | head -5"}
+{"cmd": "((SELECT 1) UNION ALL (SELECT 2)) | head -5"}
+{"cmd": "aws sns confirm-subscription --topic-arn arn --token token | head -5"}
+{"cmd": "brew migrate -n python | head -5"}
+{"cmd": "cargo add --path ../mylib | head -5"}
+{"cmd": "ansible-doc --json ping | head -5"}
+{"cmd": "auth0 api patch clients/123 | head -5"}
+{"cmd": "az network nic delete --name mynic -g mygroup | head -5"}
+{"cmd": "az container restart --name mycontainer -g mygroup | head -5"}
+{"cmd": "brew unlink --dry-run python | head -5"}
+{"cmd": "xargs -p rm | head -5"}
+{"cmd": "az appservice plan update --name myplan -g mygroup --sku S1 | head -5"}
+{"cmd": "lipo -extract_family arm64 universal.o -output arm.o | head -5"}
+{"cmd": "ruff -h | head -5"}
+{"cmd": "xargs -L 1 head | head -5"}
+{"cmd": "az pipelines runs list --pipeline-id 1 --project myproject | head -5"}
+{"cmd": "gcloud compute disks snapshot my-disk --snapshot-names=my-snapshot | head -5"}
+{"cmd": "gzip --force file.txt | head -5"}
+{"cmd": "sqlite3 data.db \"SELECT CAST(a AS INTEGER) FROM t; .output tmp/out\" | head -5"}
+{"cmd": "psql -t -c 'SELECT 1' | head -5"}
+{"cmd": "curl -c cookies.txt https://example.com | head -5"}
+{"cmd": "duckdb mydb.db -c 'SELECT * FROM users' | head -5"}
+{"cmd": "networksetup -duplicatenetworkservice Wi-Fi Wi-Fi2 | head -5"}
+{"cmd": "cat f | docker service rollback myservice"}
+{"cmd": "cat f | aws athena start-query-execution --query-string 'SELECT 1' --result-configuration OutputLocation=s3://bucket/"}
+{"cmd": "cat f | az devops configure --list"}
+{"cmd": "cat f | ansible-vault --help"}
+{"cmd": "cat f | terraform login app.terraform.io"}
+{"cmd": "cat f | binhex decode -c file.hqx"}
+{"cmd": "cat f | awk '{print > \"output.txt\"}' file.txt"}
+{"cmd": "cat f | security default-keychain -s keychain.keychain"}
+{"cmd": "cat f | helm upgrade myrelease nginx/nginx --install"}
+{"cmd": "cat f | symbols /usr/bin/ls"}
+{"cmd": "cat f | helm list --superseded"}
+{"cmd": "cat f | ansible-console --help"}
+{"cmd": "cat f | brew desc --cask firefox"}
+{"cmd": "cat f | gunzip --list file.gz"}
+{"cmd": "cat f | docker builder prune"}
+{"cmd": "cat f | ip -6 netconf"}
+{"cmd": "cat f | az sql db delete --name mydb --server myserver -g mygroup"}
+{"cmd": "cat f | echo ${x:-$(rm foo)}"}
+{"cmd": "cat f | COPY (SELECT 1) TO 'https://example.com/out'"}
+{"cmd": "cat f | prometheus --web.console.templates=consoles"}
+{"cmd": "cat f | prometheus --web.external-url=http://prometheus.example.com"}
+{"cmd": "cat f | cargo build --all-targets"}
+{"cmd": "cat f | helm create ./path/to/mychart"}
+{"cmd": "cat f | docker load < image.tar"}
+{"cmd": "cat f | aws kinesis list-streams"}
+{"cmd": "cat f | codesign -d /path/to/app"}
+{"cmd": "cat f | xargs -L 1 head"}
+{"cmd": "cat f | az webapp restart --name myapp -g mygroup"}
+{"cmd": "cat f | ip route"}
+{"cmd": "cat f | gh repo --help"}
+{"cmd": "cat f | gh gist rename abc123 old.txt new.txt"}
+{"cmd": "cat f | docker --host tcp://localhost:2375 ps"}
+{"cmd": "cat f | find . -regex '.*\\.py$'"}
+{"cmd": "cat f | black ."}
+{"cmd": "cat f | xargs tail -n 10"}
+{"cmd": "cat f | auth0 domains delete cd_12345"}
+{"cmd": "cat f | az network application-gateway list"}
+{"cmd": "cat f | helm push mychart-1.0.0.tgz oci://registry.example.com/charts"}
+{"cmd": "cat f | defaults find keyword"}
+{"cmd": "cat f | wget -q https://example.com"}
+{"cmd": "cat f | gunzip -k file.gz"}
+{"cmd": "cat f | brew --config"}
+{"cmd": "cat f | az vm capture --name myvm -g mygroup --vhd-name-prefix myimage"}
+{"cmd": "cat f | aws athena batch-get-prepared-statement --prepared-statement-names stmt1 stmt2 --work-group primary"}
+{"cmd": "cat f | gcloud config configurations create new-config"}
+{"cmd": "cat f | uv export -o requirements.txt"}
+{"cmd": "cat f | aws s3 ls s3://mybucket"}
+{"cmd": "cat f | awk '{print int($1)}' file.txt"}
+{"cmd": "cat f | sqlite3 mydb.db 'CREATE TABLE users (id INT)'"}
+{"cmd": "cat f | gh issue delete 123 --yes"}
+{"cmd": "cat f | packer"}
+{"cmd": "cat f | gcloud iam service-accounts keys create key.json --iam-account=sa@project.iam.gserviceaccount.com"}
+{"cmd": "cat f | aws iam get-group --group-name mygroup"}
+{"cmd": "cat f | sqlcmd query 'UPDATE users SET name = 1'"}
+{"cmd": "cat f | docker rm -f mycontainer"}
+{"cmd": "cat f | aws logs describe-log-groups"}
+{"cmd": "cat f | uv run ruff check"}
+{"cmd": "cat f | aws athena create-prepared-statement --statement-name stmt --work-group primary --query-statement 'SELECT ?'"}
+{"cmd": "cat f | sleep 1m"}
+{"cmd": "cat f | aws iam create-user --user-name newuser"}
+{"cmd": "cat f | base64 --decode --wrap 0 file.txt"}
+{"cmd": "cat f | aws route53 list-query-logging-configs"}
+{"cmd": "cat f | find . -printf '%f\\n'"}
+{"cmd": "cat f | gawk --file=script.awk file.txt"}
+{"cmd": "cat f | gh pr close 123 --comment 'Closing'"}
+{"cmd": "cat f | echo $( (ls) )"}
+{"cmd": "cat f | SELECT CAST(a AS VARCHAR) INTO outfile FROM t"}
+{"cmd": "cat f | ip tunt add dev tap0 mode tap"}
+{"cmd": "cat f | ls"}
+{"cmd": "cat f | aws iam put-role-policy --role-name myrole --policy-name pol --policy-document file://p.json"}
+{"cmd": "cat f | networksetup -getsecurewebproxy Wi-Fi"}
+{"cmd": "cat f | find './path with spaces'"}
+{"cmd": "cat f | fzf --listen=6266"}
+{"cmd": "cat f | psql -c"}
+{"cmd": "cat f | az group show --name mygroup"}
+{"cmd": "cat f | helm dependency update ./mychart --skip-refresh"}
+{"cmd": "cat f | awk '/foo/ {print $1}' file.txt"}
+{"cmd": "cat f | locate file.txt"}
+{"cmd": "cat f | uv build --wheel"}
+{"cmd": "cat f | aws secretsmanager list-secret-version-ids --secret-id mysecret"}
+{"cmd": "cat f | rtk ls -la"}
+{"cmd": "cat f | docker top mycontainer"}
+{"cmd": "cat f | pip uninstall -y requests"}
+{"cmd": "cat f | hdiutil create -size 100m output.dmg"}
+{"cmd": "cat f | auth0 quickstarts ls"}
+{"cmd": "cat f | uv venv .venv"}
+{"cmd": "cat f | mysql -e 'GRANT SELECT ON db.* TO user'"}
+{"cmd": "cat f | git reflog show HEAD"}
+{"cmd": "cat f | curl -sSL -d 'data' https://example.com"}
+{"cmd": "cat f | python /tmp/pytest-of-root/pytest-3/popen-gw0/test_ftplib_blocked0/ftplib_dangerous.py"}
+{"cmd": "(uv remove --dev pytest)"}
+{"cmd": "(security unlock-keychain)"}
+{"cmd": "(?cwd=relative/path)"}
+{"cmd": "(grep foo bar 2>/dev/null)"}
+{"cmd": "(gh project list --json title,number)"}
+{"cmd": "(az storage container list --account-name myaccount --auth-mode login)"}
+{"cmd": "(xxd -revert file.hex)"}
+{"cmd": "(brew upgrade -g)"}
+{"cmd": "(caffeinate -i echo '(a)')"}
+{"cmd": "(fzf --accept-nth=2)"}
+{"cmd": "(rtk git log --oneline | rtk head -5)"}
+{"cmd": "(helm status myrelease -o json)"}
+{"cmd": "(pnpm prune)"}
+{"cmd": "(aws athena start-query-execution --query-string \"SELECT CAST($SQL AS INTEGER)\")"}
+{"cmd": "(tmutil latestbackup)"}
+{"cmd": "(/srv/a**b/x)"}
+{"cmd": "(sips --verify profile.icc)"}
+{"cmd": "(mysql -e \"SELECT 'a$'\")"}
+{"cmd": "(aws sqs tag-queue --queue-url https://sqs... --tags env=prod)"}
+{"cmd": "(prometheus -h)"}
+{"cmd": "(gh browse --projects)"}
+{"cmd": "(git fetch origin)"}
+{"cmd": "(uv run git status)"}
+{"cmd": "(helm del myrelease)"}
+{"cmd": "(kubectl logs nginx)"}
+{"cmd": "(git show-ref --verify refs/heads/main)"}
+{"cmd": "(duckdb tmp/work.db \"CREATE TABLE t AS SELECT writefile('/tmp/out','x')\")"}
+{"cmd": "(time rm x)"}
+{"cmd": "(kubectl rollout history deployment/nginx --revision=2)"}
+{"cmd": "($#)"}
+{"cmd": "(prometheus --web.listen-address=0.0.0.0:9090)"}
+{"cmd": "(brew info --installed)"}
+{"cmd": "(openssl s_client -connect example.com:443 -servername example.com)"}
+{"cmd": "(brew unpin python ruby)"}
+{"cmd": "(aws cognito-idp list-users --user-pool-id us-east-1_abc123)"}
+{"cmd": "(SELECT CONVERT(x, CHAR), CONVERT(y, SIGNED INTEGER) FROM t)"}
+{"cmd": "(gcloud compute disks describe my-disk)"}
+{"cmd": "(diskutil list -plist)"}
+{"cmd": "(helm pull nginx/nginx -d ./charts)"}
+{"cmd": "(python -c 'x=1')"}
+{"cmd": "(aws athena start-query-execution --query-string 'SHOW TABLES')"}
+{"cmd": "(git format-patch origin)"}
+{"cmd": "(sort -T /tmp file.txt)"}
+{"cmd": "(duckdb mydb.db 'DETACH DATABASE other')"}
+{"cmd": "(pip freeze --exclude-editable)"}
+{"cmd": "(brew analytics state)"}
+{"cmd": "(duckdb -separator '|' mydb.db 'SELECT 1')"}
+{"cmd": "(kubectl get secrets)"}
+{"cmd": "(brew uses --eval-all python)"}
+{"cmd": "(fd --glob pattern)"}
+{"cmd": "(qlmanage -t file.pdf)"}
+{"cmd": "(launchctl config system path /usr/local/bin)"}
+{"cmd": "(gcloud run services delete my-service --region=us-central1)"}
+{"cmd": "(docker image inspect myimage)"}
+{"cmd": "(git gc --aggressive)"}
+{"cmd": "(base64 -w 0)"}
+{"cmd": "(echo $x$(rm y))"}
+{"cmd": "(sort -o /dev/stdout input.txt)"}
+{"cmd": "(docker network ls)"}
+{"cmd": "(duckdb :memory: 'SELECT 1')"}
+{"cmd": "(kubectl edit deployment nginx)"}
+{"cmd": "(sleep 1)"}
+{"cmd": "(ip -o addr)"}
+{"cmd": "(find . -type d -empty)"}
+{"cmd": "(az storage container create --name newcontainer --account-name myaccount)"}
+{"cmd": "(kubectl rollout restart deployment/nginx)"}
+{"cmd": "(az vm capture --name myvm -g mygroup --vhd-name-prefix myimage)"}
+{"cmd": "(az devops project create --name newproject --organization https://dev.azure.com/myorg)"}
+{"cmd": "(ssh user@host rm file.txt)"}
+{"cmd": "(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_dunder_b0/dangerous_dunder_import.py)"}
+{"cmd": "(more file.txt)"}
+{"cmd": "(gh repo view --web)"}
+{"cmd": "(docker compose rm -f)"}
+{"cmd": "(ls;)"}
+{"cmd": "(az appservice plan list)"}
+{"cmd": "(pytest -k test_foo)"}
+{"cmd": "(wget -O /dev/stdout https://example.com)"}
+{"cmd": "(helm repo remove stable)"}
+{"cmd": "(kubectl cp /tmp/foo nginx:/tmp/bar)"}
+{"cmd": "(gh ruleset view 1)"}
+{"cmd": "(docker node promote node1)"}
+{"cmd": "(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_class_mro_blocked0/class_mro.py)"}
+{"cmd": "(az apim create -g mygroup -n myapim -l eastus --publisher-email admin@example.com --publisher-name MyCompany)"}
+{"cmd": "(cargo -h)"}
+{"cmd": "(-H'=demo')"}
+{"cmd": "(docker inspect mycontainer)"}
+{"cmd": "(kubectl logs $(echo \"nginx\"))"}
+{"cmd": "(az storage blob download-batch --source mycontainer --destination ./local --account-name myaccount)"}
+{"cmd": "(tmutil setdestination -a /Volumes/Backup2)"}
+{"cmd": "(sample 1234 -file /tmp/test.txt)"}
+{"cmd": "{ >; }"}
+{"cmd": "{ --mail-from; }"}
+{"cmd": "{ git log --patch; }"}
+{"cmd": "{ ansible-galaxy collection download community.general; }"}
+{"cmd": "{ auth0 apps show app_12345; }"}
+{"cmd": "{ sips --resampleHeightWidth 200 200 image.png; }"}
+{"cmd": "{ curl -a -T file.txt ftp://example.com; }"}
+{"cmd": "{ az keyvault set-policy --name myvault --object-id objid --secret-permissions get list; }"}
+{"cmd": "{ az boards work-item show --id 12345; }"}
+{"cmd": "{ sqlcmd query -q \"SELECT '$HOME'\"; }"}
+{"cmd": "{ psql -c 'INSERT INTO users VALUES (1)'; }"}
+{"cmd": "{ aws iam list-mfa-devices; }"}
+{"cmd": "{ auth0 apis scopes ls api_12345; }"}
+{"cmd": "{ curl -n https://example.com; }"}
+{"cmd": "{ curl -# https://example.com; }"}
+{"cmd": "{ xargs ls; }"}
+{"cmd": "{ git apply --cached patch.diff; }"}
+{"cmd": "{ git diff file.txt; }"}
+{"cmd": "{ pre-commit validate-config; }"}
+{"cmd": "{ gh gist create file.txt --public; }"}
+{"cmd": "{ sips -z 100 100 image.png; }"}
+{"cmd": "{ cargo tree --features all; }"}
+{"cmd": "{ az storage blob url -c mycontainer -n myblob --account-name mystorageaccount; }"}
+{"cmd": "{ journalctl --vacuum-size=100M; }"}
+{"cmd": "{ duckdb -readonly work.db \"SELECT 1 -- comment\rINSTALL httpfs\"; }"}
+{"cmd": "{ git commit -m 'message'; }"}
+{"cmd": "{ az role assignment delete --assignee user@example.com --role Reader; }"}
+{"cmd": "{ ansible-test units --python 3.10; }"}
+{"cmd": "{ sqlcmd query --help; }"}
+{"cmd": "{ openssl x509 -noout -dates -in cert.pem; }"}
+{"cmd": "{ arch -x86_64 echo 'a;zonk'; }"}
+{"cmd": "{ aws cognito-idp describe-user-pool --user-pool-id us-east-1_abc123; }"}
+{"cmd": "{ FOO='val with spaces' someunknowncmd --flag; }"}
+{"cmd": "{ lipo -remove x86_64 universal.o -output arm_only.o; }"}
+{"cmd": "{ duckdb -readonly work.db 'SELECT [1, 2]'; }"}
+{"cmd": "{ brew --prefix --installed python; }"}
+{"cmd": "{ { ls; } > $(rm foo); }"}
+{"cmd": "{ brew list --multiple; }"}
+{"cmd": "{ brew cleanup python; }"}
+{"cmd": "{ pkgutil --payload-files package.pkg; }"}
+{"cmd": "{ brew install -n python; }"}
+{"cmd": "{ xargs -P4 wc -l; }"}
+{"cmd": "{ source .env; }"}
+{"cmd": "{ gh workflow run build.yml --ref main; }"}
+{"cmd": "{ az webapp config appsettings set --name myapp -g mygroup --settings KEY=VALUE; }"}
+{"cmd": "{ az repos show --repository myrepo --project myproject; }"}
+{"cmd": "{ gh codespace list; }"}
+{"cmd": "{ git rebase --interactive main; }"}
+{"cmd": "{ terraform plan -json; }"}
+{"cmd": "{ $?; }"}
+{"cmd": "{ aws ec2 create-key-pair --key-name mykey; }"}
+{"cmd": "{ npm version minor; }"}
+{"cmd": "{ az servicebus topic show --name mytopic --namespace-name mynamespace -g mygroup; }"}
+{"cmd": "{ az acr repository delete --name myacr --repository myrepo; }"}
+{"cmd": "{ brew leaves --verbose; }"}
+{"cmd": "{ pytest --help; }"}
+{"cmd": "{ fzf --scheme=history; }"}
+{"cmd": "{ terraform import aws_instance.foo i-123; }"}
+{"cmd": "{ aws ec2 get-console-output --instance-id i-123; }"}
+{"cmd": "{ python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_socket_b0/dangerous_socket.py; }"}
+{"cmd": "{ spctl -a /Applications/Safari.app; }"}
+{"cmd": "{ kubectl auth can-i create deployments; }"}
+{"cmd": "{ duckdb -readonly data.db \"WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS INTEGER) FROM x\"; }"}
+{"cmd": "{ python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_subproce0/dangerous_subprocess.py; }"}
+{"cmd": "{ binhex --help; }"}
+{"cmd": "{ docker exec --privileged nginx rm /tmp/foo; }"}
+{"cmd": "{ git $(echo status); }"}
+{"cmd": "{ dmesg --color=always; }"}
+{"cmd": "{ brew shellenv fish; }"}
+{"cmd": "{ az ad user show --id user@example.com; }"}
+{"cmd": "{ xxd -s 0x30 file.bin; }"}
+{"cmd": "{ podman commit mycontainer myimage; }"}
+{"cmd": "{ hdiutil create -size 100m output.dmg; }"}
+{"cmd": "{ chmod 755 f && chown root f; }"}
+{"cmd": "{ aws ssm stop-automation-execution --automation-execution-id exec123; }"}
+{"cmd": "{ git reset --hard HEAD~1; }"}
+{"cmd": "{ helm lint ./mychart --set key=value; }"}
+{"cmd": "{ gcloud container clusters delete my-cluster; }"}
+{"cmd": "{ terraform test; }"}
+{"cmd": "{ auth0 users delete auth0|123456; }"}
+{"cmd": "{ wget --version; }"}
+{"cmd": "{ xargs bash -c 'git push'; }"}
+{"cmd": "{ psql -c \"SELECT CAST(x AS INTEGER) FROM t\"; }"}
+{"cmd": "{ az pipelines delete --id 1 --project myproject --yes; }"}
+{"cmd": "{ gh auth logout; }"}
+{"cmd": "{ pip download --only-binary :all: requests; }"}
+{"cmd": "{ aws iam update-login-profile --user-name myuser --password newpass; }"}
+{"cmd": "{ base64 -d file.txt; }"}
+{"cmd": "{ kubectl get secret my-secret --output=yaml; }"}
+{"cmd": "{ git remote -v; }"}
+{"cmd": "auth0 users delete auth0|123456 && echo done"}
+{"cmd": "az aks delete --name mycluster -g mygroup --yes && echo done"}
+{"cmd": "docker create ubuntu && echo done"}
+{"cmd": "fzf --tmux && echo done"}
+{"cmd": "auth0 roles delete rol_12345 && echo done"}
+{"cmd": "pre-commit-hook && echo done"}
+{"cmd": "docker network rm mynet && echo done"}
+{"cmd": "helm install --help && echo done"}
+{"cmd": "find . -inum 12345 && echo done"}
+{"cmd": "terraform apply -target=aws_instance.foo && echo done"}
+{"cmd": "mysql -e \"SELECT '/*! INTO OUTFILE */'\" && echo done"}
+{"cmd": "az monitor activity-log list --resource-group mygroup && echo done"}
+{"cmd": "az sql server firewall-rule list --server myserver -g mygroup && echo done"}
+{"cmd": "packer build -debug template.json && echo done"}
+{"cmd": "diskutil secureErase 0 disk1 && echo done"}
+{"cmd": "psql -c 'INSERT INTO users VALUES (1)' && echo done"}
+{"cmd": "cargo fix --allow-dirty && echo done"}
+{"cmd": "sqlite3 -csv mydb.db 'SELECT * FROM users' && echo done"}
+{"cmd": "gunzip -f file.gz && echo done"}
+{"cmd": "git log HEAD~5..HEAD && echo done"}
+{"cmd": "fd --exec echo && echo done"}
+{"cmd": "duckdb -readonly data.db \"WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS INTEGER) FROM x\" && echo done"}
+{"cmd": "aws sns list-tags-for-resource --resource-arn arn && echo done"}
+{"cmd": "TO 'tmp/out' (HEADER query('DELETE FROM t')) && echo done"}
+{"cmd": "git am --continue && echo done"}
+{"cmd": "openssl pkcs12 -in cert.p12 -out cert.pem && echo done"}
+{"cmd": "uv add --optional test pytest && echo done"}
+{"cmd": "fzf --border=sharp && echo done"}
+{"cmd": "curl -4 https://example.com && echo done"}
+{"cmd": "docker images && echo done"}
+{"cmd": "npm access get status lodash && echo done"}
+{"cmd": "one two && echo done"}
+{"cmd": "npm run test && echo done"}
+{"cmd": "ip addr flush dev eth0 && echo done"}
+{"cmd": "ssh host -- ls && echo done"}
+{"cmd": "xargs -I {} -P 4 -n 1 head {} && echo done"}
+{"cmd": "launchctl load ~/Library/LaunchAgents/my.plist && echo done"}
+{"cmd": "docker compose exec -it web sh && echo done"}
+{"cmd": "docker container start mycontainer && echo done"}
+{"cmd": "**/.env* && echo done"}
+{"cmd": "terraform state list aws_instance.foo && echo done"}
+{"cmd": "helm rollback myrelease && echo done"}
+{"cmd": "ls 2>>/dev/null && echo done"}
+{"cmd": "months && echo done"}
+{"cmd": "git status --porcelain && echo done"}
+{"cmd": "mv foo bar && echo done"}
+{"cmd": "npm set registry https://example.com && echo done"}
+{"cmd": "sqlcmd query 'SELECT * FROM users' && echo done"}
+{"cmd": "aws ecr delete-repository --repository-name myrepo --force && echo done"}
+{"cmd": "kubectl completion zsh && echo done"}
+{"cmd": "pip config edit --global && echo done"}
+{"cmd": "git update-index --refresh && echo done"}
+{"cmd": "hdiutil detach /dev/disk2 && echo done"}
+{"cmd": "uv pip install foo && echo done"}
+{"cmd": "gh issue lock 123 && echo done"}
+{"cmd": "7zz e archive.7z && echo done"}
+{"cmd": "MODE=test  && echo done"}
+{"cmd": "journalctl --reverse && echo done"}
+{"cmd": "pkgutil --groups && echo done"}
+{"cmd": "terraform version -json && echo done"}
+{"cmd": "du -sh . && echo done"}
+{"cmd": "aws ecr describe-repositories --repository-names myrepo && echo done"}
+{"cmd": "pnpm ls && echo done"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_zlib_safe_without_file_io0/zlib_safe.py && echo done"}
+{"cmd": "curl --cacert ca.pem https://example.com && echo done"}
+{"cmd": "brew edit --cask firefox && echo done"}
+{"cmd": "echo \"$(ls)\" \"$(rm x)\" && echo done"}
+{"cmd": "base64 file.txt > output.txt && echo done"}
+{"cmd": "docker compose ps -a && echo done"}
+{"cmd": "/srv/d/[ab] && echo done"}
+{"cmd": "--header 'Host: demo' http://10.1.2.3/ && echo done"}
+{"cmd": "curl --etag-save etag.txt https://example.com && echo done"}
+{"cmd": "?limit=x && echo done"}
+{"cmd": "xargs -d '\\n' -n 5 -P 2 wc -l && echo done"}
+{"cmd": "git cat-file -p HEAD && echo done"}
+{"cmd": "npm access revoke myorg:myteam lodash && echo done"}
+{"cmd": "docker compose exec web bash && echo done"}
+{"cmd": "aws lambda create-alias --function-name myfunc --name myalias --function-version 1 && echo done"}
+{"cmd": "docker rm -f mycontainer && echo done"}
+{"cmd": "ruff format --check && echo done"}
+{"cmd": "dippy dashboard --hub nodes.json && echo done"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_bz2_open_blocked0/bz2_bypass.py && echo done"}
+{"cmd": "npm explore lodash -- ls && echo done"}
+{"cmd": "pnpm publish && echo done"}
+{"cmd": "duckdb -readonly data.db \"SELECT CAST($SQL AS INTEGER)\" && echo done"}
+{"cmd": "helm dep build ./mychart && echo done"}
+{"cmd": "prometheus && echo done"}
+{"cmd": "az network vnet subnet show --name mysubnet --vnet-name myvnet -g mygroup && echo done"}
+{"cmd": "7za x archive.7z && echo done"}
+{"cmd": "git branch && echo done"}
+{"cmd": "echo start; source ~/venvs/myenv/bin/activate"}
+{"cmd": "echo start; psql -t -c 'SELECT 1'"}
+{"cmd": "echo start; gcloud certificate-manager trust-configs describe myconfig"}
+{"cmd": "echo start; aws athena start-query-execution --query-string 'SELECT 1'"}
+{"cmd": "echo start; ansible-galaxy role delete namespace role_name"}
+{"cmd": "echo start; xargs -0 -I {} -- cat {}"}
+{"cmd": "echo start; az group show --name mygroup"}
+{"cmd": "echo start; unzip -v archive.zip"}
+{"cmd": "echo start; brew home python"}
+{"cmd": "echo start; open -a TextEdit file.txt"}
+{"cmd": "echo start; fzf --bash"}
+{"cmd": "echo start; openssl crl -in crl.pem -text"}
+{"cmd": "echo start; kubectl -n delete get pods"}
+{"cmd": "echo start; sudo -n ls"}
+{"cmd": "echo start; time rm x"}
+{"cmd": "echo start; python /tmp/pytest-of-root/pytest-3/popen-gw0/test_globals_blocked0/globals_bypass.py"}
+{"cmd": "echo start; find . -fstype ext4"}
+{"cmd": "echo start; uv cache dir"}
+{"cmd": "echo start; dscl . list /Users"}
+{"cmd": "echo start; sed 's/foo/bar/' < file.txt"}
+{"cmd": "echo start; for f in a b; do echo $f; done > out"}
+{"cmd": "echo start; launchctl kickstart gui/501/my.service"}
+{"cmd": "echo start; az policy state list --resource-group mygroup"}
+{"cmd": "echo start; openssl rand -hex 32"}
+{"cmd": "echo start; --mail-rcpt"}
+{"cmd": "echo start; uv python dir"}
+{"cmd": "echo start; cargo new --lib mylib"}
+{"cmd": "echo start; security delete-internet-password -s server"}
+{"cmd": "echo start; unzip archive.zip -d outdir"}
+{"cmd": "echo start; aws ecr set-repository-policy --repository-name myrepo --policy-text file://policy.json"}
+{"cmd": "echo start; xargs mkdir"}
+{"cmd": "echo start; az servicebus topic list --namespace-name mynamespace -g mygroup"}
+{"cmd": "echo start; gh gist view abc123 --web"}
+{"cmd": "echo start; find . -name '*.bak' -okdir rm {} \\;"}
+{"cmd": "echo start; az pipelines build list --project myproject"}
+{"cmd": "echo start; az disk create -g mygroup -n mydisk --size-gb 100"}
+{"cmd": "echo start; fzf --bind='ctrl-e:become(code {})'"}
+{"cmd": "echo start; aws ec2 describe-availability-zones"}
+{"cmd": "echo start; ip -br addr"}
+{"cmd": "echo start; az keyvault certificate show --name mycert --vault-name myvault"}
+{"cmd": "echo start; bash -c 'python script.py'"}
+{"cmd": "echo start; gh repo view owner/repo"}
+{"cmd": "echo start; xargs kubectl get pods"}
+{"cmd": "echo start; launchctl help"}
+{"cmd": "echo start; python /tmp/pytest-of-root/pytest-3/popen-gw0/test_non_python_extension_bloc0/script.txt"}
+{"cmd": "echo start; aws route53 get-health-check-count"}
+{"cmd": "echo start; python /tmp/pytest-of-root/pytest-3/popen-gw0/test_class_definition_approved0/class_def.py"}
+{"cmd": "echo start; psql -l"}
+{"cmd": "echo start; gh ssh-key delete 12345"}
+{"cmd": "echo start; openssl x509 -noout -serial -in cert.pem"}
+{"cmd": "echo start; curl --proxy-user user:pass https://example.com"}
+{"cmd": "echo start; docker container diff mycontainer"}
+{"cmd": "echo start; brew unlink python"}
+{"cmd": "echo start; cargo doc --document-private-items"}
+{"cmd": "echo start; aws eks list-identity-provider-configs --cluster-name mycluster"}
+{"cmd": "echo start; docker container logs mycontainer"}
+{"cmd": "echo start; git var -l"}
+{"cmd": "echo start; stats(x)"}
+{"cmd": "echo start; for f in $(ls); do rm \"$f\"; done"}
+{"cmd": "echo start; unzip -t archive.zip"}
+{"cmd": "echo start; aws cloudformation create-stack --stack-name newstack --template-body file://template.yaml"}
+{"cmd": "echo start; auth0 tenants ls"}
+{"cmd": "echo start; aws eks list-addons --cluster-name mycluster"}
+{"cmd": "echo start; az storage container list --account-name mystorageaccount"}
+{"cmd": "echo start; chown user file.txt"}
+{"cmd": "echo start; find . -user root -type f -perm -4000"}
+{"cmd": "echo start; find . -ctime -1"}
+{"cmd": "echo start; az appservice plan list"}
+{"cmd": "echo start; gzip -l file.gz"}
+{"cmd": "echo start; cargo info serde"}
+{"cmd": "echo start; SELECT CAST(a AS STRUCT(x VARCHAR, y INTEGER)), CAST(b AS VARCHAR[]) FROM t"}
+{"cmd": "echo start; gh api repos/owner/repo"}
+{"cmd": "echo start; . /path/to/script.sh"}
+{"cmd": "echo start; pip list --format=freeze"}
+{"cmd": "echo start; find . -exec echo {} \\;"}
+{"cmd": "echo start; diskutil list internal"}
+{"cmd": "echo start; az keyvault secret show --name mysecret --vault-name myvault"}
+{"cmd": "echo start; -F"}
+{"cmd": "echo start; dmesg --buffer-size=16384"}
+{"cmd": "echo start; psql -c 'GRANT SELECT ON users TO alice'"}
+{"cmd": "echo start; gh gist delete abc123"}
+{"cmd": "echo start; az acr repository show-manifests --name myacr --repository myrepo"}
+{"cmd": "echo start; python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_dunder_b0/dangerous_dunder_import.py"}
+{"cmd": "echo start; az network dns record-set a add-record --zone-name mydomain.com -g mygroup --record-set-name www --ipv4-address 1.2.3.4"}
+{"cmd": "echo start; echo *.txt"}
+{"cmd": "echo start; python /tmp/pytest-of-root/pytest-3/popen-gw0/test_json_processing_approved0/json_process.py"}
+{"cmd": "echo start; ansible all -m ping --check"}
+{"cmd": "echo start; duckdb -readonly data.db \"SELECT '${HOME}'\""}
+{"cmd": "echo start; -vR8080:localhost:80"}
+{"cmd": "echo start; gcloud config configurations activate new-config"}
+{"cmd": "az network nsg show --name mynsg -g mygroup || true"}
+{"cmd": "packer fmt -check -diff template.pkr.hcl || true"}
+{"cmd": "ruff lint src/ || true"}
+{"cmd": "brew list --casks || true"}
+{"cmd": "az devops project show --project myproject --organization https://dev.azure.com/myorg || true"}
+{"cmd": "isort --profile black . || true"}
+{"cmd": "pkgutil --packages || true"}
+{"cmd": "gh project edit 1 --title 'New Title' || true"}
+{"cmd": "docker compose pull web || true"}
+{"cmd": "plutil -lint file.plist || true"}
+{"cmd": "uv run sh -c 'ls' || true"}
+{"cmd": "openssl x509 -noout -startdate -in cert.pem || true"}
+{"cmd": "networksetup -createBond MyBond en0 en1 || true"}
+{"cmd": "duckdb -readonly work.db \"SELECT * FROM access WHERE uri LIKE '%export%'\" || true"}
+{"cmd": "az sql db show --name mydb --server myserver -g mygroup || true"}
+{"cmd": "git diff file.txt || true"}
+{"cmd": "openssl s_client -connect example.com:443 -showcerts || true"}
+{"cmd": "pip index versions requests || true"}
+{"cmd": "pip hash package.tar.gz || true"}
+{"cmd": "mysql -e \"$SQL\" || true"}
+{"cmd": "az acr update --name myacr --admin-enabled true || true"}
+{"cmd": "docker-compose logs -f || true"}
+{"cmd": "az network dns zone list || true"}
+{"cmd": "gh secret set MY_SECRET --body value || true"}
+{"cmd": "packer fix -validate=false template.json || true"}
+{"cmd": "dscl -raw . -list /Users || true"}
+{"cmd": "git stash pop stash@{0} || true"}
+{"cmd": "brew search /python/ || true"}
+{"cmd": "podman image ls || true"}
+{"cmd": "git archive --format=zip HEAD || true"}
+{"cmd": "dmesg || true"}
+{"cmd": "sqlite3 data.db \"WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS INTEGER) FROM x\" || true"}
+{"cmd": "git shortlog || true"}
+{"cmd": "psql -U postgres -c 'SELECT 1' || true"}
+{"cmd": "xargs dirname || true"}
+{"cmd": "curl -Q 'CWD /dir' ftp://example.com || true"}
+{"cmd": "gcloud logging logs list || true"}
+{"cmd": "npm v typescript || true"}
+{"cmd": "VARCHAR || true"}
+{"cmd": "podman push myrepo/myimage || true"}
+{"cmd": "az pipelines build show --id 100 --project myproject || true"}
+{"cmd": "npm config delete registry || true"}
+{"cmd": "az keyvault key show --name mykey --vault-name myvault || true"}
+{"cmd": "az containerapp show --name myapp --resource-group rg || true"}
+{"cmd": "python -c 'x=1; y=2; print(x+y)' || true"}
+{"cmd": "gh auth setup-git || true"}
+{"cmd": "terraform taint aws_instance.foo || true"}
+{"cmd": "echo $(whoami) $(date) || true"}
+{"cmd": "xargs -n 1 || true"}
+{"cmd": "gcloud secrets versions describe 1 --secret=my-secret || true"}
+{"cmd": "find . -name '*.py' , -name '*.txt' || true"}
+{"cmd": "gh pr checks 123 || true"}
+{"cmd": "gcloud components install kubectl || true"}
+{"cmd": "brew deps -n python || true"}
+{"cmd": "find . -name 'README*' || true"}
+{"cmd": "docker node inspect node1 || true"}
+{"cmd": "docker swarm init --advertise-addr eth0 || true"}
+{"cmd": "tmutil listlocalsnapshotdates || true"}
+{"cmd": "auth0 apps list --tenant mytenant || true"}
+{"cmd": "terraform console || true"}
+{"cmd": "az network nsg create --name newnsg -g mygroup || true"}
+{"cmd": "fzf --height=20 || true"}
+{"cmd": "cargo bench benchname || true"}
+{"cmd": "curl -S https://example.com || true"}
+{"cmd": "gunzip -tv file.gz || true"}
+{"cmd": "aws athena create-work-group --name newworkgroup || true"}
+{"cmd": "xargs -n 1 rm || true"}
+{"cmd": "gzip --help || true"}
+{"cmd": "git branch --all || true"}
+{"cmd": "sqlite3 -cmd 'DROP TABLE users' mydb.db || true"}
+{"cmd": "aws iam list-server-certificates || true"}
+{"cmd": "/srv/d/a/f || true"}
+{"cmd": "git add file.txt || true"}
+{"cmd": "auth0 orgs update org_12345 || true"}
+{"cmd": "kubectl auth whoami || true"}
+{"cmd": "curl --data-urlencode 'key=value' https://example.com || true"}
+{"cmd": "uv run git status || true"}
+{"cmd": "git --git-dir=/some/.git status || true"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_class_mro_blocked0/class_mro.py || true"}
+{"cmd": "case $(echo x) in *) echo y;; esac || true"}
+{"cmd": "ansible-config dump --only-changed || true"}
+{"cmd": "xxd -l 120 file.bin || true"}
+{"cmd": "find . -execdir ls {} \\; || true"}
+{"cmd": "aws athena start-query-execution --query-string 'SELECT 1' --result-configuration OutputLocation=s3://bucket/ || true"}
+{"cmd": "git stash push || true"}
+{"cmd": "openssl ec -in key.pem -out key-nopass.pem || true"}
+{"cmd": "brew unknown-command || true"}
+{"cmd": "curl -e 'https://referrer.com' https://example.com || true"}
+{"cmd": "aws ecr get-authorization-token || true"}
+{"cmd": "7zz b -mm=LZMA2 || true"}
+{"cmd": "! codesign --remove-signature /path/to/app"}
+{"cmd": "! kubectl get secret somesecret $(echo \"-o yaml\")"}
+{"cmd": "! cargo test -p mypackage"}
+{"cmd": "! -F"}
+{"cmd": "! gcloud"}
+{"cmd": "! python -m pip install foo"}
+{"cmd": "! for i in $(rm foo); do echo $i; done"}
+{"cmd": "! cargo update -p serde"}
+{"cmd": "! npm adduser"}
+{"cmd": "! hdiutil resize -size 200m image.dmg"}
+{"cmd": "! az sshkey create -g mygroup -n mykey"}
+{"cmd": "! cat foo >> bar.txt"}
+{"cmd": "! fd -x rm"}
+{"cmd": "! binhex -h"}
+{"cmd": "! dippy run"}
+{"cmd": "! curl -Q 'MDTM file.txt' ftp://example.com"}
+{"cmd": "! az eventhubs eventhub delete --name myeventhub --namespace-name mynamespace -g mygroup"}
+{"cmd": "! tar -r -f archive.tar file.txt"}
+{"cmd": "! gcloud run services describe my-service --region=us-central1"}
+{"cmd": "! diskutil secureErase 0 disk1"}
+{"cmd": "! awk '{sum += $1} END {print sum}' file.txt"}
+{"cmd": "! terraform console"}
+{"cmd": "! az monitor log-analytics query --workspace myworkspace --analytics-query 'AzureActivity | take 10'"}
+{"cmd": "! ls >| out"}
+{"cmd": "! brew install --HEAD python"}
+{"cmd": "! npm -v"}
+{"cmd": "! aws route53 get-reusable-delegation-set --id N123"}
+{"cmd": "! brew shellenv"}
+{"cmd": "! gh issue lock 123"}
+{"cmd": "! sed '/start/,/end/d' file.txt"}
+{"cmd": "! az aks show --name mycluster -g mygroup"}
+{"cmd": "! COPY (SELECT 1) TO 'tmp/out' (PARTITION_BY (x))"}
+{"cmd": "! find . -user nobody"}
+{"cmd": "! ansible all --list-hosts"}
+{"cmd": "! kubectl debug nginx -it --image=ubuntu"}
+{"cmd": "! curl -Q 'DELE file.txt' ftp://example.com"}
+{"cmd": "! auth0 protection brute-force-protection show"}
+{"cmd": "! xargs time rm"}
+{"cmd": "! docker manifest create myimage:latest myimage:amd64 myimage:arm64"}
+{"cmd": "! gh project delete 1"}
+{"cmd": "! aws logs create-log-stream --log-group-name mygroup --log-stream-name newstream"}
+{"cmd": "! awk '{print > \"/dev/stdin\"}' file.txt"}
+{"cmd": "! xargs -0 -n 1 -P 4 rm"}
+{"cmd": "! ansible-inventory --help"}
+{"cmd": "! az keyvault list --resource-group mygroup"}
+{"cmd": "! diskutil list disk0"}
+{"cmd": "! journalctl -o json"}
+{"cmd": "! fzf -n 1"}
+{"cmd": "! sudo echo '(a)'"}
+{"cmd": "! launchctl bootout gui/501/my.service"}
+{"cmd": "! auth0 api get users -q search_engine:v3"}
+{"cmd": "! packer build ."}
+{"cmd": "! python /tmp/pytest-of-root/pytest-3/popen-gw0/test_configparser_blocked0/configparser_dangerous.py"}
+{"cmd": "! cdk doctor"}
+{"cmd": "! docker system prune"}
+{"cmd": "! ansible-playbook playbook.yml -e 'var=value'"}
+{"cmd": "! duckdb -readonly work.db \"SELECT [']']; INSTALL httpfs; --'\""}
+{"cmd": "! networksetup -getv6additionalroutes Wi-Fi"}
+{"cmd": "! podman create ubuntu"}
+{"cmd": "! kubectl describe $RESOURCE"}
+{"cmd": "! brew --prefix --unbrewed"}
+{"cmd": "! az keyvault secret purge --name mysecret --vault-name myvault"}
+{"cmd": "! terraform test -filter=test_file.tftest.hcl"}
+{"cmd": "! sed --in-place 's/foo/bar/' file.txt"}
+{"cmd": "! >>="}
+{"cmd": "! gh auth logout"}
+{"cmd": "! docker kill mycontainer"}
+{"cmd": "! say --rate=150 hello"}
+{"cmd": "! aws sns remove-permission --topic-arn arn --label perm"}
+{"cmd": "! ansible-lint -h"}
+{"cmd": "! git shortlog"}
+{"cmd": "! days"}
+{"cmd": "! 7za x archive.7z"}
+{"cmd": "! select x in a b; do echo; done"}
+{"cmd": "! binhex probe file.hqx"}
+{"cmd": "! mysql -e \"(SELECT 1) UNION ALL (SELECT fictional_effect())\""}
+{"cmd": "! aws athena put-capacity-assignment-configuration --capacity-reservation-name res --capacity-assignments file://a.json"}
+{"cmd": "! az pipelines list --project myproject"}
+{"cmd": "! /srv/d"}
+{"cmd": "! isort file.py"}
+{"cmd": "! echo \"$( echo ')' )\""}
+{"cmd": "! gzip -c file.txt"}
+{"cmd": "! xattr -cr /path/to/dir"}
+{"cmd": "! packer validate -syntax-only template.json"}
+{"cmd": "! kubectl config view --raw"}
+{"cmd": "! gcloud functions describe my-function"}
+{"cmd": "! install"}
+{"cmd": "! aws athena start-query-execution --query-string \"SELECT CAST(x AS INTEGER) FROM t\""}
+{"cmd": "! gcloud beta run services delete my-service"}
+{"cmd": "! )"}
+{"cmd": "echo $(cargo fix --allow-staged)"}
+{"cmd": "echo $(aws kinesis deregister-stream-consumer --stream-arn arn --consumer-name consumer)"}
+{"cmd": "echo $(brew list --built-from-source)"}
+{"cmd": "echo $(terraform show)"}
+{"cmd": "echo $(gcloud compute ssh user@my-instance --zone=us-central1-a)"}
+{"cmd": "echo $(gh repo fork owner/repo)"}
+{"cmd": "echo $(base64 -d file.txt)"}
+{"cmd": "echo $(rtk help)"}
+{"cmd": "echo $(sqlcmd query -q \".shell touch tmp/out\")"}
+{"cmd": "echo $(docker exec nginx grep pattern /var/log/app.log)"}
+{"cmd": "echo $(SELECT 1; SELECT 2 /*{marker}50000 INTO OUTFILE 'tmp/out' */)"}
+{"cmd": "echo $(gcloud compute regions describe us-central1)"}
+{"cmd": "echo $(az storage account create -n mystorageaccount -g mygroup)"}
+{"cmd": "echo $(aws --no-cli-pager --output json s3 ls)"}
+{"cmd": "echo $(az storage blob download-batch -s mycontainer -d ./local --account-name mystorageaccount)"}
+{"cmd": "echo $(7zz)"}
+{"cmd": "echo $(case x in a) rm y;; b|c) ls ;; *) ;; esac)"}
+{"cmd": "echo $(PUT)"}
+{"cmd": "echo $(gcloud --project=my-project compute instances list)"}
+{"cmd": "echo $(gh release verify-asset v1.0.0)"}
+{"cmd": "echo $(update)"}
+{"cmd": "echo $(curl --request=OPTIONS https://example.com)"}
+{"cmd": "echo $(docker secret create mysecret file.txt)"}
+{"cmd": "echo $(az network vnet delete -g mygroup -n myvnet)"}
+{"cmd": "echo $(gh repo unarchive owner/repo)"}
+{"cmd": "echo $(gunzip --recursive dir/)"}
+{"cmd": "echo $(ls $(pwd) $(echo /tmp))"}
+{"cmd": "echo $(az container restart -g mygroup -n mycontainer)"}
+{"cmd": "echo $(helm plugin uninstall myplugin)"}
+{"cmd": "echo $(sample -mayDie 1234)"}
+{"cmd": "echo $(helm template myrelease nginx/nginx)"}
+{"cmd": "echo $(xargs -L 1 head)"}
+{"cmd": "echo $(docker save myimage > image.tar)"}
+{"cmd": "echo $(find . -anewer reference.txt)"}
+{"cmd": "echo $(git stash branch new-branch)"}
+{"cmd": "echo $(gcloud certificate-manager certificates create my-cert)"}
+{"cmd": "echo $(find . -name '*.tmp' -o -name '*.bak' -delete)"}
+{"cmd": "echo $(az network private-dns zone list)"}
+{"cmd": "echo $(az devops project list --organization https://dev.azure.com/myorg)"}
+{"cmd": "echo $(> unknown/output.log)"}
+{"cmd": "echo $(fd --size +1m pattern)"}
+{"cmd": "echo $(aws athena start-query-execution --query-string 'EXPLAIN ANALYZE SELECT 1')"}
+{"cmd": "echo $(cargo vendor vendor/)"}
+{"cmd": "echo $(aws logs delete-log-group --log-group-name mygroup)"}
+{"cmd": "echo $(security create-keypair)"}
+{"cmd": "echo $(?cwd=relative/path)"}
+{"cmd": "echo $(az acr show --name myacr --output json)"}
+{"cmd": "echo $(gh ruleset list --org myorg)"}
+{"cmd": "echo $(tar -tf archive.tar --wildcards '*.txt')"}
+{"cmd": "echo $(wget -r https://example.com)"}
+{"cmd": "echo $(docker context show)"}
+{"cmd": "echo $(docker compose export web)"}
+{"cmd": "echo $(curl -X Post https://example.com)"}
+{"cmd": "echo $(unzip -Zl archive.zip)"}
+{"cmd": "echo $(start-query-execution)"}
+{"cmd": "echo $(coproc NAME { cat; })"}
+{"cmd": "echo $(xargs -t cat)"}
+{"cmd": "echo $(az network application-gateway show --name myag -g mygroup)"}
+{"cmd": "echo $(curl --head https://example.com)"}
+{"cmd": "echo $(git archive HEAD)"}
+{"cmd": "echo $(printenv)"}
+{"cmd": "echo $(gh release upload v1.0.0 ./dist/*)"}
+{"cmd": "echo $(aws cloudformation get-template --stack-name mystack)"}
+{"cmd": "echo $(psql -t -c 'SELECT 1')"}
+{"cmd": "echo $(find . -name '*exec*')"}
+{"cmd": "echo $(packer init -force template.json)"}
+{"cmd": "echo $(curl -N https://example.com)"}
+{"cmd": "echo $(awk '{print $0}' file.txt)"}
+{"cmd": "echo $(curl --tlsv1.3 https://example.com)"}
+{"cmd": "echo $(az storage account delete --name myaccount -g mygroup --yes)"}
+{"cmd": "echo $(macbinary decode --to-stdout file.bin)"}
+{"cmd": "echo $(git apply patch.diff)"}
+{"cmd": "echo $(sort --field-separator=: file.txt)"}
+{"cmd": "echo $(az aks get-versions -l eastus)"}
+{"cmd": "echo $(gh issue create --body 'Steps to reproduce')"}
+{"cmd": "echo $(gcloud container clusters delete my-cluster)"}
+{"cmd": "echo $(gh repo edit owner/repo)"}
+{"cmd": "echo $(kubectl certificate deny csr-name)"}
+{"cmd": "echo $(docker port mycontainer)"}
+{"cmd": "echo $(pkgutil --pkg-info com.apple.pkg.Safari)"}
+{"cmd": "echo $(bash -c 'rm -rf /')"}
+{"cmd": "echo $(wget https://example.com)"}
+{"cmd": "echo $(curl ftp://example.com/file.txt)"}
+{"cmd": "echo $(az network public-ip show --name mypip -g mygroup)"}
+{"cmd": "echo $(weeks)"}
+{"cmd": "echo $({ ls; } > $(rm foo))"}
+{"cmd": "echo $(sips --embedProfile profile.icc image.png)"}
+{"cmd": "echo $(prometheus --storage.tsdb.path=data/)"}
+{"cmd": "echo $(gh pr unlock 123)"}
+{"cmd": "echo $(tar -xzf archive.tar.gz)"}
+{"cmd": "echo \"$(git subtree merge --prefix=lib main)\""}
+{"cmd": "echo \"$(networksetup -setdhcp Wi-Fi)\""}
+{"cmd": "echo \"$(kubectl label pods nginx app-)\""}
+{"cmd": "echo \"$(ansible-config -h)\""}
+{"cmd": "echo \"$(duckdb -readonly data.db \"SELECT '$@'\")\""}
+{"cmd": "echo \"$(7z u archive.7z file.txt)\""}
+{"cmd": "echo \"$(uv run cdk synth 2>&1 | head -10)\""}
+{"cmd": "echo \"$(curl -# https://example.com)\""}
+{"cmd": "echo \"$(xargs ls -la)\""}
+{"cmd": "echo \"$(curl -sSL https://example.com)\""}
+{"cmd": "echo \"$(podman pull nginx)\""}
+{"cmd": "echo \"$(gh issue delete 123 --yes)\""}
+{"cmd": "echo \"$(gcloud container clusters describe my-cluster)\""}
+{"cmd": "echo \"$(echo \"it's\")\""}
+{"cmd": "echo \"$(git instaweb --start)\""}
+{"cmd": "echo \"$(7za x archive.7z)\""}
+{"cmd": "echo \"$(tar xzf archive.tar.gz)\""}
+{"cmd": "echo \"$(cargo build -j 4)\""}
+{"cmd": "echo \"$(helm package ./mychart --sign)\""}
+{"cmd": "echo \"$(ip netns identify 1234)\""}
+{"cmd": "echo \"$(pip3 freeze)\""}
+{"cmd": "echo \"$(aws iam update-login-profile --user-name myuser --password newpass)\""}
+{"cmd": "echo \"$(psql -t -c 'SELECT 1')\""}
+{"cmd": "echo \"$(ls |& rm x)\""}
+{"cmd": "echo \"$(xattr file.txt)\""}
+{"cmd": "echo \"$([[ -f foo ]])\""}
+{"cmd": "echo \"$(az repos ref list --repository myrepo --project myproject)\""}
+{"cmd": "echo \"$(az aks delete --name mycluster -g mygroup)\""}
+{"cmd": "echo \"$(pip version)\""}
+{"cmd": "echo \"$(git rebase --interactive main)\""}
+{"cmd": "echo \"$(az account show)\""}
+{"cmd": "echo \"$(gh workflow view --web)\""}
+{"cmd": "echo \"$(git config --global --edit)\""}
+{"cmd": "echo \"$(aws rds create-db-cluster --db-cluster-identifier mycluster --engine aurora-postgresql)\""}
+{"cmd": "echo \"$(rm x)\""}
+{"cmd": "echo \"$(xargs --null rm -rf)\""}
+{"cmd": "echo \"$(brew install -f python)\""}
+{"cmd": "echo \"$(brew upgrade --interactive python)\""}
+{"cmd": "echo \"$((ls) && (rm x))\""}
+{"cmd": "echo \"$(brew bundle cleanup)\""}
+{"cmd": "echo \"$(auth0 actions deploy act_12345)\""}
+{"cmd": "echo \"$(sh -c 'aws s3 rm s3://bucket/key')\""}
+{"cmd": "echo \"$(aws athena start-query-execution --query-string \"(SELECT 1); .output tmp/out\")\""}
+{"cmd": "echo \"$(7zz t -scrcSHA256 archive.7z)\""}
+{"cmd": "echo \"$(uv run pwd)\""}
+{"cmd": "echo \"$(brew cat python)\""}
+{"cmd": "echo \"$(pip list --exclude requests)\""}
+{"cmd": "echo \"$(brew style python)\""}
+{"cmd": "echo \"$(curl --data-raw 'data' https://example.com)\""}
+{"cmd": "echo \"$(journalctl --rotate)\""}
+{"cmd": "echo \"$(aws lambda list-versions-by-function --function-name myfunc)\""}
+{"cmd": "echo \"$(spctl --reset-default)\""}
+{"cmd": "echo \"$(journalctl --vacuum-files=10)\""}
+{"cmd": "echo \"$(aws athena start-query-execution --query-string 'CALL proc()')\""}
+{"cmd": "echo \"$(echo \"$(case x in a) echo;; esac)\")\""}
+{"cmd": "echo \"$(git show-ref --heads)\""}
+{"cmd": "echo \"$(fzf --height=50% --listen-unsafe)\""}
+{"cmd": "echo \"$(aws route53 get-change --id C123)\""}
+{"cmd": "echo \"$(brew unlink -n python)\""}
+{"cmd": "echo \"$([[ ( $(rm x) == y ) ]])\""}
+{"cmd": "echo \"$((SELECT 1) UNION ALL (SELECT fictional_effect()))\""}
+{"cmd": "echo \"$(brew install --formula python)\""}
+{"cmd": "echo \"$(source venv/bin/activate)\""}
+{"cmd": "echo \"$(aws rds describe-reserved-db-instances)\""}
+{"cmd": "echo \"$(ip tuntap del dev tun0 mode tun)\""}
+{"cmd": "echo \"$(docker run --rm alpine echo hello)\""}
+{"cmd": "echo \"$(ip neigh del 192.168.1.1 dev eth0)\""}
+{"cmd": "echo \"$(ruff format --check)\""}
+{"cmd": "echo \"$(helm status myrelease -o json)\""}
+{"cmd": "echo \"$(7za t archive.7z)\""}
+{"cmd": "echo \"$(ip n add 192.168.1.1 lladdr 00:11:22:33:44:55 dev eth0)\""}
+{"cmd": "echo \"$(fictcli *; fictother)\""}
+{"cmd": "echo \"$(xargs -I {} sh -c 'echo {}')\""}
+{"cmd": "echo \"$(fd -X)\""}
+{"cmd": "echo \"$(az ml workspace show --name myws --resource-group rg)\""}
+{"cmd": "echo \"$(brew cleanup --scrub)\""}
+{"cmd": "echo \"$(git switch -c new-branch)\""}
+{"cmd": "echo \"$(az network application-gateway show --name myag -g mygroup)\""}
+{"cmd": "echo \"$(az cognitiveservices account create -g mygroup -n myaccount --kind TextAnalytics --sku S0 -l eastus)\""}
+{"cmd": "echo \"$(base64 --decode --wrap 0 file.txt)\""}
+{"cmd": "echo \"$(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_os_system_method_blocked0/os_system.py)\""}
+{"cmd": "echo \"$(pip inspect --verbose)\""}
+{"cmd": "echo \"$(?limit=0)\""}
+{"cmd": "echo \"$(aws ec2 describe-availability-zones)\""}
+{"cmd": "echo \"$(export FOO=$(rm x))\""}
+{"cmd": "echo \"$(git branch --all)\""}
+{"cmd": "echo \"$(aws cloudwatch list-metrics)\""}
+{"cmd": "echo \"$(ip neighbor)\""}
+{"cmd": "echo \"$(brew uses --missing python)\""}
+{"cmd": "echo \"$(az network vnet list --resource-group mygroup)\""}
+{"cmd": "echo `curl -E client.pem https://example.com`"}
+{"cmd": "echo `git push origin --delete feature`"}
+{"cmd": "echo `git stash apply stash@{1}`"}
+{"cmd": "echo `xargs -0 --`"}
+{"cmd": "echo `auth0 api get clients`"}
+{"cmd": "echo `false`"}
+{"cmd": "echo `brew --cache python`"}
+{"cmd": "echo `docker rmi myimage`"}
+{"cmd": "echo `ls | xargs rm -f`"}
+{"cmd": "echo `curl -Q 'PWD' ftp://example.com`"}
+{"cmd": "echo `caffeinate -i rm -rf /`"}
+{"cmd": "echo `find . -mtime -7`"}
+{"cmd": "echo `auth0 actions delete act_12345`"}
+{"cmd": "echo `aws route53 list-vpc-association-authorizations --hosted-zone-id Z123`"}
+{"cmd": "echo `wc file.txt`"}
+{"cmd": "echo `npm create react-app my-app`"}
+{"cmd": "echo `ip neigh show`"}
+{"cmd": "echo `caffeinate -d`"}
+{"cmd": "echo `kubectl delete deployment nginx`"}
+{"cmd": "echo `profiles show -all`"}
+{"cmd": "echo `git rebase --continue`"}
+{"cmd": "echo `find . /tmp /var`"}
+{"cmd": "echo `echo \"a\\\"b\"`"}
+{"cmd": "echo `fzf --bind='enter:become(vim {})'`"}
+{"cmd": "echo `aws athena start-query-execution --query-string`"}
+{"cmd": "echo `dippy dashboard`"}
+{"cmd": "echo `xattr -l file.txt`"}
+{"cmd": "echo `sort -n file.txt`"}
+{"cmd": "echo `unzip -l foo.zip bar.zip`"}
+{"cmd": "echo `uv pip sync requirements.txt`"}
+{"cmd": "echo `aws rds describe-account-attributes`"}
+{"cmd": "echo `kubectl get events --sort-by='.lastTimestamp'`"}
+{"cmd": "echo `kubectl config current-context`"}
+{"cmd": "echo `wget --directory-prefix=/tmp https://example.com`"}
+{"cmd": "echo `pip wheel --wheel-dir /tmp requests`"}
+{"cmd": "echo `env --ignore-environment PATH=/bin ls`"}
+{"cmd": "echo `brew list -1`"}
+{"cmd": "echo `python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_builtin_exec_bl0/dangerous_exec.py`"}
+{"cmd": "echo `ls 2>/dev/null`"}
+{"cmd": "echo `pkgutil --file-info-plist /usr/bin/zip`"}
+{"cmd": "echo `profiles renew -type configuration`"}
+{"cmd": "echo `openssl pkcs8 -topk8 -in key.pem -out key.p8`"}
+{"cmd": "echo `awk '{print > \"output.txt\"}' file.txt`"}
+{"cmd": "echo `SELECT CAST(a AS STRUCT(x VARCHAR, y INTEGER)), CAST(b AS VARCHAR[]) FROM t`"}
+{"cmd": "echo `pip install -U pip`"}
+{"cmd": "echo `git lfs track '*.psd'`"}
+{"cmd": "echo `http://10.1.2.3/`"}
+{"cmd": "echo `pre-commit validate-manifest`"}
+{"cmd": "echo `(( x++ )) > /tmp/out`"}
+{"cmd": "echo `gcloud logging logs list --bucket=my-bucket --location=us-central1`"}
+{"cmd": "echo `ansible-playbook -h`"}
+{"cmd": "echo `docker compose cp web:/path /local`"}
+{"cmd": "echo `months`"}
+{"cmd": "echo `helm dep up ./mychart`"}
+{"cmd": "echo `node --version`"}
+{"cmd": "echo `journalctl --follow`"}
+{"cmd": "echo `find . -exec sh -c 'rm $0' {} \\;`"}
+{"cmd": "echo `tar -uf archive.tar file.txt`"}
+{"cmd": "echo `auth0 apps delete app_12345`"}
+{"cmd": "echo `curl -# https://example.com`"}
+{"cmd": "echo `curl -X DELETE https://example.com`"}
+{"cmd": "echo `aws cloudformation detect-stack-drift --stack-name mystack`"}
+{"cmd": "echo `env -- rm file.txt`"}
+{"cmd": "echo `base64 -d file.txt > decoded.bin`"}
+{"cmd": "echo `cp`"}
+{"cmd": "echo `gh pr unlock 123`"}
+{"cmd": "echo `docker buildx inspect mybuilder`"}
+{"cmd": "echo `uv tool dir`"}
+{"cmd": "echo `duckdb -readonly work.db \"ATTACH 'other.db' AS other\"`"}
+{"cmd": "echo `awk 'NR==1'`"}
+{"cmd": "echo `fzf --query=become`"}
+{"cmd": "echo `UV_PROJECT_ENVIRONMENT=.venv uv run pytest -q`"}
+{"cmd": "echo `npm pkg get name`"}
+{"cmd": "echo `docker container update --cpus 2 mycontainer`"}
+{"cmd": "echo `duckdb mydb.db 'SELECT * FROM users;'`"}
+{"cmd": "echo `7z x -p archive.7z`"}
+{"cmd": "echo `brew upgrade --greedy-auto-updates`"}
+{"cmd": "echo `curl -X get https://example.com`"}
+{"cmd": "echo `duckdb -readonly -csv mydb.db 'SELECT 1; SELECT 2;'`"}
+{"cmd": "echo `auth0 domains create`"}
+{"cmd": "echo `curl --trace trace.txt https://example.com`"}
+{"cmd": "echo `prometheus --log.level=debug`"}
+{"cmd": "echo `az network vnet show --name myvnet -g mygroup`"}
+{"cmd": "echo `aws cloudformation list-change-sets --stack-name mystack`"}
+{"cmd": "echo `git cat-file -t HEAD`"}
+{"cmd": "echo `gcloud dns managed-zones delete my-zone`"}
+{"cmd": "echo `pip config edit`"}
+{"cmd": "echo `codesign -s - /path/to/app`"}
+{"cmd": "echo `fzf --footer-border`"}
+{"cmd": "echo `fzf --header=Header`"}
+{"cmd": "x=$(az container exec -g mygroup -n mycontainer --exec-command /bin/bash)"}
+{"cmd": "x=$(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_xml_sax_blocked0/xml_sax.py)"}
+{"cmd": "x=$(git cherry -v main feature)"}
+{"cmd": "x=$(if ls; then echo; elif rm x; then echo; else echo; fi)"}
+{"cmd": "x=$(git branch --delete feature)"}
+{"cmd": "x=$(dd if=/dev/zero of=/dev/sda)"}
+{"cmd": "x=$(az vm run-command invoke -g mygroup -n myvm --command-id RunShellScript)"}
+{"cmd": "x=$(find . -daystart -mtime -1)"}
+{"cmd": "x=$(aws cloudwatch disable-alarm-actions --alarm-names myalarm)"}
+{"cmd": "x=$(prometheus --web.enable-lifecycle)"}
+{"cmd": "x=$(psql mydb)"}
+{"cmd": "x=$(xargs git checkout)"}
+{"cmd": "x=$(brew upgrade)"}
+{"cmd": "x=$(tar -xf archive.tar --wildcards '*.txt')"}
+{"cmd": "x=$(git submodule update --init)"}
+{"cmd": "x=$(gcloud run services describe my-service --region=us-central1)"}
+{"cmd": "x=$(gh search code --repo owner/repo 'pattern')"}
+{"cmd": "x=$(brew commands --quiet)"}
+{"cmd": "x=$(az webapp config show --name myapp -g mygroup)"}
+{"cmd": "x=$(docker container start mycontainer)"}
+{"cmd": "x=$(openssl help)"}
+{"cmd": "x=$(docker-compose build)"}
+{"cmd": "x=$(tar uf archive.tar file.txt)"}
+{"cmd": "x=$(terraform --help)"}
+{"cmd": "x=$(fzf --preview='execute cat {}')"}
+{"cmd": "x=$(aws ecr batch-delete-image --repository-name myrepo --image-ids imageTag=latest)"}
+{"cmd": "x=$(uv run cdk synth --quiet)"}
+{"cmd": "x=$(find . -group staff)"}
+{"cmd": "x=$(bash -exc 'git status')"}
+{"cmd": "x=$(black --check --diff)"}
+{"cmd": "x=$(gzip -r dir/)"}
+{"cmd": "x=$(git var -l)"}
+{"cmd": "x=$(yarn help)"}
+{"cmd": "x=$(curl --request DELETE https://example.com)"}
+{"cmd": "x=$(brew services stop postgresql)"}
+{"cmd": "x=$(docker images)"}
+{"cmd": "x=$(aws cloudformation list-change-sets --stack-name mystack)"}
+{"cmd": "x=$(az functionapp function list --name myfunc -g mygroup)"}
+{"cmd": "x=$(INSERT INTO t SELECT 1)"}
+{"cmd": "x=$(tmutil isexcluded /path/to/file)"}
+{"cmd": "x=$(aws cognito-idp admin-disable-user --user-pool-id us-east-1_abc123 --username myuser)"}
+{"cmd": "x=$(aws sqs delete-message-batch --queue-url https://sqs... --entries file://entries.json)"}
+{"cmd": "x=$(gunzip -l file.gz)"}
+{"cmd": "x=$(packer build -debug template.json)"}
+{"cmd": "x=$(SELECT CAST(a AS /* type */ VARCHAR), CAST(b AS DECIMAL(10,2)) FROM t)"}
+{"cmd": "x=$(sqlite3 mydb.db 'SELECT 1; SELECT 2')"}
+{"cmd": "x=$(az webapp deployment list-publishing-credentials --name myapp -g mygroup)"}
+{"cmd": "x=$(gcloud container images list-tags gcr.io/proj/image)"}
+{"cmd": "x=$(brew --prefix --unbrewed)"}
+{"cmd": "x=$(curl --dns-servers 8.8.8.8 https://example.com)"}
+{"cmd": "x=$(duckdb -readonly data.db \"SELECT stats(x) FROM t\")"}
+{"cmd": "x=$(npm root -g)"}
+{"cmd": "x=$(docker volume prune)"}
+{"cmd": "x=$(auth0 actions list)"}
+{"cmd": "x=$(security set-identity-preference -s https://example.com -c CN)"}
+{"cmd": "x=$(auth0 api patch clients/client_id)"}
+{"cmd": "x=$(brew upgrade -n python)"}
+{"cmd": "x=$(auth0 apis rm api_12345)"}
+{"cmd": "x=$(fictionalwrap -t server1 run --script)"}
+{"cmd": "x=$(brew bundle list --cask)"}
+{"cmd": "x=$([[ $(echo x) == y ]])"}
+{"cmd": "x=$(networksetup -listvalidMTUrange en0)"}
+{"cmd": "x=$(sudo rm file.txt)"}
+{"cmd": "x=$(dippy audit --not-allow --group-by cmd)"}
+{"cmd": "x=$(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_popen2_blocked0/popen2_dangerous.py)"}
+{"cmd": "x=$(sips --extractProfile profile.icc image.png)"}
+{"cmd": "x=$(build)"}
+{"cmd": "x=$((FORMAT 'csv'))"}
+{"cmd": "x=$(hostname)"}
+{"cmd": "x=$(npm x cowsay)"}
+{"cmd": "x=$(brew desc --search python)"}
+{"cmd": "x=$(git branch -a)"}
+{"cmd": "x=$(az network nsg rule delete --name myrule --nsg-name mynsg -g mygroup)"}
+{"cmd": "x=$(auth0 orgs delete org_12345)"}
+{"cmd": "x=$(kubectl drain node-1 --delete-emptydir-data)"}
+{"cmd": "x=$(tar -tvjf archive.tar.bz2)"}
+{"cmd": "x=$(gcloud components update)"}
+{"cmd": "x=$(kubectl get secret my-secret -o jsonpath='{.data.password}')"}
+{"cmd": "x=$(helm upgrade myrelease ./mychart)"}
+{"cmd": "x=$(gh repo clone owner/repo)"}
+{"cmd": "x=$(git checkout HEAD~1 -- file.txt)"}
+{"cmd": "x=$(tmutil startbackup -b)"}
+{"cmd": "x=$(docker-compose logs -f)"}
+{"cmd": "x=$(uv pip list)"}
+{"cmd": "x=$(sqlite3 mydb.db 'ALTER TABLE users ADD COLUMN x INT')"}
+{"cmd": "x=$(git diff foo-$(date -u).txt)"}
+{"cmd": "x=$(docker network prune)"}
+{"cmd": "x=$(gcloud dns record-sets create www --zone=my-zone --type=A --rrdatas=1.2.3.4)"}
+{"cmd": "x=$(brew search --closed python)"}
+{"cmd": "x=$(kubectl plugin list)"}
+{"cmd": "diff <(find . -name '*.py' -o -name '*.txt') /dev/null"}
+{"cmd": "diff <(git am --continue) /dev/null"}
+{"cmd": "diff <(aws configure get aws_access_key_id) /dev/null"}
+{"cmd": "diff <([opts: -s] [opts: -v]) /dev/null"}
+{"cmd": "diff <(?limit=x) /dev/null"}
+{"cmd": "diff <(psql -c \"(SELECT 1); DROP TABLE t\") /dev/null"}
+{"cmd": "diff <(brew --help) /dev/null"}
+{"cmd": "diff <(open -t file.txt) /dev/null"}
+{"cmd": "diff <(profiles show -type configuration) /dev/null"}
+{"cmd": "diff <(ssh host 'ls; pwd') /dev/null"}
+{"cmd": "diff <(plutil -replace key -string newvalue file.plist) /dev/null"}
+{"cmd": "diff <(gcloud artifacts repositories describe my-repo --location=us-central1) /dev/null"}
+{"cmd": "diff <(networksetup -createVLAN MyVLAN en0 100) /dev/null"}
+{"cmd": "diff <(git diff --name-only) /dev/null"}
+{"cmd": "diff <(mdimport -t -d2 file.txt) /dev/null"}
+{"cmd": "diff <(kubectl taint nodes node-1 key:NoSchedule-) /dev/null"}
+{"cmd": "diff <(docker network inspect bridge) /dev/null"}
+{"cmd": "diff <(gh codespace delete -c codespace-name) /dev/null"}
+{"cmd": "diff <(ruff lint .) /dev/null"}
+{"cmd": "diff <(docker manifest create myimage:latest myimage:amd64 myimage:arm64) /dev/null"}
+{"cmd": "diff <(az tag list --resource-id /subscriptions/...) /dev/null"}
+{"cmd": "diff <(az pipelines build list --project myproject) /dev/null"}
+{"cmd": "diff <(launchctl submit -l my.job -- /usr/bin/true) /dev/null"}
+{"cmd": "diff <(gh issue edit 123) /dev/null"}
+{"cmd": "diff <(cargo rm serde) /dev/null"}
+{"cmd": "diff <(duckdb -readonly data.db) /dev/null"}
+{"cmd": "diff <(aws athena start-query-execution --query-string 'EXPLAIN SELECT 1') /dev/null"}
+{"cmd": "diff <(profiles renew -type configuration) /dev/null"}
+{"cmd": "diff <(sudo) /dev/null"}
+{"cmd": "diff <(7zz u archive.7z newfile.txt) /dev/null"}
+{"cmd": "diff <(az vm list -g mygroup) /dev/null"}
+{"cmd": "diff <(dedupe) /dev/null"}
+{"cmd": "diff <(pnpm install) /dev/null"}
+{"cmd": "diff <(sort -o /dev/stdout input.txt) /dev/null"}
+{"cmd": "diff <(az storage blob delete-batch --source mycontainer --account-name myaccount --pattern '*.log') /dev/null"}
+{"cmd": "diff <(ip r add 10.0.0.0/8 via 192.168.1.1) /dev/null"}
+{"cmd": "diff <(git rebase -i HEAD~3) /dev/null"}
+{"cmd": "diff <(mysql --version) /dev/null"}
+{"cmd": "diff <(xargs -p cat) /dev/null"}
+{"cmd": "diff <(gh pr review 123 --request-changes) /dev/null"}
+{"cmd": "diff <(az sql db list-editions --location eastus) /dev/null"}
+{"cmd": "diff <(open -b com.apple.Safari) /dev/null"}
+{"cmd": "diff <(git merge-base main feature) /dev/null"}
+{"cmd": "diff <(uv venv --python 3.11) /dev/null"}
+{"cmd": "diff <(bash -c '') /dev/null"}
+{"cmd": "diff <(curl -# https://example.com) /dev/null"}
+{"cmd": "diff <(aws ecr set-repository-policy --repository-name myrepo --policy-text file://policy.json) /dev/null"}
+{"cmd": "diff <(sample 1234 10 1) /dev/null"}
+{"cmd": "diff <(docker export mycontainer > export.tar) /dev/null"}
+{"cmd": "diff <(gh pr close 123 --comment 'Closing') /dev/null"}
+{"cmd": "diff <(gcloud) /dev/null"}
+{"cmd": "diff <(ansible-inventory --list -i hosts --output out.json) /dev/null"}
+{"cmd": "diff <(sqlcmd query -q \"(WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x)\") /dev/null"}
+{"cmd": "diff <(profiles show) /dev/null"}
+{"cmd": "diff <(npm unpublish lodash@1.0.0) /dev/null"}
+{"cmd": "diff <(fzf --header=Header) /dev/null"}
+{"cmd": "diff <(fd --type directory pattern) /dev/null"}
+{"cmd": "diff <(git push origin --delete feature) /dev/null"}
+{"cmd": "diff <(fzf --disabled) /dev/null"}
+{"cmd": "diff <(aws logs create-log-group --log-group-name newgroup) /dev/null"}
+{"cmd": "diff <(uv run --with requests ls) /dev/null"}
+{"cmd": "diff <(kubectl logs $POD) /dev/null"}
+{"cmd": "diff <(gcloud config configurations activate new-config) /dev/null"}
+{"cmd": "diff <(az ad group member remove --group mygroup --member-id userid) /dev/null"}
+{"cmd": "diff <(pip --help) /dev/null"}
+{"cmd": "diff <(az -h) /dev/null"}
+{"cmd": "diff <(sqlite3 data.db \"(SELECT 1 INTO outfile)\") /dev/null"}
+{"cmd": "diff <(brew reinstall -f python) /dev/null"}
+{"cmd": "diff <(aws athena get-capacity-reservation --name myreservation) /dev/null"}
+{"cmd": "diff <(az aks nodepool add --cluster-name mycluster --name nodepool2 -g mygroup --node-count 2) /dev/null"}
+{"cmd": "diff <(nice -n 10 git status) /dev/null"}
+{"cmd": "diff <(python /tmp/pytest-of-root/pytest-3/popen-gw0/test_path_write_bytes_method_b0/path_write_bytes.py) /dev/null"}
+{"cmd": "diff <(uv run ls) /dev/null"}
+{"cmd": "diff <(curl --output output.txt https://example.com) /dev/null"}
+{"cmd": "diff <(az pipelines agent list --pool-id 1 --organization https://dev.azure.com/myorg) /dev/null"}
+{"cmd": "diff <(echo ${x:+$(rm foo)}) /dev/null"}
+{"cmd": "diff <(cdk migrate --from-stack MyCloudFormationStack) /dev/null"}
+{"cmd": "diff <(duckdb -readonly work.db \"COPY (SELECT 1) TO '/tmp/output.csv'\") /dev/null"}
+{"cmd": "diff <(cargo --help) /dev/null"}
+{"cmd": "diff <(aws cloudformation create-stack --stack-name newstack --template-body file://template.yaml) /dev/null"}
+{"cmd": "diff <(/srv/d/a) /dev/null"}
+{"cmd": "diff <(az resource update --ids /subscriptions/.../... --set properties.foo=bar) /dev/null"}
+{"cmd": "diff <(aws athena get-named-query --named-query-id abc123) /dev/null"}
+{"cmd": "diff <(kubectl config set-cluster prod-cluster --server=https://k8s.example.com) /dev/null"}
+{"cmd": "diff <(fzf --highlight-line) /dev/null"}
+{"cmd": "diff <(az network vnet subnet create --name newsubnet --vnet-name myvnet -g mygroup --address-prefix 10.0.1.0/24) /dev/null"}
+{"cmd": "diff <(profiles show -all) /dev/null"}
+{"cmd": "diff <(aws sns get-data-protection-policy --resource-arn arn) /dev/null"}
+{"cmd": "diff <(pip freeze) /dev/null"}
+{"cmd": "diff <(find . -writable) /dev/null"}
+{"cmd": "brew install --skip-link python > out.txt"}
+{"cmd": "az tag add-value -n mytag --value myvalue > out.txt"}
+{"cmd": "pip wheel requests > out.txt"}
+{"cmd": "diskutil mount disk0s1 > out.txt"}
+{"cmd": "nanoseconds > out.txt"}
+{"cmd": "openssl s_client -connect example.com:443 -showcerts > out.txt"}
+{"cmd": "az pipelines run --name mypipeline --project myproject > out.txt"}
+{"cmd": "brew missing > out.txt"}
+{"cmd": "uv sync --no-install-project > out.txt"}
+{"cmd": "uv lock --locked > out.txt"}
+{"cmd": "openssl s_client -connect example.com:443 -verify 5 > out.txt"}
+{"cmd": "git range-diff main..feature main..other > out.txt"}
+{"cmd": "aws configure list > out.txt"}
+{"cmd": "lipo -info fat.o > out.txt"}
+{"cmd": "az bicep upgrade > out.txt"}
+{"cmd": "brew tap homebrew/cask-versions > out.txt"}
+{"cmd": "helm upgrade myrelease nginx/nginx --reset-values > out.txt"}
+{"cmd": "docker exec mycontainer ls > out.txt"}
+{"cmd": "git config user.name foo > out.txt"}
+{"cmd": "npm install --save-dev jest > out.txt"}
+{"cmd": "kubectl run nginx --image=nginx --restart=Never > out.txt"}
+{"cmd": "psql -c 'GRANT SELECT ON users TO alice' > out.txt"}
+{"cmd": "terraform init -backend=false > out.txt"}
+{"cmd": "packer fmt -diff template.pkr.hcl > out.txt"}
+{"cmd": "docker compose port web 80 > out.txt"}
+{"cmd": "podman images > out.txt"}
+{"cmd": "brew desc --formula python > out.txt"}
+{"cmd": "brew bundle install > out.txt"}
+{"cmd": "echo ${x:=$(rm y)} > out.txt"}
+{"cmd": "curl -X PATCH https://example.com > out.txt"}
+{"cmd": "gh project field-list 1 --owner myorg > out.txt"}
+{"cmd": "helm version > out.txt"}
+{"cmd": "sed '1,10d' file.txt > out.txt"}
+{"cmd": "wget -O file.zip https://example.com/file.zip > out.txt"}
+{"cmd": "docker compose start web > out.txt"}
+{"cmd": "auth0 apis delete api_12345 > out.txt"}
+{"cmd": "kubectl exec -it foo -- bash > out.txt"}
+{"cmd": "pytest --version > out.txt"}
+{"cmd": "sort --output output.txt input.txt > out.txt"}
+{"cmd": "ansible-pull -h > out.txt"}
+{"cmd": "docker history myimage > out.txt"}
+{"cmd": "unzip -x archive.zip > out.txt"}
+{"cmd": "aws iam list-group-policies --group-name mygroup > out.txt"}
+{"cmd": "fzf --bind='focus:transform-query:echo\\ {}' > out.txt"}
+{"cmd": "duckdb -readonly data.db \"SELECT stats(x) FROM t\" > out.txt"}
+{"cmd": "curl http://example.com/api/users > out.txt"}
+{"cmd": "kubectl get services > out.txt"}
+{"cmd": "git sparse-checkout init > out.txt"}
+{"cmd": "ip -6 netconf > out.txt"}
+{"cmd": "2> tmp/error.log > out.txt"}
+{"cmd": "auth0 roles update rol_12345 > out.txt"}
+{"cmd": "echo hello > out.txt"}
+{"cmd": "npm undeprecate lodash@1.0.0 > out.txt"}
+{"cmd": "brew outdated --formula > out.txt"}
+{"cmd": "tar -xf archive.tar --to-command cat > out.txt"}
+{"cmd": "aws rds describe-db-snapshots > out.txt"}
+{"cmd": "helm template myrelease nginx/nginx --values values.yaml > out.txt"}
+{"cmd": "fzf --scroll-off=5 > out.txt"}
+{"cmd": "aws cloudwatch enable-alarm-actions --alarm-names myalarm > out.txt"}
+{"cmd": "networksetup -setdhcp Wi-Fi > out.txt"}
+{"cmd": "aws athena update-data-catalog --name mycat --type HIVE > out.txt"}
+{"cmd": "import json; json.dumps({'x': 1}) > out.txt"}
+{"cmd": "psql -f script.sql mydb > out.txt"}
+{"cmd": "kubectl get secret my-secret -o yaml > out.txt"}
+{"cmd": "az vm update -g mygroup -n myvm --set tags.env=prod > out.txt"}
+{"cmd": "xattr -p com.apple.quarantine file.txt > out.txt"}
+{"cmd": "ssh -v host ls > out.txt"}
+{"cmd": "duckdb tmp/work.db \"COPY (SELECT 1) TO '/etc/dippy-bypass'\" > out.txt"}
+{"cmd": "[opts: -s,] > out.txt"}
+{"cmd": "tmutil removedestination ABC123 > out.txt"}
+{"cmd": "helm template myrelease nginx/nginx --include-crds > out.txt"}
+{"cmd": "docker container diff mycontainer > out.txt"}
+{"cmd": "aws athena start-query-execution --query-string '-- just a comment' > out.txt"}
+{"cmd": "auth0 apps show app_12345 > out.txt"}
+{"cmd": "journalctl -n 100 > out.txt"}
+{"cmd": "unzip -v archive.zip > out.txt"}
+{"cmd": "unzip -Z -1 archive.zip > out.txt"}
+{"cmd": "ansible-playbook playbook.yml -C > out.txt"}
+{"cmd": "aws sqs list-queues --queue-name-prefix prod > out.txt"}
+{"cmd": "TO 'tmp/out'; INSTALL httpfs > out.txt"}
+{"cmd": "aws sqs get-queue-url --queue-name myqueue > out.txt"}
+{"cmd": "brew tap --help > out.txt"}
+{"cmd": "az redis delete -g mygroup -n myredis > out.txt"}
+{"cmd": "docker swarm unlock-key > out.txt"}
+{"cmd": "git send-email patches/ > out.txt"}
+{"cmd": "gh workflow disable build.yml > out.txt"}
+{"cmd": "az pipelines build list --project myproject > out.txt"}
+{"cmd": "cargo install ripgrep > out.txt"}
+{"cmd": "time ls > out.txt"}
+{"cmd": "sort -i file.txt > out.txt"}
+{"cmd": "npm owner ls lodash 2>/dev/null"}
+{"cmd": "gcloud beta run services delete my-service 2>/dev/null"}
+{"cmd": "aws eks describe-identity-provider-config --cluster-name mycluster --identity-provider-config type=oidc,name=myconfig 2>/dev/null"}
+{"cmd": "helm list -A 2>/dev/null"}
+{"cmd": "python -m calendar 2>/dev/null"}
+{"cmd": "curl -Q 'CWD /dir' ftp://example.com 2>/dev/null"}
+{"cmd": "bash -c 'pwd' 2>/dev/null"}
+{"cmd": "npm access list packages 2>/dev/null"}
+{"cmd": "curl --show-error https://example.com 2>/dev/null"}
+{"cmd": "fzf --wrap 2>/dev/null"}
+{"cmd": "mysql -e 'DESCRIBE users' 2>/dev/null"}
+{"cmd": "auth0 users search --query email:user@example.com 2>/dev/null"}
+{"cmd": "fzf --height=50% --layout=reverse --border 2>/dev/null"}
+{"cmd": "brew deps --include-optional python 2>/dev/null"}
+{"cmd": "ssh-config 2>/dev/null"}
+{"cmd": "brew shellenv 2>/dev/null"}
+{"cmd": "ps aux 2>/dev/null"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_builtin_exec_bl0/dangerous_exec.py 2>/dev/null"}
+{"cmd": "uv -h 2>/dev/null"}
+{"cmd": "aws rds reboot-db-instance --db-instance-identifier mydb 2>/dev/null"}
+{"cmd": "ip maddr del 33:33:00:00:00:02 dev eth0 2>/dev/null"}
+{"cmd": "base64 --noerrcheck file.txt 2>/dev/null"}
+{"cmd": "docker image inspect myimage 2>/dev/null"}
+{"cmd": "kubectl wait --for=condition=Ready pod/nginx 2>/dev/null"}
+{"cmd": "cargo publish --registry crates-io 2>/dev/null"}
+{"cmd": "tar -ztf archive.tar.gz 2>/dev/null"}
+{"cmd": "tmutil inheritbackup /path/to/machine 2>/dev/null"}
+{"cmd": "gh issue list --label bug 2>/dev/null"}
+{"cmd": "aws eks list-updates --name mycluster 2>/dev/null"}
+{"cmd": "gcloud compute instances create foo 2>/dev/null"}
+{"cmd": "terraform show plan.tfplan 2>/dev/null"}
+{"cmd": "az cognitiveservices account deployment create --name myaccount --resource-group rg 2>/dev/null"}
+{"cmd": "gzip --recursive dir/ 2>/dev/null"}
+{"cmd": "ls && rm foo 2>/dev/null"}
+{"cmd": "gh -R owner/repo workflow list 2>/dev/null"}
+{"cmd": "gcloud functions logs read my-function 2>/dev/null"}
+{"cmd": "gh project field-list 1 --owner myorg 2>/dev/null"}
+{"cmd": "brew gist-logs -n python 2>/dev/null"}
+{"cmd": "find -H . -name '*.py' 2>/dev/null"}
+{"cmd": "az container restart --name mycontainer -g mygroup 2>/dev/null"}
+{"cmd": "security create-keypair 2>/dev/null"}
+{"cmd": "gh secret set MY_SECRET --body value 2>/dev/null"}
+{"cmd": "docker image push myrepo/myimage 2>/dev/null"}
+{"cmd": "yarn publish 2>/dev/null"}
+{"cmd": "fzf --preview='cat {}' --bind='enter:become(rm {})' 2>/dev/null"}
+{"cmd": "?limit=1001 2>/dev/null"}
+{"cmd": "aws cloudformation cancel-update-stack --stack-name mystack 2>/dev/null"}
+{"cmd": "git mv -f old.txt new.txt 2>/dev/null"}
+{"cmd": "auth0 apps create --name myapp 2>/dev/null"}
+{"cmd": "gcloud compute instances delete foo 2>/dev/null"}
+{"cmd": "npm docs lodash 2>/dev/null"}
+{"cmd": "dmesg --follow 2>/dev/null"}
+{"cmd": "gh alias delete co 2>/dev/null"}
+{"cmd": "uv help 2>/dev/null"}
+{"cmd": "curl -k https://example.com 2>/dev/null"}
+{"cmd": "curl --request HEAD https://example.com 2>/dev/null"}
+{"cmd": "aws ec2 start-instances --instance-ids i-123 2>/dev/null"}
+{"cmd": "/srv/d/a/b/out.log 2>/dev/null"}
+{"cmd": "az aks nodepool upgrade --cluster-name mycluster --name nodepool1 -g mygroup --kubernetes-version 1.27.0 2>/dev/null"}
+{"cmd": "echo $\"locale\" 2>/dev/null"}
+{"cmd": "$(touch /tmp/dippy-bypass) 2>/dev/null"}
+{"cmd": "npm rm jest 2>/dev/null"}
+{"cmd": "uv python find 2>/dev/null"}
+{"cmd": "mysql -e \"$SQL\" 2>/dev/null"}
+{"cmd": "-H\"Host: demo\" http://10.1.2.3/ 2>/dev/null"}
+{"cmd": "?limit=x 2>/dev/null"}
+{"cmd": "brew upgrade -f python 2>/dev/null"}
+{"cmd": "docker logs --tail 100 mycontainer 2>/dev/null"}
+{"cmd": "ssh user@host 'git status' 2>/dev/null"}
+{"cmd": "gh api --method=GET repos/owner/repo 2>/dev/null"}
+{"cmd": "psql --list 2>/dev/null"}
+{"cmd": "az redis list-keys --name myredis -g mygroup 2>/dev/null"}
+{"cmd": "; SELECT 2 2>/dev/null"}
+{"cmd": "aws kinesis delete-stream --stream-name mystream 2>/dev/null"}
+{"cmd": "gcloud auth revoke 2>/dev/null"}
+{"cmd": "az network vnet create -g mygroup -n myvnet 2>/dev/null"}
+{"cmd": "scutil -r example.com 2>/dev/null"}
+{"cmd": "gh gist clone abc123 2>/dev/null"}
+{"cmd": "duckdb -readonly work.db \"WITH x AS (SELECT 'INSTALL') SELECT * FROM x\" 2>/dev/null"}
+{"cmd": "git cherry -v main feature 2>/dev/null"}
+{"cmd": "scutil --set HostName myhost.local 2>/dev/null"}
+{"cmd": "pip config list --site 2>/dev/null"}
+{"cmd": "brew bundle check --verbose 2>/dev/null"}
+{"cmd": "brew migrate python 2>/dev/null"}
+{"cmd": "import pathlib; p=pathlib.Path('/tmp') 2>/dev/null"}
+{"cmd": "az policy assignment list --resource-group mygroup 2>/dev/null"}
+{"cmd": "fzf --bind='enter:execute-silent(rm {})' 2>/dev/null"}
+{"cmd": "gh project edit 1 2>/dev/null"}
+{"cmd": "gh repo create --private 2>/dev/null"}
+{"cmd": "script -aq /dev/null ls 2>/dev/null"}
+{"cmd": "find /home/user >> /tmp/log.txt"}
+{"cmd": "aws iam get-policy --policy-arn arn:aws:iam::123:policy/mypolicy >> /tmp/log.txt"}
+{"cmd": "aws cloudformation describe-change-set --change-set-name mychangeset --stack-name mystack >> /tmp/log.txt"}
+{"cmd": "ip addr change 192.168.1.100/24 dev eth0 >> /tmp/log.txt"}
+{"cmd": "packer fix -validate=true template.json >> /tmp/log.txt"}
+{"cmd": "ifconfig en0 >> /tmp/log.txt"}
+{"cmd": "gawk --file script.awk file.txt >> /tmp/log.txt"}
+{"cmd": "aws sts get-access-key-info --access-key-id AKIA... >> /tmp/log.txt"}
+{"cmd": "-H 'Host: demo' http://10.1.2.3/ >> /tmp/log.txt"}
+{"cmd": "az storage blob delete-batch --source mycontainer --account-name myaccount --pattern '*.log' >> /tmp/log.txt"}
+{"cmd": "/srv/d/sub/f.txt >> /tmp/log.txt"}
+{"cmd": "journalctl _PID=1234 >> /tmp/log.txt"}
+{"cmd": "ansible-lint --parseable playbook.yml >> /tmp/log.txt"}
+{"cmd": "sips --verify profile.icc >> /tmp/log.txt"}
+{"cmd": "aws athena update-data-catalog --name mycat --type HIVE >> /tmp/log.txt"}
+{"cmd": "git branch --list 'feature/*' >> /tmp/log.txt"}
+{"cmd": "aws cloudformation list-stacks --stack-status-filter CREATE_COMPLETE >> /tmp/log.txt"}
+{"cmd": "networksetup -getv6additionalroutes Wi-Fi >> /tmp/log.txt"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_non_python_extension_bloc0/script.txt >> /tmp/log.txt"}
+{"cmd": "brew services info postgresql >> /tmp/log.txt"}
+{"cmd": "curl -w '%{http_code}' https://example.com >> /tmp/log.txt"}
+{"cmd": "az lock list >> /tmp/log.txt"}
+{"cmd": "yq eval-all '.key' file.yaml >> /tmp/log.txt"}
+{"cmd": "docker cp /local mycontainer:/path >> /tmp/log.txt"}
+{"cmd": "7zz h file.txt >> /tmp/log.txt"}
+{"cmd": "curl --url-query 'key=value' https://example.com >> /tmp/log.txt"}
+{"cmd": "npm version patch >> /tmp/log.txt"}
+{"cmd": "journalctl --unit=nginx >> /tmp/log.txt"}
+{"cmd": "curl --user user:pass https://example.com >> /tmp/log.txt"}
+{"cmd": "az monitor metrics list --resource /subscriptions/.../... >> /tmp/log.txt"}
+{"cmd": "cdk diff --app 'npx ts-node bin/app.ts' >> /tmp/log.txt"}
+{"cmd": "docker node inspect node1 >> /tmp/log.txt"}
+{"cmd": "kubectl get all >> /tmp/log.txt"}
+{"cmd": "gcloud config set project my-project >> /tmp/log.txt"}
+{"cmd": "gcloud container node-pools create my-pool --cluster=my-cluster >> /tmp/log.txt"}
+{"cmd": "az vm image list-skus -l eastus -p Canonical -f UbuntuServer >> /tmp/log.txt"}
+{"cmd": "launchctl error posix 2 >> /tmp/log.txt"}
+{"cmd": "curl --request=PATCH https://example.com >> /tmp/log.txt"}
+{"cmd": "docker-compose logs >> /tmp/log.txt"}
+{"cmd": "rtk >> /tmp/log.txt"}
+{"cmd": "timeout 5 cat file.txt >> /tmp/log.txt"}
+{"cmd": "aws ec2 describe-volumes >> /tmp/log.txt"}
+{"cmd": "gh cache list >> /tmp/log.txt"}
+{"cmd": "docker-compose top >> /tmp/log.txt"}
+{"cmd": "git notes remove >> /tmp/log.txt"}
+{"cmd": "find . -xtype l >> /tmp/log.txt"}
+{"cmd": "/a >> /tmp/log.txt"}
+{"cmd": "az ml model delete --name mymodel --workspace-name myws >> /tmp/log.txt"}
+{"cmd": "case $(echo x) in *) echo y;; esac >> /tmp/log.txt"}
+{"cmd": "docker image build -t myimage . >> /tmp/log.txt"}
+{"cmd": "az network public-ip create --name newpip -g mygroup --allocation-method Static --sku Standard >> /tmp/log.txt"}
+{"cmd": "say -f input.txt >> /tmp/log.txt"}
+{"cmd": "cdk migrate --from-path template.yaml >> /tmp/log.txt"}
+{"cmd": "networksetup -renamenetworkservice Wi-Fi WiFi >> /tmp/log.txt"}
+{"cmd": "curl -M >> /tmp/log.txt"}
+{"cmd": "docker -H tcp://localhost:2375 ps >> /tmp/log.txt"}
+{"cmd": "profiles status -type configuration >> /tmp/log.txt"}
+{"cmd": "aws logs filter-log-events --log-group-name mygroup --filter-pattern ERROR >> /tmp/log.txt"}
+{"cmd": "git rerere status >> /tmp/log.txt"}
+{"cmd": "git ls-remote >> /tmp/log.txt"}
+{"cmd": "gh codespace delete -c codespace-name >> /tmp/log.txt"}
+{"cmd": "az redis create --name newredis -g mygroup --location eastus --sku Basic --vm-size c0 >> /tmp/log.txt"}
+{"cmd": "docker service rm myservice >> /tmp/log.txt"}
+{"cmd": "curl -o output.txt -X DELETE https://example.com >> /tmp/log.txt"}
+{"cmd": "brew --taps >> /tmp/log.txt"}
+{"cmd": "script -q /dev/null pwd >> /tmp/log.txt"}
+{"cmd": "openssl dgst -sha256 -sign key.pem -out sig.bin file.txt >> /tmp/log.txt"}
+{"cmd": "gh pr status >> /tmp/log.txt"}
+{"cmd": "sed --in-place 's/foo/bar/' file.txt >> /tmp/log.txt"}
+{"cmd": "duckdb -readonly data.db \"(SELECT 1); .output tmp/out\" >> /tmp/log.txt"}
+{"cmd": "curl --trace trace.txt https://example.com >> /tmp/log.txt"}
+{"cmd": "az disk delete -g mygroup -n mydisk >> /tmp/log.txt"}
+{"cmd": "kubectl exec -it foo -- bash >> /tmp/log.txt"}
+{"cmd": "git show-branch >> /tmp/log.txt"}
+{"cmd": "awk 'NR > 5' file.txt >> /tmp/log.txt"}
+{"cmd": "az functionapp keys list --name myfunc -g mygroup >> /tmp/log.txt"}
+{"cmd": "helm list --uninstalled >> /tmp/log.txt"}
+{"cmd": "mysql -e 'GRANT SELECT ON db.* TO user' >> /tmp/log.txt"}
+{"cmd": "aws ssm get-maintenance-window --window-id mw-123 >> /tmp/log.txt"}
+{"cmd": "7z t archive.7z >> /tmp/log.txt"}
+{"cmd": "mktemp -u -t prefix >> /tmp/log.txt"}
+{"cmd": "docker node promote node1 >> /tmp/log.txt"}
+{"cmd": "brew gist-logs -n python >> /tmp/log.txt"}
+{"cmd": "diskutil info --all >> /tmp/log.txt"}
+{"cmd": "xargs --verbose cat >> /tmp/log.txt"}
+{"cmd": "uv pip sync requirements.txt >> /tmp/log.txt"}
+{"cmd": "fd -d 3 pattern >> /tmp/log.txt"}
+{"cmd": "fd -i pattern >> /tmp/log.txt"}
+{"cmd": "dmesg >> /tmp/log.txt"}
+{"cmd": "az acr repository list --name myacr >> /tmp/log.txt"}
+{"cmd": "auth0 actions create 2>&1 | tee log"}
+{"cmd": "git gc --aggressive 2>&1 | tee log"}
+{"cmd": "fd --version 2>&1 | tee log"}
+{"cmd": "az container delete --name mycontainer -g mygroup 2>&1 | tee log"}
+{"cmd": "mysql -e \"SELECT CAST(a AS INTEGER) FROM t; DROP TABLE t\" 2>&1 | tee log"}
+{"cmd": "echo `echo \\`date\\`` 2>&1 | tee log"}
+{"cmd": "gh auth login 2>&1 | tee log"}
+{"cmd": "docker compose --file docker-compose.yml logs 2>&1 | tee log"}
+{"cmd": "gcloud container node-pools list --cluster=my-cluster 2>&1 | tee log"}
+{"cmd": "curl --globoff 'https://example.com/{a,b,c}' 2>&1 | tee log"}
+{"cmd": "auth0 api stats/daily 2>&1 | tee log"}
+{"cmd": "gh pr list -R cli/cli 2>&1 | tee log"}
+{"cmd": "az repos policy list --repository-id repoid --project myproject 2>&1 | tee log"}
+{"cmd": "aws ssm stop-automation-execution --automation-execution-id exec123 2>&1 | tee log"}
+{"cmd": "sort --merge file1.txt file2.txt 2>&1 | tee log"}
+{"cmd": "sh -cl 'git status' 2>&1 | tee log"}
+{"cmd": "awk 'BEGIN {FS=\":\"} {print $1}' file.txt 2>&1 | tee log"}
+{"cmd": "gh attestation verify artifact.tar.gz 2>&1 | tee log"}
+{"cmd": "aws ssm terminate-session --session-id sess123 2>&1 | tee log"}
+{"cmd": "duckdb -readonly work.db \"SELECT $$'$$; COPY (SELECT 1) TO '/tmp/output.csv' --'\" 2>&1 | tee log"}
+{"cmd": "psql -c \"SELECT CAST(x AS INTEGER) FROM t\" 2>&1 | tee log"}
+{"cmd": "tar -xjf archive.tar.bz2 2>&1 | tee log"}
+{"cmd": "sudo echo '(a)' 2>&1 | tee log"}
+{"cmd": "aws dynamodb scan --table-name mytable --filter-expression 'attr > :val' 2>&1 | tee log"}
+{"cmd": "networksetup 2>&1 | tee log"}
+{"cmd": "rtk --nonexistent-flag 2>&1 | tee log"}
+{"cmd": "sips -g all image.png 2>&1 | tee log"}
+{"cmd": "npm access list packages 2>&1 | tee log"}
+{"cmd": "az resource list --resource-group rg 2>&1 | tee log"}
+{"cmd": "sqlcmd query -q \"SELECT CAST(fictional_effect() AS INTEGER)\" 2>&1 | tee log"}
+{"cmd": "npm update 2>&1 | tee log"}
+{"cmd": "openssl x509 -noout -enddate -in cert.pem 2>&1 | tee log"}
+{"cmd": "git config user.name 'John Doe' 2>&1 | tee log"}
+{"cmd": "dscl . -search /Users name alice 2>&1 | tee log"}
+{"cmd": "aws rds describe-pending-maintenance-actions 2>&1 | tee log"}
+{"cmd": "duckdb -readonly -csv data.db \"CREATE TEMP TABLE main.n AS SELECT 1; SELECT * FROM n\" 2>&1 | tee log"}
+{"cmd": "echo \"π\" > ü 2>&1 | tee log"}
+{"cmd": "brew missing 2>&1 | tee log"}
+{"cmd": "podman network ls 2>&1 | tee log"}
+{"cmd": "docker images 2>&1 | tee log"}
+{"cmd": "az resource show --ids /subscriptions/.../resource 2>&1 | tee log"}
+{"cmd": "networksetup -getairportpower en0 2>&1 | tee log"}
+{"cmd": "git remote -v 2>&1 | tee log"}
+{"cmd": "ls <&3 2>&1 | tee log"}
+{"cmd": "helm rollback myrelease 2 -n production 2>&1 | tee log"}
+{"cmd": "aws eks describe-addon-versions --addon-name vpc-cni 2>&1 | tee log"}
+{"cmd": "ip link set eth0 down 2>&1 | tee log"}
+{"cmd": "aws cloudwatch disable-alarm-actions --alarm-names myalarm 2>&1 | tee log"}
+{"cmd": "duckdb -readonly data.db \"SELECT CAST(a AS INTEGER) INTO outfile FROM t\" 2>&1 | tee log"}
+{"cmd": "uv pip 2>&1 | tee log"}
+{"cmd": "git grep -n pattern 2>&1 | tee log"}
+{"cmd": "terraform metadata functions 2>&1 | tee log"}
+{"cmd": "gh issue unlock 123 2>&1 | tee log"}
+{"cmd": "duckdb -readonly data.db 'SELECT list_sum([1]); SELECT stats(x) FROM t' 2>&1 | tee log"}
+{"cmd": "git mergetool file.txt 2>&1 | tee log"}
+{"cmd": "cargo bench 2>&1 | tee log"}
+{"cmd": "python /tmp/pytest-of-root/pytest-3/popen-gw0/test_safe_script_approved0/safe.py 2>&1 | tee log"}
+{"cmd": "kubectl config set-credentials user --token=token123 2>&1 | tee log"}
+{"cmd": "launchctl config system path /usr/local/bin 2>&1 | tee log"}
+{"cmd": "-sH'Host: demo' http://10.1.2.3/ 2>&1 | tee log"}
+{"cmd": "aws eks describe-cluster --name mycluster 2>&1 | tee log"}
+{"cmd": "gh codespace ssh -c codespace-name 2>&1 | tee log"}
+{"cmd": "docker plugin upgrade myplugin 2>&1 | tee log"}
+{"cmd": "SELECT 1 -- ordinary INTO OUTFILE 'tmp/out' 2>&1 | tee log"}
+{"cmd": "auth0 universal-login prompts update login 2>&1 | tee log"}
+{"cmd": "fd --changed-before 2024-01-01 pattern 2>&1 | tee log"}
+{"cmd": "source .venv/bin/activate 2>&1 | tee log"}
+{"cmd": "auth0 universal-login templates update 2>&1 | tee log"}
+{"cmd": "brew upgrade --formula 2>&1 | tee log"}
+{"cmd": "terraform login 2>&1 | tee log"}
+{"cmd": "aws ec2 describe-snapshots --owner-ids self 2>&1 | tee log"}
+{"cmd": "ip link add veth0 type veth peer name veth1 2>&1 | tee log"}
+{"cmd": "az pipelines run --id 123 -p myproject 2>&1 | tee log"}
+{"cmd": "packer build -var 'key=value' template.json 2>&1 | tee log"}
+{"cmd": "pip3 --version 2>&1 | tee log"}
+{"cmd": "docker compose run --rm web pytest 2>&1 | tee log"}
+{"cmd": "sort --numeric-sort file.txt 2>&1 | tee log"}
+{"cmd": "pip download requests 2>&1 | tee log"}
+{"cmd": "gunzip -tv file.gz 2>&1 | tee log"}
+{"cmd": "git name-rev HEAD 2>&1 | tee log"}
+{"cmd": "brew bump-cask-pr firefox 2>&1 | tee log"}
+{"cmd": "podman run ubuntu 2>&1 | tee log"}
+{"cmd": "git gc (garbage collect) 2>&1 | tee log"}
+{"cmd": "npm init 2>&1 | tee log"}
+{"cmd": "fzf --hscroll-off=10 2>&1 | tee log"}
+{"cmd": "aws s3api get-bucket-policy --bucket mybucket 2>&1 | tee log"}
+{"cmd": "curl --silent https://example.com 2>&1 | tee log"}
+{"cmd": "az webapp config set --name myapp -g mygroup --linux-fx-version 'PYTHON|3.9' 2>&1 | tee log"}
+{"cmd": "awk 'BEGIN {system(\"rm -rf /\")}' 2>&1 | tee log"}
+{"cmd": "gh pr edit 123 --title 'New title' 2>&1 | tee log"}
+{"cmd": "FOO=bar launchctl bsexec 1234 /bin/ls"}
+{"cmd": "FOO=bar launchctl dumpstate"}
+{"cmd": "FOO=bar duckdb -readonly data.db \"SELECT '${HOME}'\""}
+{"cmd": "FOO=bar brew bundle --help"}
+{"cmd": "FOO=bar pip version"}
+{"cmd": "FOO=bar launchctl plist /Applications/Safari.app"}
+{"cmd": "FOO=bar aws sns subscribe --topic-arn arn --protocol email --notification-endpoint email@example.com"}
+{"cmd": "FOO=bar bash -c 'echo hello'"}
+{"cmd": "FOO=bar uv pip uninstall requests"}
+{"cmd": "FOO=bar hdiutil imageinfo -plist image.dmg"}
+{"cmd": "FOO=bar hdiutil info -plist"}
+{"cmd": "FOO=bar brew commands --quiet"}
+{"cmd": "FOO=bar unzip -lv archive.zip"}
+{"cmd": "FOO=bar find . -exec cat {} \\;"}
+{"cmd": "FOO=bar 7zz a archive.7z file.txt"}
+{"cmd": "FOO=bar write"}
+{"cmd": "FOO=bar az tag create -n mytag"}
+{"cmd": "FOO=bar git hash-object file.txt"}
+{"cmd": "FOO=bar whereis python"}
+{"cmd": "FOO=bar launchctl dumpjpcategory"}
+{"cmd": "FOO=bar gcloud iap web set-iam-policy policy.json --resource-type=backend-services"}
+{"cmd": "FOO=bar pip3 show requests"}
+{"cmd": "FOO=bar aws cloudformation cancel-update-stack --stack-name mystack"}
+{"cmd": "FOO=bar echo hello | tee"}
+{"cmd": "FOO=bar fd --changed-within 1week pattern"}
+{"cmd": "FOO=bar brew outdated --json=v2"}
+{"cmd": "FOO=bar git branch -vv"}
+{"cmd": "FOO=bar dscl . delete /Users/alice"}
+{"cmd": "FOO=bar brew missing -v"}
+{"cmd": "FOO=bar aws ecr batch-delete-image --repository-name myrepo --image-ids imageTag=latest"}
+{"cmd": "FOO=bar ls > \"out file\""}
+{"cmd": "FOO=bar docker-compose start"}
+{"cmd": "FOO=bar brew list -r"}
+{"cmd": "FOO=bar aws athena start-query-execution --query-string '  WITH x AS (SELECT 1) SELECT * FROM x'"}
+{"cmd": "FOO=bar import json; d=json.loads('{\"a\":1}'); print(d['a'])"}
+{"cmd": "FOO=bar time ls -la"}
+{"cmd": "FOO=bar aws cloudformation detect-stack-resource-drift --stack-name mystack --logical-resource-id res"}
+{"cmd": "FOO=bar az cosmosdb delete --name myaccount -g mygroup"}
+{"cmd": "FOO=bar spctl -a /Applications/Safari.app"}
+{"cmd": "FOO=bar uv venv --python 3.11"}
+{"cmd": "FOO=bar git add --patch"}
+{"cmd": "FOO=bar curl --ntlm https://example.com"}
+{"cmd": "FOO=bar openssl req -new -key key.pem -out csr.pem"}
+{"cmd": "FOO=bar uv sync"}
+{"cmd": "FOO=bar cargo init"}
+{"cmd": "FOO=bar xargs -0 sh -c 'cat'"}
+{"cmd": "FOO=bar uv python pin 3.12"}
+{"cmd": "FOO=bar ansible-console all -i inventory.ini"}
+{"cmd": "FOO=bar aws lambda remove-permission --function-name myfunc --statement-id stmt"}
+{"cmd": "FOO=bar sqlcmd query -q \"SELECT CAST(x AS INTEGER) FROM t\""}
+{"cmd": "FOO=bar echo `"}
+{"cmd": "FOO=bar networksetup -deleteVLAN MyVLAN en0 100"}
+{"cmd": "FOO=bar kubectl config rename-context old-name new-name"}
+{"cmd": "FOO=bar aws rds describe-orderable-db-instance-options --engine postgres"}
+{"cmd": "FOO=bar aws athena list-prepared-statements --work-group primary"}
+{"cmd": "FOO=bar az network vnet list --resource-group mygroup"}
+{"cmd": "FOO=bar helm create ./path/to/mychart"}
+{"cmd": "FOO=bar curl -Q 'RNFR old.txt' -Q 'RNTO new.txt' ftp://example.com"}
+{"cmd": "FOO=bar aws route53 list-resource-record-sets --hosted-zone-id Z123"}
+{"cmd": "FOO=bar --ftp-create-dirs"}
+{"cmd": "FOO=bar duckdb -readonly work.db \"SELECT $$'$$; COPY (SELECT 1) TO '/tmp/output.csv' --'\""}
+{"cmd": "FOO=bar terraform apply"}
+{"cmd": "FOO=bar aws iam put-role-policy --role-name myrole --policy-name pol --policy-document file://p.json"}
+{"cmd": "FOO=bar gh variable get MY_VAR"}
+{"cmd": "FOO=bar echo `whoami`"}
+{"cmd": "FOO=bar git diff"}
+{"cmd": "FOO=bar find . -fls /tmp/output.txt"}
+{"cmd": "FOO=bar az vm create myvm --resource-group mygroup"}
+{"cmd": "FOO=bar cargo add serde"}
+{"cmd": "FOO=bar kubectl taint nodes node-1 key:NoSchedule-"}
+{"cmd": "FOO=bar hours"}
+{"cmd": "FOO=bar find . -exec sh -c 'rm $0' {} \\;"}
+{"cmd": "FOO=bar uv cache clean requests"}
+{"cmd": "FOO=bar xargs -J % cat %"}
+{"cmd": "FOO=bar gh pr merge --auto"}
+{"cmd": "FOO=bar git ls-files | xargs git blame"}
+{"cmd": "FOO=bar az functionapp function show --name myfunc --function-name myfunction -g mygroup"}
+{"cmd": "FOO=bar mysql -X -e 'SELECT 1'"}
+{"cmd": "FOO=bar sample -mayDie 1234"}
+{"cmd": "FOO=bar npm -v"}
+{"cmd": "FOO=bar az repos show -r myrepo -p myproject"}
+{"cmd": "FOO=bar gcloud --region=us-central1 compute instances list"}
+{"cmd": "FOO=bar az ad group member list --group mygroup"}
+{"cmd": "FOO=bar aws cognito-idp list-tags-for-resource --resource-arn arn"}
+{"cmd": "FOO=bar az cosmosdb mongodb database list --account-name myaccount -g mygroup"}
+{"cmd": "FOO=bar docker build -t myimage ."}
+{"cmd": "FOO=bar aws secretsmanager delete-secret --secret-id mysecret"}
+{"cmd": "FOO=bar brew log python"}
+{"cmd": "FOO=bar helm"}
+{"cmd": "FOO=bar brew update --merge"}
+{"cmd": "env FOO=bar az vm image list-publishers -l eastus"}
+{"cmd": "env FOO=bar aws lambda invoke --function-name myfunc response.json"}
+{"cmd": "env FOO=bar 2>&00-"}
+{"cmd": "env FOO=bar curl --ftp-create-dirs ftp://example.com/newdir/file.txt"}
+{"cmd": "env FOO=bar python /tmp/pytest-of-root/pytest-3/popen-gw0/test_algorithm_script_approved0/algorithm.py"}
+{"cmd": "env FOO=bar git sparse-checkout init"}
+{"cmd": "env FOO=bar python /tmp/pytest-of-root/pytest-3/popen-gw0/test_lzma_open_blocked0/lzma_bypass.py"}
+{"cmd": "env FOO=bar dmesg --userspace"}
+{"cmd": "env FOO=bar psql -c 'WITH x AS (SELECT 1) SELECT * FROM x'"}
+{"cmd": "env FOO=bar find . -iwholename '*/TEST/*'"}
+{"cmd": "env FOO=bar base64 -d -w 0 file.txt"}
+{"cmd": "env FOO=bar whoami"}
+{"cmd": "env FOO=bar podman cp mycontainer:/path /local"}
+{"cmd": "env FOO=bar prometheus --storage.tsdb.path=/var/lib/prometheus"}
+{"cmd": "env FOO=bar pip install --compile requests"}
+{"cmd": "env FOO=bar 7zz"}
+{"cmd": "env FOO=bar brew list --formulae"}
+{"cmd": "env FOO=bar duckdb -safe work.db \"INSTALL httpfs\""}
+{"cmd": "env FOO=bar xargs chown root"}
+{"cmd": "env FOO=bar launchctl setenv MY_VAR value"}
+{"cmd": "env FOO=bar python /tmp/pytest-of-root/pytest-3/popen-gw0/test_urllib_urlopen_blocked0/urllib_urlopen.py"}
+{"cmd": "env FOO=bar ls >& out"}
+{"cmd": "env FOO=bar helm test myrelease -n production"}
+{"cmd": "env FOO=bar )"}
+{"cmd": "env FOO=bar aws iam create-role --role-name newrole --assume-role-policy-document file://trust.json"}
+{"cmd": "env FOO=bar podman push myrepo/myimage"}
+{"cmd": "env FOO=bar psql -c 'UPDATE users SET name = 1'"}
+{"cmd": "env FOO=bar INSTALL httpfs"}
+{"cmd": "env FOO=bar git commit"}
+{"cmd": "env FOO=bar aws lambda get-layer-version --layer-name mylayer --version-number 1"}
+{"cmd": "env FOO=bar auth0 --tenant mytenant apps create"}
+{"cmd": "env FOO=bar gzip -f file.txt"}
+{"cmd": "env FOO=bar gh ruleset view 1 --web"}
+{"cmd": "env FOO=bar pip cache list"}
+{"cmd": "env FOO=bar gcloud app describe"}
+{"cmd": "env FOO=bar az acr list --resource-group mygroup"}
+{"cmd": "env FOO=bar aws ssm describe-patch-baselines"}
+{"cmd": "env FOO=bar fd --list-details pattern"}
+{"cmd": "env FOO=bar gh gist delete abc123"}
+{"cmd": "env FOO=bar aws s3 cp s3://bucket/file localfile"}
+{"cmd": "env FOO=bar az storage blob exists -c mycontainer -n myblob --account-name mystorageaccount"}
+{"cmd": "env FOO=bar journalctl --relinquish-var"}
+{"cmd": "env FOO=bar yarn remove lodash"}
+{"cmd": "env FOO=bar docker compose port web 80"}
+{"cmd": "env FOO=bar fzf --bind=change:first"}
+{"cmd": "env FOO=bar auth0 apis rm api_12345"}
+{"cmd": "env FOO=bar aws --profile prod --region us-west-2 lambda list-functions"}
+{"cmd": "env FOO=bar ssh host 'ls; pwd'"}
+{"cmd": "env FOO=bar ansible-config init"}
+{"cmd": "env FOO=bar docker exec nginx sh -c 'rm -rf /'"}
+{"cmd": "env FOO=bar gh project view 1"}
+{"cmd": "env FOO=bar dmesg --console-level=8"}
+{"cmd": "env FOO=bar az image show -g mygroup -n myimage"}
+{"cmd": "env FOO=bar aws eks create-cluster --name newcluster --role-arn arn --resources-vpc-config subnetIds=..."}
+{"cmd": "env FOO=bar fish -c 'ls'"}
+{"cmd": "env FOO=bar security dump-trust-settings -d"}
+{"cmd": "env FOO=bar networksetup -showBondStatus bond0"}
+{"cmd": "env FOO=bar ifconfig -a"}
+{"cmd": "env FOO=bar git switch feature"}
+{"cmd": "env FOO=bar caffeinate -i rm -rf /"}
+{"cmd": "env FOO=bar gh label list"}
+{"cmd": "env FOO=bar aws athena start-calculation-execution --session-id sess --code-block 'print(1)'"}
+{"cmd": "env FOO=bar ls | grep foo"}
+{"cmd": "env FOO=bar tee --help"}
+{"cmd": "env FOO=bar aws dynamodb describe-table --table-name mytable"}
+{"cmd": "env FOO=bar time git status && git log"}
+{"cmd": "env FOO=bar aws rds describe-orderable-db-instance-options --engine postgres"}
+{"cmd": "env FOO=bar ansible-console --help"}
+{"cmd": "env FOO=bar sqlcmd query 'CREATE TABLE users (id INT)'"}
+{"cmd": "env FOO=bar 7z a -p archive.7z file.txt"}
+{"cmd": "env FOO=bar xargs -d '\\n' rm"}
+{"cmd": "env FOO=bar security delete-keychain keychain.keychain"}
+{"cmd": "env FOO=bar terraform state pull"}
+{"cmd": "env FOO=bar tmutil deleteinprogress /path/to/machine"}
+{"cmd": "env FOO=bar exa"}
+{"cmd": "env FOO=bar bash -c 'ls; rm x'"}
+{"cmd": "env FOO=bar gh auth login --hostname github.enterprise.com"}
+{"cmd": "env FOO=bar auth0 email provider create"}
+{"cmd": "env FOO=bar hdiutil chpass image.dmg"}
+{"cmd": "env FOO=bar ssh host npm install"}
+{"cmd": "env FOO=bar kubectl cp /tmp/foo nginx:/tmp/bar"}
+{"cmd": "env FOO=bar gh project list --owner myorg"}
+{"cmd": "env FOO=bar aws athena start-query-execution --query-string '  WITH x AS (SELECT 1) SELECT * FROM x'"}
+{"cmd": "env FOO=bar npm start"}
+{"cmd": "env FOO=bar sqlite3 data.db"}
+{"cmd": "env FOO=bar aws ssm describe-automation-step-executions --automation-execution-id exec123"}
+{"cmd": "env FOO=bar auth0 unknown-command"}
+{"cmd": "env FOO=bar sqlite3 -readonly mydb.db 'DROP TABLE users'"}
+{"cmd": "env FOO=bar COPY (SELECT query('DELETE FROM t')) TO 'tmp/out'"}
+{"cmd": "env FOO=bar sample 1234 10 1"}
+{"cmd": "sudo cdk init"}
+{"cmd": "sudo pkgutil --file-info /usr/bin/zip"}
+{"cmd": "sudo uv python install 3.11 3.12"}
+{"cmd": "sudo networksetup -createBond MyBond en0 en1"}
+{"cmd": "sudo duckdb -readonly data.db \"(SELECT 1); DROP TABLE t\""}
+{"cmd": "sudo kubectl describe node worker-1"}
+{"cmd": "sudo python /tmp/pytest-of-root/pytest-3/popen-gw0/test_commands_blocked0/commands_dangerous.py"}
+{"cmd": "sudo kubectl set env deployment/nginx ENV_VAR=value"}
+{"cmd": "sudo aws sns list-topics"}
+{"cmd": "sudo brew home"}
+{"cmd": "sudo journalctl -b"}
+{"cmd": "sudo brew fetch --HEAD python"}
+{"cmd": "sudo duckdb -readonly -csv data.db \"CREATE TEMP TABLE n AS DELETE FROM data; SELECT * FROM n\""}
+{"cmd": "sudo az ml workspace delete --name myws --resource-group rg"}
+{"cmd": "sudo duckdb mydb.db"}
+{"cmd": "sudo cat -n file.txt"}
+{"cmd": "sudo gcloud config get-value project"}
+{"cmd": "sudo brew autoremove --dry-run"}
+{"cmd": "sudo duckdb -csv mydb.db 'SELECT * FROM users'"}
+{"cmd": "sudo gcloud compute disks list"}
+{"cmd": "sudo aws iam list-policies --scope Local"}
+{"cmd": "sudo awk '{print length($1)}' file.txt"}
+{"cmd": "sudo python /tmp/pytest-of-root/pytest-3/popen-gw0/test_wsgiref_handlers_blocked0/wsgiref_dangerous.py"}
+{"cmd": "sudo sudo -- ls"}
+{"cmd": "sudo ip neigh add 192.168.1.1 lladdr 00:11:22:33:44:55 dev eth0"}
+{"cmd": "sudo aws lambda delete-alias --function-name myfunc --name myalias"}
+{"cmd": "sudo symbols -noHeaders /usr/bin/ls"}
+{"cmd": "sudo launchctl debug gui/501/my.service"}
+{"cmd": "sudo xattr file.txt"}
+{"cmd": "sudo npm config get registry"}
+{"cmd": "sudo fzf --disabled"}
+{"cmd": "sudo less file.txt"}
+{"cmd": "sudo az container delete --name mycontainer -g mygroup"}
+{"cmd": "sudo for (( i=$(rm foo); i<10; i++ )); do echo $i; done"}
+{"cmd": "sudo sqlite3 mydb.db 'PRAGMA foreign_keys = ON'"}
+{"cmd": "sudo aws cognito-idp get-group --user-pool-id us-east-1_abc123 --group-name mygroup"}
+{"cmd": "sudo dmesg --ctime"}
+{"cmd": "sudo gh pr create"}
+{"cmd": "sudo gh project list --limit 50"}
+{"cmd": "sudo /a/.dippy"}
+{"cmd": "sudo pnpm install"}
+{"cmd": "sudo [[ ! -f foo ]]"}
+{"cmd": "sudo aws logs delete-log-group --log-group-name mygroup"}
+{"cmd": "sudo diskutil eject disk1"}
+{"cmd": "sudo sort --temporary-directory=/tmp file.txt"}
+{"cmd": "sudo az role assignment create --assignee user@example.com --role Reader"}
+{"cmd": "sudo curl -V"}
+{"cmd": "sudo gh attestation download artifact.tar.gz"}
+{"cmd": "sudo aws athena start-query-execution --query-string 'select * from foo'"}
+{"cmd": "sudo gcloud compute"}
+{"cmd": "sudo brew test python"}
+{"cmd": "sudo az devops project show --project myproject --organization https://dev.azure.com/myorg"}
+{"cmd": "sudo gcloud compute zones list"}
+{"cmd": "sudo gh label create bug --description 'Bug report'"}
+{"cmd": "sudo env sudo ls"}
+{"cmd": "sudo cargo update"}
+{"cmd": "sudo brew services stop postgresql"}
+{"cmd": "sudo stats(x)"}
+{"cmd": "sudo find -H . -name '*.py'"}
+{"cmd": "sudo spctl --disable --label MyRule"}
+{"cmd": "sudo brew fetch --build-from-source python"}
+{"cmd": "sudo source ~/.bash_profile"}
+{"cmd": "sudo git remote rename origin upstream"}
+{"cmd": "sudo uv pip uninstall requests"}
+{"cmd": "sudo docker --host tcp://localhost:2375 ps"}
+{"cmd": "sudo az vm restart --name myvm -g mygroup"}
+{"cmd": "sudo docker events --filter container=mycontainer"}
+{"cmd": "sudo diskutil appleRAID list"}
+{"cmd": "sudo /app/x.env"}
+{"cmd": "sudo helm package ./mychart -u"}
+{"cmd": "sudo cargo new myproject"}
+{"cmd": "sudo write"}
+{"cmd": "sudo helm install nginx/nginx -g"}
+{"cmd": "sudo docker ps --all"}
+{"cmd": "sudo aws athena get-work-group --work-group primary"}
+{"cmd": "sudo ansible-inventory --list"}
+{"cmd": "sudo aws lambda list-event-source-mappings --function-name myfunc"}
+{"cmd": "sudo find . -name 'target' -quit"}
+{"cmd": "sudo /app.css"}
+{"cmd": "sudo tail -f log.txt"}
+{"cmd": "sudo az cosmosdb sql database show --name mydb --account-name myaccount -g mygroup"}
+{"cmd": "sudo gcloud iam roles list"}
+{"cmd": "sudo [[ -f $(rm x) ]]"}
+{"cmd": "sudo nawk '{print $1}' file.txt"}
+{"cmd": "sudo sqlcmd query -q \"$SQL\""}
+{"cmd": "sudo hdiutil compact sparse.sparseimage"}
+{"cmd": "sudo sysctl -n hw.model"}
+{"cmd": "sudo az webapp deployment source show --name myapp -g mygroup"}
+{"cmd": "sudo ssh -t host rm file.txt"}
+{"cmd": "sudo aws dynamodb update-table --table-name mytable --billing-mode PAY_PER_REQUEST"}
+{"cmd": "sh -c 'aws --no-cli-pager --output json s3 ls'"}
+{"cmd": "sh -c 'ip netns list'"}
+{"cmd": "sh -c 'brew list --poured-from-bottle'"}
+{"cmd": "sh -c 'az network public-ip list --resource-group mygroup'"}
+{"cmd": "sh -c 'aws sqs receive-message --queue-url https://sqs... --max-number-of-messages 10'"}
+{"cmd": "sh -c 'git --help'"}
+{"cmd": "sh -c 'az devops team list-member --team MyTeam'"}
+{"cmd": "sh -c 'mysql -e \"SELECT CAST(fictional_effect() AS INTEGER)\"'"}
+{"cmd": "sh -c 'az account get-access-token --resource-type ms-graph'"}
+{"cmd": "sh -c 'prometheus --config.file=prometheus.yml'"}
+{"cmd": "sh -c 'aws iam list-attached-user-policies --user-name myuser'"}
+{"cmd": "sh -c 'entropy'"}
+{"cmd": "sh -c 'macbinary decode --to-stdout file.bin'"}
+{"cmd": "sh -c 'scutil --nc start MyVPN'"}
+{"cmd": "sh -c 'env --ignore-environment ls'"}
+{"cmd": "sh -c 'sips -r 90 image.png'"}
+{"cmd": "sh -c 'journalctl --lines=100'"}
+{"cmd": "sh -c 'aws eks update-cluster-config --name mycluster --resources-vpc-config ...'"}
+{"cmd": "sh -c 'git ls-files | xargs git rm'"}
+{"cmd": "sh -c 'git sparse-checkout set path/to/dir'"}
+{"cmd": "sh -c 'curl -X TRACE https://example.com'"}
+{"cmd": "sh -c 'kubectl config set-context production --cluster=prod-cluster'"}
+{"cmd": "sh -c 'docker image build -t myimage .'"}
+{"cmd": "sh -c 'kubectl top pods -n kube-system'"}
+{"cmd": "sh -c 'az cognitiveservices account create -g mygroup -n myaccount --kind TextAnalytics --sku S0 -l eastus'"}
+{"cmd": "sh -c 'python3 ~/probe.py'"}
+{"cmd": "sh -c 'helm delete myrelease'"}
+{"cmd": "sh -c 'kubectl get secret my-secret --output=yaml'"}
+{"cmd": "sh -c 'aws cloudwatch get-dashboard --dashboard-name mydash'"}
+{"cmd": "sh -c 'aws cognito-idp admin-create-user --user-pool-id us-east-1_abc123 --username newuser'"}
+{"cmd": "sh -c 'ansible-test units'"}
+{"cmd": "sh -c 'az vm capture --name myvm -g mygroup --vhd-name-prefix myimage'"}
+{"cmd": "sh -c 'ansible-test env'"}
+{"cmd": "sh -c 'az appconfig show -n myconfig'"}
+{"cmd": "sh -c 'fictionalwrap -t server1 run --script'"}
+{"cmd": "sh -c '(( x++ )) > /tmp/out'"}
+{"cmd": "sh -c 'az storage blob exists -c mycontainer -n myblob --account-name mystorageaccount'"}
+{"cmd": "sh -c 'sample'"}
+{"cmd": "sh -c 'gh pr view --comments'"}
+{"cmd": "sh -c 'helm template myrelease nginx/nginx --set key=value'"}
+{"cmd": "sh -c 'uv tool list'"}
+{"cmd": "sh -c 'fzf --bind=change:first'"}
+{"cmd": "sh -c 'aws rds describe-db-parameters --db-parameter-group-name mygroup'"}
+{"cmd": "sh -c 'gh project unlink 1'"}
+{"cmd": "sh -c '. /path/to/script.sh'"}
+{"cmd": "sh -c 'az sshkey list'"}
+{"cmd": "sh -c 'ack pattern'"}
+{"cmd": "sh -c 'list_sum([1,2,3])'"}
+{"cmd": "sh -c 'SELECT CAST(a AS /* type */ VARCHAR), CAST(b AS DECIMAL(10,2)) FROM t'"}
+{"cmd": "sh -c 'az sql db create --name newdb --server myserver -g mygroup'"}
+{"cmd": "sh -c 'gh secret delete MY_SECRET --org myorg'"}
+{"cmd": "sh -c 'aws logs create-log-stream --log-group-name mygroup --log-stream-name newstream'"}
+{"cmd": "sh -c 'psql -c'"}
+{"cmd": "sh -c 'gcloud pubsub subscriptions create my-sub --topic=my-topic'"}
+{"cmd": "sh -c 'find . -exec head {} \\;'"}
+{"cmd": "sh -c 'fzf --no-hscroll'"}
+{"cmd": "sh -c 'pre-commit try-repo'"}
+{"cmd": "sh -c 'brew uninstall --zap firefox'"}
+{"cmd": "sh -c 'gzip -d file.gz'"}
+{"cmd": "sh -c 'networksetup -setmanual Wi-Fi 192.168.1.100 255.255.255.0 192.168.1.1'"}
+{"cmd": "sh -c 'ansible-galaxy collection install -r requirements.yml'"}
+{"cmd": "sh -c 'xargs env FOO=bar cat'"}
+{"cmd": "sh -c 'find . -empty -delete'"}
+{"cmd": "sh -c 'kubectl uncordon node-1'"}
+{"cmd": "sh -c '--data'"}
+{"cmd": "sh -c 'xargs -I {}'"}
+{"cmd": "sh -c 'az network application-gateway show --name myag -g mygroup'"}
+{"cmd": "sh -c 'indeterminate'"}
+{"cmd": "sh -c 'pre-commit run --files foo.py'"}
+{"cmd": "sh -c 'pip help install'"}
+{"cmd": "sh -c 'docker stack rm mystack'"}
+{"cmd": "sh -c 'kubectl get pv'"}
+{"cmd": "sh -c 'npm root -g'"}
+{"cmd": "sh -c 'az servicebus topic delete --name mytopic --namespace-name mynamespace -g mygroup'"}
+{"cmd": "sh -c '7zz h -scrcCRC32 file.txt'"}
+{"cmd": "sh -c 'terraform workspace list'"}
+{"cmd": "sh -c 'agent${HOME}'"}
+{"cmd": "sh -c 'xargs -- rm'"}
+{"cmd": "sh -c 'docker node ls'"}
+{"cmd": "sh -c 'python /tmp/pytest-of-root/pytest-3/popen-gw0/test_os_mkdir_blocked0/os_mkdir.py'"}
+{"cmd": "sh -c 'fd -t d pattern'"}
+{"cmd": "sh -c 'xargs git add'"}
+{"cmd": "sh -c 'npm dist-tag ls lodash'"}
+{"cmd": "sh -c 'openssl md5 file.txt'"}
+{"cmd": "bash -c 'text/html; charset=utf-8'"}
+{"cmd": "bash -c 'az pipelines variable-group list --project myproject'"}
+{"cmd": "bash -c 'auth0 ul show'"}
+{"cmd": "bash -c 'az webapp log show --name myapp -g mygroup'"}
+{"cmd": "bash -c 'python /tmp/pytest-of-root/pytest-3/popen-gw0/test_os_popen_method_blocked0/os_popen.py'"}
+{"cmd": "bash -c 'aws iam attach-user-policy --user-name myuser --policy-arn arn'"}
+{"cmd": "bash -c 'aws sts get-session-token'"}
+{"cmd": "bash -c '-oProxyCommand=x'"}
+{"cmd": "bash -c 'gcloud run services describe my-service --region=us-central1'"}
+{"cmd": "bash -c 'az servicebus queue show --name myqueue --namespace-name mynamespace -g mygroup'"}
+{"cmd": "bash -c 'ansible-vault encrypt_string'"}
+{"cmd": "bash -c 'aws ec2 describe-launch-templates'"}
+{"cmd": "bash -c 'auth0 roles delete rol_12345'"}
+{"cmd": "bash -c 'npm un typescript'"}
+{"cmd": "bash -c '3>>'"}
+{"cmd": "bash -c 'networksetup -createlocation Office'"}
+{"cmd": "bash -c 'mysql -V'"}
+{"cmd": "bash -c 'launchctl plist /Applications/Safari.app'"}
+{"cmd": "bash -c 'aws route53 list-reusable-delegation-sets'"}
+{"cmd": "bash -c 'aws s3 rm s3://bucket/file'"}
+{"cmd": "bash -c 'kubectl cp /tmp/foo nginx:/tmp/bar'"}
+{"cmd": "bash -c 'az servicebus topic create --name newtopic --namespace-name mynamespace -g mygroup'"}
+{"cmd": "bash -c 'launchctl procinfo 1234'"}
+{"cmd": "bash -c 'uv help sync'"}
+{"cmd": "bash -c 'gcloud beta compute instances describe my-instance'"}
+{"cmd": "bash -c 'git apply --stat patch.diff'"}
+{"cmd": "bash -c 'FOO=bar ls'"}
+{"cmd": "bash -c 'psql -c'"}
+{"cmd": "bash -c 'git bisect start'"}
+{"cmd": "bash -c 'uv run ruff format'"}
+{"cmd": "bash -c 'aws iam update-login-profile --user-name myuser --password newpass'"}
+{"cmd": "bash -c 'gh gist list --public'"}
+{"cmd": "bash -c 'aws ssm list-compliance-summaries'"}
+{"cmd": "bash -c 'echo é $(rm ž)'"}
+{"cmd": "bash -c 'brew tap user/repo https://github.com/user/repo'"}
+{"cmd": "bash -c 'npm add lodash'"}
+{"cmd": "bash -c 'aws iam delete-policy --policy-arn arn'"}
+{"cmd": "bash -c 'gh pr merge --auto'"}
+{"cmd": "bash -c 'auth0 --no-input apps list'"}
+{"cmd": "bash -c 'az vm image list --publisher Canonical'"}
+{"cmd": "bash -c 'az vm capture --name myvm -g mygroup --vhd-name-prefix myimage'"}
+{"cmd": "bash -c 'kubectl cordon node-1'"}
+{"cmd": "bash -c 'fd --exec-batch'"}
+{"cmd": "bash -c 'sqlcmd config cs'"}
+{"cmd": "bash -c 'git submodule update'"}
+{"cmd": "bash -c 'gcloud iam roles describe roles/editor'"}
+{"cmd": "bash -c 'docker stats mycontainer'"}
+{"cmd": "bash -c 'az redis list --resource-group mygroup'"}
+{"cmd": "bash -c 'gcloud compute backend-services describe k8s-be --global --project foo'"}
+{"cmd": "bash -c 'fzf --listen-unsafe=6266'"}
+{"cmd": "bash -c 'az servicebus queue create --name newqueue --namespace-name mynamespace -g mygroup'"}
+{"cmd": "bash -c 'git blame -L 10,20 file.txt'"}
+{"cmd": "bash -c 'SELECT CAST(a AS fictional_type) FROM t'"}
+{"cmd": "bash -c 'gawk -f script.awk file.txt'"}
+{"cmd": "bash -c 'git config --get-all user.name'"}
+{"cmd": "bash -c 'brew list --installed-on-request'"}
+{"cmd": "bash -c 'helm upgrade myrelease nginx/nginx --dry-run=client'"}
+{"cmd": "bash -c 'docker top mycontainer'"}
+{"cmd": "bash -c 'ip neigh flush dev eth0'"}
+{"cmd": "bash -c 'docker volume inspect myvol'"}
+{"cmd": "bash -c 'aws route53 list-health-checks'"}
+{"cmd": "bash -c 'security error 25293'"}
+{"cmd": "bash -c 'brew deps --union python ruby'"}
+{"cmd": "bash -c 'docker container rename oldname newname'"}
+{"cmd": "bash -c 'brew some-new-command arg1 arg2'"}
+{"cmd": "bash -c 'launchctl config system path /usr/local/bin'"}
+{"cmd": "bash -c 'auth0 roles permissions list rol_12345'"}
+{"cmd": "bash -c 'python /tmp/pytest-of-root/pytest-3/popen-gw0/test_class_subclasses_blocked0/subclasses_bypass.py'"}
+{"cmd": "bash -c 'ansible-doc file'"}
+{"cmd": "bash -c 'ansible-test --help'"}
+{"cmd": "bash -c 'sqlcmd -h'"}
+{"cmd": "bash -c 'ssh user@host ls'"}
+{"cmd": "bash -c 'aws route53 list-vpc-association-authorizations --hosted-zone-id Z123'"}
+{"cmd": "bash -c 'helm template myrelease nginx/nginx --skip-crds'"}
+{"cmd": "xargs python -c 'from collections import OrderedDict; d=OrderedDict()' < list"}
+{"cmd": "xargs az redis delete --name myredis -g mygroup < list"}
+{"cmd": "xargs curl -Q 'LIST' ftp://example.com < list"}
+{"cmd": "xargs unzip archive.zip file.txt < list"}
+{"cmd": "xargs docker plugin push myplugin < list"}
+{"cmd": "xargs brew outdated python < list"}
+{"cmd": "xargs az vm open-port --name myvm -g mygroup --port 80 < list"}
+{"cmd": "xargs sh -c 'cat file.txt' < list"}
+{"cmd": "xargs az sql server firewall-rule delete --name myrule --server myserver -g mygroup < list"}
+{"cmd": "xargs > tmp/output.log < list"}
+{"cmd": "xargs xargs -e STOP head < list"}
+{"cmd": "xargs gh secret list --org myorg < list"}
+{"cmd": "xargs docker-compose exec web bash < list"}
+{"cmd": "xargs gh codespace list --limit 50 < list"}
+{"cmd": "xargs tar cvf archive.tar file.txt < list"}
+{"cmd": "xargs aws ssm list-document-versions --name mydoc < list"}
+{"cmd": "xargs echo $(whoami) < list"}
+{"cmd": "xargs psql -f script.sql mydb < list"}
+{"cmd": "xargs brew log -1 python < list"}
+{"cmd": "xargs TO '' < list"}
+{"cmd": "xargs find . ! -name '*.pyc' < list"}
+{"cmd": "xargs fzf --no-color < list"}
+{"cmd": "xargs aws cloudformation delete-stack --stack-name mystack < list"}
+{"cmd": "xargs curl --data 'data' https://example.com < list"}
+{"cmd": "xargs tar xvf archive.tar < list"}
+{"cmd": "xargs az keyvault key get-versions --name mykey --vault-name myvault < list"}
+{"cmd": "xargs xargs -d '\\n' rm < list"}
+{"cmd": "xargs aws kinesis describe-stream-summary --stream-name mystream < list"}
+{"cmd": "xargs gh codespace create < list"}
+{"cmd": "xargs fzf --header-border < list"}
+{"cmd": "xargs sysctl -a < list"}
+{"cmd": "xargs dscl . -diff /Users/alice /Users/bob < list"}
+{"cmd": "xargs openssl rand -hex 32 < list"}
+{"cmd": "xargs docker compose logs web < list"}
+{"cmd": "xargs ip maddr show < list"}
+{"cmd": "xargs find . -mtime +30 -delete < list"}
+{"cmd": "xargs cargo bench benchname < list"}
+{"cmd": "xargs git log --patch < list"}
+{"cmd": "xargs security remove-trusted-cert cert.pem < list"}
+{"cmd": "xargs gh gist view abc123 --raw < list"}
+{"cmd": "xargs ip route replace default via 192.168.1.1 < list"}
+{"cmd": "xargs gh run list --status completed < list"}
+{"cmd": "xargs isort src/ < list"}
+{"cmd": "xargs fzf -x < list"}
+{"cmd": "xargs az policy state summarize --resource-group mygroup < list"}
+{"cmd": "xargs fd -t f | xargs head -5 < list"}
+{"cmd": "xargs uv -h < list"}
+{"cmd": "xargs pip install git+https://github.com/user/repo.git < list"}
+{"cmd": "xargs terraform plan --help < list"}
+{"cmd": "xargs kubectl get secrets < list"}
+{"cmd": "xargs gh repo create --private < list"}
+{"cmd": "xargs git log main..feature < list"}
+{"cmd": "xargs 7zr x archive.7z < list"}
+{"cmd": "xargs gh search issues --state open < list"}
+{"cmd": "xargs spctl --reset-default < list"}
+{"cmd": "xargs duckdb -readonly data.db '.shell touch tmp/out' < list"}
+{"cmd": "xargs ?cwd=relative/path < list"}
+{"cmd": "xargs kubectl exec -it pod -c container -- ls /app < list"}
+{"cmd": "xargs gh issue delete 123 < list"}
+{"cmd": "xargs python -c 'import shutil; shutil.rmtree('/tmp')' < list"}
+{"cmd": "xargs kubectl get deployments < list"}
+{"cmd": "xargs git shortlog --summary --numbered < list"}
+{"cmd": "xargs git push -u origin feature < list"}
+{"cmd": "xargs brew list -t < list"}
+{"cmd": "xargs az appservice plan list --resource-group mygroup < list"}
+{"cmd": "xargs python3 -c 'import os; os.system(\"ls\")' < list"}
+{"cmd": "xargs brew outdated --json < list"}
+{"cmd": "xargs gh project edit 1 < list"}
+{"cmd": "xargs docker buildx create < list"}
+{"cmd": "xargs gzip --list file.gz < list"}
+{"cmd": "xargs aws logs get-log-events --log-group-name mygroup --log-stream-name mystream < list"}
+{"cmd": "xargs terraform --help < list"}
+{"cmd": "xargs aws logs filter-log-events --log-group-name mygroup --filter-pattern ERROR < list"}
+{"cmd": "xargs aws route53 get-hosted-zone-count < list"}
+{"cmd": "xargs yq --inplace '.key = \"value\"' file.yaml < list"}
+{"cmd": "xargs openssl x509 -noout -dates -in cert.pem < list"}
+{"cmd": "xargs gh repo unarchive owner/repo < list"}
+{"cmd": "xargs curl --doh-url https://dns.google/dns-query https://example.com < list"}
+{"cmd": "xargs podman rmi myimage < list"}
+{"cmd": "xargs find . -uid 1000 < list"}
+{"cmd": "xargs sample 1234 < list"}
+{"cmd": "xargs gh run view < list"}
+{"cmd": "xargs git cherry -v main feature < list"}
+{"cmd": "xargs ./unknown-script.py < list"}
+{"cmd": "xargs time -p ls < list"}
+{"cmd": "xargs cdk deploy --hotswap < list"}
+{"cmd": "xargs ; DELETE FROM access_mp2 < list"}
+{"cmd": "xargs coproc rm -rf / < list"}
+{"cmd": "xargs az webapp list < list"}
+{"cmd": "xargs brew desc --name python < list"}
+{"cmd": "find . -exec pip help install \\;"}
+{"cmd": "find . -exec tar -xf archive.tar -C /path \\;"}
+{"cmd": "find . -exec networksetup -deleteVLAN MyVLAN en0 100 \\;"}
+{"cmd": "find . -exec import math; print(math.pi) \\;"}
+{"cmd": "find . -exec ls $(pwd) $(echo /tmp) \\;"}
+{"cmd": "find . -exec defaults find keyword \\;"}
+{"cmd": "find . -exec find . -type d -empty \\;"}
+{"cmd": "find . -exec bash -o pipefail -c 'git log' \\;"}
+{"cmd": "find . -exec auth0 roles show rol_12345 \\;"}
+{"cmd": "find . -exec brew migrate --dry-run python \\;"}
+{"cmd": "find . -exec brew leaves -p \\;"}
+{"cmd": "find . -exec ruff check --select E501 \\;"}
+{"cmd": "find . -exec gh release download v1.0.0 \\;"}
+{"cmd": "find . -exec az storage container set-permission --name mycontainer --account-name myaccount --public-access blob \\;"}
+{"cmd": "find . -exec xattr -w com.apple.quarantine 0 file.txt \\;"}
+{"cmd": "find . -exec awk '{print ($1 > 0 ? \"positive\" : \"non-positive\")}' file.txt \\;"}
+{"cmd": "find . -exec echo a=b \\;"}
+{"cmd": "find . -exec curl --noproxy '*' https://example.com \\;"}
+{"cmd": "find . -exec auth0 roles permissions add rol_12345 \\;"}
+{"cmd": "find . -exec codex \\;"}
+{"cmd": "find . -exec brew upgrade -g \\;"}
+{"cmd": "find . -exec gh label create bug \\;"}
+{"cmd": "find . -exec aws lambda get-function-concurrency --function-name myfunc \\;"}
+{"cmd": "find . -exec git stash apply stash@{1} \\;"}
+{"cmd": "find . -exec rtk gain --history \\;"}
+{"cmd": "find . -exec az storage account create --name newaccount -g mygroup --location eastus --sku Standard_LRS \\;"}
+{"cmd": "find . -exec python /tmp/pytest-of-root/pytest-3/popen-gw0/test_commands_blocked0/commands_dangerous.py \\;"}
+{"cmd": "find . -exec wget -q --spider https://example.com \\;"}
+{"cmd": "find . -exec podman system df \\;"}
+{"cmd": "find . -exec git cat-file -p HEAD \\;"}
+{"cmd": "find . -exec kubectl certificate approve csr-name \\;"}
+{"cmd": "find . -exec sed --file=script.sed file.txt \\;"}
+{"cmd": "find . -exec 3> \\;"}
+{"cmd": "find . -exec brew cleanup --prune=all \\;"}
+{"cmd": "find . -exec gh workflow list --all \\;"}
+{"cmd": "find . -exec git format-patch -o patches/ HEAD~5 \\;"}
+{"cmd": "find . -exec free -h \\;"}
+{"cmd": "find . -exec aws s3api get-bucket-lifecycle-configuration --bucket mybucket \\;"}
+{"cmd": "find . -exec aws athena create-work-group --name newworkgroup \\;"}
+{"cmd": "find . -exec az network private-dns zone show --name myprivatedns -g mygroup \\;"}
+{"cmd": "find . -exec uv sync --frozen \\;"}
+{"cmd": "find . -exec git ls-tree HEAD \\;"}
+{"cmd": "find . -exec openssl ecparam -genkey -name prime256v1 -out key.pem \\;"}
+{"cmd": "find . -exec helm inspect all nginx/nginx \\;"}
+{"cmd": "find . -exec pip3 check \\;"}
+{"cmd": "find . -exec az network dns record-set a list --zone-name mydomain.com -g mygroup \\;"}
+{"cmd": "find . -exec sample -fullPaths 1234 \\;"}
+{"cmd": "find . -exec az webapp deployment list-publishing-credentials --name myapp -g mygroup \\;"}
+{"cmd": "find . -exec tar --create -f archive.tar file.txt \\;"}
+{"cmd": "find . -exec open -R file.txt \\;"}
+{"cmd": "find . -exec sort -h file.txt \\;"}
+{"cmd": "find . -exec az resource show --ids /subscriptions/.../resource \\;"}
+{"cmd": "find . -exec unzip -l foo.zip bar.zip \\;"}
+{"cmd": "find . -exec curl --ipv4 https://example.com \\;"}
+{"cmd": "find . -exec diskutil listFilesystems -plist \\;"}
+{"cmd": "find . -exec awk '{print >> (\"log_\" NR)}' file.txt \\;"}
+{"cmd": "find . -exec kubectl config use-context production \\;"}
+{"cmd": "find . -exec docker restart mycontainer \\;"}
+{"cmd": "find . -exec dscl . list /Users \\;"}
+{"cmd": "find . -exec kubectl debug nginx --image=busybox \\;"}
+{"cmd": "find . -exec docker stats --no-stream \\;"}
+{"cmd": "find . -exec sort -i file.txt \\;"}
+{"cmd": "find . -exec az policy assignment list --resource-group mygroup \\;"}
+{"cmd": "find . -exec docker node inspect node1 \\;"}
+{"cmd": "find . -exec python /tmp/pytest-of-root/pytest-3/popen-gw0/test_text_processing_approved0/text_process.py \\;"}
+{"cmd": "find . -exec open https://example.com \\;"}
+{"cmd": "find . -exec az devops project delete --id projectid --organization https://dev.azure.com/myorg --yes \\;"}
+{"cmd": "find . -exec cargo vendor \\;"}
+{"cmd": "find . -exec aws s3api put-bucket-policy --bucket mybucket --policy file://policy.json \\;"}
+{"cmd": "find . -exec aws s3api delete-bucket --bucket mybucket \\;"}
+{"cmd": "find . -exec sqlcmd query 'SELECT 1' --database master \\;"}
+{"cmd": "find . -exec openssl x509 -noout -fingerprint -sha256 -in cert.pem \\;"}
+{"cmd": "find . -exec pnpm info react \\;"}
+{"cmd": "find . -exec yarn unlink \\;"}
+{"cmd": "find . -exec 7zz d archive.7z *.bak \\;"}
+{"cmd": "find . -exec helm install myrelease nginx/nginx --atomic \\;"}
+{"cmd": "find . -exec 7z e archive.7z -o/tmp \\;"}
+{"cmd": "find . -exec SELECT CAST(query('DROP TABLE t') AS VARCHAR) \\;"}
+{"cmd": "find . -exec gh pr unlock 123 \\;"}
+{"cmd": "find . -exec tmutil addexclusion /path/to/exclude \\;"}
+{"cmd": "find . -exec helm inspect values nginx/nginx \\;"}
+{"cmd": "find . -exec npm link lodash \\;"}
+{"cmd": "find . -exec kubectl port-forward svc/nginx 8080:80 \\;"}
+{"cmd": "find . -exec 7zz a -sdel archive.7z file.txt \\;"}
+{"cmd": "find . -exec docker compose -p myproject ps \\;"}
+{"cmd": "find . -exec git grep -i pattern \\;"}
+{"cmd": "find . -exec fzf --highlight-line \\;"}
+{"cmd": "find . -exec brew reinstall python \\;"}
+{"cmd": "find . -exec [opts: word] \\;"}
+{"cmd": "find . -exec COPY (SELECT 1) TO 'tmp/out' (PARTITION_BY (x)) \\;"}
+{"cmd": "if git notes remove; then echo ok; fi"}
+{"cmd": "if ansible-doc -h; then echo ok; fi"}
+{"cmd": "if networksetup -disconnectpppoeservice MyPPPoE; then echo ok; fi"}
+{"cmd": "if psql --file=script.sql; then echo ok; fi"}
+{"cmd": "if gh extension search cli; then echo ok; fi"}
+{"cmd": "if uv cache clean requests; then echo ok; fi"}
+{"cmd": "if az disk list --resource-group mygroup; then echo ok; fi"}
+{"cmd": "if profiles list; then echo ok; fi"}
+{"cmd": "if aws route53 get-traffic-policy --id tp123 --version 1; then echo ok; fi"}
+{"cmd": "if gh codespace jupyter; then echo ok; fi"}
+{"cmd": "if tar --update -f archive.tar file.txt; then echo ok; fi"}
+{"cmd": "if openssl x509 -noout -text; then echo ok; fi"}
+{"cmd": "if security find-identity -p codesigning; then echo ok; fi"}
+{"cmd": "if xargs sh -c 'rm foo'; then echo ok; fi"}
+{"cmd": "if aws logs put-log-events --log-group-name mygroup --log-stream-name mystream --log-events ...; then echo ok; fi"}
+{"cmd": "if import subprocess; subprocess.run(['ls']); then echo ok; fi"}
+{"cmd": "if cargo metadata; then echo ok; fi"}
+{"cmd": "if brew --cache python; then echo ok; fi"}
+{"cmd": "if docker buildx ls; then echo ok; fi"}
+{"cmd": "if docker swarm leave --force; then echo ok; fi"}
+{"cmd": "if docker inspect mycontainer; then echo ok; fi"}
+{"cmd": "if gh repo set-default owner/repo; then echo ok; fi"}
+{"cmd": "if declare -a arr=(a b); then echo ok; fi"}
+{"cmd": "if az aks create --name newcluster -g mygroup --node-count 3 --node-vm-size Standard_DS2_v2; then echo ok; fi"}
+{"cmd": "if mdimport /path/to/directory; then echo ok; fi"}
+{"cmd": "if brew search --closed python; then echo ok; fi"}
+{"cmd": "if git reflog show HEAD; then echo ok; fi"}
+{"cmd": "if ansible-vault decrypt secrets.yml; then echo ok; fi"}
+{"cmd": "if duckdb mydb.db -c 'SELECT * FROM users'; then echo ok; fi"}
+{"cmd": "if git ls-files -z | xargs -0 head -1; then echo ok; fi"}
+{"cmd": "if function g { ls; }; then echo ok; fi"}
+{"cmd": "if tmutil associatedisk /Volumes/Mount /path/to/backup; then echo ok; fi"}
+{"cmd": "if find . -fprint0 /tmp/output.txt; then echo ok; fi"}
+{"cmd": "if duckdb -readonly data.db \"SELECT '$@'\"; then echo ok; fi"}
+{"cmd": "if npm bugs express; then echo ok; fi"}
+{"cmd": "if aws sqs add-permission --queue-url https://sqs... --label perm --aws-account-ids 123 --actions SendMessage; then echo ok; fi"}
+{"cmd": "if kubectl get pods -o jsonpath='{.items[*].metadata.name}'; then echo ok; fi"}
+{"cmd": "if help cd; then echo ok; fi"}
+{"cmd": "if gh codespace code; then echo ok; fi"}
+{"cmd": "if auth0 apps delete app_12345; then echo ok; fi"}
+{"cmd": "if git mv path/to/file path/to/destination; then echo ok; fi"}
+{"cmd": "if git push origin main; then echo ok; fi"}
+{"cmd": "if fzf --tail=1000; then echo ok; fi"}
+{"cmd": "if auth0 --tenant mytenant apps list; then echo ok; fi"}
+{"cmd": "if ip link set eth0 promisc on; then echo ok; fi"}
+{"cmd": "if yq '.key'; then echo ok; fi"}
+{"cmd": "if kubectl api-resources; then echo ok; fi"}
+{"cmd": "if ip -br addr; then echo ok; fi"}
+{"cmd": "if ip netns exec myns ip addr; then echo ok; fi"}
+{"cmd": "if terraform version -json; then echo ok; fi"}
+{"cmd": "if for (( i=0; i<10; i+=$(rm foo) )); do echo $i; done; then echo ok; fi"}
+{"cmd": "if black --target-version py39 .; then echo ok; fi"}
+{"cmd": "if ls && pwd && whoami; then echo ok; fi"}
+{"cmd": "if az cognitiveservices account deployment create --name myaccount --resource-group rg; then echo ok; fi"}
+{"cmd": "if packer; then echo ok; fi"}
+{"cmd": "if ruff format; then echo ok; fi"}
+{"cmd": "if curl --data 'data' https://example.com; then echo ok; fi"}
+{"cmd": "if unzip -tl archive.zip; then echo ok; fi"}
+{"cmd": "if psql -c 'DELETE FROM users'; then echo ok; fi"}
+{"cmd": "if sqlcmd query -q \"SELECT CAST(a AS INTEGER) INTO outfile FROM t\"; then echo ok; fi"}
+{"cmd": "if iconv --silent -f UTF-8 -t ASCII input.txt; then echo ok; fi"}
+{"cmd": "if mysql -e \"(SELECT 1); .output tmp/out\"; then echo ok; fi"}
+{"cmd": "if uv run --with requests python script.py; then echo ok; fi"}
+{"cmd": "if git rerere; then echo ok; fi"}
+{"cmd": "if tar -t -f archive.tar; then echo ok; fi"}
+{"cmd": "if az ml workspace create --name myws --resource-group rg; then echo ok; fi"}
+{"cmd": "if sqlcmd query -q \"SELECT CAST(a AS INTEGER) FROM t; .output tmp/out\"; then echo ok; fi"}
+{"cmd": "if ip stats show group offload; then echo ok; fi"}
+{"cmd": "if binhex --help; then echo ok; fi"}
+{"cmd": "if aws athena start-query-execution --query-string 'CALL some_procedure()'; then echo ok; fi"}
+{"cmd": "if xargs -s 1024 cat; then echo ok; fi"}
+{"cmd": "if prompt; then echo ok; fi"}
+{"cmd": "if git sparse-checkout list; then echo ok; fi"}
+{"cmd": "if npm i --global create-react-app; then echo ok; fi"}
+{"cmd": "if sed -i '' 's/foo/bar/' file.txt; then echo ok; fi"}
+{"cmd": "if 7zz x archive.7z; then echo ok; fi"}
+{"cmd": "if security set-keychain-settings keychain.keychain; then echo ok; fi"}
+{"cmd": "if python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dangerous_import_socket_b0/dangerous_socket.py; then echo ok; fi"}
+{"cmd": "if aws route53 get-hosted-zone-count; then echo ok; fi"}
+{"cmd": "if auth0 actions deploy; then echo ok; fi"}
+{"cmd": "if aws ec2 describe-addresses; then echo ok; fi"}
+{"cmd": "if yarn remove express; then echo ok; fi"}
+{"cmd": "if az lock list; then echo ok; fi"}
+{"cmd": "if sort -n -r -u file.txt; then echo ok; fi"}
+{"cmd": "if fzf --header-first; then echo ok; fi"}
+{"cmd": "if az container exec --name mycontainer -g mygroup --exec-command /bin/bash; then echo ok; fi"}
+{"cmd": "if packer build -debug template.json; then echo ok; fi"}
+{"cmd": "if TO 'tmp/*.csv'; then echo ok; fi"}
+{"cmd": "if find . -fprint /tmp/output.txt; then echo ok; fi"}
+{"cmd": "if cdk notices; then echo ok; fi"}
+{"cmd": "while cargo build --all-targets; do sleep 1; done"}
+{"cmd": "while curl --ipv4 https://example.com; do sleep 1; done"}
+{"cmd": "while git maintenance run; do sleep 1; done"}
+{"cmd": "while gcloud components list; do sleep 1; done"}
+{"cmd": "while test; do sleep 1; done"}
+{"cmd": "while aws ec2 describe-network-interfaces; do sleep 1; done"}
+{"cmd": "while docker image pull nginx; do sleep 1; done"}
+{"cmd": "while (ls) > $(rm foo); do sleep 1; done"}
+{"cmd": "while duckdb -safe mydb.db 'DROP TABLE users'; do sleep 1; done"}
+{"cmd": "while pnpm audit; do sleep 1; done"}
+{"cmd": "while fzf --bind='ctrl-p:put(text)'; do sleep 1; done"}
+{"cmd": "while cat <(ls) >(rm x); do sleep 1; done"}
+{"cmd": "while fd --exclude '*.pyc' pattern; do sleep 1; done"}
+{"cmd": "while cargo login --registry crates-io; do sleep 1; done"}
+{"cmd": "while 3>>; do sleep 1; done"}
+{"cmd": "while psql -c 'SELECT 1; SELECT 2'; do sleep 1; done"}
+{"cmd": "while npm access revoke myorg:myteam lodash; do sleep 1; done"}
+{"cmd": "while docker context use mycontext; do sleep 1; done"}
+{"cmd": "while kubectl certificate approve csr-name; do sleep 1; done"}
+{"cmd": "while curl --ntlm https://example.com; do sleep 1; done"}
+{"cmd": "while profiles status; do sleep 1; done"}
+{"cmd": "while psql -c 'VACUUM'; do sleep 1; done"}
+{"cmd": "while caffeinate -u; do sleep 1; done"}
+{"cmd": "while SELECT writefile('x','y'); do sleep 1; done"}
+{"cmd": "while curl --request HEAD https://example.com; do sleep 1; done"}
+{"cmd": "while gcloud compute instances; do sleep 1; done"}
+{"cmd": "while aws ec2 describe-instances --filters Name=tag:Name,Values=myserver; do sleep 1; done"}
+{"cmd": "while gcloud sql backups list --instance=my-instance; do sleep 1; done"}
+{"cmd": "while aws iam list-policies --scope Local; do sleep 1; done"}
+{"cmd": "while echo $(; do sleep 1; done"}
+{"cmd": "while mysql -B -e 'SELECT 1'; do sleep 1; done"}
+{"cmd": "while sqlite3 -json mydb.db 'SELECT * FROM users'; do sleep 1; done"}
+{"cmd": "while duckdb -readonly data.db \"SELECT list_sum([1]); COPY (SELECT 1) TO 'elsewhere/out'\"; do sleep 1; done"}
+{"cmd": "while gh pr ready 123; do sleep 1; done"}
+{"cmd": "while gcloud iap web set-iam-policy policy.json --resource-type=backend-services; do sleep 1; done"}
+{"cmd": "while fzf --border=sharp; do sleep 1; done"}
+{"cmd": "while pip lock -o pylock.toml; do sleep 1; done"}
+{"cmd": "while helm un myrelease; do sleep 1; done"}
+{"cmd": "while gcloud beta run services describe myservice; do sleep 1; done"}
+{"cmd": "while sed 's/foo/bar/w /dev/stdout' input.txt; do sleep 1; done"}
+{"cmd": "while tar -u -f archive.tar file.txt; do sleep 1; done"}
+{"cmd": "while gh pr checks --required; do sleep 1; done"}
+{"cmd": "while INTEGER; do sleep 1; done"}
+{"cmd": "while kubectl rollout status deployment/nginx; do sleep 1; done"}
+{"cmd": "while ansible all -b -m apt -a 'name=nginx state=present'; do sleep 1; done"}
+{"cmd": "while cargo init --lib; do sleep 1; done"}
+{"cmd": "while xargs -J % cat %; do sleep 1; done"}
+{"cmd": "while git apply patch.diff; do sleep 1; done"}
+{"cmd": "while echo `; do sleep 1; done"}
+{"cmd": "while gcloud beta compute instances list; do sleep 1; done"}
+{"cmd": "while find . -name 'target' -quit; do sleep 1; done"}
+{"cmd": "while pip install --dry-run requests; do sleep 1; done"}
+{"cmd": "while tar -xf archive.tar --to-command cat; do sleep 1; done"}
+{"cmd": "while npm run build; do sleep 1; done"}
+{"cmd": "while npm exec jest; do sleep 1; done"}
+{"cmd": "while . script.sh arg1; do sleep 1; done"}
+{"cmd": "while xargs -I {} sh -c 'rm {}'; do sleep 1; done"}
+{"cmd": "while az sshkey delete -g mygroup -n mykey; do sleep 1; done"}
+{"cmd": "while xargs chgrp wheel; do sleep 1; done"}
+{"cmd": "while gunzip file1.gz file2.gz; do sleep 1; done"}
+{"cmd": "while packer init .; do sleep 1; done"}
+{"cmd": "while auth0 domains create; do sleep 1; done"}
+{"cmd": "while docker volume create myvol; do sleep 1; done"}
+{"cmd": "while cargo new --lib mylib; do sleep 1; done"}
+{"cmd": "while git status --help; do sleep 1; done"}
+{"cmd": "while sort file.txt; do sleep 1; done"}
+{"cmd": "while awk '{print $NF}' file.txt; do sleep 1; done"}
+{"cmd": "while networksetup -disconnectpppoeservice MyPPPoE; do sleep 1; done"}
+{"cmd": "while find . /tmp /var; do sleep 1; done"}
+{"cmd": "while ls a\\ b; do sleep 1; done"}
+{"cmd": "while git remote show origin; do sleep 1; done"}
+{"cmd": "while uv pip install foo; do sleep 1; done"}
+{"cmd": "while launchctl stop my.service; do sleep 1; done"}
+{"cmd": "while ./unknown-script.py; do sleep 1; done"}
+{"cmd": "while npm outdated --long; do sleep 1; done"}
+{"cmd": "while psql -c \"SELECT '192.168.1.5'::INET <<= '192.168.1.0/24'::INET\"; do sleep 1; done"}
+{"cmd": "while brew services stop postgresql; do sleep 1; done"}
+{"cmd": "while ip neigh replace 192.168.1.1 lladdr 00:11:22:33:44:66 dev eth0; do sleep 1; done"}
+{"cmd": "while sort -m file1.txt file2.txt; do sleep 1; done"}
+{"cmd": "while gh extension upgrade ext-name; do sleep 1; done"}
+{"cmd": "while git clean --force; do sleep 1; done"}
+{"cmd": "while curl -fsSL https://example.com/install.sh; do sleep 1; done"}
+{"cmd": "while mysql -e 'INSERT INTO users VALUES (1)'; do sleep 1; done"}
+{"cmd": "while auth0 apps open app_12345; do sleep 1; done"}
+{"cmd": "while git bisect start; do sleep 1; done"}
+{"cmd": "while security lock-keychain; do sleep 1; done"}
+{"cmd": "while rtk version; do sleep 1; done"}
+{"cmd": "while docker node inspect node1; do sleep 1; done"}
+{"cmd": "while launchctl managerpid; do sleep 1; done"}
+{"cmd": "while git diff; do sleep 1; done"}
+{"cmd": "for f in *; do pip wheel requests; done"}
+{"cmd": "for f in *; do brew remove python; done"}
+{"cmd": "for f in *; do find . -name 'README*'; done"}
+{"cmd": "for f in *; do xargs --max-args=10 grep pattern; done"}
+{"cmd": "for f in *; do aws s3 ls; done"}
+{"cmd": "for f in *; do podman top mycontainer; done"}
+{"cmd": "for f in *; do ip netconf show; done"}
+{"cmd": "for f in *; do hdiutil compact sparse.sparseimage; done"}
+{"cmd": "for f in *; do kubectl exec -it nginx -c container -- sh; done"}
+{"cmd": "for f in *; do unzip -tl archive.zip; done"}
+{"cmd": "for f in *; do ?decision=maybe; done"}
+{"cmd": "for f in *; do ansible-config init --disabled; done"}
+{"cmd": "for f in *; do az acr update -n myregistry --admin-enabled true; done"}
+{"cmd": "for f in *; do find . -size -1M; done"}
+{"cmd": "for f in *; do psql -l; done"}
+{"cmd": "for f in *; do brew autoremove; done"}
+{"cmd": "for f in *; do timeout 5 kubectl get pods; done"}
+{"cmd": "for f in *; do auth0 email templates update; done"}
+{"cmd": "for f in *; do duckdb -readonly work.db \"SELECT \"'1'\"\"; done"}
+{"cmd": "for f in *; do kubectl --context=foo get managedcertificate ci-api -o jsonpath='{}'; done"}
+{"cmd": "for f in *; do docker run ubuntu; done"}
+{"cmd": "for f in *; do aws athena get-query-runtime-statistics --query-execution-id abc123; done"}
+{"cmd": "for f in *; do sqlite3 data.db \"SELECT CAST(a AS INTEGER) FROM t; DROP TABLE t\"; done"}
+{"cmd": "for f in *; do xattr -l file.txt; done"}
+{"cmd": "for f in *; do terraform plan --help; done"}
+{"cmd": "for f in *; do aws ssm describe-effective-patches-for-patch-baseline --baseline-id pb-123; done"}
+{"cmd": "for f in *; do npm pkg fix; done"}
+{"cmd": "for f in *; do psql --command='SELECT * FROM users'; done"}
+{"cmd": "for f in *; do xargs git log --oneline; done"}
+{"cmd": "for f in *; do git add .; done"}
+{"cmd": "for f in *; do aws athena start-query-execution --query-string 'TRUNCATE TABLE foo'; done"}
+{"cmd": "for f in *; do auth0 quickstarts list; done"}
+{"cmd": "for f in *; do find . -maxdepth 2 -mindepth 1; done"}
+{"cmd": "for f in *; do brew install --cask firefox; done"}
+{"cmd": "for f in *; do -H \"Host: demo\" http://10.1.2.3/; done"}
+{"cmd": "for f in *; do az container delete --name mycontainer -g mygroup --yes; done"}
+{"cmd": "for f in *; do python --version-info; done"}
+{"cmd": "for f in *; do duckdb -s 'INSERT INTO t VALUES (1)'; done"}
+{"cmd": "for f in *; do git status --help; done"}
+{"cmd": "for f in *; do xargs -0; done"}
+{"cmd": "for f in *; do duckdb -readonly data.db \"WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS INTEGER) FROM x\"; done"}
+{"cmd": "for f in *; do psql -c \"(SELECT 1); .output tmp/out\"; done"}
+{"cmd": "for f in *; do git filter-branch (rewrite history); done"}
+{"cmd": "for f in *; do python -VV; done"}
+{"cmd": "for f in *; do brew services cleanup; done"}
+{"cmd": "for f in *; do gcloud compute snapshots list; done"}
+{"cmd": "for f in *; do aws athena list-named-queries; done"}
+{"cmd": "for f in *; do brew services run postgresql; done"}
+{"cmd": "for f in *; do gh ruleset list --limit 50; done"}
+{"cmd": "for f in *; do WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS VARCHAR) FROM x; done"}
+{"cmd": "for f in *; do brew audit --new python; done"}
+{"cmd": "for f in *; do binhex encode -o output.hqx file.txt; done"}
+{"cmd": "for f in *; do lipo -replace x86_64 new_x86.o universal.o -output updated.o; done"}
+{"cmd": "for f in *; do pip search requests; done"}
+{"cmd": "for f in *; do echo $(rm -rf /); done"}
+{"cmd": "for f in *; do duckdb -readonly work.db \"SELECT * FROM access WHERE uri LIKE '%export%'\"; done"}
+{"cmd": "for f in *; do profiles validate -path /path/to/profile.mobileconfig; done"}
+{"cmd": "for f in *; do aws sns delete-topic --topic-arn arn; done"}
+{"cmd": "for f in *; do caffeinate -i echo 'a;zonk'; done"}
+{"cmd": "for f in *; do ip netns exec myns ip addr; done"}
+{"cmd": "for f in *; do curl --ntlm https://example.com; done"}
+{"cmd": "for f in *; do fzf --no-sort; done"}
+{"cmd": "for f in *; do env sudo rm file.txt; done"}
+{"cmd": "for f in *; do helm repo add bitnami https://charts.bitnami.com/bitnami; done"}
+{"cmd": "for f in *; do aws ssm get-ops-item --ops-item-id oi-123; done"}
+{"cmd": "for f in *; do aws sns create-topic --name newtopic; done"}
+{"cmd": "for f in *; do docker-compose top; done"}
+{"cmd": "for f in *; do ip link set eth0 promisc on; done"}
+{"cmd": "for f in *; do uv lock --locked; done"}
+{"cmd": "for f in *; do say -f input.txt; done"}
+{"cmd": "for f in *; do gh issue delete 123; done"}
+{"cmd": "for f in *; do fd -x rm; done"}
+{"cmd": "for f in *; do ip neighbor; done"}
+{"cmd": "for f in *; do cargo add --git https://github.com/serde-rs/serde; done"}
+{"cmd": "for f in *; do ip tuntap show; done"}
+{"cmd": "for f in *; do kubectl describe $(echo \"pod nginx\"); done"}
+{"cmd": "for f in *; do networksetup -duplicatenetworkservice Wi-Fi Wi-Fi2; done"}
+{"cmd": "for f in *; do aws s3api get-object-acl --bucket mybucket --key mykey; done"}
+{"cmd": "for f in *; do ansible-lint --parseable playbook.yml; done"}
+{"cmd": "for f in *; do gh pr update-branch 123; done"}
+{"cmd": "for f in *; do az storage blob delete-batch --source mycontainer --account-name myaccount --pattern '*.log'; done"}
+{"cmd": "for f in *; do prometheus -h; done"}
+{"cmd": "for f in *; do uv tool uninstall ruff; done"}
+{"cmd": "for f in *; do gcloud storage rm gs://my-bucket/my-object; done"}
+{"cmd": "for f in *; do ansible-playbook playbook.yml --list-tags; done"}
+{"cmd": "for f in *; do cdk docs; done"}
+{"cmd": "for f in *; do ls # comment; done"}
+{"cmd": "for f in *; do az eventhubs namespace list; done"}
+{"cmd": "for f in *; do duckdb tmp/$DATABASE 'CREATE TABLE results AS SELECT 1'; done"}
+{"cmd": "for f in *; do curl -D headers.txt https://example.com; done"}
+{"cmd": "[[ -n $(docker node ps node1) ]]"}
+{"cmd": "[[ -n $(find . -name '*.py' -print -exec cat {} \\;) ]]"}
+{"cmd": "[[ -n $(docker rm -f mycontainer) ]]"}
+{"cmd": "[[ -n $(git cherry-pick --continue) ]]"}
+{"cmd": "[[ -n $(iconv -s -f UTF-8 -t ASCII input.txt) ]]"}
+{"cmd": "[[ -n $(fd --full-path pattern) ]]"}
+{"cmd": "[[ -n $(cargo tree --duplicates) ]]"}
+{"cmd": "[[ -n $(hdiutil pmap image.dmg) ]]"}
+{"cmd": "[[ -n $(ifconfig eth0 broadcast 192.168.1.255) ]]"}
+{"cmd": "[[ -n $(awk '{if ($1 > 10) print}' file.txt) ]]"}
+{"cmd": "[[ -n $(sqlite3 -safe mydb.db 'DROP TABLE users') ]]"}
+{"cmd": "[[ -n $(git mv old.txt new.txt) ]]"}
+{"cmd": "[[ -n $(sqlite3 -init script.sql mydb.db) ]]"}
+{"cmd": "[[ -n $(gh run rerun 12345 --job job-id) ]]"}
+{"cmd": "[[ -n $(-H '=demo') ]]"}
+{"cmd": "[[ -n $(aws cloudformation update-stack --stack-name mystack --template-body file://template.yaml) ]]"}
+{"cmd": "[[ -n $(brew leaves -v) ]]"}
+{"cmd": "[[ -n $(fzf --bind=focus:transform-header:echo\\ focused) ]]"}
+{"cmd": "[[ -n $(gh gist view abc123 --files) ]]"}
+{"cmd": "[[ -n $(gh gpg-key add key.pub) ]]"}
+{"cmd": "[[ -n $(ip addr del 192.168.1.100/24 dev eth0) ]]"}
+{"cmd": "[[ -n $(awk 'NR == 1 || /pattern/' file.txt) ]]"}
+{"cmd": "[[ -n $(bash -c 'touch newfile') ]]"}
+{"cmd": "[[ -n $(xargs -d '\\n' wc -l) ]]"}
+{"cmd": "[[ -n $(gh issue list -R cli/cli) ]]"}
+{"cmd": "[[ -n $(podman search nginx) ]]"}
+{"cmd": "[[ -n $(gcloud compute backend-services describe k8s-be --global --project foo) ]]"}
+{"cmd": "[[ -n $(fzf --query=foo --select-1 --exit-0) ]]"}
+{"cmd": "[[ -n $(sleep 1m) ]]"}
+{"cmd": "[[ -n $(tar -c -f archive.tar file.txt) ]]"}
+{"cmd": "[[ -n $(pip install --editable .) ]]"}
+{"cmd": "[[ -n $(type ls) ]]"}
+{"cmd": "[[ -n $(gh project view 1 --owner myorg) ]]"}
+{"cmd": "[[ -n $(spctl --status) ]]"}
+{"cmd": "[[ -n $(fzf --style=minimal) ]]"}
+{"cmd": "[[ -n $(aws sns list-origination-numbers) ]]"}
+{"cmd": "[[ -n $(journalctl _SYSTEMD_UNIT=sshd.service) ]]"}
+{"cmd": "[[ -n $(git add --all) ]]"}
+{"cmd": "[[ -n $(gh api --help) ]]"}
+{"cmd": "[[ -n $(helm get metadata myrelease) ]]"}
+{"cmd": "[[ -n $(git lfs untrack '*.psd') ]]"}
+{"cmd": "[[ -n $(ip -6 addr) ]]"}
+{"cmd": "[[ -n $(cargo +nightly build) ]]"}
+{"cmd": "[[ -n $(aws iam delete-role --role-name myrole) ]]"}
+{"cmd": "[[ -n $(tar xvf archive.tar) ]]"}
+{"cmd": "[[ -n $(brew services restart postgresql) ]]"}
+{"cmd": "[[ -n $(prometheus --storage.tsdb.retention.time=15d) ]]"}
+{"cmd": "[[ -n $(find . -name 'target' -quit) ]]"}
+{"cmd": "[[ -n $(ansible-lint playbook.yml roles/) ]]"}
+{"cmd": "[[ -n $(az disk update -g mygroup -n mydisk --size-gb 200) ]]"}
+{"cmd": "[[ -n $(env FOO=bar BAZ=qux rm file.txt) ]]"}
+{"cmd": "[[ -n $(uv python uninstall 3.12) ]]"}
+{"cmd": "[[ -n $(time nice git status) ]]"}
+{"cmd": "[[ -n $(az cosmosdb sql database show --name mydb --account-name myaccount -g mygroup) ]]"}
+{"cmd": "[[ -n $(cargo locate-project --message-format plain) ]]"}
+{"cmd": "[[ -n $(b) ]]"}
+{"cmd": "[[ -n $(execute) ]]"}
+{"cmd": "[[ -n $(codesign --remove-signature /path/to/app) ]]"}
+{"cmd": "[[ -n $(gcloud logging logs list --limit=100) ]]"}
+{"cmd": "[[ -n $(aws route53 get-health-check --health-check-id hc123) ]]"}
+{"cmd": "[[ -n $(aws cloudwatch list-metrics) ]]"}
+{"cmd": "[[ -n $(sort --version-sort file.txt) ]]"}
+{"cmd": "[[ -n $(aws athena create-capacity-reservation --name myres --target-dpus 24) ]]"}
+{"cmd": "[[ -n $(env -i rm -rf /) ]]"}
+{"cmd": "[[ -n $(>&) ]]"}
+{"cmd": "[[ -n $(brew uses --eval-all python) ]]"}
+{"cmd": "[[ -n $(aws --profile prod --region us-west-2 lambda list-functions) ]]"}
+{"cmd": "[[ -n $(gh extension upgrade --all) ]]"}
+{"cmd": "[[ -n $(gh codespace cp file.txt remote:) ]]"}
+{"cmd": "[[ -n $(xargs --process-slot-var=SLOT cat) ]]"}
+{"cmd": "[[ -n $(ls | xargs -I {} stat {}) ]]"}
+{"cmd": "[[ -n $(caffeinate -i echo 'a;zonk') ]]"}
+{"cmd": "[[ -n $(brew upgrade --interactive python) ]]"}
+{"cmd": "[[ -n $(sed -n -i 's/pattern/replacement/p' file.txt) ]]"}
+{"cmd": "[[ -n $(agent\"socket) ]]"}
+{"cmd": "[[ -n $(ruff check --select E501) ]]"}
+{"cmd": "[[ -n $(rtk gain --history) ]]"}
+{"cmd": "[[ -n $(cargo run --release) ]]"}
+{"cmd": "[[ -n $(dig google.com) ]]"}
+{"cmd": "[[ -n $(awk '{print $0}' file.txt) ]]"}
+{"cmd": "[[ -n $(gh config get editor) ]]"}
+{"cmd": "[[ -n $(launchctl config system path /usr/local/bin) ]]"}
+{"cmd": "[[ -n $(ansible-galaxy role --help) ]]"}
+{"cmd": "[[ -n $((SELECT 1)) ]]"}
+{"cmd": "[[ -n $(sed -i -e 's/foo/bar/' -e 's/baz/qux/' file.txt) ]]"}
+{"cmd": "[[ -n $(aws s3api list-multipart-uploads --bucket mybucket) ]]"}
+{"cmd": "[[ -n $(az network public-ip show -g mygroup -n myip) ]]"}
+{"cmd": "[[ -n $(docker container wait mycontainer) ]]"}
+{"cmd": "[[ -n $(gh pr review 123 --request-changes) ]]"}
+{"cmd": "[[ -n $(curl -C - https://example.com/bigfile) ]]"}
+{"cmd": "f() { gh -R owner/repo workflow list; }; f"}
+{"cmd": "f() { set run-on-server-ssh-config; }; f"}
+{"cmd": "f() { fzf --header=Header; }; f"}
+{"cmd": "f() { gcloud secrets versions access 1 --secret=my-secret; }; f"}
+{"cmd": "f() { git mv old.txt new.txt; }; f"}
+{"cmd": "f() { ((SELECT 1)); }; f"}
+{"cmd": "f() { npm profile disable-2fa; }; f"}
+{"cmd": "f() { pkgutil --pkg-info-plist com.apple.pkg.Safari; }; f"}
+{"cmd": "f() { (SELECT 1); DROP TABLE t; }; f"}
+{"cmd": "f() { 7zz --help; }; f"}
+{"cmd": "f() { docker secret inspect mysecret; }; f"}
+{"cmd": "f() { iconv --silent -f UTF-8 -t ASCII input.txt; }; f"}
+{"cmd": "f() { kubectl exec -it foo -- bash; }; f"}
+{"cmd": "f() { brew readall; }; f"}
+{"cmd": "f() { duckdb -readonly data.db \"SELECT 1; \\INSTALL httpfs\"; }; f"}
+{"cmd": "f() { curl --user user:pass https://example.com; }; f"}
+{"cmd": "f() { kubectl config delete-user admin; }; f"}
+{"cmd": "f() { az containerapp show --name myapp --resource-group rg; }; f"}
+{"cmd": "f() { az group delete --name mygroup; }; f"}
+{"cmd": "f() { fzf --scheme=history; }; f"}
+{"cmd": "f() { gawk -V; }; f"}
+{"cmd": "f() { /a/.dippy/x; }; f"}
+{"cmd": "f() { az resource list; }; f"}
+{"cmd": "f() { kubectl cordon node-1; }; f"}
+{"cmd": "f() { ansible-vault create secrets.yml; }; f"}
+{"cmd": "f() { git pull origin main; }; f"}
+{"cmd": "f() { curl -O https://example.com/file.zip; }; f"}
+{"cmd": "f() { wget --background https://example.com/large.iso; }; f"}
+{"cmd": "f() { az aks list --resource-group mygroup; }; f"}
+{"cmd": "f() { curl --max-time 30 https://example.com; }; f"}
+{"cmd": "f() { git grep --count pattern; }; f"}
+{"cmd": "f() { fzf --algo=v1; }; f"}
+{"cmd": "f() { for f in bin/*; do [ -f \"$f\" ] || continue; echo \"$f\"; done; }; f"}
+{"cmd": "f() { qlmanage -t file.pdf; }; f"}
+{"cmd": "f() { helm completion zsh; }; f"}
+{"cmd": "f() { sqlite3 mydb.db 'VACUUM'; }; f"}
+{"cmd": "f() { gh browse 123; }; f"}
+{"cmd": "f() { openssl x509 -in cert.pem -noout -text; }; f"}
+{"cmd": "f() { ssh -p 22 host; }; f"}
+{"cmd": "f() { journalctl --relinquish-var; }; f"}
+{"cmd": "f() { docker rename oldname newname; }; f"}
+{"cmd": "f() { networksetup -setairportnetwork en0 MyNetwork password; }; f"}
+{"cmd": "f() { gh release delete v1.0.0; }; f"}
+{"cmd": "f() { duckdb -readonly work.db \"EXPORT DATABASE '/tmp/backup'\"; }; f"}
+{"cmd": "f() { /a/.dippy; }; f"}
+{"cmd": "f() { aws cognito-idp get-signing-certificate --user-pool-id us-east-1_abc123; }; f"}
+{"cmd": "f() { aws ssm cancel-command --command-id cmd123; }; f"}
+{"cmd": "f() { spctl --disable-status; }; f"}
+{"cmd": "f() { az cognitiveservices model list --location eastus; }; f"}
+{"cmd": "f() { aws iam list-mfa-devices; }; f"}
+{"cmd": "f() { sqlite3 mydb.db 'SELECT * FROM users'; }; f"}
+{"cmd": "f() { env -i FOO=bar BAR=baz ls; }; f"}
+{"cmd": "f() { kubectl get pods -o jsonpath='{.items[*].metadata.name}'; }; f"}
+{"cmd": "f() { aws ec2 help; }; f"}
+{"cmd": "f() { brew outdated --quiet; }; f"}
+{"cmd": "f() { r; }; f"}
+{"cmd": "f() { aws cloudformation validate-template --template-body file://template.yaml; }; f"}
+{"cmd": "f() { kubectl wait --for=condition=Ready pod/nginx; }; f"}
+{"cmd": "f() { aws sqs create-queue --queue-name newqueue; }; f"}
+{"cmd": "f() { brew uses --missing python; }; f"}
+{"cmd": "f() { az ad user create --display-name 'New User' --user-principal-name newuser@example.com --password pass; }; f"}
+{"cmd": "f() { cdk synth --output cdk.out; }; f"}
+{"cmd": "f() { ruff lint src/; }; f"}
+{"cmd": "f() { az webapp log tail -g mygroup -n myapp; }; f"}
+{"cmd": "f() { pip install --ignore-installed requests; }; f"}
+{"cmd": "f() { caffeinate -u -t 3600; }; f"}
+{"cmd": "f() { sips -d dpiWidth image.png; }; f"}
+{"cmd": "f() { az cognitiveservices account deployment delete --name myaccount --resource-group rg; }; f"}
+{"cmd": "f() { az ad group list; }; f"}
+{"cmd": "f() { xargs ln -s; }; f"}
+{"cmd": "f() { fd -s pattern; }; f"}
+{"cmd": "f() { sed ':a;N;$!ba;s/\\n/ /g' file.txt; }; f"}
+{"cmd": "f() { gh run list --json status,conclusion; }; f"}
+{"cmd": "f() { git fetch --prune; }; f"}
+{"cmd": "f() { python-allow-symbol; }; f"}
+{"cmd": "f() { gh run list --branch main; }; f"}
+{"cmd": "f() { sh script.sh; }; f"}
+{"cmd": "f() { aws s3 ls && aws s3 rm foo; }; f"}
+{"cmd": "f() { docker pause mycontainer; }; f"}
+{"cmd": "f() { aws iam list-group-policies --group-name mygroup; }; f"}
+{"cmd": "f() { pip index versions requests --index-url https://test.pypi.org/simple/; }; f"}
+{"cmd": "f() { pip list --include-editable; }; f"}
+{"cmd": "f() { tar -xf archive.tar -C /path; }; f"}
+{"cmd": "f() { python -u -B -O /tmp/pytest-of-root/pytest-3/popen-gw0/test_script_with_multiple_flag0/safe.py; }; f"}
+{"cmd": "f() { aws cloudformation describe-stack-resource --stack-name mystack --logical-resource-id myresource; }; f"}
+{"cmd": "f() { brew --caskroom; }; f"}
+{"cmd": "f() { brew deps --graph python; }; f"}
+{"cmd": "f() { gh issue develop 123; }; f"}
+{"cmd": "f() { kubectl apply -k ./overlays/production; }; f"}
+{"cmd": "f() { gcloud compute backend-services list --project foo; }; f"}
+{"cmd": "cd /tmp && packer -help"}
+{"cmd": "cd /tmp && uv sync --frozen"}
+{"cmd": "cd /tmp && git bisect start HEAD HEAD~10"}
+{"cmd": "cd /tmp && uv run --frozen ls"}
+{"cmd": "cd /tmp && curl --doh-url https://dns.google/dns-query https://example.com"}
+{"cmd": "cd /tmp && docker-compose restart"}
+{"cmd": "cd /tmp && helm lint ./mychart -f values.yaml"}
+{"cmd": "cd /tmp && az devops project list"}
+{"cmd": "cd /tmp && **/.env*"}
+{"cmd": "cd /tmp && pnpm link"}
+{"cmd": "cd /tmp && docker container attach mycontainer"}
+{"cmd": "cd /tmp && gcloud sql databases create my-db --instance=my-instance"}
+{"cmd": "cd /tmp && git difftool HEAD~1"}
+{"cmd": "cd /tmp && brew services restart postgresql"}
+{"cmd": "cd /tmp && isort -d"}
+{"cmd": "cd /tmp && gcloud container images describe gcr.io/my-project/my-image"}
+{"cmd": "cd /tmp && docker exec -w /app -u root nginx pwd"}
+{"cmd": "cd /tmp && duckdb mydb.db 'DETACH DATABASE other'"}
+{"cmd": "cd /tmp && ip route del default"}
+{"cmd": "cd /tmp && entropy"}
+{"cmd": "cd /tmp && brew fetch -f python"}
+{"cmd": "cd /tmp && packer"}
+{"cmd": "cd /tmp && find . -iname '*.TXT'"}
+{"cmd": "cd /tmp && aws cognito-idp list-users --user-pool-id us-east-1_abc123 --filter 'email = \"user@example.com\"'"}
+{"cmd": "cd /tmp && base64 -n file.txt"}
+{"cmd": "cd /tmp && az redis show --name myredis -g mygroup"}
+{"cmd": "cd /tmp && podman rm mycontainer"}
+{"cmd": "cd /tmp && yarn publish"}
+{"cmd": "cd /tmp && coproc NAME { echo hi; }"}
+{"cmd": "cd /tmp && cargo publish --allow-dirty"}
+{"cmd": "cd /tmp && packer fmt -check -diff template.pkr.hcl"}
+{"cmd": "cd /tmp && gh codespace view"}
+{"cmd": "cd /tmp && aws lambda get-function-concurrency --function-name myfunc"}
+{"cmd": "cd /tmp && git config user.name foo"}
+{"cmd": "cd /tmp && xargs -I {} rm {}"}
+{"cmd": "cd /tmp && az containerapp list --resource-group rg"}
+{"cmd": "cd /tmp && docker pull nginx:latest"}
+{"cmd": "cd /tmp && sqlite3 data.db \".shell touch tmp/out\""}
+{"cmd": "cd /tmp && python --version"}
+{"cmd": "cd /tmp && curl --negotiate https://example.com"}
+{"cmd": "cd /tmp && ip mroute show"}
+{"cmd": "cd /tmp && az vm start --name myvm -g mygroup"}
+{"cmd": "cd /tmp && aws logs describe-export-tasks"}
+{"cmd": "cd /tmp && gh repo create --private"}
+{"cmd": "cd /tmp && fzf --gap"}
+{"cmd": "cd /tmp && pip debug --verbose"}
+{"cmd": "cd /tmp && curl --append -T file.txt ftp://example.com"}
+{"cmd": "cd /tmp && awk '{s+=$1} END {print s}' file.txt"}
+{"cmd": "cd /tmp && cdk destroy --all"}
+{"cmd": "cd /tmp && xxd -v"}
+{"cmd": "cd /tmp && duckdb -init script.sql mydb.db"}
+{"cmd": "cd /tmp && brew uses --include-optional python"}
+{"cmd": "cd /tmp && tar -cjf archive.tar.bz2 file.txt"}
+{"cmd": "cd /tmp && curl --head https://example.com"}
+{"cmd": "cd /tmp && cargo test --all-targets"}
+{"cmd": "cd /tmp && cli"}
+{"cmd": "cd /tmp && cdk -h"}
+{"cmd": "cd /tmp && az webapp update -g mygroup -n myapp"}
+{"cmd": "cd /tmp && gh extension exec ext-name"}
+{"cmd": "cd /tmp && az network public-ip list"}
+{"cmd": "cd /tmp && prometheus --version"}
+{"cmd": "cd /tmp && if ls; then echo; elif rm x; then echo; else echo; fi"}
+{"cmd": "cd /tmp && find . -perm -u=x"}
+{"cmd": "cd /tmp && brew deps --include-optional python"}
+{"cmd": "cd /tmp && kubectl autoscale deployment nginx --min=2 --max=10 --cpu-percent=80"}
+{"cmd": "cd /tmp && npm find react"}
+{"cmd": "cd /tmp && wget --spider -T 10 https://example.com"}
+{"cmd": "cd /tmp && curl --key key.pem https://example.com"}
+{"cmd": "cd /tmp && sort -n -o output.txt file.txt"}
+{"cmd": "cd /tmp && helm get values myrelease -n production"}
+{"cmd": "cd /tmp && fzf --highlight-line"}
+{"cmd": "cd /tmp && kubectl config use-context production"}
+{"cmd": "cd /tmp && auth0 actions show act_12345"}
+{"cmd": "cd /tmp && gh run list --json status,conclusion"}
+{"cmd": "cd /tmp && fzf --scheme=default"}
+{"cmd": "cd /tmp && docker secret rm mysecret"}
+{"cmd": "cd /tmp && gh run list -L 50"}
+{"cmd": "cd /tmp && 7zz x -so archive.7z"}
+{"cmd": "cd /tmp && curl --anyauth https://example.com"}
+{"cmd": "cd /tmp && aws cloudformation describe-type --type-name AWS::S3::Bucket"}
+{"cmd": "cd /tmp && gcloud topic configurations"}
+{"cmd": "cd /tmp && terraform init -upgrade"}
+{"cmd": "cd /tmp && aws rds describe-db-cluster-snapshots"}
+{"cmd": "cd /tmp && # only comment"}
+{"cmd": "cd /tmp && helm install myrelease nginx/nginx"}
+{"cmd": "cd /tmp && docker image ls"}
+{"cmd": "cd /tmp && scutil --set ComputerName MyMac"}
+{"cmd": "cd /tmp && a/b"}
+{"cmd": "cd /tmp && source ~/.nvm/nvm.sh"}
+{"cmd": "cd /tmp && fzf --bind='ctrl-e:execute(code {})'"}
+{"cmd": "ssh host gh browse --projects"}
+{"cmd": "ssh host caffeinate -s"}
+{"cmd": "ssh host sort -h file.txt"}
+{"cmd": "ssh host (1 + 1)"}
+{"cmd": "ssh host ansible --version"}
+{"cmd": "ssh host fzf --preview-label=Preview"}
+{"cmd": "ssh host ls {fd}>out"}
+{"cmd": "ssh host decades"}
+{"cmd": "ssh host ssh -p 2222 host rm file.txt"}
+{"cmd": "ssh host npm access set status=public lodash"}
+{"cmd": "ssh host docker node promote node1"}
+{"cmd": "ssh host az cosmosdb update --name myaccount -g mygroup --default-consistency-level Session"}
+{"cmd": "ssh host python -V"}
+{"cmd": "ssh host az deployment group list --resource-group rg"}
+{"cmd": "ssh host gh browse --no-browser"}
+{"cmd": "ssh host gcloud iam roles create my-role --project=my-project --file=role.yaml"}
+{"cmd": "ssh host terraform --version"}
+{"cmd": "ssh host gcloud sql instances describe my-instance"}
+{"cmd": "ssh host az resource list"}
+{"cmd": "ssh host node script.js"}
+{"cmd": "ssh host gh pr comment 123 --body 'LGTM'"}
+{"cmd": "ssh host uv run --quiet cdk diff"}
+{"cmd": "ssh host gh repo view --web"}
+{"cmd": "ssh host helm rollback myrelease 2 -n production"}
+{"cmd": "ssh host aws dynamodb transact-write-items --transact-items file://items.json"}
+{"cmd": "ssh host auth0 --tenant foo.auth0.com apps list"}
+{"cmd": "ssh host az aks get-versions --location eastus"}
+{"cmd": "ssh host gh secret list"}
+{"cmd": "ssh host npm x playwright"}
+{"cmd": "ssh host rm foo && mv bar baz"}
+{"cmd": "ssh host kubectl config set-credentials user --token=token123"}
+{"cmd": "ssh host duckdb -readonly data.db \"SELECT '$((1+2))'\""}
+{"cmd": "ssh host auth0 apis ls"}
+{"cmd": "ssh host cdk bootstrap"}
+{"cmd": "ssh host pip show --files requests"}
+{"cmd": "ssh host find . -type f -exec md5sum {} +"}
+{"cmd": "ssh host docker rm -f mycontainer"}
+{"cmd": "ssh host brew dr"}
+{"cmd": "ssh host curl -Q 'HELP' ftp://example.com"}
+{"cmd": "ssh host aws ssm terminate-session --session-id sess123"}
+{"cmd": "ssh host find . -exec head {} \\;"}
+{"cmd": "ssh host aws athena start-query-execution --query-string 'INSERT INTO foo SELECT * FROM bar'"}
+{"cmd": "ssh host kubectl scale --replicas=5 -f deployment.yaml"}
+{"cmd": "ssh host gh repo create my-project"}
+{"cmd": "ssh host gcloud app logs read"}
+{"cmd": "ssh host az boards work-item list --project myproj"}
+{"cmd": "ssh host sh -c 'rm file.txt'"}
+{"cmd": "ssh host pnpm list"}
+{"cmd": "ssh host aws lambda get-function-concurrency --function-name myfunc"}
+{"cmd": "ssh host ip -6 netconf"}
+{"cmd": "ssh host auth0 protection breached-password-detection update"}
+{"cmd": "ssh host /srv/dx/f"}
+{"cmd": "ssh host tmutil inheritbackup /path/to/machine"}
+{"cmd": "ssh host az eventhubs namespace list --resource-group mygroup"}
+{"cmd": "ssh host gcloud compute networks describe my-network"}
+{"cmd": "ssh host cdk watch MyStack"}
+{"cmd": "ssh host kubectl edit deployment nginx"}
+{"cmd": "ssh host docker container ls"}
+{"cmd": "ssh host helm upgrade myrelease nginx/nginx --dry-run"}
+{"cmd": "ssh host aws rds describe-db-parameters --db-parameter-group-name mygroup"}
+{"cmd": "ssh host bash -c"}
+{"cmd": "ssh host az devops wiki page show --path /page --wiki mywiki --project myproject"}
+{"cmd": "ssh host npm show express"}
+{"cmd": "ssh host find . -size +100k"}
+{"cmd": "ssh host nice git log"}
+{"cmd": "ssh host aws athena get-calculation-execution-code --calculation-execution-id calc"}
+{"cmd": "ssh host az vm create --name newvm -g mygroup --image UbuntuLTS --admin-user azureuser --generate-ssh-keys"}
+{"cmd": "ssh host brew update -f"}
+{"cmd": "ssh host cargo new --vcs git myproject"}
+{"cmd": "ssh host black --check src/"}
+{"cmd": "ssh host uv -h"}
+{"cmd": "ssh host fzf --scheme=path"}
+{"cmd": "ssh host duckdb -readonly data.db \"(SELECT 1 INTO outfile)\""}
+{"cmd": "ssh host ip neigh del 192.168.1.1 dev eth0"}
+{"cmd": "ssh host ansible-inventory --list -i hosts --output out.json"}
+{"cmd": "ssh host unzip -u archive.zip"}
+{"cmd": "ssh host gcloud container node-pools describe my-pool --cluster=my-cluster"}
+{"cmd": "ssh host MODE=test "}
+{"cmd": "ssh host fzf --bind='ctrl-r:reload(find .)'"}
+{"cmd": "ssh host aws sqs receive-message --queue-url https://sqs..."}
+{"cmd": "ssh host sqlite3 -readonly mydb.db 'DROP TABLE users'"}
+{"cmd": "ssh host brew uninstall --cask firefox"}
+{"cmd": "ssh host aws ec2 delete-snapshot --snapshot-id snap-123"}
+{"cmd": "ssh host launchctl debug gui/501/my.service"}
+{"cmd": "ssh host auth0 actions show act_12345"}
+{"cmd": "ssh host gcloud dns record-sets describe www --zone=my-zone --type=A"}
+{"cmd": "ssh host gh auth switch"}
+{"cmd": "ssh host brew list -v"}
+{"cmd": "ssh host xargs --null rm -rf"}
+{"cmd": "ssh host rg -i pattern ."}
+{"cmd": "docker exec ctr git rev-list main..feature"}
+{"cmd": "docker exec ctr sed '/pattern/d' file.txt"}
+{"cmd": "docker exec ctr uv version"}
+{"cmd": "docker exec ctr pre-commit install --hook-type pre-push"}
+{"cmd": "docker exec ctr az boards work-item update --id 12345"}
+{"cmd": "docker exec ctr az resource delete --ids /subscriptions/.../resourceGroups/.../providers/.../resource"}
+{"cmd": "docker exec ctr prometheus --web.enable-otlp-receiver"}
+{"cmd": "docker exec ctr duckdb mydb.db 'SELECT * FROM users'"}
+{"cmd": "docker exec ctr SELECT CONVERT(x, CHAR), CONVERT(y, SIGNED INTEGER) FROM t"}
+{"cmd": "docker exec ctr fzf --footer=Footer"}
+{"cmd": "docker exec ctr pre-commit try-repo"}
+{"cmd": "docker exec ctr gcloud help"}
+{"cmd": "docker exec ctr git fetch"}
+{"cmd": "docker exec ctr find /var/log -type f -name '*.log' -mtime +30"}
+{"cmd": "docker exec ctr docker start mycontainer"}
+{"cmd": "docker exec ctr brew autoremove"}
+{"cmd": "docker exec ctr /srv/d/a/f"}
+{"cmd": "docker exec ctr iconv --help"}
+{"cmd": "docker exec ctr gcloud sql backups list --instance=my-instance"}
+{"cmd": "docker exec ctr az logicapp list"}
+{"cmd": "docker exec ctr xargs -- cat"}
+{"cmd": "docker exec ctr duckdb -readonly work.db \"EXPORT DATABASE '/tmp/backup'\""}
+{"cmd": "docker exec ctr fd -E node_modules pattern"}
+{"cmd": "docker exec ctr curl --cacert ca.pem https://example.com"}
+{"cmd": "docker exec ctr brew tap --custom-remote homebrew/cask"}
+{"cmd": "docker exec ctr gcloud --region=us-central1 compute instances list"}
+{"cmd": "docker exec ctr kubectl rollout undo deployment/nginx --to-revision=2"}
+{"cmd": "docker exec ctr zsh -lc 'ls'"}
+{"cmd": "docker exec ctr sort --unique file.txt"}
+{"cmd": "docker exec ctr cdk context --reset key"}
+{"cmd": "docker exec ctr git mv old.txt new.txt"}
+{"cmd": "docker exec ctr -L 8080:localhost:80"}
+{"cmd": "docker exec ctr az provider show -n Microsoft.Compute"}
+{"cmd": "docker exec ctr docker container attach mycontainer"}
+{"cmd": "docker exec ctr echo ${x:-$(rm foo)}"}
+{"cmd": "docker exec ctr az vm resize --name myvm -g mygroup --size Standard_DS3_v2"}
+{"cmd": "docker exec ctr xattr -l file.txt"}
+{"cmd": "docker exec ctr auth0 actions show action123"}
+{"cmd": "docker exec ctr psql -c \"(SELECT 1); .output tmp/out\""}
+{"cmd": "docker exec ctr docker compose top"}
+{"cmd": "docker exec ctr docker buildx prune"}
+{"cmd": "docker exec ctr aws iam list-attached-role-policies --role-name myrole"}
+{"cmd": "docker exec ctr docker commit mycontainer myimage"}
+{"cmd": "docker exec ctr pip install requests==2.28.0"}
+{"cmd": "docker exec ctr if then fi"}
+{"cmd": "docker exec ctr aws ssm list-associations"}
+{"cmd": "docker exec ctr tee -a output.log"}
+{"cmd": "docker exec ctr gh issue list --assignee @me"}
+{"cmd": "docker exec ctr fzf --exact"}
+{"cmd": "docker exec ctr auth0 users delete auth0|123456"}
+{"cmd": "docker exec ctr find . -mtime +30"}
+{"cmd": "docker exec ctr az network nic create --name newnic -g mygroup --vnet-name myvnet --subnet mysubnet"}
+{"cmd": "docker exec ctr echo data 3> /tmp/out"}
+{"cmd": "docker exec ctr git branch new-branch"}
+{"cmd": "docker exec ctr duckdb -readonly work.db \"EXPLAIN ANALYZE INSERT INTO items VALUES (1)\""}
+{"cmd": "docker exec ctr duckdb tmp/work.db \"COPY (SELECT 1) TO '/etc/dippy-bypass'\""}
+{"cmd": "docker exec ctr awk '{print | \"sort\"}' file.txt"}
+{"cmd": "docker exec ctr terraform output my_output"}
+{"cmd": "docker exec ctr aws ssm describe-parameters"}
+{"cmd": "docker exec ctr psql -c \"(SELECT fictional_effect())\""}
+{"cmd": "docker exec ctr gh release edit v1.0.0"}
+{"cmd": "docker exec ctr TO 'tmp/out' (HEADER true, HEADER false)"}
+{"cmd": "docker exec ctr aws cloudformation describe-stack-resource --stack-name mystack --logical-resource-id myresource"}
+{"cmd": "docker exec ctr awk '{print > $1\".txt\"}' file.txt"}
+{"cmd": "docker exec ctr git cat-file -s HEAD"}
+{"cmd": "docker exec ctr az network dns zone list"}
+{"cmd": "docker exec ctr sqlcmd create mssql --accept-eula"}
+{"cmd": "docker exec ctr helm completion zsh"}
+{"cmd": "docker exec ctr docker container inspect mycontainer"}
+{"cmd": "docker exec ctr gcloud artifacts docker images list us-central1-docker.pkg.dev/my-project/my-repo"}
+{"cmd": "docker exec ctr kubectl exec pod --"}
+{"cmd": "docker exec ctr cargo init myproject"}
+{"cmd": "docker exec ctr az redis create -g mygroup -n myredis -l eastus --sku Basic --vm-size c0"}
+{"cmd": "docker exec ctr fzf --listen=6266 --listen-unsafe"}
+{"cmd": "docker exec ctr uptime"}
+{"cmd": "docker exec ctr gh codespace stop -c codespace-name"}
+{"cmd": "docker exec ctr python /tmp/pytest-of-root/pytest-3/popen-gw0/test_dunder_import_in_comprehe0/comprehension_bypass.py"}
+{"cmd": "docker exec ctr kubectl logs -l app=nginx"}
+{"cmd": "docker exec ctr az storage account show-connection-string --name myaccount -g mygroup"}
+{"cmd": "docker exec ctr diskutil list internal"}
+{"cmd": "docker exec ctr duckdb -readonly data.db \".shell touch tmp/out\""}
+{"cmd": "docker exec ctr bash -c 'echo foo && rm bar'"}
+{"cmd": "docker exec ctr docker compose -f docker-compose.yml ps"}
+{"cmd": "docker exec ctr az apim show -g mygroup -n myapim"}
+{"cmd": "docker exec ctr git push"}
+{"cmd": "docker exec ctr rtk discover"}
+{"cmd": "docker exec ctr brew readall"}
+{"cmd": "docker exec ctr gh alias set co 'pr checkout'"}
+{"cmd": "docker exec ctr npm team destroy myorg:myteam"}
+{"cmd": "docker exec ctr aws athena start-query-execution --query-string '   '"}
+{"cmd": "kubectl exec pod -- brew edit --formula python"}
+{"cmd": "kubectl exec pod -- wget --mirror https://example.com"}
+{"cmd": "kubectl exec pod -- ip tunnel change tun0 mode ipip"}
+{"cmd": "kubectl exec pod -- terraform validate -json"}
+{"cmd": "kubectl exec pod -- brew desc -s python"}
+{"cmd": "kubectl exec pod -- xargs -d ',' wc -l"}
+{"cmd": "kubectl exec pod -- brew migrate -f python"}
+{"cmd": "kubectl exec pod -- gh browse"}
+{"cmd": "kubectl exec pod -- aws athena start-query-execution --query-string 'MSCK REPAIR TABLE foo'"}
+{"cmd": "kubectl exec pod -- sqlite3"}
+{"cmd": "kubectl exec pod -- fd -x echo"}
+{"cmd": "kubectl exec pod -- sort --dictionary-order file.txt"}
+{"cmd": "kubectl exec pod -- docker-compose port web 80"}
+{"cmd": "kubectl exec pod -- TO 'tmp/out' (HEADER true, HEADER false)"}
+{"cmd": "kubectl exec pod -- ; COPY (SELECT 2) TO 'tmp/second.csv'"}
+{"cmd": "kubectl exec pod -- fzf --border-label=Search"}
+{"cmd": "kubectl exec pod -- xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"}
+{"cmd": "kubectl exec pod -- brew uses --include-test python"}
+{"cmd": "kubectl exec pod -- openssl x509 -noout -text -in cert.pem"}
+{"cmd": "kubectl exec pod -- codesign -v --deep /path/to/app"}
+{"cmd": "kubectl exec pod -- sort --check file.txt"}
+{"cmd": "kubectl exec pod -- az group exists --name mygroup"}
+{"cmd": "kubectl exec pod -- kubectl get secret my-secret -o wide"}
+{"cmd": "kubectl exec pod -- brew info --installed"}
+{"cmd": "kubectl exec pod -- git status -b"}
+{"cmd": "kubectl exec pod -- tar -tvf archive.tar"}
+{"cmd": "kubectl exec pod -- npm whoami"}
+{"cmd": "kubectl exec pod -- security translocate-original-path /path/to/app"}
+{"cmd": "kubectl exec pod -- python /tmp/pytest-of-root/pytest-3/popen-gw0/test_pickle_import_from_blocke0/pickle_from.py"}
+{"cmd": "kubectl exec pod -- sort -V file.txt"}
+{"cmd": "kubectl exec pod -- cargo t"}
+{"cmd": "kubectl exec pod -- ls && cat foo"}
+{"cmd": "kubectl exec pod -- auth0 api clients --data '{\"name\":\"test\"}'"}
+{"cmd": "kubectl exec pod -- fd --unrestricted pattern"}
+{"cmd": "kubectl exec pod -- xargs -t cat"}
+{"cmd": "kubectl exec pod -- FROM 'tmp/in'"}
+{"cmd": "kubectl exec pod -- git pull --ff-only"}
+{"cmd": "kubectl exec pod -- az vm show --name myvm -g mygroup --output json"}
+{"cmd": "kubectl exec pod -- uv pip check"}
+{"cmd": "kubectl exec pod -- kubectl -n kube-system get secret my-secret -o yaml"}
+{"cmd": "kubectl exec pod -- docker search nginx"}
+{"cmd": "kubectl exec pod -- find . -links 1"}
+{"cmd": "kubectl exec pod -- duckdb -readonly -csv data.db \"CREATE TEMP TABLE n AS DELETE FROM data; SELECT * FROM n\""}
+{"cmd": "kubectl exec pod -- compression_tool -decode -a zlib -i input.z"}
+{"cmd": "kubectl exec pod -- psql -V"}
+{"cmd": "kubectl exec pod -- brew install --force python"}
+{"cmd": "kubectl exec pod -- sed -r 's/[0-9]+/NUM/' file.txt"}
+{"cmd": "kubectl exec pod -- sqlcmd query -q \"SELECT CAST(fictional_effect() AS INTEGER)\""}
+{"cmd": "kubectl exec pod -- sample"}
+{"cmd": "kubectl exec pod -- az ad group member add --group mygroup --member-id userid"}
+{"cmd": "kubectl exec pod -- [[ $(rm file) == x ]]"}
+{"cmd": "kubectl exec pod -- launchctl dumpjpcategory"}
+{"cmd": "kubectl exec pod -- aws cloudformation continue-update-rollback --stack-name mystack"}
+{"cmd": "kubectl exec pod -- find './path with spaces'"}
+{"cmd": "kubectl exec pod -- npm fund"}
+{"cmd": "kubectl exec pod -- az vm show myvm --resource-group mygroup"}
+{"cmd": "kubectl exec pod -- python --version-info"}
+{"cmd": "kubectl exec pod -- duckdb -safe work.db \"INSTALL httpfs\""}
+{"cmd": "kubectl exec pod -- kubectl edit configmap my-config"}
+{"cmd": "kubectl exec pod -- aws sqs add-permission --queue-url https://sqs... --label perm --aws-account-ids 123 --actions SendMessage"}
+{"cmd": "kubectl exec pod -- security delete-generic-password -s service"}
+{"cmd": "kubectl exec pod -- ansible-doc file"}
+{"cmd": "kubectl exec pod -- brew upgrade -n python"}
+{"cmd": "kubectl exec pod -- docker attach mycontainer"}
+{"cmd": "kubectl exec pod -- openssl x509 -noout -dates -in cert.pem"}
+{"cmd": "kubectl exec pod -- aws rds describe-db-subnet-groups"}
+{"cmd": "kubectl exec pod -- $VALUE"}
+{"cmd": "kubectl exec pod -- -H"}
+{"cmd": "kubectl exec pod -- just test --verbose"}
+{"cmd": "kubectl exec pod -- pip list --format=columns"}
+{"cmd": "kubectl exec pod -- gh auth login"}
+{"cmd": "kubectl exec pod -- gcloud compute snapshots describe my-snapshot"}
+{"cmd": "kubectl exec pod -- helm create mychart"}
+{"cmd": "kubectl exec pod -- npm pkg get"}
+{"cmd": "kubectl exec pod -- az sql db update --name mydb --server myserver -g mygroup --max-size 250GB"}
+{"cmd": "kubectl exec pod -- brew bundle sh"}
+{"cmd": "kubectl exec pod -- dmesg -f kern"}
+{"cmd": "kubectl exec pod -- psql --help"}
+{"cmd": "kubectl exec pod -- awk -f script.awk file.txt"}
+{"cmd": "kubectl exec pod -- az webapp deployment list-publishing-credentials --name myapp -g mygroup"}
+{"cmd": "kubectl exec pod -- grep --include=$(echo '*.py') pattern ."}
+{"cmd": "kubectl exec pod -- psql -c \"(SELECT 1); .output tmp/out\""}
+{"cmd": "kubectl exec pod -- gcloud components update --version=1.2.3"}
+{"cmd": "kubectl exec pod -- dmesg --kernel"}
+{"cmd": "kubectl exec pod -- git config --global user.email 'john@example.com'"}
+{"cmd": "kubectl exec pod -- auth0 apis update api_12345"}
+{"cmd": "kubectl exec pod -- cargo +nightly build"}
+{"cmd": "kubectl exec pod -- sqlite3 mydb.db 'ALTER TABLE users ADD COLUMN x INT'"}
+{"cmd": "kubectl exec pod -- ansible-test units"}
+{"cmd": "kubectl exec pod -- docker node rm node1"}
+{"cmd": "watch security find-key -t public"}
+{"cmd": "watch ls 2>&1"}
+{"cmd": "watch docker plugin rm myplugin"}
+{"cmd": "watch gh issue edit 123 --add-label enhancement"}
+{"cmd": "watch podman restart mycontainer"}
+{"cmd": "watch az keyvault key show --name mykey --vault-name myvault"}
+{"cmd": "watch source ~/.pyenv/completions/pyenv.bash"}
+{"cmd": "watch sort --stable file.txt"}
+{"cmd": "watch gawk '{system(\"date\")}' file.txt"}
+{"cmd": "watch gcloud logging logs list"}
+{"cmd": "watch openssl dgst -sha256 -sign key.pem -out sig.bin file.txt"}
+{"cmd": "watch az ad group show --group mygroup"}
+{"cmd": "watch /*"}
+{"cmd": "watch cdk destroy MyStack"}
+{"cmd": "watch echo $(rm -rf /)"}
+{"cmd": "watch wget -i urls.txt"}
+{"cmd": "watch user@host"}
+{"cmd": "watch psql -c 'UPDATE users SET name = 1'"}
+{"cmd": "watch echo ~ ~/x ~root/y"}
+{"cmd": "watch aws secretsmanager rotate-secret --secret-id mysecret"}
+{"cmd": "watch /a/.dippy/x"}
+{"cmd": "watch az aks get-credentials --name mycluster -g mygroup --overwrite-existing"}
+{"cmd": "watch sort -u -o sorted.txt file.txt"}
+{"cmd": "watch terraform validate"}
+{"cmd": "watch env mv src dst"}
+{"cmd": "watch helm lint ./mychart -f values.yaml"}
+{"cmd": "watch yq eval -i '.key = \"value\"' file.yaml"}
+{"cmd": "watch python /tmp/pytest-of-root/pytest-3/popen-gw0/test_generator_gi_frame_blocke0/gi_frame.py"}
+{"cmd": "watch az sql db copy --name mydb --server myserver -g mygroup --dest-name copydb"}
+{"cmd": "watch auth0 actions diff act_12345"}
+{"cmd": "watch sqlcmd query -q \"SELECT '$HOME'\""}
+{"cmd": "watch gh search commits --author user"}
+{"cmd": "watch auth0 actions list"}
+{"cmd": "watch fzf --zsh"}
+{"cmd": "watch find . -xtype f"}
+{"cmd": "watch python /tmp/pytest-of-root/pytest-3/popen-gw0/test_pickle_import_from_blocke0/pickle_from.py"}
+{"cmd": "watch uv run --python 3.11 ls"}
+{"cmd": "watch ruff format ."}
+{"cmd": "watch find . -nouser"}
+{"cmd": "watch FOO=bar git push"}
+{"cmd": "watch gcloud config configurations activate new-config"}
+{"cmd": "watch dmesg -f kern"}
+{"cmd": "watch gh run list --limit 20"}
+{"cmd": "watch gcloud components list"}
+{"cmd": "watch az ad user list"}
+{"cmd": "watch helm rollback myrelease 2"}
+{"cmd": "watch hdiutil compact sparse.sparseimage"}
+{"cmd": "watch gh workflow view --web"}
+{"cmd": "watch gh pr diff --patch"}
+{"cmd": "watch fzf --bind='focus:transform-preview-label:echo\\ {}'"}
+{"cmd": "watch tail file.txt"}
+{"cmd": "watch helm pull nginx/nginx --untar"}
+{"cmd": "watch ls &>> out"}
+{"cmd": "watch duckdb -safe mydb.db 'SELECT 1'"}
+{"cmd": "watch fd -I pattern"}
+{"cmd": "watch gh run view 12345 --web"}
+{"cmd": "watch auth0 roles list"}
+{"cmd": "watch xxd -r -s 100 file.hex output.bin"}
+{"cmd": "watch echo `echo \\`date\\``"}
+{"cmd": "watch gh repo view"}
+{"cmd": "watch auth0 apps show app123"}
+{"cmd": "watch mysql -e 'CREATE TABLE users (id INT)'"}
+{"cmd": "watch launchctl print gui/501"}
+{"cmd": "watch python /tmp/pytest-of-root/pytest-3/popen-gw0/test_path_open_method_blocked0/path_open.py"}
+{"cmd": "watch sqlcmd start"}
+{"cmd": "watch sqlcmd query -q"}
+{"cmd": "watch aws s3 ls"}
+{"cmd": "watch aws ecr describe-images --repository-name myrepo"}
+{"cmd": "watch aws ssm list-command-invocations --command-id cmd123"}
+{"cmd": "watch aws iam help"}
+{"cmd": "watch npm profile set email new@example.com"}
+{"cmd": "watch (( 1 )) > $(rm foo)"}
+{"cmd": "watch uv run cdk synth"}
+{"cmd": "watch git notes list"}
+{"cmd": "watch find . -regex '.*\\.py$'"}
+{"cmd": "watch find . -depth"}
+{"cmd": "watch echo `rm -rf /`"}
+{"cmd": "watch ifconfig eth0 -promisc"}
+{"cmd": "watch npm login"}
+{"cmd": "watch gh rs list"}
+{"cmd": "watch git stash apply"}
+{"cmd": "watch aws ecr describe-image-scan-findings --repository-name myrepo --image-id imageTag=latest"}
+{"cmd": "watch npm diff"}
+{"cmd": "watch gh auth setup-git"}
+{"cmd": "watch az network vnet list --resource-group mygroup"}
+{"cmd": "watch git am --reject patch.patch"}
+{"cmd": "watch tmutil deleteinprogress /path/to/machine"}
+{"cmd": "watch curl --continue-at - https://example.com/bigfile"}
+{"cmd": "watch gh config set editor vim"}
+{"cmd": "watch packer fmt -check -diff template.pkr.hcl"}
+{"cmd": "brew search --open python # trailing comment"}
+{"cmd": "az network vnet subnet list --vnet-name myvnet -g mygroup # trailing comment"}
+{"cmd": "aws route53 disassociate-vpc-from-hosted-zone --hosted-zone-id Z123 --vpc VPCRegion=us-east-1,VPCId=vpc-123 # trailing comment"}
+{"cmd": "fd --exec rm # trailing comment"}
+{"cmd": "ls ;; rm # trailing comment"}
+{"cmd": "ip neighbor # trailing comment"}
+{"cmd": "echo test && ls # trailing comment"}
+{"cmd": "az vm resize --name myvm -g mygroup --size Standard_DS3_v2 # trailing comment"}
+{"cmd": "auth0 apps update app123 # trailing comment"}
+{"cmd": "ssh host npm install # trailing comment"}
+{"cmd": "git checkout -- file.txt # trailing comment"}
+{"cmd": "git stash pop stash@{0} # trailing comment"}
+{"cmd": "sh -c 'echo hello' # trailing comment"}
+{"cmd": "docker context ls # trailing comment"}
+{"cmd": "aws athena update-work-group --work-group myworkgroup --state ENABLED # trailing comment"}
+{"cmd": "textutil -convert txt -output out.txt foo.rtf # trailing comment"}
+{"cmd": "gcloud compute ssh user@my-instance --zone=us-central1-a # trailing comment"}
+{"cmd": "-H 'Host: one' -H 'Host: two' http://10.1.2.3/ # trailing comment"}
+{"cmd": "npm logout # trailing comment"}
+{"cmd": "gh codespace stop -c codespace-name # trailing comment"}
+{"cmd": "plutil -convert json -o out.json file.plist # trailing comment"}
+{"cmd": "dscl . -search /Users name alice # trailing comment"}
+{"cmd": "helm list -A # trailing comment"}
+{"cmd": "terraform taint aws_instance.foo # trailing comment"}
+{"cmd": "az network vnet list # trailing comment"}
+{"cmd": "duckdb -readonly work.db \"SELECT 1 -- comment\rINSTALL httpfs\" # trailing comment"}
+{"cmd": "aws iam put-role-policy --role-name myrole --policy-name pol --policy-document file://p.json # trailing comment"}
+{"cmd": "7zz l -slt archive.7z # trailing comment"}
+{"cmd": "az vm stop -g mygroup -n myvm # trailing comment"}
+{"cmd": "xargs dd # trailing comment"}
+{"cmd": "git bisect good # trailing comment"}
+{"cmd": "az policy assignment create --name newassignment --policy mypolicy # trailing comment"}
+{"cmd": "[[ ! -e x ]] # trailing comment"}
+{"cmd": "brew upgrade --help # trailing comment"}
+{"cmd": "brew deps --include-optional python # trailing comment"}
+{"cmd": "echo \"$[1+$(rm x)]\" # trailing comment"}
+{"cmd": "ansible-config init # trailing comment"}
+{"cmd": "openssl x509 -noout -purpose -in cert.pem # trailing comment"}
+{"cmd": "docker exec -it nginx ls /app # trailing comment"}
+{"cmd": "az vm delete --name myvm -g mygroup # trailing comment"}
+{"cmd": "$_ # trailing comment"}
+{"cmd": "gcloud compute regions list # trailing comment"}
+{"cmd": "pip config list --user # trailing comment"}
+{"cmd": "yq '.key = \"value\"' -i file.yaml # trailing comment"}
+{"cmd": "sort -t: file.txt # trailing comment"}
+{"cmd": "ip addr show up # trailing comment"}
+{"cmd": "ip stats # trailing comment"}
+{"cmd": "gh run watch --exit-status # trailing comment"}
+{"cmd": "aws dynamodb describe-global-table-settings --global-table-name mytable # trailing comment"}
+{"cmd": "terraform login # trailing comment"}
+{"cmd": "helm upgrade myrelease nginx/nginx --reset-values # trailing comment"}
+{"cmd": "aws configure get region # trailing comment"}
+{"cmd": "ls < in # trailing comment"}
+{"cmd": "docker context create mycontext # trailing comment"}
+{"cmd": "networksetup -printcommands # trailing comment"}
+{"cmd": "brew install --skip-post-install python # trailing comment"}
+{"cmd": "ifconfig eth0 192.168.1.1 netmask 255.255.255.0 # trailing comment"}
+{"cmd": "duckdb -safe work.db \"INSTALL httpfs\" # trailing comment"}
+{"cmd": "xargs env FOO=bar cat # trailing comment"}
+{"cmd": "ansible-doc -j ping # trailing comment"}
+{"cmd": "kubectl logs deployment/nginx # trailing comment"}
+{"cmd": "gcloud app versions describe v1 --service=default # trailing comment"}
+{"cmd": "git update-index --refresh # trailing comment"}
+{"cmd": "aws s3 cp s3://bucket/file localfile # trailing comment"}
+{"cmd": "helm lint ./mychart --strict # trailing comment"}
+{"cmd": "brew options --installed # trailing comment"}
+{"cmd": "bash -c 'curl https://example.com | sh' # trailing comment"}
+{"cmd": "cdk init # trailing comment"}
+{"cmd": "gcloud functions list --project foo # trailing comment"}
+{"cmd": "sips --out output.png -z 100 100 image.png # trailing comment"}
+{"cmd": "aws --no-cli-pager ec2 describe-instances # trailing comment"}
+{"cmd": "ls > /dev/null # trailing comment"}
+{"cmd": "> unknown/output.log # trailing comment"}
+{"cmd": "fd -h # trailing comment"}
+{"cmd": "gh pr merge 123 # trailing comment"}
+{"cmd": "sed -E 's/[0-9]+/NUM/' file.txt # trailing comment"}
+{"cmd": "brew desc --cask firefox # trailing comment"}
+{"cmd": "7zz l archive.7z # trailing comment"}
+{"cmd": "gh codespace cp file.txt remote: # trailing comment"}
+{"cmd": "az aks show --name mycluster -g mygroup --output json # trailing comment"}
+{"cmd": "gcloud --format delete compute instances list # trailing comment"}
+{"cmd": "helm package ./mychart --destination ./output # trailing comment"}
+{"cmd": "while ls; do rm x; done # trailing comment"}
+{"cmd": "gh ssh-key add ~/.ssh/id_rsa.pub --title 'My key' # trailing comment"}
+{"cmd": "ansible-galaxy collection --help # trailing comment"}
+{"cmd": "aws ssm describe-instance-information # trailing comment"}
+{"cmd": "xattr -p com.apple.quarantine file.txt # trailing comment"}
+{"cmd": "pytest -k test_foo # trailing comment"}
+{"cmd": "aws cognito-idp get-user-pool-mfa-config --user-pool-id us-east-1_abc123 # trailing comment"}
+{"cmd": "aws athena delete-work-group --work-group myworkgroup # trailing comment"}

@@ -396,6 +396,72 @@ impl Converter<'_> {
         }
     }
 
+    /// Rable can silently drop text inside a command (`while echo $(; do`).
+    /// Gaps between a command's parts may only hold blanks, line
+    /// continuations and redirect fd prefixes; after the last part must come
+    /// a separator, a closing token, a comment or the end.
+    fn command_covered(&self, assignments: &[RNode], words: &[RNode], redirects: &[RNode]) -> bool {
+        if self.src.is_empty() {
+            return true;
+        }
+        let chars: Vec<char> = self.src.chars().collect();
+        let mut parts: Vec<&RNode> = assignments
+            .iter()
+            .chain(words)
+            .chain(redirects)
+            .filter(|p| !p.span.is_empty())
+            .collect();
+        parts.sort_by_key(|p| p.span.start);
+        let mut pos = match parts.first() {
+            Some(p) => p.span.start,
+            None => return true,
+        };
+        for p in &parts {
+            if p.span.start > pos {
+                let gap: String = chars[pos.min(chars.len())..p.span.start.min(chars.len())]
+                    .iter()
+                    .collect();
+                let gap = gap.replace("\\\n", "");
+                let is_redirect = matches!(p.kind, K::Redirect { .. } | K::HereDoc { .. });
+                let trimmed = gap.trim_end_matches(|c: char| c.is_ascii_digit());
+                let trimmed = if is_redirect && trimmed.ends_with('}') {
+                    trimmed.rfind('{').map_or(trimmed, |i| &trimmed[..i])
+                } else if is_redirect {
+                    trimmed
+                } else {
+                    &gap
+                };
+                if !trimmed.chars().all(char::is_whitespace)
+                    || (!gap.is_empty() && !gap.starts_with(char::is_whitespace) && !is_redirect)
+                {
+                    return false;
+                }
+            }
+            pos = pos.max(p.span.end);
+        }
+        let mut rest = chars[pos.min(chars.len())..].iter().peekable();
+        while let Some(c) = rest.peek() {
+            if **c == ' ' || **c == '\t' {
+                rest.next();
+            } else if **c == '\\' {
+                let mut look = rest.clone();
+                look.next();
+                if look.peek() == Some(&&'\n') {
+                    rest.next();
+                    rest.next();
+                } else {
+                    break;
+                }
+            } else {
+                break;
+            }
+        }
+        match rest.peek() {
+            None => true,
+            Some(c) => matches!(**c, ';' | '&' | '|' | ')' | '}' | '\n' | '\r' | '#'),
+        }
+    }
+
     /// A list member; Rable fills a dangling `&&`/`||` with an empty node
     /// where Bash and Parable report a syntax error.
     fn list_item(&self, n: &RNode) -> Node {
@@ -414,6 +480,13 @@ impl Converter<'_> {
                 redirects,
             } if assignments.is_empty() && words.is_empty() && redirects.is_empty() => {
                 Node::Unsupported("empty command".into())
+            }
+            K::Command {
+                assignments,
+                words,
+                redirects,
+            } if !self.command_covered(assignments, words, redirects) => {
+                Node::Unsupported("text Rable dropped from a command".into())
             }
             K::Command {
                 assignments,

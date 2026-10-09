@@ -33,6 +33,7 @@ REPO = HERE.parent.parent
 CORPUS = HERE / "corpus.jsonl"
 HANDWRITTEN = HERE / "handwritten.jsonl"
 PARSER_CASES = HERE / "parser_cases.jsonl"
+FUZZ_CASES = HERE / "fuzz_cases.jsonl"
 sys.path.insert(0, str(HERE))
 
 from parity_env import (  # noqa: E402
@@ -96,7 +97,11 @@ def load_cases(harvest_dir: Path) -> list[dict]:
             for line in fh:
                 record = json.loads(line)
                 add(record["cmd"], record.get("config", ""), record["src"])
-    for path, src in ((HANDWRITTEN, "handwritten"), (PARSER_CASES, "parser")):
+    for path, src in (
+        (HANDWRITTEN, "handwritten"),
+        (PARSER_CASES, "parser"),
+        (FUZZ_CASES, "fuzz"),
+    ):
         if not path.exists():
             continue
         with open(path, encoding="utf-8") as fh:

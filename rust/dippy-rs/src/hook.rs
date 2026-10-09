@@ -262,7 +262,10 @@ mod tests {
     #[test]
     fn dumps_like_python() {
         let v = json!({"a": "🐤 x", "b": [1, true], "c": {}});
-        assert_eq!(py_dumps(&v), "{\"a\": \"\\ud83d\\udc24 x\", \"b\": [1, true], \"c\": {}}");
+        assert_eq!(
+            py_dumps(&v),
+            "{\"a\": \"\\ud83d\\udc24 x\", \"b\": [1, true], \"c\": {}}"
+        );
     }
 
     #[test]
