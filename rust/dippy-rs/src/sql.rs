@@ -1598,6 +1598,12 @@ mod grammar {
                     if i == start {
                         return None;
                     }
+                    // An operator glued to a comment (`//**/` in DuckDB) may
+                    // tokenize differently in SQLGlot.
+                    if i < n && (super::starts_with(&s, i, "--") || super::starts_with(&s, i, "/*"))
+                    {
+                        return None;
+                    }
                     let run: String = s[start..i].iter().collect();
                     let op = OPS.iter().find(|op| **op == run)?;
                     if (*op == "<<=" || *op == ">>=") && !matches!(d, Postgres | Duckdb) {
@@ -2301,6 +2307,7 @@ mod grammar {
             self.op("(")?;
             let mut args = 0;
             let mut distinct = false;
+            let mut first_arg = self.pos;
             // Functions with dedicated SQLGlot argument parsers, or whose
             // generator rewrites the call (`strpos`, `mod` as `%`, SQLite
             // `concat` as `||`), lose predicate arguments: operands only.
@@ -2335,7 +2342,7 @@ mod grammar {
                 args = 1;
             } else if !self.is_op(")") {
                 distinct = self.eat_kw("DISTINCT");
-                let first_arg = self.pos;
+                first_arg = self.pos;
                 loop {
                     if args == 1 && self.d == Mysql && name == "STRING_AGG" {
                         // The separator becomes `SEPARATOR <expr>`, which
@@ -2373,6 +2380,15 @@ mod grammar {
                         break;
                     }
                 }
+            }
+            // SQLGlot drops a DISTINCT call with an inet containment
+            // operator in its arguments.
+            if distinct
+                && self.toks[first_arg..self.pos]
+                    .iter()
+                    .any(|t| matches!(t, Tok::Op("<<=") | Tok::Op(">>=")))
+            {
+                return None;
             }
             self.op(")")?;
             if args > 4 || mask & (1 << args) == 0 {
@@ -3467,6 +3483,11 @@ mod tests {
             ("duckdb", "SELECT date_trunc(second, ts) FROM t"),
             ("duckdb", "SELECT [(SELECT e), n]"),
             ("duckdb", "SELECT [EXISTS (FROM d), e]"),
+            ("duckdb", "SELECT i//**/(u)"),
+            ("postgres", "SELECT count(DISTINCT a, x <<= l)"),
+            ("postgres", "SELECT strpos(a = 1, b, 2)"),
+            ("mysql", "SELECT string_agg(c, a.b)"),
+            ("duckdb", "SELECT list_value((SELECT 1), d)"),
             ("athena", "SELECT substr(a = b)"),
             ("mysql", "SELECT string_agg(a, -a)"),
             ("tsql", "SELECT string_agg(DISTINCT a, ',') FROM t"),
