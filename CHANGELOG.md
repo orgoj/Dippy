@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.22] - 2026-10-09
+
+### Added
+
+- Experimental Rust port in `rust/` (`dippy-rs --cmd CMD [--json] [--cwd DIR] [--config FILE]`), parsing with the Rable crate. It is not used by the Python package. `rust/parity/` holds a corpus harvested from the test suite with Python Dippy as the oracle and reports the agreement rate; see `docs/plans/rust-port-report.md`.
+
 ## [0.4.21] - 2026-10-09
 
 ### Added
