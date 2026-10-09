@@ -43,7 +43,7 @@ TEMPLATES = [
     "sh -c '{c}'",
     "bash -c '{c}'",
     "xargs {c} < list",
-    "find . -exec {c} \\\;",
+    r"find . -exec {c} \;",
     "if {c}; then echo ok; fi",
     "while {c}; do sleep 1; done",
     "for f in *; do {c}; done",
