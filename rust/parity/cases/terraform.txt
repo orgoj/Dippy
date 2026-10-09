@@ -1,0 +1,96 @@
+terraform plan
+terraform plan -out=plan.tfplan
+terraform plan -var 'name=value'
+terraform plan -var-file=vars.tfvars
+terraform plan -target=aws_instance.foo
+terraform plan -destroy
+terraform plan -refresh-only
+terraform plan -json
+terraform show
+terraform show plan.tfplan
+terraform show -json
+terraform show -json plan.tfplan
+terraform state list
+terraform state list aws_instance.foo
+terraform state show aws_instance.foo
+terraform state show -json aws_instance.foo
+terraform state pull
+terraform validate
+terraform validate -json
+terraform validate -no-color
+terraform fmt
+terraform fmt -check
+terraform fmt -diff
+terraform fmt -recursive
+terraform fmt -write=false
+terraform fmt -list=false
+terraform output
+terraform output my_output
+terraform output -json
+terraform output -raw my_output
+terraform output -state=terraform.tfstate
+terraform providers
+terraform providers lock
+terraform providers mirror ./providers
+terraform providers schema -json
+terraform graph
+terraform graph -type=plan
+terraform graph -draw-cycles
+terraform graph | dot -Tpng > graph.png
+terraform console
+terraform console -var 'name=value'
+terraform get
+terraform get -update
+terraform version
+terraform version -json
+terraform modules
+terraform modules -json
+terraform metadata functions
+terraform metadata functions -json
+terraform test
+terraform test -filter=test_file.tftest.hcl
+terraform test -json
+terraform refresh
+terraform refresh -target=aws_instance.foo
+terraform --help
+terraform -help
+terraform plan --help
+terraform --version
+terraform workspace list
+terraform workspace show
+terraform workspace select default
+terraform workspace select -or-create dev
+terraform apply
+terraform apply -auto-approve
+terraform apply plan.tfplan
+terraform apply -var 'name=value'
+terraform apply -target=aws_instance.foo
+terraform destroy
+terraform destroy -auto-approve
+terraform destroy -target=aws_instance.foo
+terraform init
+terraform init -upgrade
+terraform init -reconfigure
+terraform init -migrate-state
+terraform init -backend=false
+terraform import aws_instance.foo i-123
+terraform import -var 'name=value' aws_instance.foo i-123
+terraform state mv aws_instance.foo aws_instance.bar
+terraform state rm aws_instance.foo
+terraform state push terraform.tfstate
+terraform state replace-provider hashicorp/aws registry.example.com/aws
+terraform taint aws_instance.foo
+terraform untaint aws_instance.foo
+terraform workspace new dev
+terraform workspace delete dev
+terraform force-unlock 1234-5678
+terraform login
+terraform login app.terraform.io
+terraform logout
+terraform logout app.terraform.io
+terraform ''
+terraform -chdir
+terraform -chdir=x state rm a
+tf state '' rm
+tf workspace -x new foo
+terraform -var a=b plan
