@@ -1,0 +1,23 @@
+sed 's/a/b/w out1' -e 'w out2' f
+sed -e 's/a/b/w out1' -e 'w out2' f
+{"cmd": "sed -n '/x/w /tmp/a\n/y/w /tmp/b' f"}
+sed 's/new x/y/' f
+{"cmd": "sed 'w\u001fout' f"}
+{"cmd": "sed 'e\u001c' f"}
+{"cmd": "sed 's/a/b/e\n' f"}
+sed '1d; e ls' f
+sed 's/a/b/eg' f
+sed -i
+sed -i ''
+sed -i '' 's/a/b/' f
+sed -is/a/b/ f
+sed --in-place=.bak -e 's/a/b/w w1' f1 f2
+sed -e
+sed --expression=e f
+sed --expression='s/x/y/w o' f
+sed -f s.sed -i f
+sed --file=s.sed -i f
+sed -E -n -i.bak 's/x/y/p' a b c
+{"cmd": "sed 'w　out' f"}
+{"cmd": "sed 's/a/b/w x' f"}
+{"cmd": "sed 's/a/b/w x\u001dy' f"}
