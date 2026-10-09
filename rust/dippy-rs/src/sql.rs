@@ -1250,6 +1250,111 @@ mod grammar {
         table_mask(&DISTINCT_FUNCTIONS, name, d)
     }
 
+    /// Words in [`RESERVED`] that SQLGlot accepts as an explicit `AS` column
+    /// alias in every dialect and query position probed (select list,
+    /// subquery, CTE, set operation, GROUP BY/ORDER BY queries and DuckDB
+    /// `CREATE TABLE AS`). Derived with the `sql_tables.py` probe.
+    const AS_ALIASES: [&str; 98] = [
+        "AGAINST",
+        "ALWAYS",
+        "ANTI",
+        "APPLY",
+        "ASOF",
+        "AT",
+        "BEGIN",
+        "BERNOULLI",
+        "BLOCK",
+        "CHARSET",
+        "COLUMNS",
+        "CONNECT",
+        "CURRENT",
+        "EXCLUDE",
+        "FILTER",
+        "FINAL",
+        "FIRST",
+        "FOLLOWING",
+        "FORMAT",
+        "GLOB",
+        "ILIKE",
+        "INCLUDE",
+        "ISNULL",
+        "KEEP",
+        "LAST",
+        "LEVEL",
+        "LIST",
+        "LOCAL",
+        "LOCKED",
+        "MAP",
+        "MATCHED",
+        "MATCH_RECOGNIZE",
+        "MEMBER",
+        "METHOD",
+        "MINUS",
+        "MODE",
+        "NOCYCLE",
+        "NOTNULL",
+        "NOWAIT",
+        "NULLABLE",
+        "NULLS",
+        "OPERATOR",
+        "ORDINALITY",
+        "OUTPUT",
+        "OVERLAPS",
+        "OVERLAY",
+        "PARTITIONED_BY",
+        "PERCENT",
+        "PERCENTILE_CONT",
+        "PERCENTILE_DISC",
+        "PIVOT",
+        "POSITION",
+        "POSITIONAL",
+        "PRECEDING",
+        "PREWHERE",
+        "PRIOR",
+        "QUALIFY",
+        "REPEATABLE",
+        "RESPECT",
+        "ROLLBACK",
+        "ROLLUP",
+        "ROWNUM",
+        "SAMPLE",
+        "SEED",
+        "SEMI",
+        "SERDEPROPERTIES",
+        "SETTINGS",
+        "SHARE",
+        "SIMILAR",
+        "SKIP",
+        "SOUNDS",
+        "STAR",
+        "START",
+        "STRUCT",
+        "SUBSTRING",
+        "SUMMARIZE",
+        "SYSDATE",
+        "SYSTEM_TIME",
+        "SYSTEM_USER",
+        "SYSTIMESTAMP",
+        "TABLESAMPLE",
+        "TIES",
+        "TIME",
+        "TIMESTAMP",
+        "TOP",
+        "TRIM",
+        "TRY_CAST",
+        "UNBOUNDED",
+        "UNCACHE",
+        "UNKNOWN",
+        "UNNEST",
+        "UNPIVOT",
+        "VALUE",
+        "VIEW",
+        "WITHIN",
+        "WITHOUT",
+        "XML",
+        "ZONE",
+    ];
+
     fn is_reserved(word: &str) -> bool {
         RESERVED.binary_search(&word).is_ok()
     }
@@ -1774,6 +1879,15 @@ mod grammar {
                 self.expr_list()?;
                 self.op(")")?;
             }
+            if self.d == Tsql && self.eat_kw("TOP") {
+                if self.eat_op("(") {
+                    self.integer()?;
+                    self.op(")")?;
+                } else {
+                    self.integer()?;
+                }
+                self.eat_kw("PERCENT");
+            }
             self.select_list()?;
             if self.eat_kw("FROM") {
                 self.from_list()?;
@@ -1858,6 +1972,13 @@ mod grammar {
                 return Some(());
             }
             self.expr()?;
+            if self.eat_kw("AS") {
+                if matches!(self.peek(), Some(Tok::Word(w)) if AS_ALIASES.contains(&w.as_str())) {
+                    self.pos += 1;
+                    return Some(());
+                }
+                return self.ident().map(drop);
+            }
             self.alias()
         }
 
@@ -3280,6 +3401,9 @@ mod tests {
             ("duckdb", "SELECT $$export$$"),
             ("postgres", "SELECT $$it's$$ FROM t"),
             ("tsql", "SELECT @@VERSION"),
+            ("tsql", "SELECT TOP 5 * FROM t"),
+            ("tsql", "SELECT DISTINCT TOP (3) a FROM t"),
+            ("duckdb", "SELECT 1 AS value, a AS mode FROM t"),
             ("duckdb", "SELECT date_trunc('second', ts) FROM t"),
             ("duckdb", "SELECT strptime(a, '%d') FROM t"),
             ("duckdb", "SELECT quantile_disc(a, 0.99) FROM t"),
@@ -3310,6 +3434,10 @@ mod tests {
             ("tsql", "SELECT string_agg(DISTINCT a, ',') FROM t"),
             ("mysql", "SELECT $$x$$$$y$$"),
             ("duckdb", "SELECT $$a$$ || $tag$b$tag$"),
+            ("duckdb", "SELECT TOP 5 * FROM t"),
+            ("tsql", "SELECT TOP 2.5 a FROM t"),
+            ("duckdb", "SELECT a value FROM t"),
+            ("duckdb", "SELECT a AS key FROM t"),
         ] {
             assert_ne!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
         }

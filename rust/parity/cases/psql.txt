@@ -1,0 +1,15 @@
+psql -c "SELECT $$x$$"
+psql -c 'SELECT $$x$$'
+psql --command="SELECT 1" --command="DROP TABLE t"
+psql --command='SELECT 1'
+psql -c 'SELECT a FROM t GROUP BY ROLLUP (a)'
+psql -c 'SELECT sum(a) OVER (ORDER BY b RANGE UNBOUNDED PRECEDING) FROM t'
+psql -c 'SELECT date_trunc('"'"'day'"'"', ts) FROM t'
+psql -c 'SELECT 1' -f x.sql
+psql -fx.sql -c 'SELECT 1'
+psql -c "SELECT '$(id)'"
+psql -c 'SELECT 1 \g /tmp/out'
+psql -c '\copy t TO /tmp/out'
+psql -c 'COPY (SELECT 1) TO STDOUT'
+psql -c "SELECT pg_read_file('/etc/passwd')"
+psql -c 'SELECT 1' -c
