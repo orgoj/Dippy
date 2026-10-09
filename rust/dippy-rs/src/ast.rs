@@ -639,7 +639,9 @@ impl Converter<'_> {
             .filter(|p| {
                 matches!(
                     p.kind,
-                    K::CommandSubstitution { .. } | K::ProcessSubstitution { .. } | K::ArithmeticExpansion { .. }
+                    K::CommandSubstitution { .. }
+                        | K::ProcessSubstitution { .. }
+                        | K::ArithmeticExpansion { .. }
                 )
             })
             .collect();
@@ -1127,7 +1129,9 @@ fn scan_gap(
 fn contains_unsupported(n: &Node) -> bool {
     match n {
         Node::Unsupported(_) => true,
-        Node::CmdSub { command } | Node::ProcSub { command, .. } => matches!(**command, Node::Unsupported(_)),
+        Node::CmdSub { command } | Node::ProcSub { command, .. } => {
+            matches!(**command, Node::Unsupported(_))
+        }
         Node::Arith { cmdsubs } => cmdsubs.iter().any(contains_unsupported),
         _ => false,
     }

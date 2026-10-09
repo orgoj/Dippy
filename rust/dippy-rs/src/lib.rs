@@ -11,6 +11,7 @@ pub mod cli;
 pub mod config;
 pub mod dump;
 pub mod fnmatch;
+pub mod hook;
 pub mod parser;
 pub mod paths;
 pub mod scan;

@@ -4,6 +4,7 @@ use std::path::PathBuf;
 use dippy_rs::analyzer::{self, Action};
 use dippy_rs::cli::{self, HandlerContext};
 use dippy_rs::config::{self, Config};
+use dippy_rs::hook::{self, py_json_str};
 use dippy_rs::{dump, paths};
 use serde_json::{Value, json};
 
@@ -66,31 +67,6 @@ fn handler_jsonl() {
             })
         );
     }
-}
-
-/// Python `json.dumps` string encoding (ASCII only, `\uXXXX` escapes).
-fn py_json_str(s: &str) -> String {
-    let mut out = String::from("\"");
-    for c in s.chars() {
-        match c {
-            '"' => out.push_str("\\\""),
-            '\\' => out.push_str("\\\\"),
-            '\n' => out.push_str("\\n"),
-            '\r' => out.push_str("\\r"),
-            '\t' => out.push_str("\\t"),
-            '\u{8}' => out.push_str("\\b"),
-            '\u{c}' => out.push_str("\\f"),
-            c if (c as u32) < 0x20 || (c as u32) > 0x7e => {
-                let mut buf = [0u16; 2];
-                for unit in c.encode_utf16(&mut buf) {
-                    out.push_str(&format!("\\u{unit:04x}"));
-                }
-            }
-            c => out.push(c),
-        }
-    }
-    out.push('"');
-    out
 }
 
 #[derive(Default)]
@@ -207,6 +183,13 @@ fn main() {
             }
         }
         Some("--handler-jsonl") => handler_jsonl(),
+        Some("--claude") if args.len() == 1 => {
+            let mut input = String::new();
+            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+            if let Some(out) = hook::claude_hook(&input) {
+                println!("{out}");
+            }
+        }
         _ => match parse_args(&args) {
             Ok(a) => std::process::exit(cli_mode(a)),
             Err(e) => {

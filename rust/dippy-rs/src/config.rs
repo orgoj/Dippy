@@ -78,6 +78,8 @@ pub struct WrapperInfo {
 pub struct Config {
     pub rules: Vec<Rule>,
     pub redirect_rules: Vec<Rule>,
+    /// `after` rules (PostToolUse feedback).
+    pub after_rules: Vec<Rule>,
     pub wrappers: BTreeMap<String, WrapperInfo>,
     /// Insertion-ordered (Python dict).
     pub aliases: Vec<(String, String)>,
@@ -100,6 +102,7 @@ impl Default for Config {
         Self {
             rules: Vec::new(),
             redirect_rules: Vec::new(),
+            after_rules: Vec::new(),
             wrappers: BTreeMap::new(),
             aliases: Vec::new(),
             python_allow_modules: Vec::new(),
@@ -754,7 +757,16 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     rule.negated_flags = neg;
                     cfg.redirect_rules.push(rule);
                 }
-                "after" | "after-mcp" | "after-web" | "ask-mcp" | "deny-mcp" => {
+                "after" => {
+                    if rest.is_empty() {
+                        return Err("requires a pattern".into());
+                    }
+                    let (pattern, message) = extract_message(&rest)?;
+                    let mut rule = Rule::new("after", pattern);
+                    rule.message = message;
+                    cfg.after_rules.push(rule);
+                }
+                "after-mcp" | "after-web" | "ask-mcp" | "deny-mcp" => {
                     if rest.is_empty() {
                         return Err("requires a pattern".into());
                     }
@@ -932,6 +944,7 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
     Config {
         rules: [base.rules, overlay.rules].concat(),
         redirect_rules: [base.redirect_rules, overlay.redirect_rules].concat(),
+        after_rules: [base.after_rules, overlay.after_rules].concat(),
         wrappers,
         aliases,
         python_allow_modules: [base.python_allow_modules, overlay.python_allow_modules].concat(),
@@ -962,6 +975,7 @@ fn tag_rules(mut config: Config, source: &str, scope: &str) -> Config {
         .rules
         .iter_mut()
         .chain(config.redirect_rules.iter_mut())
+        .chain(config.after_rules.iter_mut())
     {
         r.source = Some(source.into());
         r.scope = Some(scope.into());
@@ -1688,6 +1702,34 @@ pub fn match_command(
     remote: bool,
 ) -> Option<Match> {
     match_words(cmd, config, cwd, active, remote)
+}
+
+/// `match_after`: message of the last matching `after` rule ("" if silent).
+pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<String> {
+    let resolved: Vec<String> = match words.split_first() {
+        Some((first, rest)) => std::iter::once(resolve_alias(first, config, cwd))
+            .chain(rest.iter().cloned())
+            .collect(),
+        None => Vec::new(),
+    };
+    let normalized_cmd = normalize_words(&resolved, cwd);
+    let base_cwd = config.path_rule_cwd.as_deref().unwrap_or(cwd);
+    let mut result = None;
+    for rule in &config.after_rules {
+        let pattern = normalize_pattern(&rule.pattern, base_cwd);
+        let mut matched = fnmatchcase(&normalized_cmd, &pattern);
+        if !matched {
+            if let Some(base) = pattern.strip_suffix(" *") {
+                if !fnmatchcase("", base) {
+                    matched = fnmatchcase(&normalized_cmd, base);
+                }
+            }
+        }
+        if matched {
+            result = Some(rule.message.clone().unwrap_or_default());
+        }
+    }
+    result
 }
 
 #[cfg(test)]
