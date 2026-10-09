@@ -1983,15 +1983,16 @@ mod grammar {
         }
 
         fn select_item(&mut self) -> Option<()> {
+            // SQLGlot reads `* EXCEPT` as a star modifier, not a set operation.
             if self.eat_op("*") {
-                return Some(());
+                return (!self.is_kw("EXCEPT")).then_some(());
             }
             if self.is_ident()
                 && matches!(self.peek_at(1), Some(Tok::Op(".")))
                 && matches!(self.peek_at(2), Some(Tok::Op("*")))
             {
                 self.pos += 3;
-                return Some(());
+                return (!self.is_kw("EXCEPT")).then_some(());
             }
             // T-SQL reads `SELECT name = expr` as an alias assignment.
             if self.d == Tsql && self.is_ident() {
@@ -3511,6 +3512,7 @@ mod tests {
             ("duckdb", "SELECT [EXISTS (FROM d), e]"),
             ("duckdb", "SELECT i//**/(u)"),
             ("tsql", "SELECT a.b = 1"),
+            ("duckdb", "SELECT * EXCEPT SELECT b"),
             ("mysql", "SELECT a BETWEEN a || b AND 2"),
             ("postgres", "SELECT count(DISTINCT a, x <<= l)"),
             ("postgres", "SELECT strpos(a = 1, b, 2)"),
