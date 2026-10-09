@@ -1,0 +1,5 @@
+fd -x
+fd --exec
+fd x --exec-batch sh -c 'rm -rf /'
+fd -X 'a b' c
+fd -xls
