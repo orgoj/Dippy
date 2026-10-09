@@ -1,0 +1,230 @@
+az ''
+az 12 vm delete
+az vm ²³ list
+az --name
+az account
+az account clear
+az devops configure --list
+az devops configure -d x
+az bicep list-versions
+az bicep build
+az vm set-x
+az aks get-credentials -g x
+az a b c d e f list
+az monitor log-analytics query -w x --analytics-query 'x'
+az vm aaaaaaaa-bbbb-cccc-dddd-éééééééééééé delete
+az version
+az --version
+az --help
+az -h
+az vm --help
+az vm list --help
+az find 'how to create vm'
+az account show
+az account list
+az account list --output table
+az account list-locations
+az account get-access-token
+az account get-access-token --resource-type ms-graph
+az account set -s subscription_id
+az login
+az login --use-device-code
+az login --service-principal
+az logout
+az configure
+az vm list
+az vm list -g mygroup
+az vm list --output table
+az vm show -g mygroup -n myvm
+az vm show --resource-group mygroup --name myvm
+az vm list-sizes -l eastus
+az vm list-skus -l eastus
+az vm image list
+az vm image list-offers -l eastus -p Canonical
+az vm image list-publishers -l eastus
+az vm image list-skus -l eastus -p Canonical -f UbuntuServer
+az vm get-instance-view -g mygroup -n myvm
+az vm create -g mygroup -n myvm --image UbuntuLTS
+az vm delete -g mygroup -n myvm
+az vm start -g mygroup -n myvm
+az vm stop -g mygroup -n myvm
+az vm restart -g mygroup -n myvm
+az vm deallocate -g mygroup -n myvm
+az vm update -g mygroup -n myvm --set tags.env=prod
+az vm run-command invoke -g mygroup -n myvm --command-id RunShellScript
+az group list
+az group show -n mygroup
+az group exists -n mygroup
+az group create -n mygroup -l eastus
+az group delete -n mygroup
+az group update -n mygroup --tags env=prod
+az aks list
+az aks list -g mygroup
+az aks show -g mygroup -n mycluster
+az aks get-upgrades -g mygroup -n mycluster
+az aks get-versions -l eastus
+az aks create -g mygroup -n mycluster
+az aks delete -g mygroup -n mycluster
+az aks update -g mygroup -n mycluster
+az aks start -g mygroup -n mycluster
+az aks stop -g mygroup -n mycluster
+az aks get-credentials -g mygroup -n mycluster
+az acr list
+az acr show -n myregistry
+az acr repository list -n myregistry
+az acr repository show -n myregistry --repository myimage
+az acr repository show-tags -n myregistry --repository myimage
+az acr create -n myregistry -g mygroup --sku Basic
+az acr delete -n myregistry
+az acr update -n myregistry --admin-enabled true
+az acr login -n myregistry
+az acr repository delete -n myregistry --repository myimage
+az storage account list
+az storage account show -n mystorageaccount
+az storage account show-connection-string -n mystorageaccount
+az storage account create -n mystorageaccount -g mygroup
+az storage account delete -n mystorageaccount
+az storage account update -n mystorageaccount --sku Standard_GRS
+az storage blob list -c mycontainer --account-name mystorageaccount
+az storage blob show -c mycontainer -n myblob --account-name mystorageaccount
+az storage blob exists -c mycontainer -n myblob --account-name mystorageaccount
+az storage blob download -c mycontainer -n myblob -f file.txt --account-name mystorageaccount
+az storage blob download-batch -s mycontainer -d ./local --account-name mystorageaccount
+az storage blob url -c mycontainer -n myblob --account-name mystorageaccount
+az storage blob upload -c mycontainer -n myblob -f file.txt --account-name mystorageaccount
+az storage blob delete -c mycontainer -n myblob --account-name mystorageaccount
+az storage blob copy start --source-uri https://... -c mycontainer -b myblob
+az storage container list --account-name mystorageaccount
+az storage container show -n mycontainer --account-name mystorageaccount
+az storage container exists -n mycontainer --account-name mystorageaccount
+az storage container create -n mycontainer --account-name mystorageaccount
+az storage container delete -n mycontainer --account-name mystorageaccount
+az network vnet list
+az network vnet show -g mygroup -n myvnet
+az network nsg list
+az network nsg show -g mygroup -n mynsg
+az network public-ip list
+az network public-ip show -g mygroup -n myip
+az network nic list
+az network nic show -g mygroup -n mynic
+az network vnet create -g mygroup -n myvnet
+az network vnet delete -g mygroup -n myvnet
+az network nsg create -g mygroup -n mynsg
+az network nsg delete -g mygroup -n mynsg
+az network nsg rule create -g mygroup --nsg-name mynsg -n myrule
+az network public-ip create -g mygroup -n myip
+az network public-ip delete -g mygroup -n myip
+az webapp list
+az webapp show -g mygroup -n myapp
+az webapp log tail -g mygroup -n myapp
+az webapp log show -g mygroup -n myapp
+az webapp create -g mygroup -n myapp -p myplan
+az webapp delete -g mygroup -n myapp
+az webapp start -g mygroup -n myapp
+az webapp stop -g mygroup -n myapp
+az webapp restart -g mygroup -n myapp
+az webapp update -g mygroup -n myapp
+az webapp deployment source config -g mygroup -n myapp --repo-url https://...
+az container list
+az container show -g mygroup -n mycontainer
+az container logs -g mygroup -n mycontainer
+az container create -g mygroup -n mycontainer --image nginx
+az container delete -g mygroup -n mycontainer
+az container start -g mygroup -n mycontainer
+az container stop -g mygroup -n mycontainer
+az container restart -g mygroup -n mycontainer
+az container exec -g mygroup -n mycontainer --exec-command /bin/bash
+az disk list
+az disk show -g mygroup -n mydisk
+az disk create -g mygroup -n mydisk --size-gb 100
+az disk delete -g mygroup -n mydisk
+az disk update -g mygroup -n mydisk --size-gb 200
+az image list
+az image show -g mygroup -n myimage
+az image create -g mygroup -n myimage --source myvm
+az image delete -g mygroup -n myimage
+az devops project list
+az devops project show -p myproject
+az repos list -p myproject
+az repos show -r myrepo -p myproject
+az pipelines list -p myproject
+az pipelines show --id 123 -p myproject
+az pipelines runs list --pipeline-id 123 -p myproject
+az devops configure
+az devops project create --name myproject
+az devops project delete --id project-id
+az repos create --name myrepo -p myproject
+az repos delete --id repo-id -p myproject
+az pipelines create --name mypipeline -p myproject
+az pipelines delete --id 123 -p myproject
+az pipelines run --id 123 -p myproject
+az redis list
+az redis show -g mygroup -n myredis
+az redis list-keys -g mygroup -n myredis
+az redis create -g mygroup -n myredis -l eastus --sku Basic --vm-size c0
+az redis delete -g mygroup -n myredis
+az redis update -g mygroup -n myredis
+az provider list
+az provider show -n Microsoft.Compute
+az provider register -n Microsoft.Compute
+az provider unregister -n Microsoft.Compute
+az lock list
+az lock show -n mylock -g mygroup
+az lock create -n mylock -g mygroup --lock-type CanNotDelete
+az lock delete -n mylock -g mygroup
+az tag list
+az tag show -n mytag
+az tag create -n mytag
+az tag delete -n mytag
+az tag add-value -n mytag --value myvalue
+az advisor recommendation list
+az advisor recommendation list -g mygroup
+az config get
+az config set defaults.group=mygroup
+az config unset defaults.group
+az upgrade
+az bicep version
+az bicep install
+az bicep upgrade
+az bicep build -f main.bicep
+az cognitiveservices account list
+az cognitiveservices account show -g mygroup -n myaccount
+az cognitiveservices account list-skus -g mygroup -n myaccount
+az cognitiveservices account create -g mygroup -n myaccount --kind TextAnalytics --sku S0 -l eastus
+az cognitiveservices account delete -g mygroup -n myaccount
+az sshkey list
+az sshkey show -g mygroup -n mykey
+az sshkey create -g mygroup -n mykey
+az sshkey delete -g mygroup -n mykey
+az appconfig list
+az appconfig show -n myconfig
+az appconfig kv list -n myconfig
+az appconfig create -g mygroup -n myconfig -l eastus
+az appconfig delete -n myconfig
+az appconfig kv set -n myconfig --key mykey --value myvalue
+az appconfig kv delete -n myconfig --key mykey
+az apim list
+az apim show -g mygroup -n myapim
+az apim create -g mygroup -n myapim -l eastus --publisher-email admin@example.com --publisher-name MyCompany
+az apim delete -g mygroup -n myapim
+az logicapp list
+az logicapp show -g mygroup -n mylogicapp
+az logicapp create -g mygroup -n mylogicapp --storage-account mystorageaccount
+az logicapp delete -g mygroup -n mylogicapp
+az logicapp start -g mygroup -n mylogicapp
+az logicapp stop -g mygroup -n mylogicapp
+az quantum workspace list
+az quantum workspace show -g mygroup -n myworkspace
+az quantum workspace create -g mygroup -n myworkspace -l eastus
+az quantum workspace delete -g mygroup -n myworkspace
+az serial-console connect -g mygroup -n myvm
+az feedback
+az storage table list --account-name mystorageaccount
+az storage queue list --account-name mystorageaccount
+az storage entity query -t mytable --account-name mystorageaccount
+az storage table create -n mytable --account-name mystorageaccount
+az storage table delete -n mytable --account-name mystorageaccount
+az storage queue create -n myqueue --account-name mystorageaccount
+az storage queue delete -n myqueue --account-name mystorageaccount
+az storage entity insert -t mytable -e PartitionKey=pk RowKey=rk --account-name mystorageaccount
+az storage entity delete -t mytable -e PartitionKey=pk RowKey=rk --account-name mystorageaccount
