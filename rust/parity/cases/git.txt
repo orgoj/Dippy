@@ -1,0 +1,84 @@
+git
+git ''
+git -C
+git -c
+git -c x=y
+git --config-env=a=b status
+git --git-dirx=/x status
+git --git-dir /x --work-tree=/y log
+git --namespace=n --super-prefix=p status
+git -p log
+git --bare --no-optional-locks status
+git --unknown status
+git -C /x -C /y branch new
+git branch
+git branch -a -v
+git branch --list 'feat*'
+git branch --list=x
+git branch --contains abc new
+git branch -u origin/main
+git branch --set-upstream-to=o/m
+git branch --unset-upstream
+git branch -c a b
+git tag --list
+git tag --listx
+git tag -n
+git tag -l v1 -d
+git tag v1
+git remote
+git remote show origin
+git remote get-url origin
+git remote set-head origin -a
+git remote update
+git stash
+git stash list
+git stash show -p
+git stash -p
+git stash save
+git config
+git config -l
+git config --global --list
+git config --global user.name
+git config --local user.name me
+git config --worktree --system a
+git config --replace-all a b
+git config --rename-section a b
+git config --get-urlmatch http https://x
+git notes
+git notes list
+git notes prune
+git notes get-ref
+git bisect visualize
+git bisect run make
+git worktree list --porcelain
+git worktree prune
+git submodule
+git submodule foreach 'git pull'
+git submodule summary
+git apply --check --stat p
+git apply --stat p
+git sparse-checkout
+git bundle list-heads b
+git bundle
+git lfs
+git lfs env
+git lfs push
+git hash-object --write f
+git hash-object --stdin
+git symbolic-ref -q HEAD
+git symbolic-ref --short HEAD
+git replace --list
+git replace -d x
+git rerere status
+git rerere clear
+git gc
+git prune
+git filter-repo --path x
+git filter-branch
+git cherry-pick abc
+git archive HEAD -o out.zip
+git difftool
+git whatchanged
+git mergetool
+git init
+git clone url
