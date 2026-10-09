@@ -1,0 +1,69 @@
+cdk list
+cdk ls
+cdk list --long
+cdk ls -l
+cdk list --app 'npx ts-node bin/app.ts'
+cdk diff
+cdk diff MyStack
+cdk diff --app 'npx ts-node bin/app.ts'
+cdk diff --template template.yaml
+cdk diff --security-only
+cdk diff --fail
+cdk synth
+cdk synthesize
+cdk synth MyStack
+cdk synth --quiet
+cdk synth --json
+cdk synth --app 'npx ts-node bin/app.ts'
+cdk synth --output cdk.out
+cdk synth --exclusively
+cdk docs
+cdk doctor
+cdk metadata
+cdk metadata MyStack
+cdk notices
+cdk notices --unacknowledged
+cdk acknowledge 12345
+cdk context
+cdk context --json
+cdk version
+cdk --version
+cdk --help
+cdk -h
+cdk deploy --help
+cdk deploy
+cdk deploy MyStack
+cdk deploy --all
+cdk deploy --require-approval never
+cdk deploy --hotswap
+cdk deploy --force
+cdk deploy --app 'npx ts-node bin/app.ts'
+cdk destroy
+cdk destroy MyStack
+cdk destroy --all
+cdk destroy --force
+cdk bootstrap
+cdk bootstrap aws://123456789012/us-east-1
+cdk bootstrap --trust 123456789012
+cdk init
+cdk init app
+cdk init app --language typescript
+cdk init lib --language python
+cdk init sample-app --language java
+cdk import
+cdk import MyStack
+cdk migrate
+cdk migrate --from-path template.yaml
+cdk migrate --from-stack MyCloudFormationStack
+cdk watch
+cdk watch MyStack
+cdk watch --hotswap
+cdk gc
+cdk gc --type all
+cdk context --reset
+cdk context --clear
+cdk context --reset key
+cdk refactor
+cdk refactor --dry-run
+cdk context --clear
+cdk ''

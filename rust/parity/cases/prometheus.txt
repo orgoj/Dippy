@@ -1,0 +1,44 @@
+prometheus --help
+prometheus -h
+prometheus --help-long
+prometheus --help-man
+prometheus --version
+prometheus
+prometheus --config.file=prometheus.yml
+prometheus --config.file=/etc/prometheus/prometheus.yml
+prometheus --web.listen-address=0.0.0.0:9090
+prometheus --web.listen-address=:9090
+prometheus --storage.tsdb.path=data/
+prometheus --storage.tsdb.path=/var/lib/prometheus
+prometheus --storage.tsdb.retention.time=15d
+prometheus --storage.tsdb.retention.size=512MB
+prometheus --log.level=info
+prometheus --log.level=debug
+prometheus --log.format=json
+prometheus --agent
+prometheus --no-agent
+prometheus --web.config.file=/etc/prometheus/web.yml
+prometheus --web.external-url=http://prometheus.example.com
+prometheus --web.route-prefix=/prometheus
+prometheus --web.enable-lifecycle
+prometheus --web.enable-admin-api
+prometheus --web.enable-remote-write-receiver
+prometheus --web.enable-otlp-receiver
+prometheus --web.console.templates=consoles
+prometheus --web.console.libraries=console_libraries
+prometheus --storage.agent.path=data-agent/
+prometheus --storage.agent.wal-compression
+prometheus --storage.tsdb.no-lockfile
+prometheus --storage.remote.flush-deadline=1m
+prometheus --query.timeout=2m
+prometheus --query.max-concurrency=20
+prometheus --query.max-samples=50000000
+prometheus --rules.alert.for-outage-tolerance=1h
+prometheus --alertmanager.notification-queue-capacity=10000
+prometheus --enable-feature=exemplar-storage
+prometheus --enable-feature=memory-snapshot-on-shutdown
+prometheus --auto-gomaxprocs
+prometheus --auto-gomemlimit
+prometheus --config.file=prometheus.yml --storage.tsdb.path=/data --web.listen-address=:9090
+prometheus --agent --storage.agent.path=/data --web.listen-address=:9090
+prometheus x --version

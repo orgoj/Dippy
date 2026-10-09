@@ -1,0 +1,202 @@
+helm --help
+helm -h
+helm --version
+helm version
+helm help
+helm help install
+helm install --help
+helm env
+helm completion bash
+helm completion zsh
+helm completion fish
+helm completion powershell
+helm list
+helm ls
+helm list -A
+helm list --all-namespaces
+helm list -n production
+helm list --namespace production
+helm list -o json
+helm list --output yaml
+helm list --filter nginx
+helm list --deployed
+helm list --failed
+helm list --pending
+helm list --superseded
+helm list --uninstalled
+helm list --uninstalling
+helm get all myrelease
+helm get hooks myrelease
+helm get manifest myrelease
+helm get metadata myrelease
+helm get notes myrelease
+helm get values myrelease
+helm get values myrelease -a
+helm get values myrelease --all
+helm get values myrelease -n production
+helm get all myrelease --revision 3
+helm show all nginx/nginx
+helm show chart nginx/nginx
+helm show crds nginx/nginx
+helm show readme nginx/nginx
+helm show values nginx/nginx
+helm inspect all nginx/nginx
+helm inspect chart nginx/nginx
+helm inspect values nginx/nginx
+helm show all ./mychart
+helm show values ./mychart --version 1.2.3
+helm status myrelease
+helm status myrelease -n production
+helm status myrelease --revision 3
+helm status myrelease -o json
+helm history myrelease
+helm history myrelease -n production
+helm history myrelease --max 10
+helm history myrelease -o json
+helm search hub nginx
+helm search repo nginx
+helm search hub nginx --max-col-width 80
+helm search repo nginx --versions
+helm search repo nginx -l
+helm search repo nginx --version ^2.0.0
+helm template myrelease nginx/nginx
+helm template myrelease ./mychart
+helm template myrelease nginx/nginx --set key=value
+helm template myrelease nginx/nginx -f values.yaml
+helm template myrelease nginx/nginx --values values.yaml
+helm template myrelease nginx/nginx --version 1.2.3
+helm template myrelease nginx/nginx --namespace production
+helm template myrelease nginx/nginx --include-crds
+helm template myrelease nginx/nginx --skip-crds
+helm template myrelease nginx/nginx --no-hooks
+helm template myrelease nginx/nginx --validate
+helm lint ./mychart
+helm lint ./mychart --strict
+helm lint ./mychart --with-subcharts
+helm lint ./mychart --set key=value
+helm lint ./mychart -f values.yaml
+helm verify ./mychart-1.0.0.tgz
+helm verify ./mychart-1.0.0.tgz --keyring pubring.gpg
+helm repo list
+helm repo ls
+helm repo list -o json
+helm dependency list ./mychart
+helm dep list ./mychart
+helm dependency ls ./mychart
+helm dep ls ./mychart
+helm plugin list
+helm plugin ls
+helm plugin verify ./myplugin
+helm install myrelease nginx/nginx --dry-run
+helm install myrelease nginx/nginx --dry-run=client
+helm install myrelease nginx/nginx --dry-run=server
+helm upgrade myrelease nginx/nginx --dry-run
+helm upgrade myrelease nginx/nginx --dry-run=client
+helm uninstall myrelease --dry-run
+helm rollback myrelease 2 --dry-run
+helm install myrelease nginx/nginx -n prod --dry-run
+helm install myrelease nginx/nginx --set foo=bar --dry-run
+helm upgrade --install myrelease nginx/nginx --dry-run
+helm install myrelease nginx/nginx
+helm install myrelease ./mychart
+helm install myrelease nginx/nginx -n production
+helm install myrelease nginx/nginx --namespace production
+helm install myrelease nginx/nginx --create-namespace
+helm install myrelease nginx/nginx --set key=value
+helm install myrelease nginx/nginx -f values.yaml
+helm install myrelease nginx/nginx --values values.yaml
+helm install myrelease nginx/nginx --version 1.2.3
+helm install myrelease nginx/nginx --wait
+helm install myrelease nginx/nginx --timeout 5m
+helm install myrelease nginx/nginx --atomic
+helm install nginx/nginx --generate-name
+helm install nginx/nginx -g
+helm upgrade myrelease nginx/nginx
+helm upgrade myrelease ./mychart
+helm upgrade myrelease nginx/nginx -n production
+helm upgrade myrelease nginx/nginx --install
+helm upgrade --install myrelease nginx/nginx
+helm upgrade myrelease nginx/nginx --set key=value
+helm upgrade myrelease nginx/nginx -f values.yaml
+helm upgrade myrelease nginx/nginx --reuse-values
+helm upgrade myrelease nginx/nginx --reset-values
+helm upgrade myrelease nginx/nginx --force
+helm upgrade myrelease nginx/nginx --cleanup-on-fail
+helm uninstall myrelease
+helm delete myrelease
+helm del myrelease
+helm un myrelease
+helm uninstall myrelease -n production
+helm uninstall myrelease --keep-history
+helm uninstall myrelease --no-hooks
+helm uninstall myrelease --wait
+helm rollback myrelease
+helm rollback myrelease 2
+helm rollback myrelease 2 -n production
+helm rollback myrelease 2 --force
+helm rollback myrelease 2 --no-hooks
+helm rollback myrelease 2 --wait
+helm test myrelease
+helm test myrelease -n production
+helm test myrelease --logs
+helm test myrelease --timeout 5m
+helm create mychart
+helm create ./path/to/mychart
+helm create mychart --starter mystarter
+helm package ./mychart
+helm package ./mychart -d ./output
+helm package ./mychart --destination ./output
+helm package ./mychart --version 1.2.3
+helm package ./mychart --app-version 2.0.0
+helm package ./mychart --sign
+helm package ./mychart -u
+helm package ./mychart --dependency-update
+helm pull nginx/nginx
+helm fetch nginx/nginx
+helm pull nginx/nginx --untar
+helm pull nginx/nginx --untardir ./charts
+helm pull nginx/nginx -d ./charts
+helm pull nginx/nginx --destination ./charts
+helm pull nginx/nginx --version 1.2.3
+helm pull oci://registry.example.com/charts/nginx
+helm push mychart-1.0.0.tgz oci://registry.example.com/charts
+helm push ./mychart-1.0.0.tgz oci://registry.example.com/charts
+helm repo add stable https://charts.helm.sh/stable
+helm repo add bitnami https://charts.bitnami.com/bitnami
+helm repo add myrepo https://example.com/charts --username user --password pass
+helm repo remove stable
+helm repo rm stable
+helm repo update
+helm repo up
+helm repo index ./charts
+helm repo index ./charts --url https://example.com/charts
+helm repo index ./charts --merge index.yaml
+helm dependency update ./mychart
+helm dep update ./mychart
+helm dep up ./mychart
+helm dependency build ./mychart
+helm dep build ./mychart
+helm dependency update ./mychart --skip-refresh
+helm plugin install https://github.com/example/helm-plugin
+helm plugin install ./path/to/plugin
+helm plugin uninstall myplugin
+helm plugin update myplugin
+helm plugin package ./myplugin
+helm registry login registry.example.com
+helm registry login registry.example.com -u user
+helm registry login registry.example.com --username user --password pass
+helm registry logout registry.example.com
+helm
+helm --debug list
+helm -n production list
+helm --namespace production list
+helm --kube-context dev list
+helm list --debug
+helm --kube-as-group=a list
+helm --kube-as-group a install
+helm -n
+helm repo
+helm repo -x
+helm registry login
+helm un x --dry-run
+helm fetch x

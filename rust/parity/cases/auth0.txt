@@ -1,0 +1,147 @@
+auth0 apps list
+auth0 apps ls
+auth0 apps show app_12345
+auth0 apps create
+auth0 apps create --name myapp
+auth0 apps update app_12345
+auth0 apps delete app_12345
+auth0 apps rm app_12345
+auth0 apps open app_12345
+auth0 users search
+auth0 users search --query email:user@example.com
+auth0 users search-by-email user@example.com
+auth0 users show user_12345
+auth0 users create
+auth0 users update auth0|123456
+auth0 users delete auth0|123456
+auth0 users import
+auth0 users import --connection myconn
+auth0 logs list
+auth0 logs ls
+auth0 logs tail
+auth0 logs tail --filter type:s
+auth0 actions list
+auth0 actions ls
+auth0 actions show act_12345
+auth0 actions diff act_12345
+auth0 actions create
+auth0 actions update act_12345
+auth0 actions delete act_12345
+auth0 actions rm act_12345
+auth0 actions deploy act_12345
+auth0 apis list
+auth0 apis ls
+auth0 apis show api_12345
+auth0 apis create
+auth0 apis update api_12345
+auth0 apis delete api_12345
+auth0 apis rm api_12345
+auth0 apis scopes list api_12345
+auth0 apis scopes ls api_12345
+auth0 roles list
+auth0 roles ls
+auth0 roles show rol_12345
+auth0 roles create
+auth0 roles update rol_12345
+auth0 roles delete rol_12345
+auth0 roles rm rol_12345
+auth0 roles permissions list rol_12345
+auth0 roles perms list rol_12345
+auth0 roles permissions add rol_12345
+auth0 roles permissions remove rol_12345
+auth0 roles perms rm rol_12345
+auth0 orgs list
+auth0 orgs ls
+auth0 orgs show org_12345
+auth0 orgs create
+auth0 orgs update org_12345
+auth0 orgs delete org_12345
+auth0 orgs rm org_12345
+auth0 orgs members list org_12345
+auth0 orgs members ls org_12345
+auth0 rules list
+auth0 rules ls
+auth0 rules show rul_12345
+auth0 rules create
+auth0 rules update rul_12345
+auth0 rules delete rul_12345
+auth0 rules rm rul_12345
+auth0 rules enable rul_12345
+auth0 rules disable rul_12345
+auth0 domains list
+auth0 domains ls
+auth0 domains show cd_12345
+auth0 domains create
+auth0 domains update cd_12345
+auth0 domains delete cd_12345
+auth0 domains rm cd_12345
+auth0 domains verify cd_12345
+auth0 protection breached-password-detection show
+auth0 protection bpd show
+auth0 protection brute-force-protection show
+auth0 protection bfp show
+auth0 protection suspicious-ip-throttling show
+auth0 protection sit show
+auth0 ap bpd show
+auth0 attack-protection bpd show
+auth0 protection breached-password-detection update
+auth0 protection bpd update
+auth0 protection brute-force-protection update
+auth0 protection suspicious-ip-throttling update
+auth0 tenants list
+auth0 tenants ls
+auth0 tenants use mytenant
+auth0 quickstarts list
+auth0 qs list
+auth0 quickstarts ls
+auth0 quickstarts download
+auth0 qs download
+auth0 email templates show
+auth0 email templates update
+auth0 email provider show
+auth0 email provider create
+auth0 email provider update
+auth0 email provider delete
+auth0 email provider rm
+auth0 universal-login show
+auth0 ul show
+auth0 universal-login update
+auth0 ul update
+auth0 universal-login customize
+auth0 ul customize
+auth0 universal-login templates show
+auth0 ul templates show
+auth0 universal-login templates update
+auth0 ul templates update
+auth0 universal-login prompts show login
+auth0 ul prompts show login
+auth0 universal-login prompts update login
+auth0 test token
+auth0 test login
+auth0 api get clients
+auth0 api get tenants/settings
+auth0 api clients
+auth0 api stats/daily
+auth0 api get users -q search_engine:v3
+auth0 api post clients
+auth0 api put clients/client_id
+auth0 api patch clients/client_id
+auth0 api delete actions/actions/act_id
+auth0 api clients --data '{"name":"test"}'
+auth0 api clients -d '{"name":"test"}'
+auth0 --tenant mytenant apps list
+auth0 -t mytenant apps list
+auth0 apps list --tenant mytenant
+auth0 --tenant mytenant apps create
+auth0 --debug apps list
+auth0 --no-color apps list
+auth0 --no-input apps list
+auth0
+auth0 --help
+auth0 apps --help
+auth0 unknown-command
+auth0 -t
+auth0 -t foo
+auth0 --debug x apps list
+auth0 api post x
+auth0 -h
