@@ -1,0 +1,6 @@
+# Extra ifconfig cases
+ifconfig
+ifconfig -a
+ifconfig eth0
+ifconfig eth0 down
+ifconfig -l

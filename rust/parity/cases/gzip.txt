@@ -1,0 +1,9 @@
+# Extra gzip cases
+gzip
+gzip -
+gzip -cd f.gz
+gunzip -dk f.gz
+gzip --stdout f
+gzip -9v f
+gzip -- -c
+gzip -kt f

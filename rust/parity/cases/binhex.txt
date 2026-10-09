@@ -1,0 +1,12 @@
+# Extra binhex cases
+binhex
+binhex probe f
+binhex encode f
+binhex decode -c f
+binhex encode -o out f
+binhex encode -o '' f
+binhex encode -C dir f
+binhex -C
+applesingle decode --rename new f
+macbinary --version
+binhex f

@@ -1,0 +1,7 @@
+# Extra compression_tool cases
+compression_tool
+compression_tool -encode -o
+compression_tool -encode -o ''
+compression_tool --decode --o out -i in
+compression_tool -decode -i in
+compression_tool --h -encode -o out
