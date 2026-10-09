@@ -35,10 +35,19 @@ Test candidate command rules with `dippy --cmd` or the repository's
 without executing the underlying command; keep `dippy --cmd *` and
 `dippy --config * --cmd *` allowed in developer configurations to prevent
 approval prompt storms during rule verification. Classify destructive bypass
-examples as strings; never execute them. Use the `check-path.py` debug helper for
-path decisions.
-Pass `--config` a persistent file, not process substitution such as `/dev/fd/*`,
-and use the project's documented Python runner for source checks.
+examples as strings; never execute them. Check read, edit, redirect, web and
+MCP rules with the `check-rule.py` debug helper; `--config-only FILE` isolates a
+candidate file and `--flag` supplies context flags:
+
+```bash
+./scripts/debug/try-rules.sh tmp/cand.dippy 'tool ~/proj/a' 'tool ~/proj/../x'
+PYTHONPATH=src python3 ./scripts/debug/check-rule.py edit --cwd ~/wiki ~/x/NOTES.md ~/x/SOUL.md
+PYTHONPATH=src python3 ./scripts/debug/check-rule.py read --config-only tmp/cand.dippy /srv/a
+```
+
+Write candidate files with the edit tool and run one plain helper command per
+check; loops, shell variables and inline Python each cost a manual approval.
+Pass `--config` a persistent file, not process substitution such as `/dev/fd/*`.
 
 For multiline approved execution, use one directly attached quoted heredoc:
 
