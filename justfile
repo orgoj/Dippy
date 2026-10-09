@@ -49,6 +49,30 @@ lint *ARGS:
 fmt *ARGS:
     uv run ruff format {{ if ARGS == "--fix" { "" } else { "--check" } }} 2>&1 | sed -u "s/^/[fmt] /" | tee /tmp/{{project}}-fmt.log
 
+# Set the package version in pyproject.toml and __init__.py, then refresh uv.lock
+bump-version VERSION:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 - "{{VERSION}}" <<'PY'
+    import re, sys
+    from pathlib import Path
+    new = sys.argv[1]
+    if not re.fullmatch(r"\d+\.\d+\.\d+", new):
+        sys.exit(f"invalid version: {new}")
+    for path, pattern in (
+        ("pyproject.toml", r'^version = "[^"]+"$'),
+        ("src/dippy/__init__.py", r'^__version__ = "[^"]+"$'),
+    ):
+        file = Path(path)
+        prefix = "version" if path == "pyproject.toml" else "__version__"
+        text, count = re.subn(pattern, f'{prefix} = "{new}"', file.read_text(), count=1, flags=re.M)
+        if count != 1:
+            sys.exit(f"version line not found in {path}")
+        file.write_text(text)
+    PY
+    uv lock
+    echo "Version set to {{VERSION}}"
+
 # Update vendored parable.py from GitHub
 update-parable:
     #!/usr/bin/env bash

@@ -64,8 +64,9 @@ For every requested implementation that will be committed as `feat:` or `fix:`:
 1. Before the first implementation, test, or documentation edit, choose the
    smallest reasonable version increment. Extend an existing feature with a
    patch release unless compatibility or product scope requires a minor release.
-2. Update `pyproject.toml` and `src/dippy/__init__.py`, run `uv lock`, and
-   create the dated version section in `CHANGELOG.md`.
+2. Run `just bump-version X.Y.Z` (updates `pyproject.toml`,
+   `src/dippy/__init__.py` and `uv.lock`), and create the dated version
+   section in `CHANGELOG.md`.
 3. Implement with the required tests and documentation, then run `just check`.
 4. Run `just test` immediately before committing. Use a conventional commit
    with a `Co-Authored-By` trailer; never commit a red suite.

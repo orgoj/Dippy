@@ -13,9 +13,20 @@ frequency alone is not enough: identify what repeated task the user is trying to
 complete, such as creating, populating, inspecting, and cleaning a project-local
 scratch directory.
 
+Query the log only with `dippy audit`; it is auto-approved and reads the
+rotations too. Never build `cat | grep | yq` pipelines over the log files: each
+one is a manual approval prompt for the user.
+
+```bash
+dippy audit --since 2026-10-01 --not-allow --policy-cwd ~/wiki
+dippy audit --agent agy --not-allow --group-by cwd
+dippy audit --not-allow --policy-cwd ~/wiki --group-by tool --group-by file_path
+```
+
 The `agent` field records the CLI (`claude`, `codex`, `agy`, `pi`), not the
-agent's name: identify one agent's session by its `cwd`. Web and file-tool
-entries carry `tool` instead of `cmd` and have no `cwd`.
+agent's name: identify one agent by its `policy_cwd` (the project whose policy
+applied) or else its `cwd`. Web and file-tool entries carry `tool` instead of
+`cmd`. Decision `pass` means Dippy did not decide and the agent CLI prompted.
 
 Prefer the narrowest rule that covers the workflow. Keep destructive commands,
 arbitrary code execution, remote execution, secret-bearing reads, and external

@@ -1713,6 +1713,17 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 
 **Log rotation:** Dippy automatically rotates audit logs daily. The current log is renamed to `audit-YYYY-MM-DD.log` (yesterday's date) on the first run after midnight. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
+**Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. It never writes and is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` match at or below a path component boundary.
+
+```bash
+dippy audit --since 2026-10-01 --not-allow --policy-cwd ~/wiki
+dippy audit --agent agy --decision ask --decision pass --group-by cmd
+dippy audit --not-allow --group-by tool --group-by file_path --limit 20
+dippy audit --grep 'curl -X POST' --limit 5
+```
+
+`--group-by FIELD` (repeatable) prints `count<TAB>value...` lines, most frequent first; a missing field shows as `-`. `--limit N` keeps the last N entries or the top N groups.
+
 **Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
 
 File, MCP and web rules name their origin in the decision reason - `[.dippy* @ /home/u/proj/.dippy]` - which tells you whether a user rule or a project rule won. The named file is the one that was loaded, so a rule reached through `include` is reported under the file that includes it.

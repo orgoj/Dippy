@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.15] - 2026-10-09
+
+### Added
+
+- `dippy audit` queries the configured audit log and its daily rotations without writing: filters `--since`, `--until`, `--decision` (repeatable), `--not-allow`, `--agent`, `--cwd`, `--policy-cwd`, `--tool`, `--grep`, plus `--group-by FIELD` counts and `--limit`. The built-in handler auto-approves `dippy audit`, so audit analysis no longer needs hand-approved shell pipelines.
+- `just bump-version X.Y.Z` updates `pyproject.toml`, `src/dippy/__init__.py` and `uv.lock`.
+
 ## [0.4.14] - 2026-10-08
 
 ### Fixed

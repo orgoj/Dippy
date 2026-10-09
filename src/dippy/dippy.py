@@ -53,6 +53,7 @@ from dippy.core.config import (
     USER_CONFIG,
 )
 from dippy import __version__
+from dippy.audit import query_audit_log
 from dippy.config_admin import edit_config
 from dippy.core.notifier import run_notifier, should_run_notifier
 from dippy.core.template import expand_template
@@ -1187,6 +1188,47 @@ Subcommands:
         help="Auto-repair common issues",
     )
 
+    # === audit subcommand ===
+    audit_parser = subparsers.add_parser(
+        "audit",
+        help="Query the audit log (read-only)",
+        description="Filter and group entries of the configured audit log and "
+        "its daily rotations. Filters combine with AND; dates are UTC.",
+    )
+    audit_parser.add_argument("--since", metavar="YYYY-MM-DD")
+    audit_parser.add_argument("--until", metavar="YYYY-MM-DD")
+    audit_parser.add_argument(
+        "--decision",
+        action="append",
+        choices=["allow", "ask", "deny", "pass"],
+        help="Keep only this decision (repeatable)",
+    )
+    audit_parser.add_argument(
+        "--not-allow", action="store_true", help="Drop allow decisions"
+    )
+    audit_parser.add_argument(
+        "--agent", dest="audit_agent", metavar="CLI", help="claude, codex, agy, ..."
+    )
+    audit_parser.add_argument(
+        "--cwd", dest="audit_cwd", metavar="PATH", help="cwd at or below PATH"
+    )
+    audit_parser.add_argument(
+        "--policy-cwd", metavar="PATH", help="policy_cwd at or below PATH"
+    )
+    audit_parser.add_argument("--tool", metavar="NAME", help="Agent tool name")
+    audit_parser.add_argument(
+        "--grep", metavar="TEXT", help="Substring of command, cmd, message or path"
+    )
+    audit_parser.add_argument(
+        "--group-by",
+        action="append",
+        metavar="FIELD",
+        help="Count entries by field, e.g. cmd, command, cwd, tool (repeatable)",
+    )
+    audit_parser.add_argument(
+        "--limit", type=int, metavar="N", help="Last N entries or top N groups"
+    )
+
     return parser.parse_args()
 
 
@@ -1345,9 +1387,44 @@ def handle_subcommand(args: argparse.Namespace) -> int:
         return handle_hooks_subcommand(args)
     elif args.subcommand == "doctor":
         return handle_doctor_subcommand(args)
+    elif args.subcommand == "audit":
+        return handle_audit_subcommand(args)
     else:
         print(f"Unknown subcommand: {args.subcommand}", file=sys.stderr)
         return 1
+
+
+def handle_audit_subcommand(args: argparse.Namespace) -> int:
+    """Print audit log entries matching the filters; never writes."""
+    try:
+        _, config = _subcommand_config(args)
+    except ConfigError as error:
+        print(f"config error: {error}", file=sys.stderr)
+        return 1
+    if config.log is None:
+        print("audit log is not configured (set log PATH)", file=sys.stderr)
+        return 1
+    try:
+        lines = query_audit_log(
+            config.log,
+            since=args.since,
+            until=args.until,
+            decisions=args.decision,
+            not_allow=args.not_allow,
+            agent=args.audit_agent,
+            cwd=args.audit_cwd,
+            policy_cwd=args.policy_cwd,
+            tool=args.tool,
+            grep=args.grep,
+            group_by=args.group_by,
+            limit=args.limit,
+        )
+    except (OSError, ValueError) as error:
+        print(f"audit: {error}", file=sys.stderr)
+        return 1
+    for line in lines:
+        print(line)
+    return 0
 
 
 _CONFIG_KEYS = frozenset(
