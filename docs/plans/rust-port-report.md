@@ -100,3 +100,54 @@ See `rust/parity/ast-report.md`. All remaining differences end in `ask` on the
 Rust side: Parable-rejected input that Rable accepts with empty targets or
 empty commands, `$(case ...)` bodies the substitution scanner cannot balance,
 and a bare `!`.
+
+## Phase 2 - Parity harness
+
+All tools live in `rust/parity/`:
+
+| File | Purpose |
+| --- | --- |
+| `collect_plugin.py` | pytest plugin: harvests every string test parameter and every top-level `analyze()` call with a default or `parse_config` config |
+| `handwritten.jsonl` | 721 config cases covering every directive in `docs/config.md` |
+| `parser_cases.jsonl` | 164 parser stress cases (quoting, substitutions, redirects, heredocs, compound commands, malformed input) |
+| `gen_fuzz.py` / `fuzz_cases.jsonl` | 3,578 corpus commands placed in 40 shell contexts (wrappers, pipelines, lists, substitutions, redirects, `sudo`, `ssh`, ...) |
+| `build_corpus.py` + `oracle.py` | dedupe, drop configs that run programs or write files, run Python `cli_mode` in process with an empty `HOME`, write `corpus.jsonl` |
+| `run` | run `dippy-rs` per case, write `report.md`; exit 1 on any unsafe divergence |
+| `ast_compare.py` / `ast_dump.py` | Parable vs adapter tree comparison, `ast-report.md` |
+| `handler_compare.py` | identical `HandlerContext` fed to Python and Rust handlers |
+| `hook_compare.py` | `dippy --claude` vs `dippy-rs --claude` on the same payloads |
+
+The in-process oracle was checked against the real `dippy` executable on 100
+cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`
+(`home`, `work`, `configs`) so decisions that depend on paths are comparable.
+
+## Phase 3 - Rust core
+
+Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
+
+- `ast.rs`, `scan.rs`: Parable-shaped tree from Rable (see phase 1).
+- `parser.rs`, `bash.rs`, `paths.rs`, `fnmatch.rs`: `tokenize`, quote
+  handling, `os.path`/`pathlib` semantics, Python `fnmatch`.
+- `analyzer.rs`: line-by-line port of `core/analyzer.py`.
+- `config.rs`: config language (`parse_config`, every directive, settings
+  validation with fatal SSH-profile errors), scopes (user, project `.dippy`,
+  `--config`/`DIPPY_CONFIG`, `DIPPY_CONFIG_ONLY`, `set final`), includes
+  with globbing and cycle detection, command/redirect/option-block/`after`
+  matching, context flags, last-match-wins.
+- `allowlists.rs`: generated at build time from `core/allowlists.py`
+  (`build.rs`), so the lists cannot drift.
+- `hook.rs`: `--claude` hook mode.
+- CLI: `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR] [--config FILE]
+  [--config-only FILE] [--remote]`, same output (Python `json.dumps`
+  formatting) and exit codes as `cli_mode`.
+
+Not ported (fail closed or out of scope): MCP/web/file-tool rules in hook mode
+(ask), other hook modes, notifier programs (never run), audit logging,
+execution subcommands.
+
+## Phase 4 - Handlers
+
+Handler modules are ported and each is verified with
+`handler_compare.py` on identical inputs; the Python handler uses
+`rustpython-ruff_python_parser` for its static analysis. Per-module extra
+cases are in `rust/parity/cases/`.
