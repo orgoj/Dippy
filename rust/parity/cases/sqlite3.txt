@@ -1,0 +1,11 @@
+sqlite3 data.db 'SELECT 1' '.shell id'
+sqlite3 data.db "SELECT load_extension('x')"
+sqlite3 data.db 'SELECT $$x$$'
+sqlite3 -cmd '.output /tmp/x' data.db 'SELECT 1'
+sqlite3 -cmd "SELECT 1" -cmd "DROP TABLE t" data.db
+sqlite3 data.db "SELECT '$(id)'"
+sqlite3 -A x data.db 'SELECT 1'
+sqlite3 -lookaside 1 2 data.db 'SELECT 1'
+sqlite3 -bail -echo data.db 'SELECT count(*) FROM t GROUP BY ALL'
+sqlite3 data.db 'SELECT a FROM t WHERE a = 1 GROUP BY ROLLUP (a)'
+sqlite3 data.db 'SELECT 1' 'ATTACH "x" AS y'

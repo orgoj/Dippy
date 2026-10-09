@@ -1,0 +1,14 @@
+sqlcmd query 'SELECT @@SERVERNAME, @@VERSION'
+sqlcmd query "SELECT @@VERSION; DROP TABLE t"
+sqlcmd query -q "SELECT 1" -d master
+sqlcmd query --text "$SQL"
+sqlcmd query 'EXEC sp_who'
+sqlcmd query 'SELECT * INTO t2 FROM t'
+sqlcmd query 'SELECT TOP 5 * FROM t'
+sqlcmd query 'SELECT [name] FROM sys.databases'
+sqlcmd -S server query 'SELECT 1'
+sqlcmd config add-context --name x
+sqlcmd completion bash
+sqlcmd use mssql
+sqlcmd query
+sqlcmd query -d

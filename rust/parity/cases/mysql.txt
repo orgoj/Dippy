@@ -1,0 +1,14 @@
+mysql -e "SELECT @@version"
+mysql -e 'SELECT @@version'
+mysql -e "SELECT 1" -e "DROP TABLE t"
+mysql -eSELECT\ 1
+mysql --execute="SELECT $X"
+mysql -e 'SELECT string_agg(a, -b) FROM t'
+mysql -e 'SELECT group_concat(DISTINCT a) FROM t'
+mysql -e 'SELECT 1 # comment'
+mysql -e 'SELECT SLEEP(10)'
+mysql -e 'SELECT * FROM t INTO DUMPFILE "/tmp/x"'
+mysql -e 'system id'
+mysql -e '\! id'
+mysql -e 'SOURCE /tmp/x.sql'
+mysql -e
