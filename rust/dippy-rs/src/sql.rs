@@ -2301,9 +2301,10 @@ mod grammar {
             self.op("(")?;
             let mut args = 0;
             let mut distinct = false;
-            // Functions with dedicated SQLGlot argument parsers lose
-            // predicate arguments (`substr(a = b)`): operands only.
-            let special = matches!(
+            // Functions with dedicated SQLGlot argument parsers, or whose
+            // generator rewrites the call (`strpos`, `mod` as `%`, SQLite
+            // `concat` as `||`), lose predicate arguments: operands only.
+            let operand_only = matches!(
                 name,
                 "ARG_MAX"
                     | "ARG_MIN"
@@ -2314,7 +2315,19 @@ mod grammar {
                     | "SUBSTR"
                     | "SUBSTRING"
                     | "TRIM"
+                    | "INSTR"
+                    | "STRPOS"
+                    | "LEFT"
+                    | "RIGHT"
+                    | "LTRIM"
+                    | "RTRIM"
+                    | "CONCAT"
+                    | "LEAST"
+                    | "TO_TIMESTAMP"
             );
+            // Rewritten into operators: a parenthesized argument loses its
+            // parentheses.
+            let no_parens = matches!(name, "MOD" | "CONCAT" | "LEAST");
             if self.eat_op("*") {
                 if name != "COUNT" {
                     return None;
@@ -2322,16 +2335,36 @@ mod grammar {
                 args = 1;
             } else if !self.is_op(")") {
                 distinct = self.eat_kw("DISTINCT");
+                let first_arg = self.pos;
                 loop {
                     if args == 1 && self.d == Mysql && name == "STRING_AGG" {
                         // The separator becomes `SEPARATOR <expr>`, which
                         // SQLGlot reads back only for a simple operand.
-                        if self.is_op("-") {
+                        match self.peek()? {
+                            Tok::Str(_) | Tok::Num(_) | Tok::Ident(_) => {}
+                            Tok::Word(w) if !is_reserved(w) => {}
+                            _ => return None,
+                        }
+                        self.pos += 1;
+                    } else if args == 1 && name == "LIST_VALUE" {
+                        // Like a `[...]` literal led by a subquery.
+                        if self.toks[first_arg..self.pos].iter().any(
+                            |t| matches!(t, Tok::Word(w) if matches!(w.as_str(), "SELECT" | "FROM" | "WITH" | "VALUES")),
+                        ) {
                             return None;
                         }
+                        self.expr()?;
+                    } else if no_parens && self.is_op("(") {
+                        return None;
+                    } else if name == "MOD" {
                         self.unary()?;
-                    } else if special {
+                    } else if operand_only {
+                        let start = self.pos;
                         self.additive()?;
+                        // MySQL reads `||` as OR inside these calls.
+                        if self.d == Mysql && self.toks[start..self.pos].contains(&Tok::Op("||")) {
+                            return None;
+                        }
                     } else {
                         self.expr()?;
                     }
@@ -2343,6 +2376,10 @@ mod grammar {
             }
             self.op(")")?;
             if args > 4 || mask & (1 << args) == 0 {
+                return None;
+            }
+            // SQLGlot accepts, then mangles, extra length arguments.
+            if args > 1 && matches!(name, "CHAR_LENGTH" | "CHARACTER_LENGTH" | "LEN" | "LENGTH") {
                 return None;
             }
             let aggregate = matches!(name, "COUNT" | "SUM" | "AVG" | "MIN" | "MAX");
