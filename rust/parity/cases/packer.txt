@@ -1,0 +1,56 @@
+packer --help
+packer -help
+packer --version
+packer version
+packer validate template.json
+packer validate -syntax-only template.json
+packer validate -var 'key=value' template.json
+packer validate -var-file=vars.json template.json
+packer validate -except=amazon-ebs template.json
+packer validate -only=docker template.json
+packer validate -machine-readable template.json
+packer validate .
+packer inspect template.json
+packer inspect -machine-readable template.json
+packer inspect .
+packer fmt -check template.pkr.hcl
+packer fmt -diff template.pkr.hcl
+packer fmt -write=false template.pkr.hcl
+packer fmt -check -diff template.pkr.hcl
+packer fmt -check -recursive .
+packer console
+packer console template.json
+packer console -var 'key=value'
+packer console -var-file=vars.json
+packer plugins installed
+packer plugins required template.json
+packer build template.json
+packer build -var 'key=value' template.json
+packer build -var-file=vars.json template.json
+packer build -only=docker template.json
+packer build -except=amazon-ebs template.json
+packer build -force template.json
+packer build -on-error=abort template.json
+packer build -parallel-builds=1 template.json
+packer build -debug template.json
+packer build .
+packer init template.json
+packer init -upgrade template.json
+packer init -force template.json
+packer init .
+packer fix template.json
+packer fix -validate=true template.json
+packer fix -validate=false template.json
+packer fmt template.pkr.hcl
+packer fmt -recursive .
+packer fmt .
+packer hcl2_upgrade template.json
+packer hcl2_upgrade -output-file=out.pkr.hcl template.json
+packer hcl2_upgrade -with-annotations template.json
+packer plugins install github.com/hashicorp/amazon
+packer plugins remove github.com/hashicorp/amazon
+packer
+packer ''
+packer plugins ''
+packer plugins
+packer -x fmt -write=false
