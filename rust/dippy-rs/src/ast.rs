@@ -633,7 +633,23 @@ impl Converter<'_> {
     /// substitutions come from scanning the raw word: Rable misses backticks
     /// inside double quotes and gives substitution bodies relative spans.
     fn word_parts(&self, value: &str, parts: &[RNode]) -> Vec<Node> {
-        let subs = substitution_nodes(value);
+        let mut subs = substitution_nodes(value);
+        let rable_subs: Vec<&RNode> = parts
+            .iter()
+            .filter(|p| {
+                matches!(
+                    p.kind,
+                    K::CommandSubstitution { .. } | K::ProcessSubstitution { .. } | K::ArithmeticExpansion { .. }
+                )
+            })
+            .collect();
+        if !rable_subs.is_empty() && subs.iter().any(contains_unsupported) {
+            // The scanner cannot balance some bodies (`$(case x in a) ...`).
+            // Fall back to Rable's own nodes; without source text their
+            // redirects cannot be rebuilt and ask.
+            let detached = Converter { src: "" };
+            subs = rable_subs.iter().map(|p| detached.node(p)).collect();
+        }
         let mut out = Vec::new();
         let mut inserted = false;
         for p in parts {
@@ -963,6 +979,16 @@ fn collect_heredocs(n: &RNode, out: &mut Vec<(String, bool)>) {
     }
 }
 
+/// Whether a node (or its first member) is one whose span Rable starts late.
+fn has_loose_start(n: &RNode) -> bool {
+    match &n.kind {
+        K::Function { .. } | K::For { .. } | K::ForArith { .. } | K::Select { .. } => true,
+        K::List { items } => items.first().is_some_and(|i| has_loose_start(&i.command)),
+        K::Pipeline { commands, .. } => commands.first().is_some_and(has_loose_start),
+        _ => false,
+    }
+}
+
 /// Span end corrected for Rable nodes whose own span stops early.
 fn effective_end(src: &[char], n: &RNode) -> Option<usize> {
     match &n.kind {
@@ -1007,10 +1033,7 @@ fn check_coverage(src: &str, nodes: &[RNode]) -> Result<(), ParseError> {
     let mut pos = 0usize;
     for (ni, n) in nodes.iter().enumerate() {
         // Rable starts function and `for` spans after the first token.
-        let loose_start = matches!(
-            n.kind,
-            K::Function { .. } | K::For { .. } | K::ForArith { .. } | K::Select { .. }
-        );
+        let loose_start = has_loose_start(n);
         let separated = scan_gap(
             &chars,
             pos,
@@ -1098,4 +1121,14 @@ fn scan_gap(
         i += 1;
     }
     Ok(separated)
+}
+
+/// Whether a substitution node failed to convert (directly or its body).
+fn contains_unsupported(n: &Node) -> bool {
+    match n {
+        Node::Unsupported(_) => true,
+        Node::CmdSub { command } | Node::ProcSub { command, .. } => matches!(**command, Node::Unsupported(_)),
+        Node::Arith { cmdsubs } => cmdsubs.iter().any(contains_unsupported),
+        _ => false,
+    }
 }
