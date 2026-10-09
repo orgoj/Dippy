@@ -20,7 +20,10 @@ from sql_compare import EXAMPLE, build, classify, python_result  # noqa: E402
 def unsafe(fn: str, opts: dict, sql: str) -> bool:
     record = {"fn": fn, "sql": sql, "opts": opts}
     proc = subprocess.run(
-        [str(EXAMPLE)], input=json.dumps(record).encode(), capture_output=True, check=True
+        [str(EXAMPLE)],
+        input=json.dumps(record).encode(),
+        capture_output=True,
+        check=True,
     )
     rs = json.loads(proc.stdout)["rs"]
     record["result"] = python_result(record)

@@ -51,8 +51,7 @@ def build() -> None:
 
 def rust_results(records: list[dict]) -> list:
     payload = "\n".join(
-        json.dumps({"fn": r["fn"], "sql": r["sql"], "opts": r["opts"]})
-        for r in records
+        json.dumps({"fn": r["fn"], "sql": r["sql"], "opts": r["opts"]}) for r in records
     )
     proc = subprocess.run(
         [str(EXAMPLE)],
@@ -112,9 +111,7 @@ def compare(records: list[dict], show: int = 10, label: str = "") -> bool:
         verdicts = pool.map(python_result, records, chunksize=16)
     for record, verdict in zip(records, verdicts):
         record["result"] = verdict
-    stats: dict[str, collections.Counter] = collections.defaultdict(
-        collections.Counter
-    )
+    stats: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
     examples: dict[tuple[str, str], list] = collections.defaultdict(list)
     for record, rs in zip(records, results):
         kind = classify(record, rs)
@@ -130,10 +127,14 @@ def compare(records: list[dict], show: int = 10, label: str = "") -> bool:
             f"safe-diff={c['safe']:5} unsafe={c['unsafe']:3} split-diff={c['split']:3}"
         )
         ok &= not c["unsafe"] and not c["split"]
-    for (fn, kind), items in sorted(examples.items(), key=lambda kv: kv[0][1] != "unsafe"):
+    for (fn, kind), items in sorted(
+        examples.items(), key=lambda kv: kv[0][1] != "unsafe"
+    ):
         limit = show
         for record, rs in items[:limit]:
-            opts = {k: v for k, v in record["opts"].items() if v not in (None, False, [])}
+            opts = {
+                k: v for k, v in record["opts"].items() if v not in (None, False, [])
+            }
             print(
                 f"  {kind.upper():6} {fn} py={record['result']!r} rs={rs!r} "
                 f"opts={opts} sql={record['sql']!r}"[:400]

@@ -1597,6 +1597,8 @@ mod tests {
         assert_eq!(decide("echo $(( $(rm -rf x) ))"), Action::Ask);
         assert_eq!(decide("a=(1 2 $(rm x))"), Action::Ask);
         assert_eq!(decide("ls ;; rm x"), Action::Ask);
-        assert_eq!(decide("mysql -e \"SELECT 'a$'\""), Action::Ask);
+        // Rable would drop everything after `$'` inside double quotes.
+        assert_eq!(decide("echo \"x '$'\" > out.txt"), Action::Ask);
+        assert_eq!(decide("mysql -e \"SELECT 'a$'\""), Action::Allow);
     }
 }

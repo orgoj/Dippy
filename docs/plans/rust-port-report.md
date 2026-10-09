@@ -5,7 +5,57 @@ Status report for the unattended Rust port described in
 
 ## Summary
 
-<!-- STATUS -->
+Phases 1-4 are complete. Out-of-scope items were not started.
+
+| Measure | Result |
+| --- | --- |
+| Decision agreement (`rust/parity/run`, 13,534 cases) | **13,531 (99.98%)** |
+| Unsafe divergences (Rust allow, Python not allow) | **0** |
+| Remaining divergences | 3, all Python bugs where Rust deliberately asks (below) |
+| Identical reason text (informational) | 13,323 (98.4%) |
+| Handlers ported | 89 of 89 modules (140 command names) |
+| Handler parity (`handler_compare.py`, identical inputs) | 8,843 same, 0 different, 0 unsafe |
+| Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
+| `--claude` hook output (`hook_compare.py`, 609 payloads) | 609 same decision, 595 byte-identical |
+| `cargo test` | 272 tests pass |
+| Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
+
+Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
+`echo "$((ls) && (rm x))"` and `a=(1 2 $(rm x))`. Python ignores command
+substitutions inside arithmetic expansion and array literals; this is a
+Python safety bug, recorded below, not fixed here because Python behaviour
+must not change in this task.
+
+`just check`: lint, format, lock and style checks pass. One Python test,
+`tests/test_config.py::TestLoadConfig::test_unreadable_user_config`, fails
+only because the container runs as root (`chmod 000` does not block root);
+it passes as an unprivileged user. It fails identically on the unchanged
+base branch.
+
+### Top remaining divergence groups
+
+None besides the three Python-bug cases above. Known classes where Rust
+asks and Python allows, which the corpus exercises only lightly:
+
+- SQL outside the conservative Rust grammar (STRUCT/array casts, `CONVERT`,
+  `INTERVAL`, `EXTRACT`, lateral joins, tagged `$tag$` strings, ...): the
+  Rust checker never proves these read-only; Python verifies them with
+  SQLGlot. Measured directly: `is_readonly_sql` agrees on 964 of 1,060 SQL
+  strings from tests and corpus, 0 unsafe; 90 of the 96 differences are
+  Python `False` vs Rust `None` (both ask).
+- Python source accepted by the Rust Python parser but not by CPython 3.12,
+  very deep nesting, and syntax-error wording (python handler).
+- Rable-accepted inputs Parable rejects (`3>`, `; SELECT 2`, `ls &&`): ask.
+
+### Next concrete step
+
+Wire `dippy-rs --claude` behind a feature flag in a real Claude Code hook
+configuration on a test machine (empty `HOME`, fake askpass) and compare its
+live decisions with Python's for a week of audit logs; in parallel port the
+MCP/web/file-tool matchers (`match_mcp`, `match_web`, `match_edit`,
+`match_read`) so hook mode no longer has to ask for those tools, then the
+Gemini/Codex/Cursor hook output formats.
+
 
 ## Phase 1 - Rable in Python Dippy
 
@@ -147,7 +197,19 @@ execution subcommands.
 
 ## Phase 4 - Handlers
 
-Handler modules are ported and each is verified with
-`handler_compare.py` on identical inputs; the Python handler uses
-`rustpython-ruff_python_parser` for its static analysis. Per-module extra
-cases are in `rust/parity/cases/`.
+All 89 handler modules are ported by seven parallel agents in separate
+worktrees and merged; each is verified with `handler_compare.py` on
+identical inputs. Per-module extra cases are in `rust/parity/cases/`.
+
+- `python`: static analysis uses `rustpython-ruff_python_parser` 0.16.10
+  (Python 3.12 target). First-violation agreement was checked on about
+  54,000 Python sources; Rust asks for syntax CPython 3.12 rejects and for
+  nesting deeper than CPython's recursion limit allows.
+- SQL (`core/sql.py`, `psql`, `mysql`, `sqlite3`, `duckdb`, `sqlcmd`,
+  Athena in `aws`): lexical masking, statement splitting and DuckDB write
+  checks are exact ports. SQLGlot's structural verification is replaced by a
+  conservative query grammar that only proves read-only for constructs whose
+  SQLGlot verdict was reproduced; differential fuzzing (21 seeds, ~21k cases
+  each, `sql_fuzz.py`) found 0 unsafe results on the final code.
+- Python's `str.isdigit`, `\s` and `str.isspace` Unicode semantics are
+  reproduced where handlers rely on them.
