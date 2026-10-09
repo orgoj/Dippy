@@ -24,6 +24,12 @@ install target (`~/go/bin/tool`). Never allow running a program from a directory
 the agent may write, such as a project `tmp/`; a tool downloaded there is the
 agent's mistake to fix, not a rule to add.
 
+Give every `deny` and `ask` message the permitted alternative, because the agent
+sees only the message, never the config: `deny git -C * "Use: cd <repo> && git
+log|diff|show"`. A bare prohibition, or text such as "commands listed below",
+makes the agent guess and retry. A catch-all `deny *` names the allowed commands;
+a rule that requires a specific form (flags, `--name`) spells that form out.
+
 For an audit entry, use its exact command and `cwd`. Read that project's
 instructions and inspect each config scope separately before choosing a code or
 config fix; an explicit project rule can override a handler. Replay the command
