@@ -37,6 +37,7 @@
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **Audit log queries** — auto-approved read-only `dippy audit` filters the log and its rotations by date, decision, agent, cwd, tool or text and counts entries with `--group-by`
+- **Live dashboard** — `dippy dashboard` serves a read-only web view of the audit log (stdlib only, token-protected API, `127.0.0.1:8765` by default) to watch decisions across agents as they happen
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
 - **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify a quoted argument or literal quoted-heredoc script before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
 - **Optional project SSH profiles** — SSH, tmux and Herdr share explicit SSH config/agent selection with no user-authentication fallback, private control sockets, and project-scoped recovery; ordinary user SSH settings remain the default

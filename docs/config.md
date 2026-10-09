@@ -1732,6 +1732,13 @@ dippy audit --grep 'curl -X POST' --limit 5
 
 `--group-by FIELD` (repeatable) prints `count<TAB>value...` lines, most frequent first; a missing field shows as `-`. `--limit N` keeps the last N entries or the top N groups.
 
+**Live dashboard:** `dippy dashboard` serves the audit log entries since yesterday (UTC) as a web page that refreshes every 2 seconds, with filters for decision, agent, absolute cwd and text. It only reads the log and never changes configuration. Open the URL it prints: the `#token=...` part authorizes the data API, and a new random token is generated at every start. It listens on `127.0.0.1:8765`; use `--port` to change the port and `--host` (IPv4 only) only deliberately, for example a Tailscale address. For remote viewing, an SSH tunnel (`ssh -L 8765:127.0.0.1:8765 host`) keeps the default address. Unlike `dippy audit`, it requires approval when an agent runs it.
+
+```bash
+dippy dashboard
+dippy dashboard --port 9000
+```
+
 **Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
 
 File, MCP and web rules name their origin in the decision reason - `[.dippy* @ /home/u/proj/.dippy]` - which tells you whether a user rule or a project rule won. The named file is the one that was loaded, so a rule reached through `include` is reported under the file that includes it.

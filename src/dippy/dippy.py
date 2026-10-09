@@ -55,6 +55,7 @@ from dippy.core.config import (
 from dippy import __version__
 from dippy.audit import query_audit_log
 from dippy.config_admin import edit_config
+from dippy.dashboard import serve as serve_dashboard
 from dippy.core.notifier import run_notifier, should_run_notifier
 from dippy.core.template import expand_template
 from dippy.execution import configure_and_execute, recover, validate_server
@@ -1229,6 +1230,20 @@ Subcommands:
         "--limit", type=int, metavar="N", help="Last N entries or top N groups"
     )
 
+    # === dashboard subcommand ===
+    dashboard_parser = subparsers.add_parser(
+        "dashboard",
+        help="Serve a live read-only web view of the audit log",
+        description="Serve the audit log since yesterday (UTC) as a live web "
+        "page. Open the printed URL; its token guards the data API.",
+    )
+    dashboard_parser.add_argument(
+        "--host", default="127.0.0.1", help="Listen address (default: 127.0.0.1)"
+    )
+    dashboard_parser.add_argument(
+        "--port", type=int, default=8765, help="Listen port (default: 8765)"
+    )
+
     return parser.parse_args()
 
 
@@ -1389,6 +1404,8 @@ def handle_subcommand(args: argparse.Namespace) -> int:
         return handle_doctor_subcommand(args)
     elif args.subcommand == "audit":
         return handle_audit_subcommand(args)
+    elif args.subcommand == "dashboard":
+        return handle_dashboard_subcommand(args)
     else:
         print(f"Unknown subcommand: {args.subcommand}", file=sys.stderr)
         return 1
@@ -1428,6 +1445,19 @@ def handle_audit_subcommand(args: argparse.Namespace) -> int:
     for line in lines:
         print(line)
     return 0
+
+
+def handle_dashboard_subcommand(args: argparse.Namespace) -> int:
+    """Serve the live read-only audit log view until interrupted."""
+    try:
+        _, config = _subcommand_config(args)
+    except ConfigError as error:
+        print(f"config error: {error}", file=sys.stderr)
+        return 1
+    if config.log is None:
+        print("audit log is not configured (set log PATH)", file=sys.stderr)
+        return 1
+    return serve_dashboard(config.log, args.host, args.port)
 
 
 _CONFIG_KEYS = frozenset(

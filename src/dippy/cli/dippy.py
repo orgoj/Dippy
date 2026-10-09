@@ -1,7 +1,8 @@
 """Dippy's own CLI handler.
 
 `dippy audit` only queries the audit log. Every other subcommand can execute
-commands or change configuration and needs approval unless a rule allows it.
+commands, change configuration or open a network listener (`dippy dashboard`)
+and needs approval unless a rule allows it.
 """
 
 from dippy.cli import Classification, HandlerContext

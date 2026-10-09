@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.20] - 2026-10-09
+
+### Added
+
+- `dippy dashboard [--host H] [--port P]` serves a live, read-only web view of the audit log since yesterday (UTC), refreshed every 2 seconds, with decision, agent, cwd and text filters. It uses only the Python standard library, reads the log Dippy already writes and never changes configuration. It listens on `127.0.0.1:8765` by default; the data API requires the random token in the printed URL, so other local users and DNS-rebinding pages cannot read logged commands. Like other subcommands except `dippy audit`, running it asks for approval.
+
 ## [0.4.19] - 2026-10-09
 
 ### Fixed
