@@ -1,6 +1,6 @@
 """Dippy's own CLI handler.
 
-`dippy audit` only reads the audit log. Every other subcommand can execute
+`dippy audit` only queries the audit log. Every other subcommand can execute
 commands or change configuration and needs approval unless a rule allows it.
 """
 
@@ -14,4 +14,4 @@ def classify(ctx: HandlerContext) -> Classification:
     tokens = ctx.tokens
     if len(tokens) > 1 and tokens[1] == "audit":
         return Classification("allow", description="dippy audit")
-    return Classification("ask", description="dippy")
+    return Classification("ask")

@@ -39,7 +39,7 @@ def _log_files(log: Path, since: date | None) -> list[Path]:
 def _under(value: object, prefix: str) -> bool:
     if not isinstance(value, str):
         return False
-    prefix = os.path.expanduser(prefix).rstrip("/")
+    prefix = os.path.abspath(os.path.expanduser(prefix)).rstrip("/")
     return value == prefix or value.startswith(prefix + "/")
 
 
@@ -68,6 +68,8 @@ def query_audit_log(
     limit: int | None = None,
 ) -> list[str]:
     """Return matching raw JSON lines, or `count<TAB>values` lines when grouped."""
+    if limit is not None and limit < 0:
+        raise ValueError(f"limit must not be negative: {limit}")
     since_date = _parse_date(since) if since else None
     until_date = _parse_date(until) if until else None
 
@@ -120,5 +122,5 @@ def query_audit_log(
 
     lines = [line for _, line, _ in matches]
     if limit is not None:
-        lines = lines[-limit:] if limit > 0 else []
+        lines = lines[max(0, len(lines) - limit) :]
     return lines

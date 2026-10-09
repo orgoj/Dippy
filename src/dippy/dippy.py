@@ -1395,7 +1395,10 @@ def handle_subcommand(args: argparse.Namespace) -> int:
 
 
 def handle_audit_subcommand(args: argparse.Namespace) -> int:
-    """Print audit log entries matching the filters; never writes."""
+    """Print audit log entries matching the filters.
+
+    Writes nothing beyond the daily log rotation every config load performs.
+    """
     try:
         _, config = _subcommand_config(args)
     except ConfigError as error:

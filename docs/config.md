@@ -854,6 +854,7 @@ Both commands and patterns are normalized before matching:
 - `~` expands to home directory
 - `./foo` and `../foo` resolve against cwd to absolute paths
 - Relative paths without `./` (e.g., `bin/foo`) resolve against cwd to absolute paths
+- Absolute and `~/` paths collapse `..`, `.` and repeated slashes lexically (`/a/b/../c` → `/a/c`, `//etc` → `/etc`); unlike relative paths, symlinks are not followed, so `/allowed/link/../x` is judged as `/allowed/x`
 
 ```
 # Config (cwd: /home/user/project)
@@ -1713,7 +1714,7 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 
 **Log rotation:** Dippy automatically rotates audit logs daily. The current log is renamed to `audit-YYYY-MM-DD.log` (yesterday's date) on the first run after midnight. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
-**Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. It never writes and is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` match at or below a path component boundary.
+**Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. Apart from the daily log rotation that every Dippy run performs, it writes nothing, and it is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` (relative paths resolve against the current directory) match at or below a path component boundary. A negative `--limit` is rejected.
 
 ```bash
 dippy audit --since 2026-10-01 --not-allow --policy-cwd ~/wiki

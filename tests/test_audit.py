@@ -205,6 +205,26 @@ CLASSIFY = [
 ]
 
 
+def test_relative_cwd_filter_resolves_against_process_cwd(log_path, monkeypatch):
+    monkeypatch.chdir("/")
+    assert len(query_audit_log(log_path, cwd="home/u/wiki")) == 4
+
+
+def test_limit_larger_than_matches_keeps_all(log_path):
+    assert len(query_audit_log(log_path, limit=7)) == 5
+    assert query_audit_log(log_path, limit=0) == []
+
+
+def test_negative_limit_is_rejected(log_path):
+    with pytest.raises(ValueError, match="limit"):
+        query_audit_log(log_path, limit=-1)
+
+
+def test_other_dippy_subcommands_keep_subcommand_in_reason(check_single):
+    _, reason = check_single("dippy config set askpass x")
+    assert "dippy config" in reason
+
+
 @pytest.mark.parametrize("command,expected", CLASSIFY)
 def test_audit_is_read_only_builtin(check, command, expected):
     result = check(command)

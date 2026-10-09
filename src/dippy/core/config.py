@@ -1426,6 +1426,14 @@ def _classify_token(token: str) -> str:
     return _BARE
 
 
+def _collapse_path(path: str, pathmod=os.path) -> str:
+    """Collapse `..`, `.` and repeated slashes, including POSIX's leading `//`."""
+    normalized = pathmod.normpath(path)
+    if normalized.startswith("//"):
+        normalized = "/" + normalized.lstrip("/")
+    return normalized
+
+
 def _expand_token(token: str, cwd: Path, *, force_path: bool = False) -> str:
     """Expand a token based on its classification.
 
@@ -1444,10 +1452,10 @@ def _expand_token(token: str, cwd: Path, *, force_path: bool = False) -> str:
     if kind == _VARIABLE:
         return token
     if kind == _ABSOLUTE:
-        return token
+        return _collapse_path(token)
     if kind == _HOME:
         # ~ → /home/user, ~/foo → /home/user/foo
-        return str(home) + token[1:] if len(token) > 1 else str(home)
+        return _collapse_path(str(home) + token[1:]) if len(token) > 1 else str(home)
     if kind == _USER_HOME:
         return token
     if kind == _RELATIVE:
@@ -1497,12 +1505,8 @@ def _normalize_pattern(pattern: str, cwd: Path) -> str:
 
 
 def _normalize_path(path: str, cwd: Path) -> str:
-    """Normalize a redirect target path (strip trailing /, force as path).
-
-    Absolute results collapse `..` so a path cannot escape the tree a rule names.
-    """
-    expanded = _expand_token(path.rstrip("/"), cwd, force_path=True)
-    return os.path.normpath(expanded) if os.path.isabs(expanded) else expanded
+    """Normalize a redirect target path (strip trailing /, force as path)."""
+    return _expand_token(path.rstrip("/"), cwd, force_path=True)
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern:
@@ -1887,7 +1891,7 @@ def _match_redirect(
     # When remote, don't expand paths against cwd; only collapse `..` lexically
     if remote:
         normalized_target = (
-            posixpath.normpath(target) if target.startswith("/") else target
+            _collapse_path(target, posixpath) if target.startswith("/") else target
         )
     else:
         normalized_target = _normalize_path(target, cwd)

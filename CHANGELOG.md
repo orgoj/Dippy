@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.17] - 2026-10-09
+
+### Fixed
+
+- Path normalization also collapses a leading `//` (kept by POSIX `normpath`), so `//etc/passwd` reaches `deny` rules for `/etc/**` in edit, read, local and remote redirect matching.
+- Absolute and `~/` path words in command rules collapse `..`, so `allow tool ~/proj/*` no longer matches `tool ~/proj/../.ssh/id_rsa`.
+- `dippy audit`: relative `--cwd`/`--policy-cwd` resolve against the current directory, a negative `--limit` is rejected, and `--limit` above the match count keeps every entry. Other `dippy` subcommands keep their subcommand (e.g. `dippy config`) in the ask reason. Docs no longer claim `dippy audit` never writes: it performs the same daily log rotation as every Dippy run.
+
 ## [0.4.16] - 2026-10-09
 
 ### Fixed
