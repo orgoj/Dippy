@@ -1,0 +1,23 @@
+awk '{print > "a"} {print > "b"}'
+awk '{print >> '"'"'a'"'"'; printf "x" > "b"}'
+awk '{print > $2}'
+awk '{print > ("x" $1)}'
+awk '{print $1 | "sh"}'
+awk '{print $1 |'"'"'sh'"'"'}'
+{"cmd": "awk '{print $1 |\u001f\"sh\"}'"}
+{"cmd": "awk '{print\u001c> \"x\"}'"}
+{"cmd": "awk '{print\n> \"multi\"}'"}
+awk '{print > "a" > "b"}'
+awk '{print > "a"}; END {print > "/tmp/b"}'
+awk '{printf("%s", $1) > "o"}'
+awk '{print > ""}'
+awk -F
+awk -F: -v x=1 ''
+awk --field-separator : '{print}'
+awk --file=x.awk
+awk -fx.awk
+gawk '{system("ls")}'
+nawk 'BEGIN{print "x" >> "/etc/passwd"}'
+mawk '{print $1 > "ü ö"}'
+awk '{print > "a}b"}'
+{"cmd": "awk '{print >\u001e\"x\"}'"}
