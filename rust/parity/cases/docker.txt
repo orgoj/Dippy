@@ -1,0 +1,391 @@
+docker ps
+docker ps -a
+docker ps --all
+docker ps --format '{{.Names}}'
+docker container ls
+docker container ls -a
+docker images
+docker images -a
+docker images --format '{{.Repository}}'
+docker image ls
+docker image ls -a
+docker inspect mycontainer
+docker inspect --format '{{.State.Running}}' mycontainer
+docker container inspect mycontainer
+docker image inspect myimage
+docker volume inspect myvol
+docker network inspect mynet
+docker logs mycontainer
+docker logs -f mycontainer
+docker logs --tail 100 mycontainer
+docker logs --since 1h mycontainer
+docker container logs mycontainer
+docker top mycontainer
+docker top mycontainer aux
+docker container top mycontainer
+docker port mycontainer
+docker port mycontainer 80
+docker stats
+docker stats mycontainer
+docker stats --no-stream
+docker container stats mycontainer
+docker history myimage
+docker history --no-trunc myimage
+docker image history myimage
+docker events
+docker events --since 1h
+docker events --filter container=mycontainer
+docker system events
+docker diff mycontainer
+docker container diff mycontainer
+docker version
+docker info
+docker system info
+docker system df
+docker search nginx
+docker search --limit 10 nginx
+docker context ls
+docker context show
+docker context inspect mycontext
+docker network ls
+docker network inspect bridge
+docker volume ls
+docker --host tcp://localhost:2375 ps
+docker -H tcp://localhost:2375 ps
+docker --context mycontext ps
+docker -c mycontext images
+docker --log-level debug ps
+docker -l debug images
+docker --config /path/to/config ps
+docker run ubuntu
+docker run -it ubuntu bash
+docker run -d nginx
+docker run --rm alpine echo hello
+docker container run ubuntu
+docker start mycontainer
+docker container start mycontainer
+docker stop mycontainer
+docker container stop mycontainer
+docker kill mycontainer
+docker container kill mycontainer
+docker restart mycontainer
+docker container restart mycontainer
+docker pause mycontainer
+docker container pause mycontainer
+docker unpause mycontainer
+docker container unpause mycontainer
+docker wait mycontainer
+docker container wait mycontainer
+docker exec mycontainer ls
+docker exec -it mycontainer bash
+docker exec -u root mycontainer whoami
+docker container exec mycontainer ls
+docker create ubuntu
+docker container create ubuntu
+docker rm mycontainer
+docker rm -f mycontainer
+docker container rm mycontainer
+docker rmi myimage
+docker image rm myimage
+docker build .
+docker build -t myimage .
+docker image build -t myimage .
+docker commit mycontainer myimage
+docker container commit mycontainer
+docker tag myimage myrepo:tag
+docker image tag myimage myrepo:tag
+docker pull nginx
+docker pull nginx:latest
+docker image pull nginx
+docker push myrepo/myimage
+docker image push myrepo/myimage
+docker login
+docker login -u user
+docker logout
+docker cp mycontainer:/path /local
+docker cp /local mycontainer:/path
+docker container cp mycontainer:/path /local
+docker import export.tar myimage
+docker image import export.tar
+docker load < image.tar
+docker image load -i image.tar
+docker export mycontainer
+docker container export mycontainer
+docker save myimage
+docker image save myimage
+docker export mycontainer > export.tar
+docker save myimage > image.tar
+docker image save myimage -o image.tar
+docker rename oldname newname
+docker container rename oldname newname
+docker update --memory 512m mycontainer
+docker container update --cpus 2 mycontainer
+docker attach mycontainer
+docker container attach mycontainer
+docker system prune
+docker system prune -a
+docker container prune
+docker image prune
+docker volume prune
+docker network prune
+docker builder prune
+docker network create mynet
+docker network rm mynet
+docker network connect mynet mycontainer
+docker network disconnect mynet mycontainer
+docker volume create myvol
+docker volume rm myvol
+docker context create mycontext
+docker context rm mycontext
+docker context update mycontext
+docker context use mycontext
+docker compose ps
+docker compose ps -a
+docker compose logs
+docker compose logs -f
+docker compose logs web
+docker compose config
+docker compose config --services
+docker compose images
+docker compose top
+docker compose version
+docker compose ls
+docker compose port web 80
+docker compose events
+docker compose -f docker-compose.yml ps
+docker compose --file docker-compose.yml logs
+docker compose -p myproject ps
+docker compose --project-name myproject logs
+docker compose --project-directory /path ps
+docker compose --env-file .env ps
+docker compose up
+docker compose up -d
+docker compose up --build
+docker compose down
+docker compose down -v
+docker compose start
+docker compose start web
+docker compose stop
+docker compose stop web
+docker compose restart
+docker compose restart web
+docker compose kill
+docker compose kill web
+docker compose pause
+docker compose unpause
+docker compose exec web bash
+docker compose exec -it web sh
+docker compose run web echo hello
+docker compose run --rm web pytest
+docker compose build
+docker compose build web
+docker compose pull
+docker compose pull web
+docker compose push
+docker compose push web
+docker compose rm
+docker compose rm -f
+docker compose create
+docker compose scale web=3
+docker compose cp web:/path /local
+docker compose attach web
+docker compose wait web
+docker compose watch
+docker compose commit web myimage
+docker compose export web
+docker compose publish
+docker swarm init
+docker swarm init --advertise-addr eth0
+docker swarm join --token SWMTKN-xxx manager:2377
+docker swarm join-token worker
+docker swarm join-token manager
+docker swarm leave
+docker swarm leave --force
+docker swarm update
+docker swarm update --cert-expiry 24h
+docker swarm ca
+docker swarm ca --rotate
+docker swarm unlock
+docker swarm unlock-key
+docker service ls
+docker service list
+docker service inspect myservice
+docker service inspect --pretty myservice
+docker service ps myservice
+docker service logs myservice
+docker service logs -f myservice
+docker service create --name myservice nginx
+docker service create --replicas 3 nginx
+docker service rm myservice
+docker service scale myservice=3
+docker service update myservice --image nginx:latest
+docker service rollback myservice
+docker secret ls
+docker secret inspect mysecret
+docker secret inspect --pretty mysecret
+docker secret create mysecret file.txt
+docker secret rm mysecret
+docker config ls
+docker config inspect myconfig
+docker config create myconfig file.txt
+docker config rm myconfig
+docker stack ls
+docker stack ps mystack
+docker stack services mystack
+docker stack deploy -c docker-compose.yml mystack
+docker stack rm mystack
+docker node ls
+docker node inspect node1
+docker node ps node1
+docker node update --availability drain node1
+docker node rm node1
+docker node promote node1
+docker node demote node1
+docker plugin ls
+docker plugin inspect myplugin
+docker plugin install myplugin
+docker plugin enable myplugin
+docker plugin disable myplugin
+docker plugin rm myplugin
+docker plugin upgrade myplugin
+docker plugin create myplugin
+docker plugin push myplugin
+docker buildx ls
+docker buildx inspect
+docker buildx inspect mybuilder
+docker buildx du
+docker buildx version
+docker buildx imagetools inspect nginx
+docker buildx build .
+docker buildx build -t myimage .
+docker buildx bake
+docker buildx create
+docker buildx create --use
+docker buildx rm mybuilder
+docker buildx use mybuilder
+docker buildx prune
+docker buildx imagetools create
+docker manifest inspect nginx:latest
+docker manifest create myimage:latest myimage:amd64 myimage:arm64
+docker manifest push myimage:latest
+docker manifest annotate myimage:latest myimage:arm64 --arch arm64
+docker manifest rm myimage:latest
+docker trust inspect nginx
+docker trust inspect --pretty nginx
+docker trust sign nginx:latest
+docker trust revoke nginx:latest
+docker-compose ps
+docker-compose logs
+docker-compose logs -f
+docker-compose config
+docker-compose images
+docker-compose top
+docker-compose version
+docker-compose port web 80
+docker-compose events
+docker-compose -f docker-compose.yml ps
+docker-compose -p myproject logs
+docker-compose up
+docker-compose up -d
+docker-compose down
+docker-compose start
+docker-compose stop
+docker-compose restart
+docker-compose exec web bash
+docker-compose run web echo hello
+docker-compose build
+docker-compose pull
+docker-compose push
+docker-compose rm
+docker-compose create
+docker exec nginx cat /etc/passwd
+docker exec -it nginx ls /app
+docker exec nginx grep pattern /var/log/app.log
+docker exec nginx rm -rf /
+docker exec nginx sh -c 'rm -rf /'
+docker exec nginx
+docker exec -e FOO=bar nginx echo hello
+docker exec -w /app -u root nginx pwd
+docker exec --privileged nginx rm /tmp/foo
+podman ps
+podman ps -a
+podman images
+podman image ls
+podman inspect mycontainer
+podman logs mycontainer
+podman top mycontainer
+podman stats
+podman version
+podman info
+podman system info
+podman system df
+podman network ls
+podman volume ls
+podman search nginx
+podman export mycontainer
+podman save myimage
+podman run ubuntu
+podman run -it ubuntu bash
+podman start mycontainer
+podman stop mycontainer
+podman kill mycontainer
+podman restart mycontainer
+podman exec mycontainer ls
+podman rm mycontainer
+podman rmi myimage
+podman build -t myimage .
+podman pull nginx
+podman push myrepo/myimage
+podman cp mycontainer:/path /local
+podman create ubuntu
+podman commit mycontainer myimage
+podman tag myimage myrepo:tag
+podman system prune
+podman image prune
+podman container prune
+podman-compose ps
+podman-compose logs
+podman-compose config
+podman-compose up
+podman-compose down
+podman-compose exec web bash
+docker exec inside cca-tmux-cli inherits wrapper context and passes remote allowlist.
+docker exec nginx cat ~/.ssh/id_rsa
+docker exec nginx cat ./foo
+docker exec nginx sh -c 'cd /app && cat foo.txt'
+docker exec mycontainer
+podman exec mycontainer
+docker exec good_container fictional_cmd run
+docker exec bad_container fictional_cmd run
+docker exec other_container fictional_cmd run
+podman exec podman_container fictional_cmd run
+docker exec good_container rm -rf /
+docker
+podman
+docker exec c -- sh -c 'echo a;b'
+docker exec -it -- c ls
+docker exec -it --
+docker exec "" ls
+docker exec -e
+docker exec --env=A=b c ls
+docker exec c -- --
+docker --debug
+docker -H
+docker image ""
+docker buildx --builder x imagetools inspect img
+docker buildx imagetools -v create
+docker image save --output=x img
+docker export -oout.tar c
+docker compose --ansi never ps
+docker compose -f
+docker-compose -f x.yml --env-file .env top
+podman-compose
+podman exec c ls
+podman-remote exec c ls
+docker system
+docker swarm
+docker swarm ca
+docker container -q ls
+docker trust inspect x
+docker manifest push x
+docker plugin
