@@ -1,0 +1,9 @@
+fzf --bind='a:execute(x),b:execute(y)'
+fzf --bind=enter:accept+execute
+fzf --bind='enter:execute()'
+fzf --bind
+fzf --bind 'enter:become:'
+fzf --bind=enter:execute-silent:
+fzf --bind='x:execute(a
+b)'
+fzf --bind=enter:EXECUTE(rm)
