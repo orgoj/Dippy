@@ -1,0 +1,9 @@
+find . -exec
+find . -exec ';'
+find . -exec rm {} + -delete
+find . -fprint
+find . -fprint out -fprintf fmt x
+find . -fls a -exec cat {} \;
+find . -exec sh -c 'rm "$1"' _ {} \;
+find . -okdir
+find . -exec 'a b' \;
