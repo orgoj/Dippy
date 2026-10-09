@@ -1,0 +1,10 @@
+pytest
+pytest tests/
+pytest -x -q tests/test_a.py
+pytest --version
+pytest -V
+pytest --help
+pytest -h
+pytest --collect-only
+pytest --co -q
+pytest -k foo --co

@@ -1,0 +1,129 @@
+pip list
+pip list --outdated
+pip list --uptodate
+pip list --format=json
+pip list --format=freeze
+pip list --format=columns
+pip list --user
+pip list --local
+pip list --not-required
+pip list --editable
+pip list --exclude requests
+pip list --include-editable
+pip list --path /path/to/env
+pip freeze
+pip freeze --local
+pip freeze --user
+pip freeze --all
+pip freeze --exclude-editable
+pip freeze --path /path/to/env
+pip show requests
+pip show numpy pandas
+pip show --verbose requests
+pip show --files requests
+pip show -f requests
+pip search requests
+pip check
+pip config list
+pip config list --user
+pip config list --global
+pip config list --site
+pip config get global.index-url
+pip config debug
+pip help
+pip help install
+pip -h
+pip --help
+pip version
+pip -V
+pip --version
+pip debug
+pip debug --verbose
+pip cache dir
+pip cache info
+pip cache list
+pip cache list requests
+pip cache list --format=human
+pip cache list --format=abspath
+pip index versions requests
+pip index versions requests --pre
+pip index versions requests --index-url https://test.pypi.org/simple/
+pip index versions requests --platform linux_x86_64
+pip inspect
+pip inspect --local
+pip inspect --user
+pip inspect --path /path/to/env
+pip inspect --verbose
+pip hash package.whl
+pip hash package.tar.gz
+pip hash -a sha256 package.whl
+pip hash --algorithm sha512 package.whl
+pip hash package1.whl package2.whl
+pip3 list
+pip3 freeze
+pip3 show requests
+pip3 --version
+pip3 check
+pip3 inspect
+pip3 hash package.whl
+pip install requests
+pip install requests==2.28.0
+pip install 'requests>=2.28'
+pip install requests numpy pandas
+pip install -r requirements.txt
+pip install --requirement requirements.txt
+pip install -e .
+pip install --editable .
+pip install --upgrade requests
+pip install -U pip
+pip install --user requests
+pip install --target /path requests
+pip install --prefix /path requests
+pip install git+https://github.com/user/repo.git
+pip install https://example.com/package.tar.gz
+pip install ./package.whl
+pip install --no-deps requests
+pip install --force-reinstall requests
+pip install --ignore-installed requests
+pip install --no-cache-dir requests
+pip install --compile requests
+pip install --no-compile requests
+pip install --dry-run requests
+pip uninstall requests
+pip uninstall -y requests
+pip uninstall --yes numpy pandas
+pip uninstall -r requirements.txt
+pip remove requests
+pip download requests
+pip download -d /tmp requests
+pip download --dest /tmp requests
+pip download --platform linux_x86_64 requests
+pip download --only-binary :all: requests
+pip download --no-binary :none: requests
+pip wheel requests
+pip wheel -w /tmp requests
+pip wheel --wheel-dir /tmp requests
+pip wheel --no-deps requests
+pip wheel -r requirements.txt
+pip lock .
+pip lock -e .
+pip lock -r requirements.txt
+pip lock -o pylock.toml
+pip lock requests
+pip cache purge
+pip cache remove requests
+pip cache remove '*'
+pip config set global.index-url https://pypi.example.com
+pip config unset global.index-url
+pip config edit
+pip config edit --global
+pip3 install requests
+pip3 uninstall requests
+pip3 install -r requirements.txt
+pip3 download requests
+pip3 wheel requests
+pip3 cache -v dir
+pip config --user list
+pip config --user set a b
+pip3
+pip cache purge --all

@@ -1,0 +1,16 @@
+isort --check-only
+isort --check-only .
+isort --check
+isort -c
+isort -c src/
+isort --diff
+isort -d
+isort --diff file.py
+isort --check-only --diff
+isort
+isort .
+isort src/
+isort file.py
+isort --profile black .
+isort --line-length 100 .
+isort --atomic .

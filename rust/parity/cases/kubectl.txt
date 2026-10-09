@@ -1,0 +1,242 @@
+kubectl --context delete get pods
+kubectl -n delete get pods
+kubectl --namespace exec get pods
+kubectl --context mycluster delete pod foo
+kubectl --context=foo get pods
+kubectl --context=foo get managedcertificate ci-api -o jsonpath='{}'
+kubectl -n kube-system describe pod foo
+kubectl delete pod foo
+kubectl --context=foo delete pod list
+kubectl apply -f foo.yaml
+kubectl exec -it foo -- bash
+kubectl get pods
+kubectl get pods -n kube-system
+kubectl get pods --all-namespaces
+kubectl get pods -A
+kubectl get pods -o wide
+kubectl get pods -o json
+kubectl get pods -o yaml
+kubectl get pods -o jsonpath='{.items[*].metadata.name}'
+kubectl get pods --watch
+kubectl get pods -w
+kubectl get pods --selector=app=nginx
+kubectl get nodes
+kubectl get services
+kubectl get deployments
+kubectl get namespaces
+kubectl get all
+kubectl get all -A
+kubectl get configmaps
+kubectl get secrets
+kubectl get secret my-secret
+kubectl get ingress
+kubectl get pv
+kubectl get pvc
+kubectl get events
+kubectl get events --sort-by='.lastTimestamp'
+kubectl describe pod nginx
+kubectl describe pod nginx -n default
+kubectl describe node worker-1
+kubectl describe deployment nginx
+kubectl describe service nginx
+kubectl describe configmap my-config
+kubectl logs nginx
+kubectl logs nginx -c container
+kubectl logs nginx --all-containers
+kubectl logs nginx -f
+kubectl logs nginx --follow
+kubectl logs nginx --tail=100
+kubectl logs nginx --since=1h
+kubectl logs nginx --timestamps
+kubectl logs deployment/nginx
+kubectl logs -l app=nginx
+kubectl explain pods
+kubectl explain pods.spec
+kubectl explain pods.spec.containers
+kubectl explain deployment.spec.template
+kubectl top pods
+kubectl top pods -n kube-system
+kubectl top nodes
+kubectl top pod nginx --containers
+kubectl cluster-info
+kubectl cluster-info dump
+kubectl cluster-info dump --output-directory=/tmp/cluster-state
+kubectl api-resources
+kubectl api-resources --namespaced=true
+kubectl api-resources --api-group=apps
+kubectl api-versions
+kubectl version
+kubectl version --client
+kubectl version -o json
+kubectl diff -f deployment.yaml
+kubectl diff -f ./manifests/
+kubectl wait --for=condition=Ready pod/nginx
+kubectl wait --for=condition=Available deployment/nginx
+kubectl wait --for=delete pod/nginx --timeout=60s
+kubectl auth can-i get pods
+kubectl auth can-i create deployments
+kubectl auth can-i '*' '*' -n default
+kubectl auth can-i --list
+kubectl auth can-i get pods --as system:serviceaccount:default:default
+kubectl auth whoami
+kubectl rollout status deployment/nginx
+kubectl rollout status daemonset/fluentd -n kube-system
+kubectl rollout history deployment/nginx
+kubectl rollout history deployment/nginx --revision=2
+kubectl config view
+kubectl config view --minify
+kubectl config view -o jsonpath='{.users[*].name}'
+kubectl config get-contexts
+kubectl config get-clusters
+kubectl config get-users
+kubectl config current-context
+kubectl plugin list
+kubectl completion bash
+kubectl completion zsh
+kubectl kustomize ./overlays/production
+kubectl --help
+kubectl -h
+kubectl get --help
+kubectl --version
+kubectl apply -f deployment.yaml
+kubectl apply -f ./manifests/
+kubectl apply -k ./overlays/production
+kubectl apply --dry-run=client -f deployment.yaml
+kubectl create deployment nginx --image=nginx
+kubectl create namespace test
+kubectl create configmap my-config --from-literal=key=value
+kubectl create secret generic my-secret --from-literal=password=secret
+kubectl create -f pod.yaml
+kubectl delete pod nginx
+kubectl delete pod nginx -n default
+kubectl delete pods --all
+kubectl delete -f deployment.yaml
+kubectl delete deployment nginx
+kubectl delete namespace test
+kubectl edit deployment nginx
+kubectl edit configmap my-config
+kubectl patch deployment nginx -p '{"spec":{"replicas":3}}'
+kubectl patch pod nginx --type='json' -p='[{"op": "replace", "path": "/spec/containers/0/image", "value":"nginx:latest"}]'
+kubectl replace -f deployment.yaml
+kubectl replace --force -f pod.yaml
+kubectl label pods nginx app=v2
+kubectl label pods nginx app-
+kubectl label pods --all status=running
+kubectl annotate pods nginx description='my pod'
+kubectl annotate pods nginx description-
+kubectl set image deployment/nginx nginx=nginx:1.19
+kubectl set resources deployment/nginx -c=nginx --limits=cpu=200m,memory=512Mi
+kubectl set env deployment/nginx ENV_VAR=value
+kubectl scale deployment nginx --replicas=3
+kubectl scale --replicas=5 -f deployment.yaml
+kubectl autoscale deployment nginx --min=2 --max=10 --cpu-percent=80
+kubectl exec nginx -- ls /
+kubectl exec -it nginx -- bash
+kubectl exec -it nginx -c container -- sh
+kubectl run nginx --image=nginx
+kubectl run nginx --image=nginx --restart=Never
+kubectl run -it busybox --image=busybox -- sh
+kubectl attach nginx -c container
+kubectl debug nginx --image=busybox
+kubectl debug nginx -it --image=ubuntu
+kubectl cp /tmp/foo nginx:/tmp/bar
+kubectl cp nginx:/tmp/foo /tmp/bar
+kubectl port-forward pod/nginx 8080:80
+kubectl port-forward svc/nginx 8080:80
+kubectl proxy
+kubectl proxy --port=8001
+kubectl rollout restart deployment/nginx
+kubectl rollout undo deployment/nginx
+kubectl rollout undo deployment/nginx --to-revision=2
+kubectl rollout pause deployment/nginx
+kubectl rollout resume deployment/nginx
+kubectl cordon node-1
+kubectl uncordon node-1
+kubectl drain node-1
+kubectl drain node-1 --ignore-daemonsets
+kubectl drain node-1 --delete-emptydir-data
+kubectl taint nodes node-1 key=value:NoSchedule
+kubectl taint nodes node-1 key:NoSchedule-
+kubectl config use-context production
+kubectl config use production
+kubectl config set-context --current --namespace=test
+kubectl config set-context production --cluster=prod-cluster
+kubectl config set-cluster prod-cluster --server=https://k8s.example.com
+kubectl config set-credentials user --token=token123
+kubectl config delete-context production
+kubectl config delete-cluster prod-cluster
+kubectl config delete-user admin
+kubectl config rename-context old-name new-name
+kubectl certificate approve csr-name
+kubectl certificate deny csr-name
+kubectl expose deployment nginx --port=80 --target-port=8080
+kubectl expose pod nginx --port=80 --type=NodePort
+kubectl get secret my-secret -o yaml
+kubectl get secret my-secret -o json
+kubectl get secrets -o yaml
+kubectl get secrets -o json
+kubectl get secret my-secret -o jsonpath='{.data.password}'
+kubectl get secret my-secret -o go-template='{{.data}}'
+kubectl get secret my-secret -o custom-columns=NAME:.metadata.name,DATA:.data
+kubectl get secret my-secret --output=yaml
+kubectl get secret my-secret --output json
+kubectl get secret/my-secret -o yaml
+kubectl get secret,configmap -o yaml
+kubectl -n kube-system get secret my-secret -o yaml
+kubectl get secret my-secret -o name
+kubectl get secret my-secret -o wide
+kubectl describe secret my-secret
+kubectl get configmap my-config -o yaml
+kubectl get secret somesecret $(echo "-o yaml")
+kubectl get secret somesecret `echo '-o yaml'`
+kubectl get $(echo secret) -o yaml
+kubectl get $RESOURCE -o yaml
+kubectl get secret somesecret -o $FORMAT
+kubectl get secret somesecret -o ${FORMAT}
+kubectl get pods $(echo '-o yaml')
+kubectl get pods -o $FORMAT
+kubectl config view --raw
+kubectl config view --raw --minify
+kubectl config view $(echo "--raw")
+kubectl config view $RAW_FLAG
+kubectl config $(echo "set-context") production
+kubectl describe $(echo "pod nginx")
+kubectl describe $RESOURCE
+kubectl logs $(echo "nginx")
+kubectl logs $POD
+kubectl exec pod -- cat /etc/passwd
+kubectl exec -it pod -c container -- ls /app
+kubectl exec pod -- rm -rf /
+kubectl exec pod -- sh -c 'rm -rf /'
+kubectl exec pod
+kubectl exec pod --
+kubectl exec -n mynamespace pod -- pwd
+kubectl exec pod -- cat ~/.ssh/id_rsa
+kubectl exec pod -- cat ./foo
+kubectl get $R -o yaml
+kubectl get secret $FMT
+kubectl get secret "$FMT"
+kubectl get pods $X
+kubectl config $SUB
+kubectl config view $F
+kubectl config view --raw
+kubectl rollout $S
+kubectl get secret x -ojson
+kubectl get secret x -o-
+kubectl get secret x -o
+kubectl get secret x --output
+kubectl get secret x --output=name
+kubectl -o yaml get secret x
+kubectl get secret,configmap -o yaml
+kubectl get secrets/x -o jsonpath='{.data}'
+kubectl get -n ns secret -o yaml
+kubectl get --field-selector a=b secret -o yaml
+kubectl exec p -- sh -c 'echo a;b'
+kubectl exec p --
+kubectl exec -it p -- $(whoami)
+kubectl -v ""
+kubectl ""
+k
+kubectl --namespace
+kubectl rollout --watch restart x
+kubectl auth can-i '*' '*'

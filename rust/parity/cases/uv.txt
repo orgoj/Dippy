@@ -1,0 +1,133 @@
+uv
+uv --help
+uv -h
+uv help
+uv help sync
+uv version
+uv --version
+uv sync
+uv sync --frozen
+uv sync --locked
+uv sync --no-install-project
+uv lock
+uv lock --upgrade
+uv lock --locked
+uv tree
+uv tree --depth 2
+uv tree --no-dedupe
+uv tree --package requests
+uv venv
+uv venv .venv
+uv venv --python 3.11
+uv venv --seed
+uv export
+uv export --format requirements-txt
+uv export --no-dev
+uv export --extra test
+uv export --all-extras
+uv export --no-hashes
+uv export -o requirements.txt
+uv pip
+uv pip list
+uv pip list --format json
+uv pip list --outdated
+uv pip freeze
+uv pip freeze --strict
+uv pip show requests
+uv pip show --files requests
+uv pip check
+uv pip tree
+uv cache dir
+uv python list
+uv python list --all-versions
+uv python find
+uv python find 3.11
+uv python dir
+uv run ls
+uv run pwd
+uv run echo hello
+uv run python --version
+uv run git status
+uv run --with requests ls
+uv run --python 3.11 ls
+uv run --frozen ls
+uv pip install requests
+uv pip install -r requirements.txt
+uv pip install --upgrade requests
+uv pip install -e .
+uv pip uninstall requests
+uv pip uninstall -y requests
+uv pip sync requirements.txt
+uv pip compile requirements.in
+uv add requests
+uv add requests numpy
+uv add --dev pytest
+uv add --optional test pytest
+uv add --group dev pytest
+uv remove requests
+uv remove --dev pytest
+uv init
+uv init myproject
+uv init --lib mylib
+uv build
+uv build --wheel
+uv build --sdist
+uv publish
+uv publish --token TOKEN
+uv cache clean
+uv cache clean requests
+uv cache prune
+uv cache prune --ci
+uv python install 3.12
+uv python install 3.11 3.12
+uv python uninstall 3.12
+uv python pin 3.12
+uv python pin --resolved 3.12
+uv run pytest
+uv run pytest -v tests/
+uv run ruff check
+uv run ruff format
+uv run mypy .
+uv run rm file.txt
+uv run npm install
+uv run pip install requests
+uv run python script.py
+uv run --with requests python script.py
+uv run bash -c 'echo hello'
+uv run sh -c 'ls'
+uv run node script.js
+uv run make build
+uv tool run ruff check
+uv tool run --from ruff ruff check
+uv tool install ruff
+uv tool uninstall ruff
+uv tool upgrade ruff
+uv tool list
+uv tool dir
+uvx ruff check
+uvx --from ruff ruff check
+uv self update
+uv run should delegate to inner command config
+uv run bash should delegate to bash handler logic.
+uv run bash should use bash handler logic
+uv run node --version should be allowed via delegation.
+uv run node --version should delegate and approve
+uv run make should delegate to config rules
+uv run --with pkg python should delegate to python config.
+uv run with flags should still delegate
+uv run node --version
+uv run echo '(a)'
+uv run echo 'a;zonk'
+uv run echo 'a;zonk'
+uv run echo '(a)'
+uv run --python=3.12 node --version
+uv run -p
+uv run --with
+uv run -- python x.py
+uv tool 'run '
+uvx
+uv pip list -v
+uv cache dir --x
+uv python
+uv run python -c "print($HOME)"
+uv run bash -c 'echo hello'

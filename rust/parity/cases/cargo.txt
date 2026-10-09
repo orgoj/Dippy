@@ -1,0 +1,141 @@
+cargo help
+cargo --help
+cargo -h
+cargo help build
+cargo build --help
+cargo version
+cargo --version
+cargo -V
+cargo search serde
+cargo search --limit 20 tokio
+cargo info serde
+cargo info tokio --verbose
+cargo tree
+cargo tree --invert serde
+cargo tree --depth 2
+cargo tree --duplicates
+cargo tree --features all
+cargo metadata
+cargo metadata --format-version 1
+cargo metadata --no-deps
+cargo read-manifest
+cargo locate-project
+cargo locate-project --message-format plain
+cargo pkgid
+cargo pkgid serde
+cargo verify-project
+cargo check
+cargo c
+cargo check --all-targets
+cargo check --release
+cargo check --workspace
+cargo check -p mypackage
+cargo check --features feature1
+cargo check --all-features
+cargo clippy
+cargo clippy --all-targets
+cargo clippy -- -D warnings
+cargo clippy --fix
+cargo fmt
+cargo fmt --check
+cargo fmt --all
+cargo fmt -- --check
+cargo doc
+cargo doc --open
+cargo doc --no-deps
+cargo doc --document-private-items
+cargo fetch
+cargo fetch --locked
+cargo update
+cargo update -p serde
+cargo update --dry-run
+cargo update --precise 1.0.0 serde
+cargo generate-lockfile
+cargo vendor
+cargo vendor vendor/
+cargo vendor --versioned-dirs
+cargo login
+cargo login --registry crates-io
+cargo logout
+cargo owner
+cargo owner --list
+cargo build
+cargo b
+cargo build --release
+cargo build --target x86_64-unknown-linux-gnu
+cargo build --all-targets
+cargo build --workspace
+cargo build -p mypackage
+cargo build --features feature1
+cargo build --all-features
+cargo build --jobs 4
+cargo build -j 4
+cargo build --verbose
+cargo build -v
+cargo run
+cargo r
+cargo run --release
+cargo run --bin mybin
+cargo run --example myexample
+cargo run -- arg1 arg2
+cargo run -p mypackage
+cargo run --features feature1
+cargo test
+cargo t
+cargo test --release
+cargo test --all-targets
+cargo test --workspace
+cargo test -p mypackage
+cargo test testname
+cargo test -- --nocapture
+cargo test -- --test-threads=1
+cargo test --doc
+cargo bench
+cargo bench --all-targets
+cargo bench benchname
+cargo bench -- --save-baseline new
+cargo install ripgrep
+cargo install --path .
+cargo install --git https://github.com/user/repo
+cargo install --version 1.0.0 serde
+cargo install --force serde
+cargo install --locked ripgrep
+cargo install --list
+cargo uninstall ripgrep
+cargo publish
+cargo publish --dry-run
+cargo publish --allow-dirty
+cargo publish --registry crates-io
+cargo yank --version 1.0.0
+cargo yank --undo --version 1.0.0
+cargo clean
+cargo clean --release
+cargo clean -p mypackage
+cargo clean --doc
+cargo new myproject
+cargo new --lib mylib
+cargo new --bin mybin
+cargo new --vcs git myproject
+cargo init
+cargo init --lib
+cargo init --bin
+cargo init myproject
+cargo add serde
+cargo add serde --features derive
+cargo add serde --dev
+cargo add serde --build
+cargo add serde --optional
+cargo add --git https://github.com/serde-rs/serde
+cargo add --path ../mylib
+cargo remove serde
+cargo rm serde
+cargo remove serde --dev
+cargo fix
+cargo fix --edition
+cargo fix --edition-idioms
+cargo fix --allow-dirty
+cargo fix --allow-staged
+cargo
+cargo unknown-command
+cargo +nightly build
+cargo +stable test

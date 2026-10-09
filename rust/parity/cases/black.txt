@@ -1,0 +1,14 @@
+black --check
+black --check .
+black --check src/
+black --diff
+black --diff file.py
+black --check --diff
+black
+black .
+black src/
+black file.py
+black --line-length 100 .
+black --target-version py39 .
+black --fast .
+black --quiet .
