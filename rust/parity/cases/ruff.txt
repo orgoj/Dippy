@@ -1,0 +1,43 @@
+ruff
+ruff --help
+ruff -h
+ruff help
+ruff version
+ruff --version
+ruff check
+ruff check .
+ruff check src/
+ruff check file.py
+ruff check src/ tests/
+ruff check --select E501
+ruff check --ignore E501
+ruff check --fix
+ruff check --fix-only
+ruff check --unsafe-fixes
+ruff check --show-fixes
+ruff check --diff
+ruff check --output-format=json
+ruff check --output-format=text
+ruff check --statistics
+ruff check --watch
+ruff check --config ruff.toml
+ruff check --extend-select F
+ruff check --preview
+ruff lint
+ruff lint .
+ruff lint src/
+ruff format
+ruff format .
+ruff format src/
+ruff format file.py
+ruff format --check
+ruff format --diff
+ruff format --line-length 100
+ruff format --config ruff.toml
+ruff format --preview
+ruff rule E501
+ruff rule --all
+ruff rule --output-format json E501
+ruff linter
+ruff config
+ruff clean
