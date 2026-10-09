@@ -6,6 +6,7 @@ vs `dippy-rs`, decisions only.
 - Cases: 13534
 - Agreement: 13269 (98.04%)
 - Divergences: 265
+- Identical reason text (informational): 12537
 - **Unsafe divergences (Rust allow, Python not allow): 0**
 
 ## By corpus source

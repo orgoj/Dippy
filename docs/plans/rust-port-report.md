@@ -3,6 +3,10 @@
 Status report for the unattended Rust port described in
 [`rust-port.md`](rust-port.md). Updated at every phase.
 
+## Summary
+
+<!-- STATUS -->
+
 ## Phase 1 - Rable in Python Dippy
 
 ### Result: Rable's Python package is not a drop-in replacement for Dippy

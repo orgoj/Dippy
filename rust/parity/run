@@ -47,9 +47,10 @@ def run_case(case: dict, env: dict) -> str:
         timeout=30,
     )
     try:
-        return json.loads(proc.stdout.splitlines()[0])["decision"]
+        out = json.loads(proc.stdout.splitlines()[0])
+        return out["decision"], out.get("reason", "")
     except (IndexError, json.JSONDecodeError, KeyError):
-        return f"error(exit {proc.returncode})"
+        return f"error(exit {proc.returncode})", ""
 
 
 def main() -> int:
@@ -65,7 +66,11 @@ def main() -> int:
     prepare_root(cases)
     env = child_env()
     with ThreadPoolExecutor(args.jobs) as pool:
-        actual = list(pool.map(lambda c: run_case(c, env), cases))
+        results = list(pool.map(lambda c: run_case(c, env), cases))
+    actual = [decision for decision, _ in results]
+    same_reason = sum(
+        1 for c, (_, reason) in zip(cases, results) if c["reason"] == reason
+    )
 
     total = len(cases)
     agree = sum(1 for c, a in zip(cases, actual) if c["expected"] == a)
@@ -92,6 +97,7 @@ def main() -> int:
         f"- Cases: {total}",
         f"- Agreement: {agree} ({100 * agree / total:.2f}%)",
         f"- Divergences: {total - agree}",
+        f"- Identical reason text (informational): {same_reason}",
         f"- **Unsafe divergences (Rust allow, Python not allow): {len(unsafe)}**",
         "",
         "## By corpus source",
