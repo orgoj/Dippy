@@ -1609,6 +1609,10 @@ mod grammar {
                     if (*op == "<<=" || *op == ">>=") && !matches!(d, Postgres | Duckdb) {
                         return None;
                     }
+                    // MySQL reads `||` as OR, with its own precedence.
+                    if *op == "||" && d == Mysql {
+                        return None;
+                    }
                     out.push(Tok::Op(op));
                 }
             }
@@ -1976,6 +1980,16 @@ mod grammar {
             {
                 self.pos += 3;
                 return Some(());
+            }
+            // T-SQL reads `SELECT name = expr` as an alias assignment.
+            if self.d == Tsql && self.is_ident() {
+                let mut k = 1;
+                while matches!(self.peek_at(k), Some(Tok::Op("."))) {
+                    k += 2;
+                }
+                if matches!(self.peek_at(k), Some(Tok::Op("="))) {
+                    return None;
+                }
             }
             self.expr()?;
             if self.eat_kw("AS") {
@@ -3484,6 +3498,8 @@ mod tests {
             ("duckdb", "SELECT [(SELECT e), n]"),
             ("duckdb", "SELECT [EXISTS (FROM d), e]"),
             ("duckdb", "SELECT i//**/(u)"),
+            ("tsql", "SELECT a.b = 1"),
+            ("mysql", "SELECT a BETWEEN a || b AND 2"),
             ("postgres", "SELECT count(DISTINCT a, x <<= l)"),
             ("postgres", "SELECT strpos(a = 1, b, 2)"),
             ("mysql", "SELECT string_agg(c, a.b)"),
