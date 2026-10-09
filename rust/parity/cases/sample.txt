@@ -1,0 +1,24 @@
+# Commands from tests/cli/test_sample.py
+sample 1234
+sample Safari
+sample 1234 10
+sample 1234 10 1
+sample -wait Safari
+sample -mayDie 1234
+sample -fullPaths 1234
+sample -e 1234
+sample -wait -mayDie Safari 10
+sample -file /tmp/out.txt 1234
+sample -file /tmp/foo/bar.sample 1234
+sample 1234 -file /tmp/test.txt
+sample -file /home/user/out.txt 1234
+sample -file ./output.txt 1234
+sample -file ~/samples/out.txt 1234
+sample -file output.sample 1234
+sample 1234 -file /var/log/sample.txt
+sample
+# Edge cases
+sample p -file /tmpfoo
+sample p -file
+sample p -mayDie -file ~/out
+sample -file /tmp/x

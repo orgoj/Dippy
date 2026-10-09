@@ -1,0 +1,37 @@
+# Commands from tests/cli/test_sips.py
+sips -g pixelWidth image.png
+sips --getProperty pixelHeight image.png
+sips -g all image.png
+sips --verify profile.icc
+sips -g format image.png
+sips image.png
+sips -s format jpeg image.png
+sips --setProperty format png image.jpg
+sips -r 90 image.png
+sips --rotate 180 image.png
+sips -f horizontal image.png
+sips --flip vertical image.png
+sips -z 100 100 image.png
+sips --resampleHeightWidth 200 200 image.png
+sips -Z 500 image.png
+sips -c 100 100 image.png
+sips -p 200 200 image.png
+sips -i image.png
+sips --addIcon image.png
+sips -d dpiWidth image.png
+sips --deleteProperty dpiHeight image.png
+sips -e profile.icc image.png
+sips --embedProfile profile.icc image.png
+sips -s format jpeg -o output.jpg image.png
+sips --out output.png -z 100 100 image.png
+sips -x profile.icc image.png
+sips --extractProfile profile.icc image.png
+# Edge cases
+sips -x '' img.png
+sips -o '' -s format png img.png
+sips --out o.png -Z 100 i.png
+sips -g all
+sips -1 --verify a.png
+sips a.png b.png
+sips -g
+sips --help

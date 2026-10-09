@@ -1,0 +1,46 @@
+# Commands from tests/cli/test_journalctl.py
+journalctl
+journalctl -f
+journalctl --follow
+journalctl -n 100
+journalctl --lines=100
+journalctl -r
+journalctl --reverse
+journalctl -o json
+journalctl --output=json
+journalctl -u sshd
+journalctl --unit=nginx
+journalctl -b
+journalctl --boot
+journalctl -b -1
+journalctl -k
+journalctl --dmesg
+journalctl -p err
+journalctl --priority=warning
+journalctl --since today
+journalctl --until now
+journalctl -S '2024-01-01' -U '2024-01-31'
+journalctl _PID=1234
+journalctl _SYSTEMD_UNIT=sshd.service
+journalctl --disk-usage
+journalctl --list-boots
+journalctl -x
+journalctl --no-pager
+journalctl -u nginx -f -n 50
+journalctl --rotate
+journalctl --vacuum-time=1d
+journalctl --vacuum-time 2weeks
+journalctl --vacuum-size=100M
+journalctl --vacuum-size 500M
+journalctl --vacuum-files=5
+journalctl --vacuum-files 10
+journalctl --flush
+journalctl --sync
+journalctl --relinquish-var
+journalctl --rotate --vacuum-time=1d
+journalctl -u nginx --rotate
+# Edge cases
+journalctl --vacuum-time=2d
+journalctl --vacuum-timex
+journalctl --sync=1
+journalctl --flush --rotate

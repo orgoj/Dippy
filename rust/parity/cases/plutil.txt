@@ -1,0 +1,17 @@
+# Commands from tests/cli/test_plutil.py
+plutil -p file.plist
+plutil -lint file.plist
+plutil -extract key json file.plist
+plutil file.plist
+plutil -convert xml1 file.plist
+plutil -convert json -o out.json file.plist
+plutil -insert key -string value file.plist
+plutil -replace key -string newvalue file.plist
+plutil -remove key file.plist
+# Edge cases
+plutil -convert xml1 -o '' f.plist
+plutil -convert xml1 -o
+plutil -remove k
+plutil -replace k -string v -o out.plist in.plist
+plutil -extract k raw f.plist
+plutil -convert binary1 a.plist b.plist

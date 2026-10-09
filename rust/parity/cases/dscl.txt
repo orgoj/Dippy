@@ -1,0 +1,23 @@
+# Commands from tests/cli/test_dscl.py
+dscl . -read /Users/alice
+dscl . -readall /Users
+dscl . -list /Users
+dscl . -search /Users name alice
+dscl . -diff /Users/alice /Users/bob
+dscl . read /Users/alice
+dscl . list /Users
+dscl -plist . -read /Users/alice
+dscl -raw . -list /Users
+dscl . -create /Users/newuser
+dscl . -append /Users/alice name bob
+dscl . -merge /Users/alice name bob
+dscl . -delete /Users/alice
+dscl . -change /Users/alice name old new
+dscl . -passwd /Users/alice
+dscl . create /Users/newuser
+dscl . delete /Users/alice
+# Edge cases
+dscl -q . -read /Users/x
+dscl -f file -raw . readpl /x y
+dscl -u
+dscl -p . -passwd /Users/x

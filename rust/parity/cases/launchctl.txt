@@ -1,0 +1,48 @@
+# Commands from tests/cli/test_launchctl.py
+launchctl list
+launchctl list com.apple.Finder
+launchctl print system
+launchctl print gui/501
+launchctl print-cache
+launchctl print-disabled system
+launchctl blame system/com.apple.logd
+launchctl plist /Applications/Safari.app
+launchctl procinfo 1234
+launchctl hostinfo
+launchctl resolveport 1234 0x1234
+launchctl dumpstate
+launchctl dumpjpcategory
+launchctl managerpid
+launchctl manageruid
+launchctl managername
+launchctl error posix 2
+launchctl variant
+launchctl version
+launchctl help
+launchctl help bootstrap
+launchctl getenv PATH
+launchctl bootstrap gui/501 ~/Library/LaunchAgents/my.plist
+launchctl bootout gui/501/my.service
+launchctl enable gui/501/my.service
+launchctl disable gui/501/my.service
+launchctl kickstart gui/501/my.service
+launchctl kill SIGTERM gui/501/my.service
+launchctl start my.service
+launchctl stop my.service
+launchctl load ~/Library/LaunchAgents/my.plist
+launchctl unload ~/Library/LaunchAgents/my.plist
+launchctl remove my.service
+launchctl setenv MY_VAR value
+launchctl unsetenv MY_VAR
+launchctl limit maxfiles 65536 65536
+launchctl config system path /usr/local/bin
+launchctl reboot system
+launchctl submit -l my.job -- /usr/bin/true
+launchctl attach gui/501/my.service
+launchctl debug gui/501/my.service
+launchctl bsexec 1234 /bin/ls
+launchctl asuser 501 /bin/ls
+launchctl
+# Edge cases
+launchctl print-disabled system
+launchctl kickstart -k x

@@ -1,0 +1,46 @@
+# Commands from tests/cli/test_tmutil.py
+tmutil help
+tmutil help startbackup
+tmutil version
+tmutil destinationinfo
+tmutil destinationinfo -X
+tmutil isexcluded /path/to/file
+tmutil latestbackup
+tmutil latestbackup -m
+tmutil listbackups
+tmutil listbackups -m -t
+tmutil listlocalsnapshotdates
+tmutil listlocalsnapshotdates /
+tmutil listlocalsnapshots /
+tmutil machinedirectory
+tmutil uniquesize /path/to/backup
+tmutil verifychecksums /path/to/backup
+tmutil compare /path1 /path2
+tmutil compare -a snapshot_path
+tmutil calculatedrift /path/to/machine
+tmutil enable
+tmutil disable
+tmutil startbackup
+tmutil startbackup -b
+tmutil stopbackup
+tmutil setdestination /Volumes/Backup
+tmutil setdestination -a /Volumes/Backup2
+tmutil removedestination ABC123
+tmutil setquota ABC123 500
+tmutil addexclusion /path/to/exclude
+tmutil addexclusion -p /path/to/exclude
+tmutil removeexclusion /path/to/include
+tmutil delete -d /Volumes/Backup -t 2024-01-01
+tmutil deleteinprogress /path/to/machine
+tmutil deletelocalsnapshots /
+tmutil deletelocalsnapshots 2024-01-01
+tmutil localsnapshot
+tmutil thinlocalsnapshots / 10000000000 1
+tmutil restore /backup/file /destination
+tmutil restore -v /backup/file /destination
+tmutil inheritbackup /path/to/machine
+tmutil associatedisk /Volumes/Mount /path/to/backup
+tmutil
+# Edge cases
+tmutil compare
+tmutil startbackup

@@ -1,0 +1,18 @@
+# Commands from tests/cli/test_arch.py
+arch
+arch -x86_64 ls
+arch -arm64 cat foo.txt
+arch --arch x86_64 pwd
+arch -x86_64 rm foo
+arch -arm64 rm -rf /
+arch -x86_64 -arm64 ls
+arch -32 ls
+arch -64 ls
+arch -x86_64 echo '(a)'
+arch -x86_64 echo 'a;zonk'
+# Edge cases
+arch -arch
+arch -d FOO=1 env
+arch -e A=b -arm64 rm x
+arch --foo ls
+arch -x86_64 bash -c 'rm -rf /'

@@ -1,0 +1,57 @@
+# Commands from tests/cli/test_dmesg.py
+dmesg
+dmesg -T
+dmesg --ctime
+dmesg -H
+dmesg --human
+dmesg -L
+dmesg --color
+dmesg --color=always
+dmesg -w
+dmesg --follow
+dmesg -l err
+dmesg --level=warn,err
+dmesg -f kern
+dmesg --facility=kern,daemon
+dmesg -n 8
+dmesg --console-level=8
+dmesg -s 16384
+dmesg --buffer-size=16384
+dmesg -x
+dmesg --decode
+dmesg -r
+dmesg --raw
+dmesg -t
+dmesg --notime
+dmesg -k
+dmesg --kernel
+dmesg -u
+dmesg --userspace
+dmesg -e
+dmesg --reltime
+dmesg -P
+dmesg --nopager
+dmesg --since '1 hour ago'
+dmesg --until now
+dmesg | grep error
+dmesg -T -H
+dmesg -TH
+dmesg -THw
+dmesg -c
+dmesg --clear
+dmesg -C
+dmesg --console-off
+dmesg -D
+dmesg --console-on
+dmesg -E
+dmesg --console-level
+dmesg -cT
+dmesg -Tc
+dmesg -TcH
+dmesg -THc
+# Edge cases
+dmesg -
+dmesg --clear=1
+dmesg -TxD
+dmesg -n 1
+dmesg --level=err,warn -H

@@ -1,0 +1,21 @@
+# Commands from tests/cli/test_spctl.py
+spctl --assess /Applications/Safari.app
+spctl -a /Applications/Safari.app
+spctl --assess -t execute /usr/bin/ls
+spctl --assess --verbose /Applications/Safari.app
+spctl --status
+spctl --disable-status
+spctl --global-enable
+spctl --global-disable
+spctl --master-enable
+spctl --master-disable
+spctl --add /Applications/MyApp.app
+spctl --add --label MyRule /Applications/MyApp.app
+spctl --disable --label MyRule
+spctl --enable --label MyRule
+spctl --remove --label MyRule
+spctl --reset-default
+spctl
+# Edge cases
+spctl --add --assess app
+spctl -a

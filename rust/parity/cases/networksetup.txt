@@ -1,0 +1,70 @@
+# Commands from tests/cli/test_networksetup.py
+networksetup -listnetworkserviceorder
+networksetup -listallnetworkservices
+networksetup -listallhardwareports
+networksetup -listpreferredwirelessnetworks en0
+networksetup -listvalidMTUrange en0
+networksetup -listvalidmedia en0
+networksetup -listVLANs
+networksetup -listdevicesthatsupportVLAN
+networksetup -listBonds
+networksetup -listpppoeservices
+networksetup -listlocations
+networksetup -getmacaddress en0
+networksetup -getcomputername
+networksetup -getinfo Wi-Fi
+networksetup -getadditionalroutes Wi-Fi
+networksetup -getv6additionalroutes Wi-Fi
+networksetup -getdnsservers Wi-Fi
+networksetup -getsearchdomains Wi-Fi
+networksetup -getwebproxy Wi-Fi
+networksetup -getsecurewebproxy Wi-Fi
+networksetup -getsocksfirewallproxy Wi-Fi
+networksetup -getproxybypassdomains Wi-Fi
+networksetup -getproxyautodiscovery Wi-Fi
+networksetup -getautoproxyurl Wi-Fi
+networksetup -getairportnetwork en0
+networksetup -getairportpower en0
+networksetup -getnetworkserviceenabled Wi-Fi
+networksetup -getMTU en0
+networksetup -getmedia en0
+networksetup -getcurrentlocation
+networksetup -showBondStatus bond0
+networksetup -showpppoestatus MyPPPoE
+networksetup -isBondSupported en0
+networksetup -version
+networksetup -help
+networksetup -printcommands
+networksetup -setcomputername MyMac
+networksetup -setmanual Wi-Fi 192.168.1.100 255.255.255.0 192.168.1.1
+networksetup -setdhcp Wi-Fi
+networksetup -setdnsservers Wi-Fi 8.8.8.8 8.8.4.4
+networksetup -setairportnetwork en0 MyNetwork password
+networksetup -setairportpower en0 on
+networksetup -setwebproxy Wi-Fi proxy.example.com 8080 off
+networksetup -setMTU en0 1500
+networksetup -createnetworkservice MyService en0
+networksetup -createVLAN MyVLAN en0 100
+networksetup -createBond MyBond en0 en1
+networksetup -createlocation Office
+networksetup -createpppoeservice en0 MyPPPoE user pass
+networksetup -removenetworkservice MyService
+networksetup -removepreferredwirelessnetwork en0 OldNetwork
+networksetup -deleteVLAN MyVLAN en0 100
+networksetup -deleteBond bond0
+networksetup -deletelocation Office
+networksetup -detectnewhardware
+networksetup -renamenetworkservice Wi-Fi WiFi
+networksetup -duplicatenetworkservice Wi-Fi Wi-Fi2
+networksetup -ordernetworkservices Wi-Fi Ethernet
+networksetup -addpreferredwirelessnetworkatindex en0 MyNet 0 WPA2
+networksetup -addDeviceToBond en2 bond0
+networksetup -connectpppoeservice MyPPPoE
+networksetup -disconnectpppoeservice MyPPPoE
+networksetup -switchtolocation Office
+networksetup
+# Edge cases
+networksetup -GETDNSSERVERS Wi-Fi
+networksetup -Version
+networksetup --getinfo Wi-Fi
+networksetup -isnetworkenabled Wi-Fi

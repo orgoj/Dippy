@@ -1,0 +1,32 @@
+# Commands from tests/cli/test_diskutil.py
+diskutil list
+diskutil list -plist
+diskutil list internal
+diskutil list external
+diskutil list disk0
+diskutil info disk0
+diskutil info -plist disk0
+diskutil info --all
+diskutil information disk0s1
+diskutil activity
+diskutil listFilesystems
+diskutil listFilesystems -plist
+diskutil mount disk0s1
+diskutil mountDisk disk0
+diskutil unmount disk0s1
+diskutil unmountDisk disk0
+diskutil eject disk1
+diskutil rename disk0s1 NewName
+diskutil eraseDisk APFS MyDisk disk1
+diskutil partitionDisk disk1 1 GPT APFS MyDisk 0b
+diskutil secureErase 0 disk1
+diskutil zeroDisk disk1
+diskutil appleRAID list
+diskutil coreStorage list
+diskutil apfs list
+diskutil
+# Edge cases
+diskutil LIST
+diskutil Info disk0
+diskutil INFORMATION /
+diskutil unmountDisk disk2

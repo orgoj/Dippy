@@ -1,0 +1,15 @@
+# Commands from tests/cli/test_textutil.py
+textutil -info foo.rtf
+textutil -help
+textutil --help
+textutil -convert txt -stdout foo.rtf
+textutil -cat html -stdout foo.rtf bar.rtf
+textutil -convert html foo.rtf
+textutil -convert rtf -font Times foo.txt
+textutil -cat html -title 'Combined' foo.rtf bar.rtf
+textutil -convert txt -output out.txt foo.rtf
+# Edge cases
+textutil -cat txt -output '' a.rtf
+textutil -convert html -stdout a.txt
+textutil -cat txt a.rtf b.rtf
+textutil -convert txt -output

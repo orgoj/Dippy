@@ -1,0 +1,11 @@
+# Commands from tests/cli/test_qlmanage.py
+qlmanage -m
+qlmanage -t file.pdf
+qlmanage -t -s 512 file.pdf
+qlmanage -p file.pdf
+qlmanage -p -x file.pdf
+qlmanage -h
+qlmanage -r
+# Edge cases
+qlmanage -x -r
+qlmanage -t -r

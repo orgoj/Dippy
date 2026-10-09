@@ -1,0 +1,18 @@
+# Commands from tests/cli/test_open.py
+open -R file.txt
+open -R /path/to/file
+open -R .
+open file.txt
+open .
+open /Applications
+open https://example.com
+open http://example.com
+open -a Safari
+open -a TextEdit file.txt
+open -b com.apple.Safari
+open -e file.txt
+open -t file.txt
+open -n -a Safari
+# Edge cases
+open -R
+open -a Finder -R .
