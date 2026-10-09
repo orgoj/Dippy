@@ -3,6 +3,7 @@
 import fnmatch
 import logging
 import os
+import posixpath
 import re
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta
@@ -1496,8 +1497,12 @@ def _normalize_pattern(pattern: str, cwd: Path) -> str:
 
 
 def _normalize_path(path: str, cwd: Path) -> str:
-    """Normalize a redirect target path (strip trailing /, force as path)."""
-    return _expand_token(path.rstrip("/"), cwd, force_path=True)
+    """Normalize a redirect target path (strip trailing /, force as path).
+
+    Absolute results collapse `..` so a path cannot escape the tree a rule names.
+    """
+    expanded = _expand_token(path.rstrip("/"), cwd, force_path=True)
+    return os.path.normpath(expanded) if os.path.isabs(expanded) else expanded
 
 
 def _glob_to_regex(pattern: str) -> re.Pattern:
@@ -1879,8 +1884,13 @@ def _match_redirect(
         cwd: Current working directory for path resolution.
         remote: If True, paths are NOT expanded against cwd (container/remote context).
     """
-    # When remote, don't expand paths - match against literal target
-    normalized_target = target if remote else _normalize_path(target, cwd)
+    # When remote, don't expand paths against cwd; only collapse `..` lexically
+    if remote:
+        normalized_target = (
+            posixpath.normpath(target) if target.startswith("/") else target
+        )
+    else:
+        normalized_target = _normalize_path(target, cwd)
     result: Match | None = None
     for rule in config.redirect_rules:
         # Patterns are always normalized as host paths (user's intent)
