@@ -698,25 +698,37 @@ pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
 /// (checked by `rust/parity/sql_fuzz.py`). Accepted divergences, where Python
 /// returns `True` (or a COPY target) and Rust does not:
 ///
-/// * functions outside [`FUNCTIONS`] (or with other argument counts), and
-///   function call syntax other than plain comma-separated arguments,
-///   `count(*)`, `DISTINCT` in simple aggregates, `FILTER` and `OVER`;
+/// * functions outside [`FUNCTIONS`]/`EXTRA_FUNCTIONS` (or with other
+///   argument counts), function call syntax other than plain comma-separated
+///   arguments, `count(*)`, `DISTINCT` in simple and string aggregates,
+///   `FILTER`, `OVER` (ROWS/RANGE frames with integer or UNBOUNDED bounds)
+///   and `date_trunc('<unit>', x)`; predicate arguments of functions that
+///   SQLGlot rewrites (`strpos`, `mod`, `substr`, ...);
 /// * types outside the small built-in list (arrays only in DuckDB);
-/// * identifiers in [`RESERVED`] (e.g. `key`, `value`, `user`), even where
-///   SQLGlot would accept them;
-/// * dollar-quoted strings, prefixed strings (`N'..'`, `E'..'`), strings with
-///   backslashes, numbers other than plain decimals/exponents, parameters,
-///   `@@variables`, `#`/`--x` MySQL comments and operators outside
-///   `= <> != < > <= >= || :: + - * / %` (plus `<<=`/`>>=` in PostgreSQL and
-///   DuckDB), including adjacent operators such as `=-1`;
-/// * clauses outside SELECT/FROM/JOIN/WHERE/GROUP BY/HAVING/ORDER BY/LIMIT/
-///   OFFSET/set operations/CTEs, DuckDB `QUALIFY`, `USING SAMPLE`, `FROM`-first
-///   and `VALUES`; e.g. `NULLS FIRST`, `TOP`, `FETCH`, window frames, lateral
-///   joins, table functions, `COLLATE`, `INTERVAL`, `EXTRACT`;
+/// * identifiers in [`RESERVED`] (e.g. `key`, `user`), even where SQLGlot
+///   would accept them, except explicit `AS` column aliases in
+///   `AS_ALIASES` (e.g. `value`, `mode`);
+/// * tagged dollar strings and untagged ones outside PostgreSQL/DuckDB,
+///   prefixed strings (`N'..'`, `E'..'`), strings with backslashes where they
+///   escape, numbers other than plain decimals/exponents, parameters,
+///   `@@variables` outside T-SQL/MySQL, `#`/`--x` MySQL comments and
+///   operators outside `= <> != < > <= >= || :: + - * / %` (plus `<<=`/`>>=`
+///   in PostgreSQL and DuckDB; no `||` in MySQL), including adjacent
+///   operators such as `=-1` and operators glued to a comment;
+/// * clauses outside SELECT/FROM/JOIN/WHERE/GROUP BY (with ALL, ROLLUP and
+///   CUBE over columns)/HAVING/ORDER BY/LIMIT/OFFSET/set operations/CTEs,
+///   T-SQL `TOP n`, DuckDB `QUALIFY`, `USING SAMPLE`, `FROM`-first and
+///   `VALUES`; e.g. `NULLS FIRST`, `FETCH`, `GROUPS` frames, lateral joins,
+///   table functions, `COLLATE`, `INTERVAL`, `EXTRACT`, `CONVERT`, T-SQL
+///   `SELECT name = expr`;
 /// * DuckDB writes other than plain CREATE TABLE (AS query or column list),
 ///   INSERT, UPDATE, DELETE, DROP TABLE and ALTER TABLE ADD COLUMN;
 /// * COPY exports with options other than FORMAT/HEADER/DELIMITER/QUOTE/
 ///   ESCAPE/NULL.
+///
+/// Where Python returns `False` (an unknown function or `NEXT VALUE FOR`
+/// inside a parsed query), Rust usually returns `None`: both ask, only the
+/// handler description differs.
 mod grammar {
     use std::collections::HashSet;
 
