@@ -1,0 +1,164 @@
+{"cmd": "echo \"`rm -rf x`\""}
+{"cmd": "echo \"a `ls` b\""}
+{"cmd": "echo `echo \\`date\\``"}
+{"cmd": "echo \"$(ls \"$(pwd)\")\""}
+{"cmd": "echo $(ls)$(pwd)"}
+{"cmd": "echo \"$(ls)\" \"$(rm x)\""}
+{"cmd": "echo $( (ls) )"}
+{"cmd": "echo $((1 + $(rm x)))"}
+{"cmd": "echo $(( x ))"}
+{"cmd": "(( x = $(rm y) ))"}
+{"cmd": "(( i++ ))"}
+{"cmd": "for ((i=0; i<$(rm z); i++)); do echo; done"}
+{"cmd": "for ((i=0; i<3; i++)); do echo $i; done"}
+{"cmd": "x=$(rm y)"}
+{"cmd": "x=`rm y` ls"}
+{"cmd": "a=(1 2 $(rm x))"}
+{"cmd": "echo ${x:-`rm y`}"}
+{"cmd": "echo ${x:=$(rm y)}"}
+{"cmd": "echo ${#x} ${!x} ${x/a/b}"}
+{"cmd": "echo \"${x:-$(rm y)}\""}
+{"cmd": "cat <(ls) >(rm x)"}
+{"cmd": "diff <(ls a) <(ls b)"}
+{"cmd": "echo \"<(ls)\""}
+{"cmd": "ls | rm x"}
+{"cmd": "ls |& rm x"}
+{"cmd": "ls && rm x || echo"}
+{"cmd": "ls; rm x &"}
+{"cmd": "ls &"}
+{"cmd": "ls;"}
+{"cmd": "ls ;"}
+{"cmd": "ls; ls;"}
+{"cmd": "ls"}
+{"cmd": "rm x"}
+{"cmd": "ls &&"}
+{"cmd": "{ ls; }"}
+{"cmd": "{ ls; rm x; }"}
+{"cmd": "{ ls & }"}
+{"cmd": "( ls )"}
+{"cmd": "( ls; )"}
+{"cmd": "( ls; rm x )"}
+{"cmd": "(ls) && (rm x)"}
+{"cmd": "f() { ls; }"}
+{"cmd": "f() { rm x; }; f"}
+{"cmd": "function g { ls; }"}
+{"cmd": "if ls; then rm x; fi"}
+{"cmd": "if ls; then echo; elif rm x; then echo; else echo; fi"}
+{"cmd": "while ls; do rm x; done"}
+{"cmd": "until ls; do rm x; done"}
+{"cmd": "for f in $(ls); do rm \"$f\"; done"}
+{"cmd": "for f in a b; do echo $f; done > out"}
+{"cmd": "select x in a b; do echo; done"}
+{"cmd": "case $(rm x) in a) ls;; esac"}
+{"cmd": "case x in a) rm y;; b|c) ls ;; *) ;; esac"}
+{"cmd": "case x in (a) ls;; esac"}
+{"cmd": "[[ -f $(rm x) ]]"}
+{"cmd": "[[ $a == $(rm x) ]]"}
+{"cmd": "[[ -n \"$(ls)\" && -z `rm y` ]]"}
+{"cmd": "[[ ! -e x ]]"}
+{"cmd": "[[ ( -e x ) ]]"}
+{"cmd": "[ -f x ]"}
+{"cmd": "test -f $(rm x)"}
+{"cmd": "! ls"}
+{"cmd": "! rm x"}
+{"cmd": "time ls"}
+{"cmd": "time rm x"}
+{"cmd": "time -p ls"}
+{"cmd": "coproc ls"}
+{"cmd": "coproc NAME { rm x; }"}
+{"cmd": "ls > out"}
+{"cmd": "ls >> out"}
+{"cmd": "ls 2> err"}
+{"cmd": "ls 2>&1"}
+{"cmd": "ls >&2"}
+{"cmd": "ls 2>&1 >/dev/null"}
+{"cmd": "ls &> out"}
+{"cmd": "ls &>> out"}
+{"cmd": "ls >| out"}
+{"cmd": "ls <> rw"}
+{"cmd": "ls < in"}
+{"cmd": "ls 0< in"}
+{"cmd": "ls <&3"}
+{"cmd": "ls 3<&-"}
+{"cmd": "ls 2>&-"}
+{"cmd": "ls >& out"}
+{"cmd": "ls 2>&1-"}
+{"cmd": "ls 1>&$x"}
+{"cmd": "ls {fd}>out"}
+{"cmd": "ls > \"out file\""}
+{"cmd": "ls > $(rm x)"}
+{"cmd": "ls > `rm x`"}
+{"cmd": "ls > /dev/null"}
+{"cmd": "ls 2>/dev/null"}
+{"cmd": "cat <<EOF\nhello $(rm x)\nEOF"}
+{"cmd": "cat <<'EOF'\nhello $(rm x)\nEOF"}
+{"cmd": "cat <<-EOF\n\ttabbed\n\tEOF"}
+{"cmd": "cat <<EOF > out\nx\nEOF"}
+{"cmd": "cat 3<<EOF\nx\nEOF"}
+{"cmd": "cat <<< \"here $(rm x)\""}
+{"cmd": "cat <<< 'here'"}
+{"cmd": "ls # comment"}
+{"cmd": "# only comment"}
+{"cmd": "ls \\"}
+{"cmd": "  -la"}
+{"cmd": "echo 'single $(rm x)'"}
+{"cmd": "echo \"double \\$(rm x)\""}
+{"cmd": "echo \\$(rm x)"}
+{"cmd": "echo $'ansi\\n'"}
+{"cmd": "echo $\"locale\""}
+{"cmd": "echo \"it's\""}
+{"cmd": "echo \"a\\\"b\""}
+{"cmd": "echo 'a'\"b\"c"}
+{"cmd": "echo {a,b,c}"}
+{"cmd": "echo {1..10}"}
+{"cmd": "echo ~ ~/x ~root/y"}
+{"cmd": "echo *.txt"}
+{"cmd": "echo a=b"}
+{"cmd": "FOO=bar ls"}
+{"cmd": "FOO=bar BAZ=$(rm x) ls"}
+{"cmd": "FOO=$(rm x)"}
+{"cmd": "export FOO=$(rm x)"}
+{"cmd": "local x=$(rm y)"}
+{"cmd": "declare -a arr=(a b)"}
+{"cmd": "echo $((2#101))"}
+{"cmd": "echo $[1+2]"}
+{"cmd": "echo \"$[1+$(rm x)]\""}
+{"cmd": "eval \"rm x\""}
+{"cmd": "bash -c \"rm x\""}
+{"cmd": "bash -c 'ls; rm x'"}
+{"cmd": "sh -c \"$(rm x)\""}
+{"cmd": "xargs rm < list"}
+{"cmd": "find . -exec rm {} \\;"}
+{"cmd": "ls ;; rm"}
+{"cmd": "ls | | rm"}
+{"cmd": "if then fi"}
+{"cmd": "echo \"unterminated"}
+{"cmd": "echo $("}
+{"cmd": "echo `"}
+{"cmd": ")"}
+{"cmd": "}"}
+{"cmd": "ls && && rm"}
+{"cmd": "echo \"$(case x in a) echo;; esac)\""}
+{"cmd": "echo $(case x in a) rm y;; esac)"}
+{"cmd": "echo \"$( echo ')' )\""}
+{"cmd": "echo $(echo \")\")"}
+{"cmd": "echo \"${x}$(rm y)\""}
+{"cmd": "echo $x$(rm y)"}
+{"cmd": "echo \"nested $(echo \"$(rm x)\")\""}
+{"cmd": "git log --format=\"%H $(rm x)\""}
+{"cmd": "git commit -m \"$(cat <<EOF\nmsg\nEOF\n)\""}
+{"cmd": "ls -- -rf"}
+{"cmd": "ls 'a b' \"c d\""}
+{"cmd": "ls a\\ b"}
+{"cmd": "echo \u00e9 $(rm \u017e)"}
+{"cmd": "echo \"\u03c0\" > \u00fc"}
+{"cmd": "ls\nrm x"}
+{"cmd": "ls;\nrm x"}
+{"cmd": "ls &&\nrm x"}
+{"cmd": "ls\n\nls"}
+{"cmd": "ls # c\nrm x"}
+{"cmd": "{ ls\n}"}
+{"cmd": "( ls\nrm x )"}
+{"cmd": "if ls\nthen rm x\nfi"}
+{"cmd": "echo $(ls\nrm x)"}
+{"cmd": "f() {\n rm x\n}"}

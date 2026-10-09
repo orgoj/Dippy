@@ -1,0 +1,3 @@
+[workspace]
+members = ["dippy-rs"]
+resolver = "2"
