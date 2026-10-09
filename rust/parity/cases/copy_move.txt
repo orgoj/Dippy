@@ -1,0 +1,32 @@
+# Extra cp/mv cases for handler_compare.py
+cp
+cp a
+cp a b
+cp a b c/
+cp a b c//
+cp a /
+cp / d/
+cp a .
+mv a ..
+cp -t
+cp -t d
+cp -t d a b
+cp -rt d a
+cp -rt
+cp -bS .bak a b
+cp -S .bak a b
+cp --suffix .bak a b
+cp --suffix=.bak a b
+cp --target-directory=d a
+cp --target-directory d a b
+cp --target-directory
+cp --target-directory= a
+cp --unknown a b
+cp --unknown=x a b
+cp -- -a -b
+cp - b
+mv -f a b
+mv -t d/ x/y/ z
+mv --backup=numbered a b
+cp -av src/ dst
+cp a/ b/ c/ d

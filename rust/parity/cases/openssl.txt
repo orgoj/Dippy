@@ -1,0 +1,8 @@
+# Extra openssl cases
+openssl
+openssl x509 -noout -in c
+openssl x509 -in c -out o
+openssl s_client -connect h:443
+openssl list
+openssl rand -hex 16
+openssl genrsa -out k 2048

@@ -1,0 +1,12 @@
+# Extra ip cases
+ip
+ip -n
+ip -n ns addr
+ip -netns ns route add x
+ip -br -c a
+ip netns exec ns ls
+ip link set dev eth0 up
+ip -rc 1 neigh flush all
+ip xfrm state
+ip -6 r
+ip addr show add

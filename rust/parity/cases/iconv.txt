@@ -1,0 +1,11 @@
+# Extra iconv cases
+iconv
+iconv -o
+iconv -o out in
+iconv -oout in
+iconv --output out in
+iconv --output=out in
+iconv --output= in
+iconv -o a -o b
+iconv -o a -l
+iconv -f utf8 -t ascii in

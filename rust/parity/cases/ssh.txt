@@ -1,0 +1,14 @@
+# Extra ssh cases for handler_compare.py
+ssh -p2222A host ls
+ssh -vp 22 host ls
+ssh -l user host -- ls -la
+ssh -- host ls
+ssh host -- --
+ssh '' ls
+ssh -q -T host 'ls; rm -rf /'
+ssh -vvv -o ProxyCommand=x host ls
+ssh -6 host uptime
+ssh -i key -J jump host ls
+ssh -é host ls
+ssh --help
+ssh host "echo $HOME"

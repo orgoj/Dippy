@@ -1,0 +1,6 @@
+# Extra rtk cases for handler_compare.py
+rtk gain --history
+rtk proxy echo 'a;b'
+rtk -v git status
+rtk discover --all
+rtk git commit -m 'msg with spaces'

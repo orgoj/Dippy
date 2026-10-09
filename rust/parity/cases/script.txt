@@ -1,0 +1,11 @@
+# Extra script cases for handler_compare.py
+script -t
+script -t 2 out ls
+script -T timing out
+script -- -p file
+script --
+script -p
+script --playback file
+script -qp file
+script out bash -c 'rm -rf /'
+script -c 'ls' out

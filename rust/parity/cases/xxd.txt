@@ -1,0 +1,7 @@
+# Extra xxd cases
+xxd
+xxd f
+xxd -r f
+xxd -revert f
+xxd -rp f
+xxd -p f

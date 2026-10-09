@@ -1,0 +1,6 @@
+# Extra mktemp cases
+mktemp
+mktemp -u
+mktemp -du
+mktemp -d -u /tmp/x.XXXX
+mktemp -d
