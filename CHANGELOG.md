@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.21] - 2026-10-09
+
+### Added
+
+- `dippy dashboard --hub NODES_FILE` runs the same page as a hub over several machines. The hub keeps node URLs and tokens in a 0600 JSON file, accepts `PUT`/`DELETE /api/nodes/{name}` (or the page's form, or a hand edit) without a restart, and proxies only `/n/{name}/api/entries` to each node with that node's token. The registry is always rewritten with mode 0600, and an invalid hand-edited entry is reported as a JSON error. The proxy speaks only HTTP(S), ignores `http_proxy`, follows no redirects, and relays only JSON responses up to 8 MiB. The page skips a poll while the previous one is still running. The page merges all nodes by time, adds a node column and marks unreachable nodes. When the network fails, each node's own page still works.
+- The dashboard token is persistent: `--token-file PATH` (default `~/.dippy/dashboard-token`), created private when missing, so a node is registered in a hub once.
+- `docs/dashboard-api.json` documents the REST API as OpenAPI; a test keeps it in sync with the server routes.
+
+### Changed
+
+- The dashboard page, script and stylesheet are package files under `dippy/dashboard_static/`.
+
 ## [0.4.20] - 2026-10-09
 
 ### Added

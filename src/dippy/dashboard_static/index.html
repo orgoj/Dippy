@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dippy Dashboard</title>
+<link rel="stylesheet" href="/app.css">
+</head>
+<body class="single">
+<header>
+  <h1>Dippy</h1>
+  <form id="filters">
+    <select name="decision">
+      <option value="">all decisions</option>
+      <option value="not_allow" selected>not allow</option>
+      <option value="allow">allow</option>
+      <option value="ask">ask</option>
+      <option value="deny">deny</option>
+      <option value="pass">pass</option>
+    </select>
+    <input name="agent" placeholder="agent (claude, agy...)">
+    <input name="cwd" placeholder="cwd /abs/path">
+    <input name="grep" placeholder="text">
+    <input name="limit" type="number" min="1" max="1000" value="200">
+    <label><input name="pause" type="checkbox"> pause</label>
+  </form>
+  <p id="status">loading...</p>
+  <section id="nodes" hidden>
+    <ul id="node-list"></ul>
+    <form id="add-node">
+      <input name="name" placeholder="name" required>
+      <input name="url" placeholder="http://host:8765" required>
+      <input name="token" placeholder="node token" type="password" required>
+      <button type="submit">add node</button>
+    </form>
+  </section>
+</header>
+<main>
+<table>
+  <thead><tr><th class="node">node</th><th>time</th><th>decision</th>
+  <th>agent</th><th>cwd</th><th>what</th><th>why</th></tr></thead>
+  <tbody id="rows"></tbody>
+</table>
+</main>
+<script src="/app.js"></script>
+</body>
+</html>

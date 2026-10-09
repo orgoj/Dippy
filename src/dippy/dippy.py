@@ -55,6 +55,7 @@ from dippy.core.config import (
 from dippy import __version__
 from dippy.audit import query_audit_log
 from dippy.config_admin import edit_config
+from dippy.dashboard import DEFAULT_TOKEN_FILE as DEFAULT_DASHBOARD_TOKEN_FILE
 from dippy.dashboard import serve as serve_dashboard
 from dippy.core.notifier import run_notifier, should_run_notifier
 from dippy.core.template import expand_template
@@ -1233,9 +1234,20 @@ Subcommands:
     # === dashboard subcommand ===
     dashboard_parser = subparsers.add_parser(
         "dashboard",
-        help="Serve a live read-only web view of the audit log",
+        help="Serve a live web view of the audit log, or a hub over nodes",
         description="Serve the audit log since yesterday (UTC) as a live web "
-        "page. Open the printed URL; its token guards the data API.",
+        "page (node), or with --hub the same page over registered nodes. Open "
+        "the printed URL; its token guards the API.",
+    )
+    dashboard_parser.add_argument(
+        "--hub",
+        metavar="NODES_FILE",
+        help="Run as a hub proxying the nodes registered in this JSON file",
+    )
+    dashboard_parser.add_argument(
+        "--token-file",
+        metavar="PATH",
+        help=f"API token, created when missing (default: {DEFAULT_DASHBOARD_TOKEN_FILE})",
     )
     dashboard_parser.add_argument(
         "--host", default="127.0.0.1", help="Listen address (default: 127.0.0.1)"
@@ -1448,7 +1460,11 @@ def handle_audit_subcommand(args: argparse.Namespace) -> int:
 
 
 def handle_dashboard_subcommand(args: argparse.Namespace) -> int:
-    """Serve the live read-only audit log view until interrupted."""
+    """Serve the live audit log view (node) or the node proxy (hub)."""
+    token_file = Path(args.token_file or DEFAULT_DASHBOARD_TOKEN_FILE).expanduser()
+    if args.hub:
+        nodes = Path(args.hub).expanduser()
+        return serve_dashboard(args.host, args.port, token_file, nodes=nodes)
     try:
         _, config = _subcommand_config(args)
     except ConfigError as error:
@@ -1457,7 +1473,7 @@ def handle_dashboard_subcommand(args: argparse.Namespace) -> int:
     if config.log is None:
         print("audit log is not configured (set log PATH)", file=sys.stderr)
         return 1
-    return serve_dashboard(config.log, args.host, args.port)
+    return serve_dashboard(args.host, args.port, token_file, log=config.log)
 
 
 _CONFIG_KEYS = frozenset(

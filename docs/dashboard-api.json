@@ -1,0 +1,118 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Dippy dashboard API",
+    "version": "1",
+    "description": "REST API of `dippy dashboard`. A node serves /api/entries from its audit log. A hub (`--hub NODES_FILE`) serves /api/nodes and proxies /n/{name}/api/entries to registered nodes; it has no /api/entries. Every operation requires the server token in X-Dippy-Token. Errors are JSON objects {\"error\": \"...\"}."
+  },
+  "components": {
+    "securitySchemes": {
+      "token": {"type": "apiKey", "in": "header", "name": "X-Dippy-Token"}
+    },
+    "parameters": {
+      "name": {
+        "name": "name", "in": "path", "required": true,
+        "schema": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"}
+      },
+      "limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 200}},
+      "decision": {"name": "decision", "in": "query", "description": "Repeatable; decisions combine with OR.", "schema": {"type": "array", "items": {"enum": ["allow", "ask", "deny", "pass"]}}, "explode": true},
+      "not_allow": {"name": "not_allow", "in": "query", "schema": {"enum": ["1"]}},
+      "agent": {"name": "agent", "in": "query", "schema": {"type": "string"}},
+      "cwd": {"name": "cwd", "in": "query", "description": "Absolute path; matches cwd at or below it.", "schema": {"type": "string"}},
+      "grep": {"name": "grep", "in": "query", "description": "Substring of command, cmd, message, file_path, tool or suggestion.", "schema": {"type": "string"}}
+    },
+    "schemas": {
+      "Error": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}},
+      "Entry": {
+        "type": "object",
+        "description": "One audit log line; fields beyond decision and ts are optional.",
+        "required": ["decision", "ts"],
+        "properties": {
+          "decision": {"enum": ["allow", "ask", "deny", "pass"]},
+          "ts": {"type": "string", "format": "date-time"},
+          "cmd": {"type": "string"}, "command": {"type": "string"},
+          "rule": {"type": "string"}, "message": {"type": "string"},
+          "cwd": {"type": "string"}, "policy_cwd": {"type": "string"},
+          "tool": {"type": "string"}, "file_path": {"type": "string"},
+          "context_flags": {"type": "array", "items": {"type": "string"}},
+          "agent": {"type": "string"}, "suggestion": {"type": "string"}
+        }
+      },
+      "Node": {"type": "object", "required": ["name", "url"], "properties": {"name": {"type": "string"}, "url": {"type": "string"}}}
+    },
+    "responses": {
+      "Entries": {"description": "Entries since yesterday (UTC), oldest first, at most limit.", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Entry"}}}}},
+      "Error": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+    }
+  },
+  "security": [{"token": []}],
+  "paths": {
+    "/api/entries": {
+      "get": {
+        "summary": "Node: audit log entries",
+        "parameters": [
+          {"$ref": "#/components/parameters/limit"}, {"$ref": "#/components/parameters/decision"},
+          {"$ref": "#/components/parameters/not_allow"}, {"$ref": "#/components/parameters/agent"},
+          {"$ref": "#/components/parameters/cwd"}, {"$ref": "#/components/parameters/grep"}
+        ],
+        "responses": {
+          "200": {"$ref": "#/components/responses/Entries"},
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "500": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    },
+    "/api/nodes": {
+      "get": {
+        "summary": "Hub: registered nodes (tokens are never returned)",
+        "responses": {
+          "200": {"description": "Nodes", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}}},
+          "401": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    },
+    "/api/nodes/{name}": {
+      "parameters": [{"$ref": "#/components/parameters/name"}],
+      "put": {
+        "summary": "Hub: add or replace a node",
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {
+            "type": "object", "required": ["url", "token"],
+            "properties": {
+              "url": {"type": "string", "description": "http:// or https:// with host; no credentials, query or fragment. A path prefix is kept."},
+              "token": {"type": "string", "minLength": 1, "description": "The node's X-Dippy-Token."}
+            }
+          }}}
+        },
+        "responses": {
+          "200": {"description": "Stored", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Node"}}}},
+          "400": {"$ref": "#/components/responses/Error"},
+          "401": {"$ref": "#/components/responses/Error"}
+        }
+      },
+      "delete": {
+        "summary": "Hub: remove a node",
+        "responses": {
+          "200": {"description": "Removed", "content": {"application/json": {"schema": {"type": "object", "properties": {"name": {"type": "string"}}}}}},
+          "401": {"$ref": "#/components/responses/Error"},
+          "404": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    },
+    "/n/{name}/api/entries": {
+      "parameters": [{"$ref": "#/components/parameters/name"}],
+      "get": {
+        "summary": "Hub: proxy to the node's /api/entries",
+        "description": "Forwards the query string with the node's token. Relays the node's status and JSON body; no environment proxy, no redirects, response capped.",
+        "responses": {
+          "200": {"$ref": "#/components/responses/Entries"},
+          "401": {"$ref": "#/components/responses/Error"},
+          "404": {"$ref": "#/components/responses/Error"},
+          "502": {"$ref": "#/components/responses/Error"}
+        }
+      }
+    }
+  }
+}

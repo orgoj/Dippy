@@ -17,9 +17,11 @@ def _setting_key(line: str) -> str | None:
     return None
 
 
-def _write_atomic(path: Path, text: str) -> None:
+def _write_atomic(path: Path, text: str, mode: int | None = None) -> None:
+    """Replace path atomically, keeping its mode unless `mode` is given."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    mode = path.stat().st_mode if path.exists() else None
+    if mode is None and path.exists():
+        mode = path.stat().st_mode
     fd, temporary = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
     temporary_path = Path(temporary)
     try:
