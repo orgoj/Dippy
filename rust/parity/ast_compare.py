@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import collections
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -41,22 +42,34 @@ def first_diff(a, b, path="$"):
     return None if a == b else (path, a, b)
 
 
-def shape(path: str) -> str:
-    import re
+def _short(value) -> str:
+    return json.dumps(value)[:160]
 
+
+def shape(path: str) -> str:
     return re.sub(r"\[\d+\]", "[]", path)
 
 
 def main() -> None:
     corpus = HERE / "corpus.jsonl"
     data = corpus.read_bytes()
-    py = subprocess.run(
-        [str(REPO / ".venv-3.12" / "bin" / "python"), str(HERE / "ast_dump.py")],
-        input=data, capture_output=True, check=True,
-    ).stdout.decode().splitlines()
-    rs = subprocess.run(
-        [str(BIN), "--dump-ast-jsonl"], input=data, capture_output=True, check=True
-    ).stdout.decode().splitlines()
+    py = (
+        subprocess.run(
+            [str(REPO / ".venv-3.12" / "bin" / "python"), str(HERE / "ast_dump.py")],
+            input=data,
+            capture_output=True,
+            check=True,
+        )
+        .stdout.decode()
+        .splitlines()
+    )
+    rs = (
+        subprocess.run(
+            [str(BIN), "--dump-ast-jsonl"], input=data, capture_output=True, check=True
+        )
+        .stdout.decode()
+        .splitlines()
+    )
     cases = [json.loads(line) for line in data.decode().splitlines() if line.strip()]
     assert len(py) == len(rs) == len(cases), (len(py), len(rs), len(cases))
     groups = collections.defaultdict(list)
@@ -88,13 +101,23 @@ def main() -> None:
         lines.append(f"## `{key}` ({len(items)})")
         lines.append("")
         for cmd, x, y in items[:8]:
-            short = lambda v: json.dumps(v)[:160]
-            lines.append(f"- `{json.dumps(cmd)[1:-1][:140]}`: Parable `{short(x)}` / Rable `{short(y)}`")
+            lines.append(
+                f"- `{json.dumps(cmd)[1:-1][:140]}`: Parable `{_short(x)}` / Rable `{_short(y)}`"
+            )
         lines.append("")
     (HERE / "ast-report.md").write_text("\n".join(lines))
     print(f"{total} commands, {ndiff} divergent, {len(groups)} groups")
     for key, items in sorted(groups.items(), key=lambda kv: -len(kv[1]))[:25]:
-        print(len(items), key, "|", json.dumps(items[0][0])[:80], "|", json.dumps(items[0][1])[:80], "|", json.dumps(items[0][2])[:80])
+        print(
+            len(items),
+            key,
+            "|",
+            json.dumps(items[0][0])[:80],
+            "|",
+            json.dumps(items[0][1])[:80],
+            "|",
+            json.dumps(items[0][2])[:80],
+        )
 
 
 if __name__ == "__main__":

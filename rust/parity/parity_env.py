@@ -51,7 +51,13 @@ def child_env() -> dict[str, str]:
 
 
 def cli_args(case: dict) -> list[str]:
-    args = ["--cmd", case["cmd"], "--json", "--cwd", resolve_cwd(case.get("cwd", CWD_PLACEHOLDER))]
+    args = [
+        "--cmd",
+        case["cmd"],
+        "--json",
+        "--cwd",
+        resolve_cwd(case.get("cwd", CWD_PLACEHOLDER)),
+    ]
     if case.get("config"):
         args += ["--config", str(config_path_for(case["config"]))]
     return args

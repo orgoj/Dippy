@@ -75,9 +75,7 @@ def _recording_analyze(command, config, cwd, context_flags=None, *, remote=False
             _emit({"src": "analyze", "cmd": command, "config": text})
     _DEPTH[0] += 1
     try:
-        return _original_analyze(
-            command, config, cwd, context_flags, remote=remote
-        )
+        return _original_analyze(command, config, cwd, context_flags, remote=remote)
     finally:
         _DEPTH[0] -= 1
 

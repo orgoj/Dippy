@@ -32,7 +32,11 @@ def run_case(case: dict) -> dict:
     except SystemExit as exc:
         code = exc.code if isinstance(exc.code, int) else 2
     except Exception as exc:  # oracle crash: Dippy itself would fail open? record
-        return {"decision": "error", "reason": f"{type(exc).__name__}: {exc}", "exit": -1}
+        return {
+            "decision": "error",
+            "reason": f"{type(exc).__name__}: {exc}",
+            "exit": -1,
+        }
     text = out.getvalue().strip().splitlines()
     try:
         payload = json.loads(text[0]) if text else {}
