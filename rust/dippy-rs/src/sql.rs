@@ -19,6 +19,9 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
+use crate::bash::decode_literal_word;
+use crate::cli::HandlerContext;
+
 /// Keyword arguments of Python `is_readonly_sql`.
 #[derive(Debug, Clone)]
 pub struct ReadonlyOptions {
@@ -644,6 +647,43 @@ pub fn duckdb_copy_export_target(sql: &str) -> Option<String> {
         return None;
     }
     grammar::copy_export_target(&statements[0])
+}
+
+// ---------------------------------------------------------------------------
+// CLI helpers.
+
+/// Port of `dippy.cli.sql_args.literal_sql_arg`: the SQL Bash passes for a
+/// literal word (after `prefix`), or `None` if uncertain.
+pub fn literal_sql_arg(ctx: &HandlerContext, index: usize, prefix: &str) -> Option<String> {
+    if index >= ctx.tokens.len() || ctx.raw_words.len() != ctx.tokens.len() {
+        return None;
+    }
+    if ctx.word_has_expansions.get(index) == Some(&true) {
+        return None;
+    }
+    let raw = ctx.raw_words[index].strip_prefix(prefix)?;
+    decode_literal_word(raw, false)
+}
+
+/// Python `str.lstrip()`.
+pub fn py_lstrip(s: &str) -> &str {
+    s.trim_start_matches(py_isspace)
+}
+
+/// Handler test context built like the analyzer: raw words from the Bash
+/// parser, quote-stripped tokens and a conservative expansion flag.
+#[cfg(test)]
+pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
+    let raw = crate::parser::tokenize(command, true);
+    assert!(!raw.is_empty(), "unparsable test command: {command}");
+    let tokens: Vec<String> = raw
+        .iter()
+        .map(|w| crate::parser::strip_quotes(w).to_string())
+        .collect();
+    let mut ctx = HandlerContext::new(&tokens);
+    ctx.word_has_expansions = raw.iter().map(|w| w.contains(['$', '`'])).collect();
+    ctx.raw_words = raw;
+    ctx
 }
 
 // ---------------------------------------------------------------------------
