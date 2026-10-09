@@ -1508,78 +1508,49 @@ def _normalize_path(path: str, cwd: Path) -> str:
     return _expand_token(path.rstrip("/"), cwd, force_path=True)
 
 
-def _glob_to_regex(pattern: str) -> re.Pattern:
-    """Convert a glob pattern with ** support to a regex.
+def _path_components(path: str) -> list[str]:
+    """Split a path on `/`, dropping empty components except a leading one."""
+    parts = path.split("/")
+    return parts[:1] + [p for p in parts[1:] if p]
 
-    ** matches zero or more path components (including /)
-    * matches anything except /
-    ? matches any single character except /
-    [abc] matches character class
-    """
-    regex = []
-    i = 0
-    n = len(pattern)
-    while i < n:
-        c = pattern[i]
-        if c == "*":
-            if i + 1 < n and pattern[i + 1] == "*":
-                # ** - matches anything including /
-                regex.append(".*")
-                i += 2
-                # Skip trailing / after **
-                if i < n and pattern[i] == "/":
-                    regex.append("/?")
-                    i += 1
-            else:
-                # * - matches anything except /
-                regex.append("[^/]*")
-                i += 1
-        elif c == "?":
-            regex.append("[^/]")
+
+def _skip_empty_doublestars(states: set[int], pattern: list[str]) -> set[int]:
+    """Add the positions reached by letting each `**` match zero components."""
+    result = set(states)
+    for i in states:
+        while i < len(pattern) and pattern[i] == "**":
             i += 1
-        elif c == "[":
-            # Character class - find the closing ]
-            j = i + 1
-            if j < n and pattern[j] == "!":
-                j += 1
-            if j < n and pattern[j] == "]":
-                j += 1
-            while j < n and pattern[j] != "]":
-                j += 1
-            if j >= n:
-                # Unclosed bracket, treat as literal
-                regex.append(re.escape(c))
-                i += 1
-            else:
-                # Convert [!...] to [^...]
-                cls = pattern[i + 1 : j]
-                if cls.startswith("!"):
-                    cls = "^" + cls[1:]
-                regex.append(f"[{cls}]")
-                i = j + 1
-        else:
-            regex.append(re.escape(c))
-            i += 1
-    return re.compile("^" + "".join(regex) + "$")
+            result.add(i)
+    return result
 
 
 def _glob_match(text: str, pattern: str) -> bool:
-    """Match text against a glob pattern with ** support.
+    """Match a path against a glob pattern component by component.
 
-    For patterns without **, uses fnmatch (faster).
-    For patterns with **, converts to regex for proper recursive matching:
-    - ** matches zero or more directories
-    - foo/**/bar matches foo/bar, foo/x/bar, foo/x/y/bar
+    - `*`, `?` and `[...]` match within one component; `*` never crosses `/`.
+    - A component that is exactly `**` matches zero or more whole components;
+      a trailing `**` needs at least one (`dir/**` excludes `dir`).
+    - `**` inside a longer component acts as `*`.
     """
-    if "**" not in pattern:
-        return fnmatch.fnmatch(text, pattern)
-    if pattern == "**":
-        return True
-    try:
-        regex = _glob_to_regex(pattern)
-        return regex.match(text) is not None
-    except re.error:
-        return False
+    parts = [
+        p if p == "**" else re.sub(r"\*{2,}", "*", p) for p in _path_components(pattern)
+    ]
+    if parts[-1] == "**":
+        parts[-1:] = ["*", "**"]
+    states = _skip_empty_doublestars({0}, parts)
+    for component in _path_components(text):
+        states = _skip_empty_doublestars(
+            {
+                i if parts[i] == "**" else i + 1
+                for i in states
+                if i < len(parts)
+                and (parts[i] == "**" or fnmatch.fnmatchcase(component, parts[i]))
+            },
+            parts,
+        )
+        if not states:
+            return False
+    return len(parts) in states
 
 
 def _match_option_rule(rule: Rule, words: list[str]) -> bool:
@@ -1860,19 +1831,19 @@ def _match_option_block(
 def _normalize_redirect_pattern(pattern: str, cwd: Path) -> str:
     """Normalize a redirect pattern, handling ** specially.
 
-    For patterns with **, normalize the prefix before ** and keep the rest.
+    For patterns with **, normalize the components before the first one
+    containing ** and keep the rest.
     For example: 'src/**' -> '/abs/path/to/src/**'
     """
     if "**" not in pattern:
         return _normalize_path(pattern, cwd)
-    # Split at first **, normalize prefix, rejoin
-    idx = pattern.index("**")
-    prefix = pattern[:idx].rstrip("/")
-    suffix = pattern[idx:]
+    parts = pattern.split("/")
+    idx = next(i for i, part in enumerate(parts) if "**" in part)
+    prefix = "/".join(parts[:idx])
     if prefix:
         normalized_prefix = _normalize_path(prefix, cwd)
-        return f"{normalized_prefix}/{suffix}"
-    # Pattern starts with ** (e.g., "**/foo") - no prefix to normalize
+        return f"{normalized_prefix}/{'/'.join(parts[idx:])}"
+    # Pattern starts with ** (e.g., "**/foo") or "/**" - no prefix to normalize
     return pattern
 
 

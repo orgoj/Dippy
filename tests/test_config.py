@@ -24,7 +24,9 @@ from dippy.core.config import (
     match_after,
     match_after_mcp,
     match_command,
+    match_edit,
     match_mcp,
+    match_read,
     match_redirect,
     match_web,
     parse_config,
@@ -1215,6 +1217,83 @@ class TestMatchRedirect:
         assert m.decision == "allow"  # allow is last match
         m2 = match_redirect("/etc/passwd", cfg, tmp_path)
         assert m2.decision == "deny"  # deny is last match
+
+
+class TestPathGlobComponents:
+    """Path globs match whole path components; `*` never crosses `/`."""
+
+    @pytest.mark.parametrize(
+        ("pattern", "target", "expected"),
+        [
+            # exact file in a directory
+            ("/srv/d/f.txt", "/srv/d/f.txt", True),
+            ("/srv/d/f.txt", "/srv/d/sub/f.txt", False),
+            # direct children only
+            ("/srv/d/*", "/srv/d/f", True),
+            ("/srv/d/*", "/srv/d/sub/f", False),
+            ("/srv/d/*.log", "/srv/d/a/b.log", False),
+            ("/srv/d/?", "/srv/d/a", True),
+            ("/srv/d/?/f", "/srv/d/a/f", True),
+            ("/srv/d/[ab]", "/srv/d/a", True),
+            ("/srv/d/[ab]/f", "/srv/d/c/f", False),
+            # whole tree below a directory, not the directory itself
+            ("/srv/d/**", "/srv/d/f", True),
+            ("/srv/d/**", "/srv/d/a/b/c", True),
+            ("/srv/d/**", "/srv/d", False),
+            ("/srv/d/**", "/srv/dx/f", False),
+            # inner ** spans zero or more whole components
+            ("/srv/d/**/out.log", "/srv/d/out.log", True),
+            ("/srv/d/**/out.log", "/srv/d/a/b/out.log", True),
+            ("/srv/d/**/out.log", "/srv/d/xout.log", False),
+            ("/srv/d/**/out.log", "/srv/dx/out.log", False),
+            ("/srv/**/x/**", "/srv/a/x/b/x/c", True),
+            ("/srv/**/x/**/y", "/srv/a/b/c/d/e", False),
+            # leading ** anchors the following component
+            ("**/.dippy", "/a/.dippy", True),
+            ("**/.dippy", "/.dippy", True),
+            ("**/.dippy", "/a/foo.dippy", False),
+            ("**/.dippy", "/a/.dippy/x", False),
+            ("**/.env*", "/app/.env.local", True),
+            ("**/.env*", "/app/x.env", False),
+            # ** inside a component acts as *
+            ("/srv/a**b/x", "/srv/aZZb/x", True),
+            ("/srv/a**b/x", "/srv/a/q/b/x", False),
+            # absolute targets vs leading * component
+            ("/*", "/a", True),
+            ("/*", "/a/b", False),
+            # empty and trailing components in the pattern are ignored
+            ("/srv/d/**/", "/srv/d/a/b", True),
+            ("/srv//d/**", "/srv/d/a", True),
+        ],
+    )
+    def test_redirect_component_matching(self, tmp_path, pattern, target, expected):
+        cfg = Config(redirect_rules=[Rule("allow", pattern)])
+        assert (match_redirect(target, cfg, tmp_path) is not None) is expected
+
+    def test_relative_patterns_resolve_against_cwd(self, tmp_path):
+        cfg = Config(
+            redirect_rules=[Rule("allow", "out/*"), Rule("allow", "log/**/x.log")]
+        )
+        assert match_redirect("out/a", cfg, tmp_path) is not None
+        assert match_redirect("out/sub/a", cfg, tmp_path) is None
+        assert match_redirect("log/x.log", cfg, tmp_path) is not None
+        assert match_redirect("log/a/x.log", cfg, tmp_path) is not None
+        assert match_redirect("logx/x.log", cfg, tmp_path) is None
+
+    def test_remote_relative_target(self, tmp_path):
+        cfg = Config(redirect_rules=[Rule("allow", "**/out/*")])
+        assert match_redirect("out/a", cfg, tmp_path, remote=True) is not None
+        assert match_redirect("out/a/b", cfg, tmp_path, remote=True) is None
+
+    def test_edit_and_read_rules_share_semantics(self, tmp_path):
+        cfg = Config(
+            edit_rules=[Rule("allow", "/srv/d/*")],
+            read_rules=[Rule("allow", "/srv/d/**/f")],
+        )
+        assert match_edit("/srv/d/f", cfg, tmp_path) is not None
+        assert match_edit("/srv/d/sub/f", cfg, tmp_path) is None
+        assert match_read("/srv/d/a/f", cfg, tmp_path) is not None
+        assert match_read("/srv/d/xf", cfg, tmp_path) is None
 
 
 class TestMatchEdgeCases:

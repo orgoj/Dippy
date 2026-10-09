@@ -831,16 +831,21 @@ do not declare a complete permitted argument shape.
 
 ### Path Patterns
 
-For redirect and file rules (`*-redirect`, `*-edit`, `*-mcp`), patterns match paths:
+For redirect and file rules (`*-redirect`, `*-edit`, `*-read`), patterns match
+paths component by component (the parts between `/`):
 
-- `*` matches any characters except `/`
-- `**` matches any characters including `/` (recursive)
-- `?`, `[abc]`, `[a-z]`, `[!abc]` work as above
+- `*`, `?`, `[abc]`, `[a-z]`, `[!abc]` match within one component; they never cross `/`
+- a component that is exactly `**` matches zero or more whole components; a
+  trailing `**` needs at least one, so `src/**` does not match `src` itself
+- `**` inside a longer component (`a**b`) acts as `*`
+- empty components and a trailing `/` in the pattern are ignored
 
 ```
-src/*      # matches src/foo.go, NOT src/sub/foo.go
-src/**     # matches src/foo.go AND src/sub/foo.go
-**/test.*  # matches test.py, src/test.py, src/sub/test.py
+src/main.go     # exactly that file
+src/*           # matches src/foo.go, NOT src/sub/foo.go
+src/**          # matches src/foo.go AND src/sub/foo.go, NOT src
+src/**/x.log    # matches src/x.log, src/a/b/x.log, NOT src/ax.log
+**/test.*       # matches test.py, src/test.py, src/sub/test.py, NOT src/mytest.py
 ```
 
 **Last match wins.** Rules are evaluated top-to-bottom; the last matching rule determines the decision. This allows broad rules followed by specific exceptions.
@@ -941,10 +946,11 @@ Redirect patterns match the target path, normalized:
 
 Supports `**` for recursive directory matching:
 
-- `**` matches zero or more directories
+- `**` matches zero or more whole directories (see [Path Patterns](#path-patterns))
 - `/tmp/**` matches `/tmp/foo`, `/tmp/a/b/c`, etc.
-- `**/foo` matches `/foo`, `/a/foo`, `/a/b/c/foo`
+- `**/foo` matches `/foo`, `/a/foo`, `/a/b/c/foo`, not `/a/xfoo`
 - `/tmp/**/file.txt` matches `/tmp/file.txt`, `/tmp/a/file.txt`, `/tmp/a/b/file.txt`
+- `/tmp/*` matches only files directly in `/tmp`; use `/tmp/**` for the whole tree
 
 ```
 # Allow temp paths

@@ -5,7 +5,12 @@ from pathlib import Path
 import pytest
 
 from dippy.core.analyzer import analyze
-from dippy.core.config import _merge_configs, parse_config
+from dippy.core.config import (
+    _merge_configs,
+    env_context_flags,
+    match_redirect,
+    parse_config,
+)
 
 
 ENV_VAR = "DIPPY_TEST_AGENT"
@@ -232,8 +237,6 @@ def test_redirect_rule_respects_context_env(monkeypatch, decision):
         {decision}-redirect [${ENV_VAR}=research] out/**
     """
     )
-    from dippy.core.config import env_context_flags, match_redirect
-
     assert config.redirect_rules[0].pattern == "out/**"
 
     monkeypatch.setenv(ENV_VAR, "research")
