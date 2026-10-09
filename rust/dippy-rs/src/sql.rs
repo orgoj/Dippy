@@ -2210,7 +2210,7 @@ mod grammar {
                         if self.eat_op(",") {
                             if self.toks[start..self.pos]
                                 .iter()
-                                .any(|t| matches!(t, Tok::Word(w) if w == "SELECT"))
+                                .any(|t| matches!(t, Tok::Word(w) if matches!(w.as_str(), "SELECT" | "FROM" | "WITH" | "VALUES")))
                             {
                                 return None;
                             }
@@ -3429,6 +3429,7 @@ mod tests {
             ),
             ("duckdb", "SELECT date_trunc(second, ts) FROM t"),
             ("duckdb", "SELECT [(SELECT e), n]"),
+            ("duckdb", "SELECT [EXISTS (FROM d), e]"),
             ("athena", "SELECT substr(a = b)"),
             ("mysql", "SELECT string_agg(a, -a)"),
             ("tsql", "SELECT string_agg(DISTINCT a, ',') FROM t"),
