@@ -1,0 +1,3 @@
+yq -i=
+yq --inplace=
+yq -I 2

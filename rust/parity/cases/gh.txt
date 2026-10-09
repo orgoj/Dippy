@@ -1,0 +1,34 @@
+gh
+gh ''
+gh --repo
+gh -R x
+gh -R x pr ''
+gh pr --web
+gh pr '' list
+gh api
+gh api -X
+gh api -X get repos/o/r
+gh api -XPOST repos/o/r
+gh api -Xget repos/o/r
+gh api --method=delete x
+gh api -X GET -X POST x
+gh api -X GET x -F a=b
+gh api x -f a=b
+gh api x --input=f.json
+gh api x --field=a=b
+gh api graphql -f 'query={ viewer { login } }'
+gh api graphql -f 'query=Mutation { x }'
+gh api graphql --raw-field='query=query{a}'
+gh api graphql -f='query=mutation{a}'
+gh api graphql -f=query=
+gh api graphql -f query=x -f a=b
+gh api graphql -f 'query=query{a}' -f a=b
+gh api graphql -f 'query=query{a}' -X POST
+gh api graphql --raw-field 'query=MUTATİON'
+gh api -X gEt x
+gh api -X 'ɢet' x
+gh -B main pr list
+gh --branch main pr view
+gh project field-list 1
+gh attestation verify x
+gh codespace logs
