@@ -1,0 +1,7 @@
+# Extra dippy cases for handler_compare.py
+dippy
+dippy audit
+dippy audit --since 1d
+dippy dashboard
+dippy run ls
+dippy --config x audit

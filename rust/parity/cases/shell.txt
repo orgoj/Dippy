@@ -1,0 +1,10 @@
+# Extra shell cases for handler_compare.py
+bash -c
+bash -c ''
+bash --norc -c 'ls'
+bash -x script.sh -c 'rm'
+zsh -ic 'ls'
+sh -e -c 'pwd; rm x'
+fish --command 'ls'
+bash -o pipefail -c 'ls | wc'
+bash -- -c ls

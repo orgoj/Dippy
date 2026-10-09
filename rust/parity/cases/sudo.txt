@@ -1,0 +1,10 @@
+# Extra sudo/doas/pkexec cases for handler_compare.py
+sudo -u
+sudo -u root
+sudo -E -H -u root env FOO=1 ls
+sudo -- -i
+sudo echo 'a b' "c'd" ''
+doas -u root -- rm -rf /
+pkexec --user root ls
+sudo -s ls
+sudo --login
