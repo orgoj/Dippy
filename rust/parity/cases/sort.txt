@@ -1,0 +1,5 @@
+sort -o
+sort --output=
+sort -o ''
+sort -k1 -o out -o out2
+sort --output
