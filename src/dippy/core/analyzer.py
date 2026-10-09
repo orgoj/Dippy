@@ -1003,7 +1003,7 @@ def _analyze_redirects(
 
         # Check output redirects against config
         if _redirect_writes_file(op):
-            redirect_match = match_redirect(target, config, cwd)
+            redirect_match = match_redirect(target, config, cwd, context_flags)
             if redirect_match:
                 if redirect_match.decision == "allow":
                     decisions.append(Decision("allow", f"redirect to {target}"))
@@ -1300,7 +1300,7 @@ def _analyze_simple_command(
                     continue
                 if "ssh" in context_flags:
                     return Decision("ask", f"remote redirect to {target}")
-                redirect_match = match_redirect(target, config, cwd)
+                redirect_match = match_redirect(target, config, cwd, context_flags)
                 if redirect_match:
                     if redirect_match.decision == "deny":
                         msg = redirect_match.message or redirect_match.pattern

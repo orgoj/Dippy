@@ -861,25 +861,24 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     )
                 )
 
-            elif directive == "allow-redirect":
+            elif directive in ("allow-redirect", "ask-redirect", "deny-redirect"):
                 if not rest:
                     raise ValueError("requires a pattern")
-                redirect_rules.append(Rule("allow", _expand_pattern_tildes(rest)))
-
-            elif directive == "ask-redirect":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
-                redirect_rules.append(
-                    Rule("ask", _expand_pattern_tildes(pattern), message=message)
+                pattern_part, flags, neg_flags = _extract_context_flags(rest)
+                pattern, message = (
+                    _extract_message(pattern_part)
+                    if directive != "allow-redirect"
+                    else (pattern_part, None)
                 )
-
-            elif directive == "deny-redirect":
-                if not rest:
-                    raise ValueError("requires a pattern")
-                pattern, message = _extract_message(rest)
+                decision = directive.split("-")[0]
                 redirect_rules.append(
-                    Rule("deny", _expand_pattern_tildes(pattern), message=message)
+                    Rule(
+                        decision,
+                        _expand_pattern_tildes(pattern),
+                        message=message,
+                        required_flags=flags,
+                        negated_flags=neg_flags,
+                    )
                 )
 
             elif directive == "after":
@@ -1878,7 +1877,12 @@ def _normalize_redirect_pattern(pattern: str, cwd: Path) -> str:
 
 
 def _match_redirect(
-    target: str, config: Config, cwd: Path, *, remote: bool = False
+    target: str,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> Match | None:
     """Match redirect target against rules. Returns last matching rule.
 
@@ -1886,6 +1890,7 @@ def _match_redirect(
         target: Redirect target to match.
         config: Configuration with redirect rules.
         cwd: Current working directory for path resolution.
+        context_flags: Active context flags; rules whose flags are not satisfied are skipped.
         remote: If True, paths are NOT expanded against cwd (container/remote context).
     """
     # When remote, don't expand paths against cwd; only collapse `..` lexically
@@ -1897,6 +1902,8 @@ def _match_redirect(
         normalized_target = _normalize_path(target, cwd)
     result: Match | None = None
     for rule in config.redirect_rules:
+        if not _check_rule_context_flags(rule, context_flags):
+            continue
         # Patterns are always normalized as host paths (user's intent)
         normalized_pattern = _normalize_redirect_pattern(
             rule.pattern, config.path_rule_cwd or cwd
@@ -1953,7 +1960,9 @@ def match_command(
 
     # Match each redirect
     for target in cmd.redirects:
-        redirect_match = _match_redirect(target, config, cwd, remote=remote)
+        redirect_match = _match_redirect(
+            target, config, cwd, context_flags, remote=remote
+        )
         if redirect_match:
             matches.append(redirect_match)
 
@@ -1971,7 +1980,12 @@ def match_command(
 
 
 def match_redirect(
-    target: str, config: Config, cwd: Path, *, remote: bool = False
+    target: str,
+    config: Config,
+    cwd: Path,
+    context_flags: frozenset[str] | None = None,
+    *,
+    remote: bool = False,
 ) -> Match | None:
     """Match a redirect target against redirect rules.
 
@@ -1983,12 +1997,13 @@ def match_redirect(
         target: Redirect target path.
         config: Loaded configuration.
         cwd: Current working directory for path resolution.
+        context_flags: Active context flags; rules whose flags are not satisfied are skipped.
         remote: If True, paths are NOT expanded against cwd (container/remote context).
 
     Returns:
         Match object for the last matching rule, or None if no match.
     """
-    return _match_redirect(target, config, cwd, remote=remote)
+    return _match_redirect(target, config, cwd, context_flags, remote=remote)
 
 
 def match_after(words: list[str], config: Config, cwd: Path) -> str | None:

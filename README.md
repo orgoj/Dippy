@@ -15,7 +15,7 @@
 - **Exclusive config** — `DIPPY_CONFIG_ONLY` and `--config-only` isolate role-specific processes from user and project configuration
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
 - **Scoped handler delegation** — `delegate [flags] command *` sends a matched command through its native safety handler instead of approving it outright, including per-target SSH context
-- **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, file edit/read operations, and web requests
+- **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, output redirects, file edit/read operations, and web requests
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), including literal quoted-heredoc script analysis with `--script-stdin` and output redirects validated by redirect rules
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **Option-aware command patterns** — `[opts: -s, --header="Host: *"]` declares optional flags and single-value globs, with literal shell argument decoding and an exact positional argument count

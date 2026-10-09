@@ -32,6 +32,7 @@ def test_path_kinds_with_candidate_file(tmp_path):
         "allow-edit /srv/box/notes/**\n"
         "allow-redirect /srv/box/out/**\n"
         "allow-edit [$AGENT=k] /srv/box/k/**\n"
+        "allow-redirect [$AGENT=k] /srv/box/kout/**\n"
     )
     common = ("--config-only", str(rules), "--cwd", str(tmp_path))
     assert _run(tmp_path, "read", *common, "/srv/box/a", "/srv/other") == [
@@ -46,6 +47,11 @@ def test_path_kinds_with_candidate_file(tmp_path):
     )
     assert "no match" in _run(tmp_path, "edit", *common, "/srv/box/k/f")[0]
     flagged = _run(tmp_path, "edit", *common, "--flag", "$AGENT=k", "/srv/box/k/f")
+    assert "-> allow" in flagged[0]
+    assert "no match" in _run(tmp_path, "redirect", *common, "/srv/box/kout/f")[0]
+    flagged = _run(
+        tmp_path, "redirect", *common, "--flag", "$AGENT=k", "/srv/box/kout/f"
+    )
     assert "-> allow" in flagged[0]
 
 

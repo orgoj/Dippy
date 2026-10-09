@@ -470,8 +470,9 @@ ask [flags] <glob> "message"
 | `<custom>` | Inside user-defined wrappers | `wrap server1 free -h` |
 | `$VAR=value` | Environment variable is set to that value | `[$HCOM_INSTANCE_NAME=bot1]` |
 
-Note: context flags are supported by `allow`, `ask` and `deny` only. The
-`-redirect`, `-edit`, `-read`, `-mcp`, `-web` and `-opt` variants ignore them.
+Context flags are supported by `allow`, `ask`, `deny`, `delegate` and their
+`-redirect`, `-edit`, `-read` and `-web` variants. The `-mcp` and `-opt`
+variants do not parse them.
 
 ### Environment Flags
 

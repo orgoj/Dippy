@@ -47,7 +47,7 @@ for value in args.values:
     elif args.kind == "edit":
         match = match_edit(value, config, cwd, flags)
     elif args.kind == "redirect":
-        match = match_redirect(value, config, cwd, remote=args.remote)
+        match = match_redirect(value, config, cwd, flags, remote=args.remote)
     elif args.kind == "web":
         match = match_web(value, config, flags)
     else:

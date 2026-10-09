@@ -223,6 +223,63 @@ def test_web_rule_respects_context_env(monkeypatch):
     assert match_web("python docs", config, context_flags=None) is None
 
 
+@pytest.mark.parametrize("decision", ["allow", "ask", "deny"])
+def test_redirect_rule_respects_context_env(monkeypatch, decision):
+    """[flags] on *-redirect rules gate the rule instead of joining the glob."""
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        {decision}-redirect [${ENV_VAR}=research] out/**
+    """
+    )
+    from dippy.core.config import env_context_flags, match_redirect
+
+    assert config.redirect_rules[0].pattern == "out/**"
+
+    monkeypatch.setenv(ENV_VAR, "research")
+    flags = env_context_flags(config)
+    match = match_redirect("/work/out/a.txt", config, Path("/work"), flags)
+    assert match is not None and match.decision == decision
+    assert match_redirect("/work/src/a.txt", config, Path("/work"), flags) is None
+
+    monkeypatch.setenv(ENV_VAR, "traffic")
+    flags = env_context_flags(config)
+    assert match_redirect("/work/out/a.txt", config, Path("/work"), flags) is None
+    assert match_redirect("/work/out/a.txt", config, Path("/work")) is None
+
+
+def test_redirect_flags_reach_analyze(monkeypatch, tmp_path):
+    """Shell redirects and handler-reported targets both honor redirect flags."""
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow-redirect out/**
+        deny-redirect [${ENV_VAR}=traffic] out/locked/** "traffic must not write here"
+    """
+    )
+    monkeypatch.setenv(ENV_VAR, "mail")
+    assert analyze("echo x > out/locked/a", config, tmp_path).action == "allow"
+    assert analyze("tee out/locked/a", config, tmp_path).action == "allow"
+
+    monkeypatch.setenv(ENV_VAR, "traffic")
+    assert analyze("echo x > out/locked/a", config, tmp_path).action == "deny"
+    assert analyze("tee out/locked/a", config, tmp_path).action == "deny"
+    assert analyze("echo x > out/a", config, tmp_path).action == "allow"
+
+
+def test_negated_redirect_flag(monkeypatch, tmp_path):
+    config = parse_config(
+        f"""
+        set context-env {ENV_VAR}
+        allow-redirect [!${ENV_VAR}=traffic] out/**
+    """
+    )
+    monkeypatch.setenv(ENV_VAR, "mail")
+    assert analyze("echo x > out/a", config, tmp_path).action == "allow"
+    monkeypatch.setenv(ENV_VAR, "traffic")
+    assert analyze("echo x > out/a", config, tmp_path).action == "ask"
+
+
 def test_env_flag_wildcard_matching(monkeypatch):
     """Wildcards in context flags (e.g. [$VAR=prefix*]) match values."""
     config = parse_config(
