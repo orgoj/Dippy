@@ -1,0 +1,12 @@
+xargs -
+xargs --
+xargs -- -p
+xargs -I{} sh -c 'echo {}'
+xargs -n
+xargs -Ln rm
+xargs --max-args=1 rm
+xargs -é rm
+xargs -0 -P4 -n1 rm -f
+xargs --interactiveX ls
+xargs -r -- rm
+xargs --replace X echo
