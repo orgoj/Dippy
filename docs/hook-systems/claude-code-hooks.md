@@ -761,6 +761,18 @@ Unlike other hooks, SessionStart stdout is injected into conversation context, n
 Debug log: `Skipping hook execution - workspace trust not accepted`
 - Solution: Accept workspace trust or use `--debug` first
 
+### 11. Auto Mode Classifier Runs After Hooks
+In auto mode (the default interactive permission mode since v2.1.283), a
+safety classifier reviews tool calls that permission rules and the safe local
+set do not settle. A PreToolUse `allow` replaces only the human prompt; the
+classifier can still deny the call, shown as
+`Denied by auto mode classifier ∙ [Category]`. Dippy `deny` and `ask` keep
+working.
+- Exceptions go in the `autoMode` block of `~/.claude/settings.json`, managed
+  settings or `--settings`; the classifier ignores project `.claude/settings*.json`
+- Disable per project with `"disableAutoMode": "disable"` in `.claude/settings.json`
+- Reference: https://code.claude.com/docs/en/auto-mode-config
+
 ---
 
 ## Undocumented Behavior
