@@ -1,0 +1,606 @@
+python3 -c 'x = 1'
+python3 -c 'print(1)'
+python3 -c 'return 1'
+python3 -c 'yield 1'
+python3 -c 'await x'
+python3 -c 'nonlocal x'
+python3 -c 'def f(a, a): pass'
+python3 -c 'f(a=1, a=2)'
+python3 -c '*a = 1'
+python3 -c '*a, *b = c'
+python3 -c '__debug__ = 1'
+python3 -c 'del f()'
+python3 -c 'del (a, b)'
+python3 -c '1 = x'
+python3 -c 'f() = 1'
+python3 -c 'x + 1 = 2'
+python3 -c '(a := 1) = 2'
+python3 -c 'a := 1'
+python3 -c '(a := 1)'
+python3 -c '[x for x in y if (z := x)]'
+python3 -c '[i := 0 for i in range(3)]'
+python3 -c '[x for x in (y := [1])]'
+{"cmd": "python3 -c 'class A:\n    [(z := x) for x in y]'"}
+python3 -c 'lambda: (yield)'
+{"cmd": "python3 -c 'def f():\n    x = yield\n    return x'"}
+{"cmd": "python3 -c 'if 1:\n\tx = 1\n        y = 2'"}
+{"cmd": "python3 -c 'if 1:\n        x = 1\n\ty = 2'"}
+{"cmd": "python3 -c 'if 1:\n    x = 1\n  y = 2'"}
+{"cmd": "python3 -c 'if 1:\n x=1'"}
+python3 -c '  x = 1'
+{"cmd": "python3 -c 'x = 1\n  y = 2'"}
+{"cmd": "python3 -c 'if 1:\n\tif 2:\n\t        x = 1'"}
+{"cmd": "python3 -c 'if 1:\n  \tx = 1\n\t  y = 2'"}
+python3 -c 'f"{x!r:>{w}}"'
+python3 -c 'f"{x=}"'
+python3 -c 'f"{'"'"'a'"'"'}"'
+python3 -c 'f"{"nested"}"'
+python3 -c 'f"{f"{f"{1}"}"}"'
+python3 -c 'f"{x:{"y"}}"'
+{"cmd": "python3 -c 'f\"{x\n}\"'"}
+python3 -c 'f"{'"'"'\n'"'"'}"'
+python3 -c 'f"{x!z}"'
+python3 -c 'f"{}"'
+python3 -c 'f"{ }"'
+python3 -c 'f"{x:}"'
+python3 -c 'f"{lambda: 1}"'
+python3 -c 'f"{(lambda: 1)}"'
+python3 -c 'f"{yield}"'
+python3 -c 'f"{*x}"'
+python3 -c 'f"{x for x in y}"'
+{"cmd": "python3 -c 'f\"{x # c\n}\"'"}
+{"cmd": "python3 -c 'f\"\"\"{x\n# c\n}\"\"\"'"}
+python3 -c 'f"{x!r=}"'
+python3 -c 'f"{x=!r:10}"'
+python3 -c 'f"{{}}"'
+python3 -c 'f"{"'
+python3 -c 'f"}"'
+python3 -c 'f"{x:{y:{z}}}"'
+python3 -c 'f"{x:{y:{z:{w}}}}"'
+python3 -c 'type X = int'
+python3 -c 'type X[T] = list[T]'
+python3 -c 'type X[T = int] = list[T]'
+python3 -c 'def f[T = int](): pass'
+python3 -c 'def f[*Ts](): pass'
+python3 -c 'def f[**P](): pass'
+python3 -c 'class A[T]: pass'
+python3 -c 'def f[T: (int, str)](): pass'
+python3 -c 't"{x}"'
+python3 -c 'lazy import json'
+python3 -c 'lazy from json import loads'
+{"cmd": "python3 -c 'try:\n    pass\nexcept A, B:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept* A:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept* A:\n    break'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept* A:\n    return'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept*:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nfinally:\n    return'"}
+{"cmd": "python3 -c 'for x in y:\n    try:\n        pass\n    finally:\n        break'"}
+{"cmd": "python3 -c 'match x:\n    case 1:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case a:\n        pass\n    case 1:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case {**rest}:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case Point(x=1, x=2):\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case [a, a]:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case {1: a, 1: b}:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case a | b:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case -1j:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case 1 + 2j:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case 1 + 2:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case f(1):\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case a.b(c=d):\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case (a as b) as c:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case _ as _:\n        pass'"}
+{"cmd": "python3 -c 'match x:\n    case [*a, *b]:\n        pass'"}
+{"cmd": "python3 -c 'match x, y:\n    case _:\n        pass'"}
+python3 -c 'match = 1'
+python3 -c 'case = 1'
+python3 -c 'type = 1'
+python3 -c '_ = 1'
+python3 -c 'match(x)'
+python3 -c 'match[x]'
+{"cmd": "python3 -c 'match -x:\n    case _:\n        pass'"}
+python3 -c 'print(*a, **b)'
+python3 -c 'print(**b, *a)'
+python3 -c 'print(a=1, b)'
+python3 -c 'f(x for x in y)'
+python3 -c 'f(x for x in y, 1)'
+python3 -c 'f(1, x for x in y)'
+python3 -c 'f(a for a in b)(c)'
+python3 -c 'f(**a, b=1)'
+python3 -c 'f(*a, b, **c, d=1)'
+python3 -c 'f(a=1, *b)'
+python3 -c 'f(x=1 for x in y)'
+python3 -c 'f(a.b=1)'
+python3 -c 'f(1=2)'
+python3 -c 'f(True=1)'
+{"cmd": "python3 -c 'with (open(x) as a, b):\n    pass'"}
+{"cmd": "python3 -c 'with (a, b,):\n    pass'"}
+{"cmd": "python3 -c 'with (a as b, c as d,):\n    pass'"}
+{"cmd": "python3 -c 'async def f():\n    pass'"}
+{"cmd": "python3 -c 'async with a:\n    pass'"}
+{"cmd": "python3 -c 'async for x in y:\n    pass'"}
+python3 -c '[x async for x in y]'
+python3 -c '(x async for x in y)'
+{"cmd": "python3 -c 'def f():\n    [x async for x in y]'"}
+{"cmd": "python3 -c 'def f():\n    await x'"}
+python3 -c 'from __future__ import braces'
+{"cmd": "python3 -c 'x = 1\nfrom __future__ import annotations'"}
+python3 -c 'from json import *'
+{"cmd": "python3 -c 'def f():\n    from json import *'"}
+python3 -c 'import json as j, math as m'
+python3 -c 'from json import (loads, dumps,)'
+python3 -c 'from json import (loads)'
+python3 -c 'from json import loads,'
+python3 -c 'import json.'
+python3 -c 'from . json import loads'
+python3 -c 'from .. import x'
+python3 -c 'from ... import x'
+python3 -c 'import json as'
+python3 -c 'from json import loads as'
+python3 -c 'import (json)'
+python3 -c 'from json import ()'
+python3 -c 0777
+python3 -c 0o777
+python3 -c 1_000
+python3 -c 1__000
+python3 -c 1_
+python3 -c 0b2
+python3 -c 1e
+python3 -c 1.e5
+python3 -c '1if 1else 2'
+python3 -c '0x1for x in y'
+python3 -c 1.real
+python3 -c '1 .real'
+python3 -c 00
+python3 -c 0_0
+python3 -c 01
+python3 -c 1j
+python3 -c 1.5J
+python3 -c 0x
+python3 -c 1e1_0
+python3 -c 'x = "\N{EM DASH}"'
+python3 -c 'x = "\N{NOT A NAME}"'
+python3 -c 'x = "\x1"'
+python3 -c 'x = b"\u1234"'
+python3 -c 'x = b"é"'
+python3 -c 'x = "abc'
+python3 -c 'x = """abc'
+python3 -c 'x = "\q"'
+python3 -c 'x = r"\"'
+python3 -c 'x = u"x"'
+python3 -c 'x = ur"x"'
+python3 -c 'x = br"x"'
+python3 -c 'x = rb"x"'
+python3 -c 'x = Rb"x"'
+python3 -c 'x = bu"x"'
+python3 -c 'x = f"a" "b" f"{c}"'
+python3 -c 'x = "a" b"b"'
+python3 -c 'x = f"a" b"b"'
+python3 -c 'x = "\777"'
+python3 -c 'x = b"\777"'
+python3 -c 'x = "\U00110000"'
+python3 -c 'x = "\ud800"'
+python3 -c 'print >>f, 1'
+python3 -c 'print "x"'
+python3 -c 'exec "x"'
+python3 -c '`x`'
+python3 -c 'x <> y'
+python3 -c 'x = 1;'
+python3 -c 'x = 1;;'
+python3 -c ';'
+python3 -c '\'
+{"cmd": "python3 -c 'x = \\\n1'"}
+{"cmd": "python3 -c 'x = \\ \n1'"}
+python3 -c 'x = (1,'
+python3 -c 'x = [1, 2,]'
+python3 -c 'x = {1: 2, **a}'
+python3 -c 'x = {**a: 1}'
+python3 -c 'x = {*a}'
+python3 -c 'x = {*a: 1}'
+python3 -c 'x = (*a,)'
+python3 -c 'x = *a,'
+python3 -c 'x = *a'
+python3 -c 'x = (*a)'
+python3 -c 'print(*a)'
+python3 -c 'x[*a]'
+python3 -c 'x[1:2, *a]'
+python3 -c 'x[a:=1]'
+python3 -c 'x[(a:=1)]'
+python3 -c 'x[a:=1, b]'
+python3 -c 'del *a'
+python3 -c 'del x[0], y.z'
+python3 -c 'del x.y.z, (a), [b]'
+python3 -c 'del ()'
+python3 -c 'del []'
+python3 -c 'del (a for a in b)'
+python3 -c 'for *x in y: pass'
+python3 -c 'for x, *y in z: pass'
+python3 -c 'for x in *a, *b: pass'
+python3 -c 'for x in *a: pass'
+python3 -c 'global x, y'
+{"cmd": "python3 -c 'def f():\n    global x\n    x: int = 1'"}
+{"cmd": "python3 -c 'def f():\n    nonlocal x'"}
+{"cmd": "python3 -c 'class A:\n    nonlocal x'"}
+{"cmd": "python3 -c 'def f(x):\n    global x'"}
+python3 -c 'def f(*): pass'
+python3 -c 'def f(*, a): pass'
+python3 -c 'def f(a, /): pass'
+python3 -c 'def f(/, a): pass'
+python3 -c 'def f(a=1, b): pass'
+python3 -c 'def f(**a, b): pass'
+python3 -c 'def f(**a, *b): pass'
+python3 -c 'def f(a, *, b=1, c): pass'
+python3 -c 'def f(*a=1): pass'
+python3 -c 'def f(a, *, **b): pass'
+python3 -c 'def f(a: int = 1, *b: int, c: int, **d: int) -> int: pass'
+python3 -c 'def f(*a: *Ts): pass'
+python3 -c 'def f(a, a=1): pass'
+python3 -c 'lambda *: 1'
+python3 -c 'lambda a=1, b: 1'
+python3 -c 'lambda a: int: 1'
+python3 -c 'lambda: (yield)'
+python3 -c 'x: int'
+python3 -c 'x.y: int = 1'
+python3 -c '(x): int = 1'
+python3 -c '(x, y): int = 1'
+python3 -c '[x]: int'
+python3 -c 'x: int = yield'
+python3 -c 'x: *int'
+python3 -c 'x: int = *a, b'
+python3 -c 'x += 1'
+python3 -c 'x, y += 1'
+python3 -c 'f() += 1'
+python3 -c 'x.y += 1'
+python3 -c 'x += yield'
+python3 -c 'x += *a,'
+python3 -c 'assert x, y'
+python3 -c 'assert (x, y)'
+python3 -c raise
+python3 -c 'raise x from y'
+python3 -c 'raise from y'
+python3 -c return
+python3 -c break
+python3 -c continue
+python3 -c pass
+{"cmd": "python3 -c 'while 1:\n    break\nelse:\n    pass'"}
+{"cmd": "python3 -c 'for x in y:\n    continue'"}
+{"cmd": "python3 -c 'if x:\n    pass\nelif y:\n    pass\nelse:\n    pass'"}
+{"cmd": "python3 -c 'if x: pass\nelse: pass'"}
+{"cmd": "python3 -c 'if x: pass\nelif: pass'"}
+{"cmd": "python3 -c 'if x:\npass'"}
+python3 -c 'if x:'
+{"cmd": "python3 -c 'if x:\n    \n'"}
+python3 -c 'if x: pass; y = 1'
+python3 -c 'if x: if y: pass'
+{"cmd": "python3 -c 'while x: pass\nelse: pass\nelse: pass'"}
+{"cmd": "python3 -c 'try:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nfinally:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept:\n    pass\nexcept A:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nelse:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept A as b.c:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept (A, B) as e:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept A as (e):\n    pass'"}
+python3 -c 'with a as (b, c): pass'
+python3 -c 'with a as b.c: pass'
+python3 -c 'with a as b[0]: pass'
+python3 -c 'with a as f(): pass'
+python3 -c 'with a as 1: pass'
+python3 -c 'with a as (b): pass'
+python3 -c 'with a as *b: pass'
+python3 -c 'with a as [b, *c]: pass'
+python3 -c 'x = yield'
+python3 -c 'x = (yield from y)'
+python3 -c 'x = await y'
+python3 -c 'not x'
+python3 -c 'x is not y'
+python3 -c 'x not in y'
+python3 -c 'x if y'
+python3 -c 'x if y else'
+python3 -c 'a < b < c'
+python3 -c 'a = b = c'
+python3 -c 'a = b = yield'
+python3 -c 'a = yield = b'
+{"cmd": "python3 -c '@x\nclass A: pass'"}
+{"cmd": "python3 -c '@x.y.z\ndef f(): pass'"}
+{"cmd": "python3 -c '@x[0]\ndef f(): pass'"}
+{"cmd": "python3 -c '@(lambda f: f)\ndef f(): pass'"}
+{"cmd": "python3 -c '@x\n'"}
+{"cmd": "python3 -c '@x\nx = 1'"}
+{"cmd": "python3 -c '@x := y\ndef f(): pass'"}
+{"cmd": "python3 -c '@x if y else z\ndef f(): pass'"}
+python3 -c 'class A(B, metaclass=M, **kw): pass'
+python3 -c 'class A(*B): pass'
+python3 -c 'class A(): pass'
+python3 -c 'class A(x for x in y): pass'
+python3 -c 'class A(B=1, C): pass'
+python3 -c 'class A[]: pass'
+python3 -c 'def f[](): pass'
+python3 -c 'x = ...'
+python3 -c 'x = Ellipsis'
+python3 -c 'x = None'
+python3 -c 'None = 1'
+python3 -c 'True = 1'
+python3 -c 'x.None = 1'
+python3 -c x.True
+python3 -c x.if
+python3 -c 'def None(): pass'
+python3 -c 'import None'
+python3 -c 'import if'
+python3 -c 'None += 1'
+python3 -c 'for None in x: pass'
+python3 -c 'def f(None): pass'
+python3 -c 'f(None=1)'
+python3 -c 'class None: pass'
+python3 -c 'import a as None'
+python3 -c 'from a import b as True'
+python3 -c 'with a as None: pass'
+python3 -c 'except_ = 1'
+python3 -c 'x = 1 if True else 2'
+python3 -c 'é = 1'
+python3 -c 'ℌ = 1'
+python3 -c 'ﬁ = 1'
+python3 -c 'x = ﬁle'
+python3 -c '$x'
+python3 -c 'x = 1 $'
+python3 -c 'x = 1 ?'
+python3 -c 'a!b'
+python3 -c 'x!'
+python3 -c 'x = 1 # comment'
+python3 -c '#!/usr/bin/env python'
+{"cmd": "python3 -c '# -*- coding: latin-1 -*-\nx = 1'"}
+{"cmd": "python3 -c '# coding: bogus\nx = 1'"}
+{"cmd": "python3 -c '\ufeffx = 1'"}
+{"cmd": "python3 -c 'x = 1\f'"}
+{"cmd": "python3 -c '\fx = 1'"}
+{"cmd": "python3 -c 'x = 1\r\ny = 2'"}
+{"cmd": "python3 -c 'x = 1\ry = 2'"}
+{"cmd": "python3 -c 'x = 1\u001c'"}
+{"cmd": "python3 -c 'x = 1\u000b'"}
+{"cmd": "python3 -c 'x\u000b= 1'"}
+{"cmd": "python3 -c 'if 1:\n    pass\n\f    x = 1'"}
+{"cmd": "python3 -c 'x = 1\u00a0'"}
+{"cmd": "python3 -c 'x\u00a0= 1'"}
+{"cmd": "python3 -c 'x = 1\u2028'"}
+{"cmd": "python3 -c 'x = 1\u3000'"}
+{"cmd": "python3 -c '\u200bx = 1'"}
+{"cmd": "python3 -c 'x\u200b = 1'"}
+{"cmd": "python3 -c 'x = \u200b1'"}
+{"cmd": "python3 -c 'x = 1\n\u0000'"}
+python3 -c '١ = 1'
+python3 -c 'x = ١'
+python3 -c 'x = 1١'
+python3 -c 'Ⅰ = 1'
+python3 -c 'x· = 1'
+python3 -c '·x = 1'
+{"cmd": "python3 -c 'x = '\"'\"'\u2028'\"'\"''"}
+python3 -c 'á = 1'
+python3 -c '𝐚 = 1'
+python3 -c 'ｅval('"'"'1'"'"')'
+python3 -c 'import ｏs'
+python3 -c 'x.__ｄict__'
+python3 -c 'ｏpen('"'"'x'"'"')'
+python3 -c 'open('"'"'x'"'"')'
+python3 -c 'x.ｒead()'
+python3 -c 'from ｏs import path'
+python3 -c '__ｂuiltins__'
+{"cmd": "python3 -c 'if True:\n    x = 1\n   # odd comment\n    y = 2'"}
+{"cmd": "python3 -c 'def f():\n    '\"'\"''\"'\"''\"'\"'doc'\"'\"''\"'\"''\"'\"'\n    return 1'"}
+{"cmd": "python3 -c 'x = [\n1,\n2\n]'"}
+{"cmd": "python3 -c 'x = (\n# c\n1)'"}
+{"cmd": "python3 -c 'x = '\"'\"''\"'\"''\"'\"'a\nb'\"'\"''\"'\"''\"'\"''"}
+{"cmd": "python3 -c 'x = '\"'\"'a'\"'\"' \\\n '\"'\"'b'\"'\"''"}
+{"cmd": "python3 -c 'x = 1 \\\n+ 2'"}
+python3 -c 'x = 1 \'
+{"cmd": "python3 -c 'x = 1\\\n'"}
+{"cmd": "python3 -c 'def f():\n  return 1\n def g(): pass'"}
+{"cmd": "python3 -c 'def f():\n  return 1\n    x = 2'"}
+{"cmd": "python3 -c 'class A:\npass'"}
+python3 -c 'x = [i for i in range(3) if i if i]'
+python3 -c 'x = [i for i in range(3) for j in i]'
+python3 -c 'x = [i for i in 1, 2]'
+python3 -c 'x = [i for i in (1, 2)]'
+python3 -c 'x = [*a for a in b]'
+python3 -c 'x = {**a for a in b}'
+python3 -c 'x = [a, b for a in c]'
+python3 -c 'x = {a: b for a, b in c}'
+python3 -c 'x = {a: b, c for d in e}'
+python3 -c 'x = a if b else c if d else e'
+python3 -c 'x = lambda: (yield)'
+python3 -c 'x = not'
+python3 -c 'x = - - 1'
+python3 -c 'x = ~~1'
+python3 -c 'x = 1 + * 2'
+python3 -c 'x = a @ b'
+python3 -c 'x @= b'
+python3 -c 'x = a // b'
+python3 -c 'x //= b'
+python3 -c 'x = a ** -b'
+python3 -c 'x = a and b or not c'
+python3 -c 'x = a.b.c(d)[e:f:g]'
+python3 -c 'x = a[::]'
+python3 -c 'x = a[:, :]'
+python3 -c 'x = a[...]'
+python3 -c 'x = a[]'
+python3 -c 'x = ()'
+python3 -c 'x = (,)'
+python3 -c 'x = [,]'
+python3 -c 'x = {,}'
+python3 -c 'x = 1,'
+python3 -c 'x = (1)'
+python3 -c 'x = (yield)'
+python3 -c 'x = (yield 1, 2)'
+python3 -c 'x = yield 1, 2'
+python3 -c 'x = await'
+python3 -c 'x = a if'
+python3 -c 'x ='
+python3 -c '= x'
+python3 -c 'x == = y'
+python3 -c 'x = 1 = 2'
+python3 -c 'x, = y'
+python3 -c '[x, y] = z'
+python3 -c '[] = x'
+python3 -c '() = x'
+python3 -c 'x.y, z[0] = a'
+python3 -c 'x = y = z = 1'
+{"cmd": "python3 -c 'import json\njson.loads('\"'\"'1'\"'\"')'"}
+python3 -c 'import json.decoder'
+python3 -c 'import collections.abc'
+python3 -c 'import os.path'
+python3 -c 'from os import path'
+python3 -c 'from collections import abc'
+python3 -c 'import html.parser'
+python3 -c 'from html import escape'
+python3 -c 'import typing as t, os'
+python3 -c 'from xml import x'
+python3 -c 'import sys as json'
+python3 -c 'breakpoint()'
+python3 -c 'input()'
+python3 -c 'compile('"'"'1'"'"', '"'"'f'"'"', '"'"'exec'"'"')'
+python3 -c 'vars()'
+python3 -c 'dir()'
+python3 -c 'locals()'
+python3 -c 'memoryview(b'"'"''"'"')'
+python3 -c 'setattr(a, '"'"'b'"'"', 1)'
+python3 -c 'delattr(a, '"'"'b'"'"')'
+python3 -c 'getattr(a, '"'"'b'"'"')'
+python3 -c 'x = print'
+python3 -c 'p = print; p(1)'
+python3 -c print.__self__
+python3 -c 'x.__getattribute__('"'"'y'"'"')'
+python3 -c x.__loader__
+python3 -c __spec__
+python3 -c __loader__
+python3 -c x.__spec__
+python3 -c x.__builtins__
+python3 -c x.__init_subclass__
+python3 -c 'x.__reduce_ex__(2)'
+python3 -c 'x.__setstate__(1)'
+python3 -c x.__setstate__
+python3 -c x.f_back
+python3 -c x.cr_await
+python3 -c x.gi_yieldfrom
+python3 -c x.tb_next
+python3 -c '(1).__class__'
+python3 -c x.y.z.write
+python3 -c 'x.y.z.write(1)'
+python3 -c 'a = x.run'
+python3 -c 'x.run()'
+python3 -c 'x.replace('"'"'a'"'"', '"'"'b'"'"')'
+python3 -c ''"'"'abc'"'"'.replace('"'"'a'"'"', '"'"'b'"'"')'
+{"cmd": "python3 -c 'with open('\"'\"'f'\"'\"'):\n    pass'"}
+{"cmd": "python3 -c 'with x, open('\"'\"'f'\"'\"'):\n    pass'"}
+{"cmd": "python3 -c 'with (open('\"'\"'f'\"'\"')):\n    pass'"}
+{"cmd": "python3 -c 'with open('\"'\"'a'\"'\"') as a, open('\"'\"'b'\"'\"') as b:\n    pass'"}
+{"cmd": "python3 -c 'with x.open('\"'\"'f'\"'\"'):\n    pass'"}
+{"cmd": "python3 -c 'async with open('\"'\"'f'\"'\"'):\n    pass'"}
+{"cmd": "python3 -c 'def f():\n    with open('\"'\"'f'\"'\"'):\n        pass'"}
+python3 -c 'f"{x:{f'"'"'{y=}'"'"'}}"'
+python3 -c 'f"{x:{y:{f'"'"'{z=}'"'"'}}}"'
+python3 -c 'f"{x=}"'
+python3 -c 'x² = 1'
+python3 -c '℘ = 1'
+python3 -c 'x℮ = 1'
+python3 -c 'ª = 1'
+python3 -c 'ⅰ = 1'
+python3 -c '̀x = 1'
+python3 -c 'x̀ = 1'
+python3 -c '゛ = 1'
+python3 -c 'x゛ = 1'
+python3 -c 'ᢅ = 1'
+python3 -c 'x·y = 1'
+python3 -c 'x· = 1'
+python3 -c 'ⸯ = 1'
+python3 -c '󠄀 = 1'
+python3 -c 'x󠄀 = 1'
+python3 -c 'µ = 1'
+python3 -c 'ſ = 1'
+python3 -c 'İ = 1'
+python3 -c 'K = 1'
+{"cmd": "python3 -c 'x = 1\ufeff'"}
+{"cmd": "python3 -c 'x\ufeff=1'"}
+{"cmd": "python3 -c '# \ufeff\nx=1'"}
+{"cmd": "python3 -c 'x=1\n\ufeff'"}
+{"cmd": "python3 -c '\ufeff# c\nx=1'"}
+{"cmd": "python3 -c '\ufeff'"}
+{"cmd": "python3 -c 'x = '\"'\"'\ufeff'\"'\"''"}
+{"cmd": "python3 -c 'x = 1 \u0085'"}
+{"cmd": "python3 -c 'x = 1\u0085y = 2'"}
+{"cmd": "python3 -c 'x = \u00a01'"}
+{"cmd": "python3 -c '\u00a0x = 1'"}
+{"cmd": "python3 -c 'if 1:\n\u00a0x = 1'"}
+{"cmd": "python3 -c 'x = 1 \u001f'"}
+{"cmd": "python3 -c 'x = 1\u007f'"}
+{"cmd": "python3 -c 'x = 1\u0080'"}
+{"cmd": "python3 -c 'x = '\"'\"'\u007f'\"'\"''"}
+{"cmd": "python3 -c 'x = \u001b[0m'"}
+{"cmd": "python3 -c 'x = 1 \\\f\n+ 2'"}
+{"cmd": "python3 -c 'x = 1 \\\r\n+ 2'"}
+{"cmd": "python3 -c 'x = 1\\\n'"}
+{"cmd": "python3 -c 'x = (1\\\n)'"}
+python3 -c 'f'"'"'{x:{y:{z}}}'"'"''
+python3 -c 'f'"'"'{x:{y:{z:{w}}}}'"'"''
+python3 -c 'f'"'"'{x:{f"{y:{z:{w}}}"}}'"'"''
+python3 -c 'f'"'"'{x=}'"'"''
+python3 -c 'f'"'"'{x = }'"'"''
+python3 -c 'f'"'"'{x=!r:^20}'"'"''
+python3 -c 'f'"'"'{x:=10}'"'"''
+python3 -c 'f'"'"'{x:{y}=}'"'"''
+python3 -c 'f'"'"'{(x:=10)}'"'"''
+python3 -c 'f'"'"'{x!r=}'"'"''
+python3 -c 'f'"'"'{x}'"'"' f'"'"'{y=}'"'"''
+{"cmd": "python3 -c 'f'\"'\"''\"'\"''\"'\"'{x\n=}'\"'\"''\"'\"''\"'\"''"}
+python3 -c 'f'"'"'{x:\n}'"'"''
+python3 -c 'f'"'"'{x:{{}}>10}'"'"''
+python3 -c 'f'"'"'{x:{y}{{z}}}'"'"''
+python3 -c 'f'"'"'{"\N{DASH}"}'"'"''
+python3 -c 'f'"'"'\N{EM DASH}{x}'"'"''
+python3 -c 'f'"'"'{x}\{y}'"'"''
+python3 -c 'rf'"'"'\{x}'"'"''
+python3 -c 'fr'"'"'{x}\'"'"''
+python3 -c 'type X[*Ts = int] = int'
+python3 -c 'type X[**P = int] = int'
+python3 -c 'class A[T = int]: pass'
+{"cmd": "python3 -c 'try:\n    pass\nelse:\n    pass\nfinally:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept* A:\n    pass\nelse:\n    pass'"}
+{"cmd": "python3 -c 'try:\n    pass\nexcept A:\n    pass\nexcept* B:\n    pass'"}
+python3 -c 'x = 1' --help
+python3 -c 'print(1)' --help
+python3 -c 'return 1' --help
+python -c
+python -m
+python -m calendar
+python3 -m calendar 2026
+python -u -m calendar
+python -m calendar -c 'import os'
+python -c 'print(1)' -m calendar
+python -i -c 'print(1)'
+python -V -c 'import os'
+python --version
+python -VV
+python -h
+python -u
+python -W ignore
+python -X dev -u
+python -i
+python -i script.py
+python script.py
+python ./dir/script.py --help
+python ~/script.py
+python -- script.py
+python - < x.py
+python -
+python3.12 -B -O -OO script.pyw
+python3 'my script.py'
+python3 -c "print($HOME)"
+python3 -c "$CODE"
+python3 -c "print('$(id)')"
+python3 -c "print('`id`')"
+python3 -c 'print("$HOME")'
+python3 -c ''
+python3 -c ' '
+{"cmd": "python3 -c '\t'"}
+python3 --check-hash-based-pycs always script.py
+python3 -Wignore script.py
+python3 -m json.tool
+python3 -mcalendar
+python3 -c'print(1)'
+X=1 python3 -c 'print(1)'

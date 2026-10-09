@@ -13,3 +13,6 @@ path = "src/main.rs"
 rable = "=0.2.1"
 serde_json = { version = "1", features = ["preserve_order"] }
 regex = "1"
+rustpython-ruff_python_parser = "=0.16.10"
+rustpython-ruff_python_ast = "=0.16.10"
+rustpython-ruff_text_size = "=0.16.10"
