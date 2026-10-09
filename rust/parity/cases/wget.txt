@@ -1,0 +1,10 @@
+# Extra wget cases for handler_compare.py
+wget -O
+wget -O '' https://x
+wget --output-document= https://x
+wget --output-document
+wget -qO- https://x
+wget -O - https://x
+wget --spider -O out https://x
+wget -c https://x
+wget -Oout https://x

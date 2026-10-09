@@ -1,0 +1,23 @@
+# Extra curl cases for handler_compare.py
+curl -o
+curl -o '' https://x
+curl -o= https://x
+curl -oout https://x
+curl --output= https://x
+curl -X
+curl -X get https://x
+curl -X= https://x
+curl -Xpost https://x
+curl --request
+curl --request=Head https://x
+curl --data-urlencode=a=b https://x
+curl --form-string=x https://x
+curl -Q 'pwd' ftp://x
+curl -Q '"LIST"' ftp://x
+curl -Q "'rm x'" ftp://x
+curl --quote 'site chmod 777 x' ftp://x
+curl -Q
+curl --mail-rcpt a@b smtp://x
+curl -sSfL https://x -o /tmp/out
+curl -L -o - https://x
+curl -X ß https://x
