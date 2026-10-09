@@ -1,0 +1,16 @@
+pre-commit
+pre-commit help
+pre-commit validate-config
+pre-commit validate-manifest
+pre-commit run
+pre-commit run --all-files
+pre-commit run --files foo.py
+pre-commit install
+pre-commit install --hook-type pre-push
+pre-commit uninstall
+pre-commit autoupdate
+pre-commit clean
+pre-commit gc
+pre-commit migrate-config
+pre-commit sample-config
+pre-commit try-repo
