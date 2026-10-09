@@ -1,0 +1,222 @@
+npm list
+npm ls
+npm ll
+npm la
+npm list --depth=0
+npm list --all
+npm list --json
+npm info react
+npm show lodash
+npm view express versions
+npm v typescript
+npm search lodash
+npm s react
+npm find react
+npm outdated
+npm outdated --long
+npm audit
+npm audit --json
+npm audit --omit=dev
+npm help
+npm help install
+npm help-search install
+npm version
+npm -v
+npm --version
+npm config list
+npm config ls
+npm c list
+npm config get registry
+npm get registry
+npm root
+npm root -g
+npm prefix
+npm prefix -g
+npm bin
+npm bin -g
+npm docs lodash
+npm home react
+npm bugs express
+npm repo typescript
+npm owner ls lodash
+npm access list packages
+npm access list collaborators lodash
+npm access get status lodash
+npm whoami
+npm ping
+npm explain lodash
+npm why lodash
+npm find-dupes
+npm query ':root > .prod'
+npm pack
+npm pack --dry-run
+npm pack lodash
+npm fund
+npm fund lodash
+npm doctor
+npm cache ls
+npm cache list
+npm run --list
+npm run
+npm completion
+npm diff
+npm diff --diff=lodash@1.0.0 --diff=lodash@2.0.0
+npm dist-tag ls
+npm dist-tag ls lodash
+npm token list
+npm profile get
+npm profile get email
+npm pkg get
+npm pkg get name
+npm pkg get name version
+npm stars
+npm stars username
+npm sbom
+npm sbom --sbom-format cyclonedx
+npm install
+npm i
+npm install lodash
+npm i express
+npm install --save lodash
+npm install --save-dev jest
+npm i -D typescript
+npm install -g npm
+npm i --global create-react-app
+npm add lodash
+npm ci
+npm install-ci-test
+npm install-test
+npm uninstall lodash
+npm remove express
+npm rm jest
+npm un typescript
+npm r lodash
+npm update
+npm upgrade
+npm up lodash
+npm run build
+npm run test
+npm run start
+npm run dev
+npm run-script build
+npm exec jest
+npm x playwright
+npm start
+npm stop
+npm restart
+npm test
+npm t
+npm publish
+npm publish --access public
+npm unpublish
+npm unpublish lodash@1.0.0
+npm link
+npm unlink
+npm link lodash
+npm prune
+npm dedupe
+npm ddp
+npm rebuild
+npm rb
+npm init
+npm init -y
+npm create react-app my-app
+npm cache clean
+npm cache clean --force
+npm cache add lodash
+npm cache verify
+npm set registry https://example.com
+npm config set registry https://example.com
+npm config delete registry
+npm access set status=public lodash
+npm access grant read-write myorg:myteam lodash
+npm access revoke myorg:myteam lodash
+npm login
+npm adduser
+npm logout
+npm audit fix
+npm audit fix --force
+npm deprecate lodash@1.0.0 'use v2'
+npm undeprecate lodash@1.0.0
+npm dist-tag add lodash@1.0.0 latest
+npm dist-tag rm lodash latest
+npm edit lodash
+npm explore lodash
+npm explore lodash -- ls
+npm owner add user lodash
+npm owner rm user lodash
+npm org set myorg user developer
+npm org rm myorg user
+npm team create myorg:myteam
+npm team destroy myorg:myteam
+npm team add myorg:myteam user
+npm team rm myorg:myteam user
+npm profile set email new@example.com
+npm profile enable-2fa
+npm profile disable-2fa
+npm shrinkwrap
+npm star lodash
+npm unstar lodash
+npm token create
+npm token revoke abc123
+npm version major
+npm version minor
+npm version patch
+npm version 1.2.3
+npm pkg set name=newname
+npm pkg delete scripts.test
+npm pkg fix
+yarn list
+yarn info react
+yarn outdated
+yarn why lodash
+yarn help
+yarn version
+yarn licenses list
+yarn install
+yarn add lodash
+yarn remove express
+yarn run build
+yarn start
+yarn test
+yarn publish
+yarn upgrade
+yarn cache clean
+yarn global add create-react-app
+yarn link
+yarn unlink
+pnpm list
+pnpm ls
+pnpm info react
+pnpm outdated
+pnpm audit
+pnpm why lodash
+pnpm help
+pnpm -v
+pnpm root
+pnpm install
+pnpm i
+pnpm add lodash
+pnpm remove express
+pnpm rm jest
+pnpm run build
+pnpm start
+pnpm test
+pnpm publish
+pnpm update
+pnpm prune
+pnpm rebuild
+pnpm link
+pnpm unlink
+pnpm store prune
+npm run test --list
+npm config unknown
+npm owner other
+npm c
+npm c set x y
+yarn cache
+pnpm dist-tag
+npm version
+yarn
+pnpm audit fix --force
+npm token revoke x
