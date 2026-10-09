@@ -681,7 +681,11 @@ pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
         .map(|w| crate::parser::strip_quotes(w).to_string())
         .collect();
     let mut ctx = HandlerContext::new(&tokens);
-    ctx.word_has_expansions = raw.iter().map(|w| w.contains(['$', '`'])).collect();
+    // Words Bash would expand do not decode as literals.
+    ctx.word_has_expansions = raw
+        .iter()
+        .map(|w| decode_literal_word(w, false).is_none())
+        .collect();
     ctx.raw_words = raw;
     ctx
 }
@@ -1209,6 +1213,43 @@ mod grammar {
         ("variance", [2, 2, 2, 2, 2, 2, 2]),
     ];
 
+    /// Hand-added rows in the format of [`FUNCTIONS`], derived with the same
+    /// probe as `rust/parity/sql_tables.py` (zero-argument bits dropped).
+    const EXTRA_FUNCTIONS: [(&str, [u8; 7]); 11] = [
+        ("day", [2, 2, 2, 2, 2, 2, 2]),
+        ("epoch_ms", [0, 0, 0, 0, 0, 2, 0]),
+        ("month", [2, 2, 2, 2, 2, 2, 2]),
+        ("quantile_cont", [0, 0, 0, 0, 0, 6, 0]),
+        ("quantile_disc", [0, 0, 0, 0, 0, 6, 0]),
+        ("regexp_matches", [0, 0, 0, 0, 0, 12, 0]),
+        ("strftime", [0, 0, 0, 6, 0, 4, 0]),
+        ("string_split", [0, 0, 0, 0, 0, 12, 0]),
+        ("strptime", [0, 0, 0, 0, 0, 4, 0]),
+        ("to_timestamp", [0, 6, 0, 0, 0, 6, 0]),
+        ("year", [2, 2, 2, 2, 2, 2, 2]),
+    ];
+
+    /// Argument-count masks for `f(DISTINCT ...)` beyond COUNT/SUM/AVG/MIN/
+    /// MAX: the probe of `sql_tables.py` with `DISTINCT` before the first
+    /// argument, intersected with the plain-call mask.
+    const DISTINCT_FUNCTIONS: [(&str, [u8; 7]); 3] = [
+        ("array_agg", [2, 2, 2, 2, 2, 2, 2]),
+        ("group_concat", [14, 6, 30, 2, 0, 6, 6]),
+        ("string_agg", [14, 6, 6, 6, 0, 6, 6]),
+    ];
+
+    fn table_mask(table: &[(&str, [u8; 7])], name: &str, d: Dialect) -> u8 {
+        let lower = name.to_ascii_lowercase();
+        table
+            .iter()
+            .find(|(n, _)| *n == lower)
+            .map_or(0, |(_, masks)| masks[d.index()])
+    }
+
+    fn distinct_mask(name: &str, d: Dialect) -> u8 {
+        table_mask(&DISTINCT_FUNCTIONS, name, d)
+    }
+
     fn is_reserved(word: &str) -> bool {
         RESERVED.binary_search(&word).is_ok()
     }
@@ -1218,7 +1259,7 @@ mod grammar {
         FUNCTIONS
             .binary_search_by(|(n, _)| n.cmp(&lower.as_str()))
             .map(|i| FUNCTIONS[i].1[d.index()])
-            .unwrap_or(0)
+            .unwrap_or_else(|_| table_mask(&EXTRA_FUNCTIONS, name, d))
     }
 
     #[derive(Debug, Clone, PartialEq)]
@@ -1231,6 +1272,8 @@ mod grammar {
         Str(String),
         /// Number literal; `true` for plain integers.
         Num(bool),
+        /// `@@name` system variable (T-SQL, MySQL).
+        SysVar,
         Op(&'static str),
     }
 
@@ -1384,6 +1427,49 @@ mod grammar {
                     }
                     let word: String = s[start..i].iter().collect();
                     out.push(Tok::Word(word.to_ascii_uppercase()));
+                }
+                '$' if matches!(d, Postgres | Duckdb) && s.get(i + 1) == Some(&'$') => {
+                    // Untagged dollar-quoted string; no `$` inside.
+                    if i > 0 && (s[i - 1].is_alphanumeric() || matches!(s[i - 1], '_' | '$')) {
+                        return None;
+                    }
+                    let start = i + 2;
+                    let mut end = start;
+                    while end < n && s[end] != '$' {
+                        if s[end] == '\r' {
+                            return None;
+                        }
+                        end += 1;
+                    }
+                    if s.get(end + 1) != Some(&'$') {
+                        return None;
+                    }
+                    i = end + 2;
+                    if s.get(i).is_some_and(|c| {
+                        c.is_alphanumeric() || matches!(c, '_' | '\'' | '"' | '`' | '$')
+                    }) {
+                        return None;
+                    }
+                    out.push(Tok::Str(s[start..end].iter().collect()));
+                }
+                '@' if matches!(d, Tsql | Mysql)
+                    && s.get(i + 1) == Some(&'@')
+                    && s.get(i + 2)
+                        .is_some_and(|c| c.is_ascii_alphabetic() || *c == '_') =>
+                {
+                    if glued {
+                        return None;
+                    }
+                    i += 2;
+                    while i < n && (s[i].is_ascii_alphanumeric() || s[i] == '_') {
+                        i += 1;
+                    }
+                    if s.get(i)
+                        .is_some_and(|c| !c.is_ascii() || matches!(c, '$' | '@' | '.'))
+                    {
+                        return None;
+                    }
+                    out.push(Tok::SysVar);
                 }
                 '(' | ')' | ',' | '.' => {
                     out.push(Tok::Op(match c {
@@ -1701,7 +1787,9 @@ mod grammar {
             }
             if self.eat_kw("GROUP") {
                 self.kw("BY")?;
-                self.expr_list()?;
+                if !self.eat_kw("ALL") {
+                    self.group_list()?;
+                }
             }
             if self.eat_kw("HAVING") {
                 self.expr()?;
@@ -1718,6 +1806,35 @@ mod grammar {
                 }
             }
             Some(())
+        }
+
+        /// GROUP BY items: expressions, or `ROLLUP`/`CUBE` over columns.
+        /// SQLGlot misparses a parenthesized item after `ROLLUP`/`CUBE`.
+        fn group_list(&mut self) -> Option<()> {
+            let mut grouping = false;
+            loop {
+                if grouping && self.is_op("(") {
+                    return None;
+                }
+                if (self.is_kw("ROLLUP") || self.is_kw("CUBE"))
+                    && matches!(self.peek_at(1), Some(Tok::Op("(")))
+                {
+                    grouping = true;
+                    self.pos += 2;
+                    loop {
+                        self.column_ref()?;
+                        if !self.eat_op(",") {
+                            break;
+                        }
+                    }
+                    self.op(")")?;
+                } else {
+                    self.expr()?;
+                }
+                if !self.eat_op(",") {
+                    return Some(());
+                }
+            }
         }
 
         fn select_list(&mut self) -> Option<()> {
@@ -1965,7 +2082,19 @@ mod grammar {
                 Tok::Op("[") => {
                     self.pos += 1;
                     if !self.eat_op("]") {
-                        self.expr_list()?;
+                        // SQLGlot loses a list whose first element holds a
+                        // subquery when more elements follow.
+                        let start = self.pos;
+                        self.expr()?;
+                        if self.eat_op(",") {
+                            if self.toks[start..self.pos]
+                                .iter()
+                                .any(|t| matches!(t, Tok::Word(w) if w == "SELECT"))
+                            {
+                                return None;
+                            }
+                            self.expr_list()?;
+                        }
                         self.op("]")?;
                     }
                 }
@@ -1999,6 +2128,7 @@ mod grammar {
                     }
                 }
                 Tok::Ident(_) => self.column_ref()?,
+                Tok::SysVar => self.pos += 1,
                 Tok::Op(_) => return None,
             }
             Some(())
@@ -2039,6 +2169,9 @@ mod grammar {
         }
 
         fn function_call(&mut self, name: &str) -> Option<()> {
+            if name == "DATE_TRUNC" {
+                return self.date_trunc();
+            }
             let mask = function_mask(name, self.d);
             if mask == 0 {
                 return None;
@@ -2046,19 +2179,41 @@ mod grammar {
             self.pos += 1;
             self.op("(")?;
             let mut args = 0;
+            let mut distinct = false;
+            // Functions with dedicated SQLGlot argument parsers lose
+            // predicate arguments (`substr(a = b)`): operands only.
+            let special = matches!(
+                name,
+                "ARG_MAX"
+                    | "ARG_MIN"
+                    | "CEIL"
+                    | "FLOOR"
+                    | "GROUP_CONCAT"
+                    | "STRING_AGG"
+                    | "SUBSTR"
+                    | "SUBSTRING"
+                    | "TRIM"
+            );
             if self.eat_op("*") {
                 if name != "COUNT" {
                     return None;
                 }
                 args = 1;
             } else if !self.is_op(")") {
-                if self.eat_kw("DISTINCT")
-                    && !matches!(name, "COUNT" | "SUM" | "AVG" | "MIN" | "MAX")
-                {
-                    return None;
-                }
+                distinct = self.eat_kw("DISTINCT");
                 loop {
-                    self.expr()?;
+                    if args == 1 && self.d == Mysql && name == "STRING_AGG" {
+                        // The separator becomes `SEPARATOR <expr>`, which
+                        // SQLGlot reads back only for a simple operand.
+                        if self.is_op("-") {
+                            return None;
+                        }
+                        self.unary()?;
+                    } else if special {
+                        self.additive()?;
+                    } else {
+                        self.expr()?;
+                    }
                     args += 1;
                     if !self.eat_op(",") {
                         break;
@@ -2070,6 +2225,9 @@ mod grammar {
                 return None;
             }
             let aggregate = matches!(name, "COUNT" | "SUM" | "AVG" | "MIN" | "MAX");
+            if distinct && !aggregate && distinct_mask(name, self.d) & (1 << args) == 0 {
+                return None;
+            }
             if self.eat_kw("FILTER") {
                 if !aggregate {
                     return None;
@@ -2088,6 +2246,7 @@ mod grammar {
                     return None;
                 }
                 self.op("(")?;
+                let spec = self.is_kw("PARTITION") || self.is_kw("ORDER");
                 if self.eat_kw("PARTITION") {
                     self.kw("BY")?;
                     self.expr_list()?;
@@ -2096,9 +2255,57 @@ mod grammar {
                     self.kw("BY")?;
                     self.order_list()?;
                 }
+                // SQLGlot reads a leading `RANGE` as a function name.
+                if self.eat_kw("ROWS") || (spec && self.eat_kw("RANGE")) {
+                    if self.eat_kw("BETWEEN") {
+                        self.frame_bound()?;
+                        self.kw("AND")?;
+                    }
+                    self.frame_bound()?;
+                }
                 self.op(")")?;
             }
             Some(())
+        }
+
+        /// Window frame bound: `UNBOUNDED`/integer `PRECEDING`/`FOLLOWING`
+        /// or `CURRENT ROW`.
+        fn frame_bound(&mut self) -> Option<()> {
+            if self.eat_kw("CURRENT") {
+                return self.kw("ROW");
+            }
+            if !self.eat_kw("UNBOUNDED") {
+                self.integer()?;
+            }
+            if self.eat_kw("PRECEDING") || self.eat_kw("FOLLOWING") {
+                return Some(());
+            }
+            None
+        }
+
+        /// `date_trunc('<unit>', expr)` with a well-known unit literal.
+        fn date_trunc(&mut self) -> Option<()> {
+            const UNITS: [&str; 10] = [
+                "year",
+                "quarter",
+                "month",
+                "week",
+                "day",
+                "hour",
+                "minute",
+                "second",
+                "millisecond",
+                "microsecond",
+            ];
+            self.pos += 1;
+            self.op("(")?;
+            let unit = self.string()?;
+            if !UNITS.contains(&unit.to_ascii_lowercase().as_str()) {
+                return None;
+            }
+            self.op(",")?;
+            self.expr()?;
+            self.op(")")
         }
 
         fn type_name(&mut self) -> Option<()> {
@@ -2387,5 +2594,724 @@ mod grammar {
             return None;
         }
         Some(target)
+    }
+}
+
+/// Port of `tests/core/test_sql.py` and `tests/core/test_sql_types.py`.
+///
+/// Python `is True` expectations that the conservative grammar does not
+/// reproduce are asserted as `!= Some(true)` and listed as divergences.
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DIALECTS: [&str; 6] = ["duckdb", "postgres", "mysql", "sqlite", "tsql", "athena"];
+
+    fn opts(dialect: Option<&str>) -> ReadonlyOptions {
+        ReadonlyOptions {
+            dialect: dialect.map(String::from),
+            ..ReadonlyOptions::default()
+        }
+    }
+
+    fn ro(sql: &str) -> Option<bool> {
+        is_readonly_sql(sql, &ReadonlyOptions::default())
+    }
+
+    fn ro_d(sql: &str, dialect: &str) -> Option<bool> {
+        is_readonly_sql(sql, &opts(Some(dialect)))
+    }
+
+    fn ro_batch(sql: &str, dialect: Option<&str>) -> Option<bool> {
+        is_readonly_sql(
+            sql,
+            &ReadonlyOptions {
+                allow_multiple: true,
+                ..opts(dialect)
+            },
+        )
+    }
+
+    fn ro_temp(sql: &str) -> Option<bool> {
+        is_readonly_sql(
+            sql,
+            &ReadonlyOptions {
+                allow_temp_tables: true,
+                ..opts(Some("duckdb"))
+            },
+        )
+    }
+
+    fn words(list: &[&str]) -> Vec<String> {
+        list.iter().map(|s| s.to_string()).collect()
+    }
+
+    fn ro_write(sql: &str, extra: &[&str]) -> Option<bool> {
+        is_readonly_sql(
+            sql,
+            &ReadonlyOptions {
+                extra_write: words(extra),
+                ..ReadonlyOptions::default()
+            },
+        )
+    }
+
+    #[test]
+    fn parenthesized_reads() {
+        for dialect in DIALECTS {
+            for sql in [
+                "(SELECT 1)",
+                "((SELECT 1))",
+                "(SELECT 1) UNION ALL (SELECT 2)",
+                "((SELECT 1) UNION ALL (SELECT 2))",
+                "(WITH x AS (SELECT 1 a) SELECT a FROM x)",
+            ] {
+                assert_eq!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
+            }
+        }
+    }
+
+    #[test]
+    fn parenthesized_unverified_operations() {
+        for dialect in DIALECTS {
+            for sql in [
+                "(SELECT fictional_effect())",
+                "(SELECT 1) UNION ALL (SELECT fictional_effect())",
+                "(WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x)",
+                "(SELECT 1 INTO outfile)",
+                "(SELECT 1); DROP TABLE t",
+                "(DELETE FROM t)",
+                "(1 + 1)",
+                "(SELECT 1) fictional_unknown_clause",
+                "(SELECT 1",
+            ] {
+                assert_ne!(ro_batch(sql, Some(dialect)), Some(true), "{dialect}: {sql}");
+            }
+        }
+    }
+
+    #[test]
+    fn duckdb_sampled_union_is_readonly() {
+        let sql =
+            "(SELECT * FROM t USING SAMPLE 8 ROWS) UNION ALL (SELECT * FROM t USING SAMPLE 5 ROWS)";
+        assert_eq!(ro_d(sql, "duckdb"), Some(true));
+    }
+
+    #[test]
+    fn mysql_executable_comments() {
+        let sql = "SELECT 1--1 /*!50000 INTO OUTFILE 'tmp/out' */";
+        assert_eq!(split_sql_statements(sql, true, true), None);
+        for marker in ["!", "M!", "m!"] {
+            for template in [
+                "SELECT 1 /*{m}50000 INTO OUTFILE 'tmp/out' */",
+                "SELECT 1 /*{m}50000 , fictional_effect() */",
+                "WITH x AS (SELECT 1 /*{m}50000 , fictional_effect() */) SELECT * FROM x",
+                "EXPLAIN SELECT 1 /*{m}50000 INTO OUTFILE 'tmp/out' */",
+                "SHOW TABLES /*{m}50000 INTO OUTFILE 'tmp/out' */",
+                "SELECT 1; SELECT 2 /*{m}50000 INTO OUTFILE 'tmp/out' */",
+            ] {
+                let sql = template.replace("{m}", marker);
+                assert_ne!(ro_batch(&sql, Some("mysql")), Some(true), "{sql}");
+            }
+        }
+        assert_ne!(
+            ro("SELECT `x` FROM t /*!50000 INTO OUTFILE 'tmp/out' */"),
+            Some(true)
+        );
+        for sql in [
+            "SELECT '/*!50000 INTO OUTFILE */'",
+            "SELECT '/*M!50000 INTO OUTFILE */'",
+            "SELECT 1 /* ordinary INTO OUTFILE 'tmp/out' */",
+            "SELECT 1 -- ordinary INTO OUTFILE 'tmp/out'",
+        ] {
+            assert_eq!(ro_d(sql, "mysql"), Some(true), "{sql}");
+        }
+    }
+
+    #[test]
+    fn sequence_increment_is_not_readonly() {
+        // Python returns False (a write); Rust asks without classifying.
+        for sql in [
+            "SELECT NEXT VALUE FOR dbo.seq",
+            "SELECT NEXT VALUE FOR dbo.seq OVER (ORDER BY id) FROM t",
+            "SELECT (SELECT NEXT VALUE FOR dbo.seq)",
+            "WITH x AS (SELECT NEXT VALUE FOR dbo.seq n) SELECT * FROM x",
+            "EXPLAIN SELECT NEXT VALUE FOR dbo.seq",
+        ] {
+            assert_ne!(ro_d(sql, "tsql"), Some(true), "{sql}");
+        }
+        assert_eq!(ro_d("SELECT 'NEXT VALUE FOR dbo.seq'", "tsql"), Some(true));
+    }
+
+    #[test]
+    fn duckdb_pure_builtins() {
+        for expression in ["stats(x)", "list_sum([1,2,3])"] {
+            let sql = format!("SELECT {expression} FROM t");
+            assert_eq!(ro_d(&sql, "duckdb"), Some(true), "{sql}");
+            assert!(duckdb_writes_only_main(&format!(
+                "CREATE TABLE main.result AS {sql}"
+            )));
+            assert_eq!(
+                ro_temp(&format!("CREATE TEMP TABLE result AS {sql}")),
+                Some(true)
+            );
+            assert_eq!(
+                duckdb_copy_export_target(&format!("COPY ({sql}) TO 'tmp/out.csv'")).as_deref(),
+                Some("tmp/out.csv")
+            );
+        }
+        for name in ["stats", "list_sum"] {
+            for template in [
+                "evil.{n}(1)",
+                "\"evil\".\"{n}\"(1)",
+                "{n}(query('DROP TABLE t'))",
+                "{n}(writefile('tmp/out','data'))",
+            ] {
+                let sql = format!("SELECT {}", template.replace("{n}", name));
+                assert_ne!(ro_d(&sql, "duckdb"), Some(true), "{sql}");
+                assert!(!duckdb_writes_only_main(&format!(
+                    "CREATE TABLE main.result AS {sql}"
+                )));
+                assert_eq!(
+                    duckdb_copy_export_target(&format!("COPY ({sql}) TO 'tmp/out.csv'")),
+                    None
+                );
+            }
+            for dialect in [
+                None,
+                Some("mysql"),
+                Some("postgres"),
+                Some("sqlite"),
+                Some("tsql"),
+                Some("athena"),
+            ] {
+                let sql = format!("SELECT {name}(x) FROM t");
+                assert_ne!(is_readonly_sql(&sql, &opts(dialect)), Some(true), "{sql}");
+            }
+        }
+    }
+
+    #[test]
+    fn copy_export_targets() {
+        for options in [
+            "",
+            "(HEADER false, DELIMITER ' ')",
+            "(FORMAT CSV, HEADER true, NULL 'none', QUOTE '\"', ESCAPE '\"')",
+            "(FORMAT 'csv')",
+        ] {
+            let sql = format!("COPY (SELECT to_milliseconds(1)) TO 'tmp/out.csv' {options}");
+            assert_eq!(
+                duckdb_copy_export_target(&sql).as_deref(),
+                Some("tmp/out.csv"),
+                "{sql}"
+            );
+            assert_ne!(ro_d(&sql, "duckdb"), Some(true));
+        }
+        let sql = "/* COPY */ COPY (SELECT '; DROP TABLE t' v) TO /* path */ 'tmp/a''b.csv' (HEADER false)";
+        assert_eq!(
+            duckdb_copy_export_target(sql).as_deref(),
+            Some("tmp/a'b.csv")
+        );
+        for tail in [
+            "TO ''",
+            "TO '-'",
+            "TO '/dev/stdout'",
+            "TO 's3://bucket/out'",
+            "TO 'tmp/*.csv'",
+            "TO 'tmp/out\nfile'",
+            "TO /tmp/out",
+            "FROM 'tmp/in'",
+            "TO 'tmp/out' (FORMAT PARQUET)",
+            "TO 'tmp/out' (PARTITION_BY (x))",
+            "TO 'tmp/out' (PER_THREAD_OUTPUT true)",
+            "TO 'tmp/out' (HEADER true, HEADER false)",
+            "TO 'tmp/out' (HEADER query('DELETE FROM t'))",
+            "TO 'tmp/out'; INSTALL httpfs",
+            "TO 'tmp/out' FOO BAR",
+        ] {
+            let sql = format!("COPY (SELECT 1) {tail}");
+            assert_eq!(duckdb_copy_export_target(&sql), None, "{sql}");
+        }
+        for inner in [
+            "SELECT evil.to_milliseconds(1)",
+            "SELECT query('DROP TABLE t')",
+            "SELECT 1 FOO BAR",
+            "WITH x AS (DELETE FROM t RETURNING *) SELECT * FROM x",
+        ] {
+            let sql = format!("COPY ({inner}) TO 'tmp/out'");
+            assert_eq!(duckdb_copy_export_target(&sql), None, "{sql}");
+        }
+    }
+
+    #[test]
+    fn duckdb_interval_constructors() {
+        for unit in [
+            "centuries",
+            "days",
+            "decades",
+            "hours",
+            "microseconds",
+            "milliseconds",
+            "minutes",
+            "months",
+            "nanoseconds",
+            "seconds",
+            "weeks",
+            "years",
+        ] {
+            let sql = format!("SELECT to_{unit}(CAST(coalesce(rt, 0)*1000 AS BIGINT)) FROM r");
+            assert_eq!(ro_d(&sql, "duckdb"), Some(true), "{sql}");
+            assert!(duckdb_writes_only_main(&format!(
+                "CREATE TABLE main.t AS {sql}"
+            )));
+            assert_eq!(
+                ro_temp(&format!("CREATE TEMP TABLE t AS {sql}")),
+                Some(true)
+            );
+        }
+        for sql in [
+            "SELECT evil.to_milliseconds(1)",
+            "SELECT \"evil\".\"to_milliseconds\"(1)",
+            "SELECT to_milliseconds(query('DELETE FROM t'))",
+            "SELECT to_milliseconds(writefile('x','data'))",
+            "SELECT to_milliseconds(1), fictional_effect()",
+        ] {
+            assert_ne!(ro_d(sql, "duckdb"), Some(true), "{sql}");
+            assert!(!duckdb_writes_only_main(&format!(
+                "CREATE TABLE main.t AS {sql}"
+            )));
+        }
+        for dialect in [
+            None,
+            Some("sqlite"),
+            Some("postgres"),
+            Some("mysql"),
+            Some("tsql"),
+            Some("athena"),
+        ] {
+            assert_ne!(
+                is_readonly_sql("SELECT to_milliseconds(1)", &opts(dialect)),
+                Some(true)
+            );
+        }
+    }
+
+    #[test]
+    fn dialect_writes_and_unverified_syntax() {
+        assert_eq!(
+            ro_d("SELECT * FROM t INTO OUTFILE '/tmp/output'", "mysql"),
+            Some(false)
+        );
+        assert_eq!(
+            ro_d(
+                "WITH changed AS (DELETE FROM t RETURNING *) SELECT * FROM changed",
+                "postgres"
+            ),
+            Some(false)
+        );
+        // Python: False (unknown function); Rust: not verified.
+        assert_ne!(ro_d("SELECT writefile('x', 'data')", "sqlite"), Some(true));
+        assert_eq!(ro_d("SELECT 'DROP INTO OUTFILE'", "mysql"), Some(true));
+        assert_eq!(
+            ro_d("SELECT * FROM t INTO OUTFILE path", "mysql"),
+            Some(false)
+        );
+        assert_eq!(ro_d("SELECT 1 FOO BAR", "mysql"), None);
+        assert_ne!(ro_d("SELECT query('DELETE FROM t')", "duckdb"), Some(true));
+        assert_eq!(ro_d("SHOW TABLES INTO OUTFILE x", "mysql"), Some(false));
+        assert_eq!(ro_d("FROM t", "duckdb"), Some(true));
+        assert_eq!(ro_d("VALUES (1), (2)", "duckdb"), Some(true));
+    }
+
+    #[test]
+    fn temp_tables() {
+        let sql = "CREATE TEMP TABLE n AS SELECT 1; SELECT * FROM n";
+        assert_eq!(ro_batch(sql, None), Some(false));
+        let temp = ReadonlyOptions {
+            allow_multiple: true,
+            allow_temp_tables: true,
+            ..ReadonlyOptions::default()
+        };
+        assert_eq!(is_readonly_sql(sql, &temp), Some(true));
+        let sql = "CREATE TEMP TABLE n AS DELETE FROM data; SELECT * FROM n";
+        assert_eq!(is_readonly_sql(sql, &temp), Some(false));
+    }
+
+    #[test]
+    fn basic_reads_and_writes() {
+        for sql in [
+            "SELECT * FROM users",
+            "SELECT id, name FROM users WHERE age > 30",
+            "SELECT * FROM a JOIN b ON a.id = b.a_id",
+            "SELECT * FROM (SELECT id FROM users) sub",
+            "SHOW TABLES",
+            "SHOW COLUMNS FROM users",
+            "DESCRIBE users",
+            "EXPLAIN SELECT * FROM users",
+            "EXPLAIN ANALYZE SELECT * FROM users",
+            "EXPLAIN PLAN FOR SELECT * FROM users",
+            "WITH cte AS (SELECT id FROM users) SELECT * FROM cte",
+            "\n        WITH\n            cte1 AS (SELECT id FROM users),\n            cte2 AS (SELECT id FROM orders)\n        SELECT * FROM cte1 JOIN cte2 ON cte1.id = cte2.id\n        ",
+            "WITH cte AS (SELECT (1 + 2) AS val) SELECT * FROM cte",
+            "\n        WITH RECURSIVE cte AS (\n            SELECT 1 AS n\n            UNION ALL\n            SELECT n + 1 FROM cte WHERE n < 10\n        )\n        SELECT * FROM cte\n        ",
+            "-- this is a comment\nSELECT * FROM users",
+            "SELECT * FROM users -- get all users",
+            "/* comment */ SELECT * FROM users",
+            "SELECT /* columns */ * FROM users",
+            "\n        /*\n         * Multi-line comment\n         */\n        SELECT * FROM users\n        ",
+            "-- DELETE everything\nSELECT * FROM users",
+            "/* INSERT INTO users */ SELECT * FROM users",
+            "-- comment 1\n/* comment 2 */ SELECT * FROM users",
+            "   SELECT * FROM users",
+            "\n\n\nSELECT * FROM users",
+            "\t\tSELECT * FROM users",
+            "  \n\t  SELECT * FROM users",
+            "  \n-- comment\n  \nSELECT * FROM users",
+            "SELECT * FROM users;",
+            "SELECT * FROM users;  \n",
+            "SELECT * FROM users;;;",
+            "SELECT 1; ",
+            "select * from users",
+            "SELECT * FROM USERS",
+            "SeLeCt * FrOm users",
+            "SELECT",
+            "SELECT 1",
+            "SELECT 1 + 2 * 3",
+            "SELECT * FROM logs WHERE action = 'DELETE'",
+            "SELECT * FROM logs WHERE action = \"DELETE\"",
+            "SELECT 'foo;bar' AS val",
+            "SELECT 'it''s a test' AS val",
+            "SELECT 'INSERT', 'UPDATE', 'DELETE' AS keywords",
+            "SELECT `DELETE` FROM users",
+            "SELECT [DELETE] FROM users",
+            "SELECT \"DELETE\" FROM users",
+            "SELECT * FROM `DROP`",
+            "SELECT * FROM [INSERT]",
+        ] {
+            assert_eq!(ro(sql), Some(true), "{sql:?}");
+        }
+        let long = format!(
+            "SELECT {} FROM t",
+            (0..1000)
+                .map(|i| format!("col{i}"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        );
+        assert_eq!(ro(&long), Some(true));
+        for sql in [
+            "INSERT INTO users (name) VALUES ('alice')",
+            "INSERT INTO users SELECT * FROM other",
+            "UPDATE users SET name = 'bob' WHERE id = 1",
+            "DELETE FROM users WHERE id = 1",
+            "CREATE TABLE users (id INT)",
+            "CREATE INDEX idx ON users(name)",
+            "DROP TABLE users",
+            "DROP INDEX idx",
+            "ALTER TABLE users ADD COLUMN age INT",
+            "TRUNCATE TABLE users",
+            "GRANT SELECT ON users TO alice",
+            "REVOKE SELECT ON users FROM alice",
+            "MERGE INTO t USING s ON t.id = s.id",
+            "WITH cte AS (SELECT id FROM users) INSERT INTO other SELECT * FROM cte",
+            "WITH cte AS (SELECT id FROM users) DELETE FROM users WHERE id IN (SELECT id FROM cte)",
+            "\n        WITH\n            cte1 AS (SELECT id FROM users),\n            cte2 AS (SELECT id FROM orders)\n        INSERT INTO results SELECT * FROM cte1\n        ",
+            "insert into users values (1)",
+            "InSeRt INTO users VALUES (1)",
+            "EXPLAIN INSERT INTO t VALUES (1)",
+            "EXPLAIN DELETE FROM users",
+            "EXPLAIN UPDATE users SET x = 1",
+            "EXPLAIN ANALYZE INSERT INTO t VALUES (1)",
+            "EXPLAIN ANALYZE\nINSERT INTO t VALUES (1)",
+            "SELECT * INTO new_table FROM users",
+            "SELECT id, name INTO backup_users FROM users WHERE active = 1",
+            "SELECT * INTO #temp_table FROM users",
+            "SELECT a.*, b.name INTO results FROM a JOIN b ON a.id = b.a_id",
+            "INSERT OR REPLACE INTO users (id, name) VALUES (1, 'alice')",
+            "INSERT OR IGNORE INTO users (id, name) VALUES (1, 'alice')",
+            "REPLACE INTO users (id, name) VALUES (1, 'alice')",
+            "INSERT INTO users (id) VALUES (1) ON CONFLICT DO NOTHING",
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON CONFLICT (id) DO UPDATE SET name = 'b'",
+            "INSERT INTO users (id, name) VALUES (1, 'a') ON DUPLICATE KEY UPDATE name = 'b'",
+        ] {
+            assert_eq!(ro(sql), Some(false), "{sql:?}");
+        }
+        for sql in [
+            "SELECT 1; SELECT 2",
+            "SELECT * FROM users; DELETE FROM users",
+            "SELECT 1;   ;  ",
+            "FOOBAR something",
+            "CALL stored_procedure()",
+            "SET search_path TO myschema",
+            "",
+            "   \n\t  ",
+            "-- just a comment",
+            "/* just a comment */",
+        ] {
+            assert_eq!(ro(sql), None, "{sql:?}");
+        }
+    }
+
+    #[test]
+    fn batches() {
+        assert_eq!(ro_batch("SELECT 1; SELECT 2", None), Some(true));
+        assert_eq!(ro_batch("SELECT 1; DELETE FROM users", None), Some(false));
+        assert_eq!(ro_batch("SELECT ';'; SELECT 2", None), Some(true));
+        assert_eq!(ro_batch("SELECT 1; -- done", None), Some(true));
+        let no_brackets = ReadonlyOptions {
+            allow_multiple: true,
+            bracket_identifiers: false,
+            ..ReadonlyOptions::default()
+        };
+        assert_eq!(
+            is_readonly_sql("SELECT [']']; INSTALL httpfs; --'", &no_brackets),
+            None
+        );
+    }
+
+    #[test]
+    fn extra_keywords() {
+        let sql = "FETCH NEXT FROM cursor";
+        assert_eq!(ro(sql), None);
+        let readonly = ReadonlyOptions {
+            extra_readonly: words(&["FETCH"]),
+            ..ReadonlyOptions::default()
+        };
+        assert_eq!(is_readonly_sql(sql, &readonly), Some(true));
+        for (sql, keyword) in [
+            ("PRAGMA table_info(users)", "PRAGMA"),
+            ("VACUUM", "VACUUM"),
+            ("ATTACH DATABASE 'other.db' AS other", "ATTACH"),
+            ("DETACH DATABASE other", "DETACH"),
+            ("MSCK REPAIR TABLE my_table", "MSCK"),
+            ("UNLOAD (SELECT * FROM t) TO 's3://bucket/'", "UNLOAD"),
+        ] {
+            assert_eq!(ro(sql), None, "{sql}");
+            assert_eq!(ro_write(sql, &[keyword]), Some(false), "{sql}");
+        }
+        let both = ReadonlyOptions {
+            extra_readonly: words(&["FETCH"]),
+            extra_write: words(&["VACUUM"]),
+            ..ReadonlyOptions::default()
+        };
+        assert_eq!(is_readonly_sql("VACUUM", &both), Some(false));
+
+        let athena = ["MSCK", "UNLOAD", "VACUUM"];
+        for sql in [
+            "MSCK REPAIR TABLE my_table",
+            "UNLOAD (SELECT * FROM t) TO 's3://bucket/path'",
+            "VACUUM my_iceberg_table",
+        ] {
+            assert_eq!(ro_write(sql, &athena), Some(false), "{sql}");
+        }
+        for sql in [
+            "SELECT * FROM my_table",
+            "SHOW TABLES IN my_database",
+            "DESCRIBE my_table",
+        ] {
+            assert_eq!(ro_write(sql, &athena), Some(true), "{sql}");
+        }
+        let sqlite = ["PRAGMA", "ATTACH", "DETACH", "VACUUM", "REINDEX", "ANALYZE"];
+        for sql in [
+            "PRAGMA table_info(users)",
+            "PRAGMA foreign_keys = ON",
+            "ATTACH DATABASE 'other.db' AS other",
+            "DETACH DATABASE other",
+            "VACUUM",
+            "VACUUM INTO 'backup.db'",
+            "REINDEX",
+            "ANALYZE",
+        ] {
+            assert_eq!(ro_write(sql, &sqlite), Some(false), "{sql}");
+        }
+        assert_eq!(ro_write("SELECT * FROM users", &sqlite), Some(true));
+    }
+
+    #[test]
+    fn inet_operators_and_cte_aliases() {
+        for dialect in ["duckdb", "postgres"] {
+            for op in ["<<=", ">>="] {
+                let sql = format!("SELECT '192.168.1.5'::INET {op} '192.168.1.0/24'::INET");
+                assert_eq!(ro_d(&sql, dialect), Some(true), "{dialect}: {sql}");
+            }
+        }
+        let sql = "WITH ips AS (SELECT DISTINCT c_ip FROM access WHERE substr(time_local,1,11) IN \
+                   ('04/Oct/2026','05/Oct/2026') AND (cs_user_agent LIKE '%WP-Safe-Scanner%')) \
+                   SELECT count(*) ips_celkem, count(il.label) ips_v_ip_labels \
+                   FROM ips LEFT JOIN ip_labels il ON TRY_CAST(ips.c_ip AS INET) <<= il.cidr::INET";
+        assert_eq!(ro_d(sql, "duckdb"), Some(true));
+        for sql in [
+            "WITH n(net) AS (VALUES ('147.45.142')) SELECT * FROM n",
+            "WITH u AS (SELECT 1 a), nase(ip, kdo) AS (VALUES ('145.239.12.84', 'gate2')) SELECT u.a, n.kdo FROM u LEFT JOIN nase n ON u.a = 1",
+            "WITH RECURSIVE t(n) AS (VALUES (1)) SELECT * FROM t",
+        ] {
+            assert_eq!(ro_d(sql, "duckdb"), Some(true), "{sql}");
+        }
+        assert_eq!(
+            ro_d(
+                "WITH n(net) AS (VALUES ('147.45.142')) DELETE FROM n",
+                "duckdb"
+            ),
+            Some(false)
+        );
+        for func in [
+            "mode", "entropy", "kurtosis", "skewness", "mad", "bit_xor", "product",
+        ] {
+            let sql = format!("SELECT {func}(host) FROM t GROUP BY ua");
+            assert_eq!(ro_d(&sql, "duckdb"), Some(true), "{sql}");
+        }
+    }
+
+    // -- tests/core/test_sql_types.py ----------------------------------------
+
+    fn ro_duckdb(sql: &str) -> Option<bool> {
+        is_readonly_sql(
+            sql,
+            &ReadonlyOptions {
+                bracket_identifiers: false,
+                ..opts(Some("duckdb"))
+            },
+        )
+    }
+
+    #[test]
+    fn reported_duckdb_traffic_query() {
+        let sql = include_str!("../../../tests/fixtures/sql/duckdb_traffic.sql");
+        assert_eq!(ro_duckdb(sql), Some(true));
+    }
+
+    #[test]
+    fn cast_type_normalization() {
+        for dialect in DIALECTS {
+            for type_name in ["VARCHAR", "INTEGER", "BOOL", "NUMERIC", "DOUBLE PRECISION"] {
+                let sql = format!("SELECT CAST(x AS {type_name}) FROM t");
+                assert_eq!(ro_d(&sql, dialect), Some(true), "{dialect}: {sql}");
+            }
+        }
+        for sql in [
+            "SELECT CAST(a AS VARCHAR), CAST(b AS INTEGER), CAST(c AS BOOL) FROM t",
+            "SELECT TRY_CAST(a AS VARCHAR), TRY_CAST(b AS NUMERIC) FROM t",
+            "SELECT a::VARCHAR, b::INTEGER, c::DOUBLE PRECISION FROM t",
+            "SELECT CAST(a AS CHARACTER VARYING), CAST(b AS TIMESTAMP WITH TIME ZONE) FROM t",
+            "SELECT CAST(CAST(a AS INTEGER) AS VARCHAR) FROM t",
+            "WITH x AS (SELECT CAST(a AS VARCHAR) v FROM t) SELECT v FROM x UNION ALL SELECT CAST(b AS VARCHAR) FROM t",
+            "SELECT CAST(a AS /* type */ VARCHAR), CAST(b AS DECIMAL(10,2)) FROM t",
+        ] {
+            assert_eq!(ro_duckdb(sql), Some(true), "{sql}");
+        }
+        assert_eq!(
+            ro_d("SELECT x::INTEGER, y::DOUBLE PRECISION FROM t", "postgres"),
+            Some(true)
+        );
+        // Accepted divergences: STRUCT/array types, type names used as
+        // identifiers and CONVERT are not in the Rust grammar (they ask).
+        for sql in [
+            "SELECT CAST(a AS STRUCT(x VARCHAR, y INTEGER)), CAST(b AS VARCHAR[]) FROM t",
+            "SELECT text, varchar, integer, CAST(x AS VARCHAR) AS varchar FROM t AS text",
+            "SELECT 1 AS int, 2 AS varchar, 3 AS boolean",
+        ] {
+            assert_eq!(ro_duckdb(sql), None, "{sql}");
+        }
+        assert_eq!(
+            ro_d(
+                "SELECT CONVERT(VARCHAR(50), x), CONVERT(INT, y) FROM t",
+                "tsql"
+            ),
+            None
+        );
+        assert_eq!(
+            ro_d(
+                "SELECT CONVERT(x, CHAR), CONVERT(y, SIGNED INTEGER) FROM t",
+                "mysql"
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn casts_in_output_contexts() {
+        let sql = "SELECT CAST(x AS VARCHAR) FROM t";
+        assert!(duckdb_writes_only_main(&format!(
+            "CREATE TABLE main.result AS {sql}"
+        )));
+        assert_eq!(
+            duckdb_copy_export_target(&format!("COPY ({sql}) TO 'tmp/out.csv'")).as_deref(),
+            Some("tmp/out.csv")
+        );
+        assert_eq!(
+            ro_temp(&format!("CREATE TEMP TABLE result AS {sql}")),
+            Some(true)
+        );
+        for dialect in DIALECTS {
+            for sql in [
+                "SELECT CAST(fictional_effect() AS VARCHAR)",
+                "WITH x AS (DELETE FROM t RETURNING *) SELECT CAST(a AS VARCHAR) FROM x",
+                "SELECT CAST(a AS VARCHAR) FROM t; DROP TABLE t",
+                "SELECT CAST(a AS VARCHAR) INTO outfile FROM t",
+                "SELECT CAST(a AS VARCHAR) FROM t UNRECOGNIZED discarded",
+                "SELECT CAST(a AS VARCHAR) FROM t WHERE",
+            ] {
+                assert_ne!(ro_batch(sql, Some(dialect)), Some(true), "{dialect}: {sql}");
+            }
+        }
+        for sql in [
+            "SELECT CAST(query('DROP TABLE t') AS VARCHAR)",
+            "SELECT CAST(a AS fictional_type) FROM t",
+        ] {
+            assert_ne!(ro_d(sql, "duckdb"), Some(true), "{sql}");
+            assert!(!duckdb_writes_only_main(&format!(
+                "CREATE TABLE main.result AS {sql}"
+            )));
+            assert_eq!(
+                duckdb_copy_export_target(&format!("COPY ({sql}) TO 'tmp/out.csv'")),
+                None
+            );
+        }
+    }
+
+    // -- Rust grammar extensions (checked against Python with sql_compare) ----
+
+    #[test]
+    fn grammar_extensions() {
+        for (dialect, sql) in [
+            ("duckdb", "SELECT a FROM t GROUP BY ALL"),
+            ("duckdb", "SELECT a FROM t GROUP BY ROLLUP (a, t.b), c"),
+            ("postgres", "SELECT a FROM t GROUP BY CUBE (a)"),
+            ("duckdb", "SELECT string_agg(DISTINCT a, ',') FROM t"),
+            ("duckdb", "SELECT $$export$$"),
+            ("postgres", "SELECT $$it's$$ FROM t"),
+            ("tsql", "SELECT @@VERSION"),
+            ("duckdb", "SELECT date_trunc('second', ts) FROM t"),
+            ("duckdb", "SELECT strptime(a, '%d') FROM t"),
+            ("duckdb", "SELECT quantile_disc(a, 0.99) FROM t"),
+            (
+                "duckdb",
+                "SELECT sum(d) OVER (PARTITION BY a ORDER BY ts, d ROWS UNBOUNDED PRECEDING) FROM e",
+            ),
+            (
+                "postgres",
+                "SELECT sum(d) OVER (ORDER BY ts RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM e",
+            ),
+        ] {
+            assert_eq!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
+        }
+        // Python does not verify these (SQLGlot loses syntax); Rust must ask.
+        for (dialect, sql) in [
+            ("duckdb", "SELECT a FROM t GROUP BY ROLLUP (a + 1)"),
+            ("duckdb", "SELECT a FROM t GROUP BY ROLLUP (q), (a)"),
+            ("duckdb", "SELECT sum(a) OVER (RANGE 1 PRECEDING) FROM t"),
+            (
+                "duckdb",
+                "SELECT sum(a) OVER (ORDER BY ts GROUPS 1 PRECEDING) FROM t",
+            ),
+            ("duckdb", "SELECT date_trunc(second, ts) FROM t"),
+            ("duckdb", "SELECT [(SELECT e), n]"),
+            ("athena", "SELECT substr(a = b)"),
+            ("mysql", "SELECT string_agg(a, -a)"),
+            ("tsql", "SELECT string_agg(DISTINCT a, ',') FROM t"),
+            ("mysql", "SELECT $$x$$$$y$$"),
+            ("duckdb", "SELECT $$a$$ || $tag$b$tag$"),
+        ] {
+            assert_ne!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
+        }
     }
 }
