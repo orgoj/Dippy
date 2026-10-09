@@ -358,7 +358,7 @@ impl Converter<'_> {
             if matches!(item.command.kind, K::List { .. }) {
                 self.flatten_list(&item.command, &mut group);
             } else {
-                group.push(self.node(&item.command));
+                group.push(self.list_item(&item.command));
             }
             let end = item.command.span.end;
             let next_start = items.get(i + 1).map(|x| x.command.span.start);
@@ -393,6 +393,15 @@ impl Converter<'_> {
         }
         if !group.is_empty() {
             out.push(finish_group(group));
+        }
+    }
+
+    /// A list member; Rable fills a dangling `&&`/`||` with an empty node
+    /// where Bash and Parable report a syntax error.
+    fn list_item(&self, n: &RNode) -> Node {
+        match n.kind {
+            K::Empty => Node::Unsupported("empty command in list".into()),
+            _ => self.node(n),
         }
     }
 
@@ -592,7 +601,7 @@ impl Converter<'_> {
                 if matches!(item.command.kind, K::List { .. }) {
                     self.flatten_list(&item.command, out);
                 } else {
-                    out.push(self.node(&item.command));
+                    out.push(self.list_item(&item.command));
                 }
                 if let Some(op) = item.operator {
                     out.push(Node::Operator {
