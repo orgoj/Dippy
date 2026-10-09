@@ -1,0 +1,17 @@
+# Extra tar cases for handler_compare.py
+tar
+tar archive.tar
+tar -f archive.tar
+tar tf a.tar
+tar -tvf a.tar
+tar xvf a.tar
+tar -czf a.tgz d
+tar --list -f a.tar
+tar --get -f a.tar
+tar --delete -f a.tar x
+tar -xf a.tar --to-command=cat
+tar -xf a.tar --to-command 'rm -rf /'
+tar -xf a.tar --to-command=
+tar -xf a.tar --to-command
+tar --exclude=x -tf a.tar
+tar -C /tmp -tf a.tar

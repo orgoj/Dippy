@@ -1,0 +1,23 @@
+# Extra unzip/7z cases for handler_compare.py
+unzip
+unzip a.zip
+unzip -l a.zip
+unzip -lv a.zip
+unzip -lo a.zip
+unzip -ld a.zip
+unzip -q a.zip
+unzip -qt a.zip
+unzip -hh
+unzip a.zip -d out
+unzip -
+7z
+7z l a.7z
+7z x a.7z
+7za t a.7z
+7zr h f
+7zz b
+7z i
+7z --help
+7z -h
+7z a a.7z f
+7z -y x a.7z
