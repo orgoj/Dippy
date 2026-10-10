@@ -447,22 +447,20 @@ fn remove_dippy_hook(
                         .as_array_mut()
                         .ok_or_else(|| format!("hooks \"{kind}\" is not a list"))?;
                     let mut kept = Vec::new();
-                    for e in entries.drain(..) {
-                        if !e.is_object() {
-                            kept.push(e);
-                        } else if is_legacy_codex_run(&e) {
-                        } else if let Some(nested) = e.get("hooks") {
-                            let nested = array(nested, kind)?.clone();
-                            let rest: Vec<Value> =
-                                nested.into_iter().filter(|h| !is_dippy_hook(h)).collect();
-                            if !rest.is_empty() {
-                                let mut e = e;
-                                e["hooks"] = Value::Array(rest);
-                                kept.push(e);
-                            }
-                        } else {
-                            kept.push(e);
+                    for mut e in entries.drain(..) {
+                        if is_legacy_codex_run(&e) {
+                            continue;
                         }
+                        if let Some(nested) = e.get_mut("hooks") {
+                            let nested = nested
+                                .as_array_mut()
+                                .ok_or_else(|| format!("hooks \"{kind}\" is not a list"))?;
+                            nested.retain(|h| !is_dippy_hook(h));
+                            if nested.is_empty() {
+                                continue;
+                            }
+                        }
+                        kept.push(e);
                     }
                     if kept.is_empty() {
                         hooks.shift_remove(kind);
