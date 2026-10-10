@@ -30,7 +30,7 @@ trap 'rm -rf "$empty_home"' EXIT
 
 run_one() {
     local cmd=$1 out
-    out=$(HOME="$home" dippy --config "$rules" --json --cwd "$cwd" --cmd "$cmd" 2>&1)
+    out=$(HOME="$home" dippy --config-only "$rules" --json --cwd "$cwd" --cmd "$cmd" 2>&1)
     printf '%-60s %s\n' "$cmd" "$out"
 }
 
