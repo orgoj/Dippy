@@ -1167,6 +1167,21 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn ui_writes_text_only_and_guards_decisions() {
+        let js = STATIC[1].1;
+        assert!(!js.contains("innerHTML") && !js.contains("outerHTML"));
+        assert!(js.contains("X-Dippy-Token") && js.contains("if (busy"));
+        // Ctrl+Enter approves, Esc denies, both only when armed (1 s).
+        assert!(js.contains("event.ctrlKey") && js.contains("\"cancel\""));
+        assert!(js.contains("const ARMING_MS = 1000;") && js.contains("!armed()"));
+        let html = STATIC[0].1;
+        for section in ["REQUEST", "WHY IT ASKED", "ADD A RULE"] {
+            assert!(html.contains(section), "{section}");
+        }
+        assert!(html.find("view-approvals") < html.find("view-log"));
+    }
+
+    #[test]
     fn contract_matches_routes() {
         let text = include_str!("../../../docs/dashboard-api.json");
         let contract: Value = serde_json::from_str(text).unwrap();

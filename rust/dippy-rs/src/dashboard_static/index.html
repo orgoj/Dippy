@@ -9,6 +9,38 @@
 <body class="single">
 <header>
   <h1>Dippy</h1>
+  <nav id="views">
+    <button type="button" data-view="approvals" class="active">Approvals <span id="pending-count"></span></button>
+    <button type="button" data-view="log">Audit log</button>
+    <label><input id="notify" type="checkbox"> notify</label>
+  </nav>
+  <p id="status">loading...</p>
+  <section id="nodes" hidden>
+    <ul id="node-list"></ul>
+    <form id="add-node">
+      <input name="name" placeholder="name" required>
+      <input name="url" placeholder="http://host:8765" required>
+      <input name="token" placeholder="node token" type="password" required>
+      <button type="submit">add node</button>
+    </form>
+  </section>
+</header>
+<main>
+<section id="view-approvals">
+  <table>
+    <thead><tr><th class="node">node</th><th>agent</th><th>cwd</th><th>request</th>
+    <th>age</th><th>left</th></tr></thead>
+    <tbody id="queue"></tbody>
+  </table>
+  <p id="queue-empty" class="muted">No pending requests.</p>
+  <h2>Recently decided</h2>
+  <table>
+    <thead><tr><th class="node">node</th><th>state</th><th>agent</th><th>request</th>
+    <th>decided</th><th>note</th></tr></thead>
+    <tbody id="done"></tbody>
+  </table>
+</section>
+<section id="view-log" hidden>
   <form id="filters">
     <select name="decision">
       <option value="">all decisions</option>
@@ -24,24 +56,49 @@
     <input name="limit" type="number" min="1" max="1000" value="200">
     <label><input name="pause" type="checkbox"> pause</label>
   </form>
-  <p id="status">loading...</p>
-  <section id="nodes" hidden>
-    <ul id="node-list"></ul>
-    <form id="add-node">
-      <input name="name" placeholder="name" required>
-      <input name="url" placeholder="http://host:8765" required>
-      <input name="token" placeholder="node token" type="password" required>
-      <button type="submit">add node</button>
-    </form>
-  </section>
-</header>
-<main>
-<table>
-  <thead><tr><th class="node">node</th><th>time</th><th>decision</th>
-  <th>agent</th><th>cwd</th><th>what</th><th>why</th></tr></thead>
-  <tbody id="rows"></tbody>
-</table>
+  <table>
+    <thead><tr><th class="node">node</th><th>time</th><th>decision</th>
+    <th>agent</th><th>cwd</th><th>what</th><th>why</th></tr></thead>
+    <tbody id="rows"></tbody>
+  </table>
+</section>
 </main>
+<dialog id="dialog">
+  <form method="dialog" id="dialog-form">
+    <p id="d-title" class="d-title"></p>
+    <h3>REQUEST</h3>
+    <textarea id="d-request" readonly rows="4"></textarea>
+    <p id="d-meta" class="muted"></p>
+    <h3>WHY IT ASKED</h3>
+    <ul id="d-causes"></ul>
+    <p id="d-flags" class="muted"></p>
+    <h3>ADD A RULE</h3>
+    <fieldset id="d-editor">
+      <div class="row">
+        <select id="d-action"><option>allow</option><option>ask</option><option>deny</option></select>
+        <select id="d-kind"><option>command</option><option>redirect</option><option>read</option>
+          <option>edit</option><option>web</option><option>mcp</option></select>
+        <input id="d-tags" placeholder="tags (comma-separated)">
+      </div>
+      <input id="d-pattern" placeholder="pattern">
+      <div class="row">
+        <label><input type="radio" name="d-target" value="project" checked> project</label>
+        <label><input type="radio" name="d-target" value="user"> user</label>
+        <button type="button" id="d-save" disabled>Save rule</button>
+      </div>
+      <p id="d-check" class="check"></p>
+    </fieldset>
+    <p id="d-suggest" class="suggest" hidden>Every part is now allowed by rules; approve to continue.</p>
+    <textarea id="d-note" rows="2" maxlength="1000" placeholder="note for the agent (optional)"></textarea>
+    <div class="row buttons">
+      <span id="d-left" class="muted"></span>
+      <button type="button" id="d-deny" class="deny">Deny (Esc)</button>
+      <button type="button" id="d-approve" class="approve">Approve (Ctrl+Enter)</button>
+      <button type="button" id="d-close">Close</button>
+    </div>
+    <p id="d-result" class="check"></p>
+  </form>
+</dialog>
 <script src="/app.js"></script>
 </body>
 </html>

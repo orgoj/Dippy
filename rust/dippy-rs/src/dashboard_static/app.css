@@ -31,3 +31,42 @@ td.cwd { max-width: 16em; overflow: hidden; text-overflow: ellipsis;
 td.time { white-space: nowrap; color: var(--muted); }
 .d-allow { color: var(--allow); } .d-ask { color: var(--ask); font-weight: 600; }
 .d-deny { color: var(--deny); font-weight: 600; } .d-pass { color: var(--pass); }
+h2 { font-size: 15px; margin: 18px 0 4px; color: var(--muted); font-weight: 500; }
+h3 { font-size: 12px; letter-spacing: .06em; margin: 12px 0 4px; color: var(--muted); }
+nav { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+nav button.active { border-color: var(--fg); font-weight: 600; }
+.muted { color: var(--muted); }
+#queue tr { cursor: pointer; }
+#queue tr:hover { background: var(--line); }
+td.left { white-space: nowrap; }
+td.urgent { color: var(--deny); font-weight: 600; }
+dialog { background: var(--bg); color: var(--fg); border: 1px solid var(--line);
+  border-radius: 8px; width: min(760px, 94vw); max-height: 92vh; overflow: auto;
+  padding: 12px 16px; }
+dialog::backdrop { background: rgba(0, 0, 0, .45); }
+dialog textarea, dialog input:not([type=radio]) { width: 100%; box-sizing: border-box; }
+dialog textarea, #d-pattern { font-family: ui-monospace, monospace; font: inherit;
+  color: inherit; background: transparent; border: 1px solid var(--line);
+  border-radius: 4px; padding: 4px 6px; }
+#d-request { font-family: ui-monospace, monospace; white-space: pre-wrap; }
+.d-title { font-weight: 600; margin: 0; }
+fieldset { border: 0; padding: 0; margin: 0; }
+fieldset:disabled { opacity: .5; }
+.row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 4px 0; }
+.row input#d-tags { flex: 1; width: auto; }
+.buttons { justify-content: flex-end; margin-top: 8px; }
+.buttons span { margin-right: auto; }
+#d-causes { list-style: none; padding: 0; margin: 0; }
+#d-causes li { border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px;
+  margin: 3px 0; cursor: pointer; font-family: ui-monospace, monospace; }
+#d-causes li.selected { border-color: var(--fg); }
+#d-causes .rule { display: block; color: var(--muted); font-family: system-ui, sans-serif; }
+.check { min-height: 1.4em; margin: 4px 0; font-family: ui-monospace, monospace; }
+.suggest { color: var(--allow); font-weight: 600; }
+button.approve { border-color: var(--allow); color: var(--allow); font-weight: 600; }
+button.approve.suggested { background: var(--allow); color: var(--bg); }
+button.deny { border-color: var(--deny); color: var(--deny); }
+button:disabled { opacity: .45; cursor: default; }
+.s-allowed { color: var(--allow); } .s-denied { color: var(--deny); }
+.s-expired { color: var(--muted); }
+#dialog-form { display: block; }

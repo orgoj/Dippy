@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.38] - 2026-10-10
+
+### Added
+
+- dippy-rs dashboard UI: an **Approvals** view first (the audit log second) lists pending requests (agent, cwd, command or tool, age, countdown to the deadline) and recently decided ones; the pending count is in the page title, and an optional browser notification announces new requests. Clicking a request opens a popup laid out like `dippy-askpass`: REQUEST (whole command, read-only), WHY IT ASKED (selectable causes with current decision, rule and context flags), ADD A RULE (action, kind, tags prefilled from the cause without `@` flags, pattern, project/user target, live check on input, Save rule enabled only when the check allows it) and Approve/Deny with an optional note. Decision buttons and keys are ignored for 1 s after the popup opens or the window regains focus; only Ctrl+Enter approves, Esc denies. A saved rule refreshes the statuses; when every cause is allowed by rules the UI suggests Approve but never clicks it. A request without command and causes shows the tool name with the rule editor disabled. Text is inserted with `textContent` only.
+
 ## [0.4.37] - 2026-10-10
 
 ### Added
