@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.40] - 2026-10-10
+
+### Added
+
+- dippy-rs dashboard hub: aggregated approval queue. The hub has no queue of its own; its allowlisted proxy now also serves `GET /n/{name}/api/approvals` and forwards `POST` bodies (64 KiB cap) for exactly `/n/{name}/api/approvals/{id}/decision`, `/check` and `/rule` to the owning node with its token (same 5 s timeout, no redirects, no environment proxy, response cap). The UI shows all nodes' queues in one list with a node column and polls the lists (nothing long-polls through the hub); nodes without the queue (Python Dippy) are skipped without an error.
+
 ## [0.4.39] - 2026-10-10
 
 ### Added

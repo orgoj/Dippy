@@ -121,6 +121,25 @@ pub const ROUTES: &[(&str, &str, Mode, Handler)] = &[
         Mode::Node,
         queue::save_rule,
     ),
+    ("GET", "/n/{name}/api/approvals", Mode::Hub, proxy_approvals),
+    (
+        "POST",
+        "/n/{name}/api/approvals/{id}/decision",
+        Mode::Hub,
+        proxy_decision,
+    ),
+    (
+        "POST",
+        "/n/{name}/api/approvals/{id}/check",
+        Mode::Hub,
+        proxy_check,
+    ),
+    (
+        "POST",
+        "/n/{name}/api/approvals/{id}/rule",
+        Mode::Hub,
+        proxy_rule,
+    ),
 ];
 
 /// Path segments of `path` captured by `template`, if it matches.
@@ -573,6 +592,57 @@ fn proxy_entries(server: &Server, req: &mut Request, captured: &[String]) -> Rep
         Ok((status, body)) => Reply { status, body },
         Err(e) => Reply::error(502, &e),
     }
+}
+
+/// Hub: the node's approval list. The UI polls it; nothing long-polls
+/// through the hub (the proxy timeout is 5 s).
+fn proxy_approvals(server: &Server, req: &mut Request, captured: &[String]) -> Reply {
+    let node = match registered(server, &captured[0]) {
+        Ok(node) => node,
+        Err(reply) => return reply,
+    };
+    match fetch_node(&node, "GET", "/api/approvals", &req.query, None) {
+        Ok((status, body)) => Reply { status, body },
+        Err(e) => Reply::error(502, &e),
+    }
+}
+
+/// Hub: forward a decision, check or rule body to the owning node.
+fn proxy_approval_post(
+    server: &Server,
+    req: &mut Request,
+    captured: &[String],
+    action: &str,
+) -> Reply {
+    let (name, id) = (&captured[0], &captured[1]);
+    if !crate::approval::valid_id(id) {
+        return Reply::error(404, &format!("unknown approval: {id}"));
+    }
+    let node = match registered(server, name) {
+        Ok(node) => node,
+        Err(reply) => return reply,
+    };
+    let body = match req.body(MAX_REQUEST_BODY) {
+        Ok(body) => body,
+        Err(e) => return Reply::error(400, &e),
+    };
+    let path = format!("/api/approvals/{id}/{action}");
+    match fetch_node(&node, "POST", &path, "", Some(&body)) {
+        Ok((status, body)) => Reply { status, body },
+        Err(e) => Reply::error(502, &e),
+    }
+}
+
+fn proxy_decision(server: &Server, req: &mut Request, captured: &[String]) -> Reply {
+    proxy_approval_post(server, req, captured, "decision")
+}
+
+fn proxy_check(server: &Server, req: &mut Request, captured: &[String]) -> Reply {
+    proxy_approval_post(server, req, captured, "check")
+}
+
+fn proxy_rule(server: &Server, req: &mut Request, captured: &[String]) -> Reply {
+    proxy_approval_post(server, req, captured, "rule")
 }
 
 // ------------------------------------------------------------------ serve
@@ -1179,6 +1249,127 @@ pub(crate) mod tests {
             assert!(html.contains(section), "{section}");
         }
         assert!(html.find("view-approvals") < html.find("view-log"));
+    }
+
+    #[test]
+    fn hub_forwards_approval_lists_and_answers() {
+        let dir = temp("hub-approvals");
+        std::fs::create_dir_all(dir.join("proj")).unwrap();
+        let mut node = Server::new("node-token", None, None);
+        node.user_config = dir.join("user-config");
+        let node = Arc::new(node);
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let node_addr = listener.local_addr().unwrap();
+        let n = Arc::clone(&node);
+        std::thread::spawn(move || serve_on(listener, n));
+        let id = "0123456789abcdef0123456789abcdef";
+        let request = json!({
+            "version": 2, "id": id, "command": "zorp x", "cwd": dir.join("proj").to_string_lossy(),
+            "tool": null, "file_path": null, "message": "zorp x", "agent": "claude",
+            "server": null, "decision": "ask", "reason": "zorp x", "context_flags": [],
+            "flags": [], "remote": false,
+            "causes": [{"kind": "command", "target": "zorp x", "rule": null, "flags": []}],
+            "deadline": crate::queue::now_ms() + 60_000,
+        });
+        node.approvals.add(request).unwrap();
+        let addr = hub(&dir);
+        let body = json!({"url": format!("http://{node_addr}"), "token": "node-token"}).to_string();
+        call(addr, "PUT", "/api/nodes/vm1", Some(TOKEN), Some(&body));
+        let (status, _, list) = call(
+            addr,
+            "GET",
+            "/n/vm1/api/approvals?state=pending",
+            Some(TOKEN),
+            None,
+        );
+        assert_eq!((status, list[0]["id"].as_str()), (200, Some(id)));
+        let rule = json!({"cause": 0, "action": "allow", "kind": "command", "tags": "",
+                          "pattern": "zorp x", "target": "project"})
+        .to_string();
+        let (status, _, check) = call(
+            addr,
+            "POST",
+            &format!("/n/vm1/api/approvals/{id}/check"),
+            Some(TOKEN),
+            Some(&rule),
+        );
+        assert_eq!((status, check["can_save"].as_bool()), (200, Some(true)));
+        let (status, _, saved) = call(
+            addr,
+            "POST",
+            &format!("/n/vm1/api/approvals/{id}/rule"),
+            Some(TOKEN),
+            Some(&rule),
+        );
+        assert_eq!((status, saved["statuses"].clone()), (200, json!(["allow"])));
+        let decision = r#"{"decision": "allow", "note": "via hub"}"#;
+        let path = format!("/n/vm1/api/approvals/{id}/decision");
+        let (status, _, item) = call(addr, "POST", &path, Some(TOKEN), Some(decision));
+        assert_eq!(
+            (status, item["state"].as_str(), item["note"].as_str()),
+            (200, Some("allowed"), Some("via hub"))
+        );
+        assert_eq!(
+            call(addr, "POST", &path, Some(TOKEN), Some(decision)).0,
+            409
+        );
+        // Allowlist: no long-poll or POST of requests through the hub.
+        assert_eq!(
+            call(
+                addr,
+                "GET",
+                &format!("/n/vm1/api/approvals/{id}?wait=5"),
+                Some(TOKEN),
+                None
+            )
+            .0,
+            404
+        );
+        assert_eq!(
+            call(
+                addr,
+                "POST",
+                "/n/vm1/api/approvals",
+                Some(TOKEN),
+                Some("{}")
+            )
+            .0,
+            404
+        );
+        assert_eq!(
+            call(
+                addr,
+                "POST",
+                "/n/vm1/api/approvals/..%2F/decision",
+                Some(TOKEN),
+                Some(decision)
+            )
+            .0,
+            404
+        );
+        assert_eq!(
+            call(
+                addr,
+                "POST",
+                &format!("/n/nope/api/approvals/{id}/decision"),
+                Some(TOKEN),
+                Some(decision)
+            )
+            .0,
+            404
+        );
+        assert_eq!(
+            call(addr, "POST", &path, Some("bad"), Some(decision)).0,
+            401
+        );
+        let big = "x".repeat(MAX_REQUEST_BODY + 1);
+        assert_eq!(call(addr, "POST", &path, Some(TOKEN), Some(&big)).0, 400);
+        // The hub has no queue of its own.
+        assert_eq!(
+            call(addr, "GET", "/api/approvals", Some(TOKEN), None).0,
+            404
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

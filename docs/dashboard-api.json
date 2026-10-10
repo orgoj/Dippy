@@ -1058,6 +1058,189 @@
           }
         }
       }
+    },
+    "/n/{name}/api/approvals": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        }
+      ],
+      "get": {
+        "summary": "Hub: the node's approval list",
+        "x-dippy-rs-only": true,
+        "description": "Forwards the query string (state) with the node's token and relays the node's status and JSON body, as /n/{name}/api/entries. A node without the queue answers 404. The UI polls lists; nothing long-polls through the hub.",
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "done"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items of that node",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Approval"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/n/{name}/api/approvals/{id}/decision": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        },
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Hub: forward /api/approvals/{id}/decision to the owning node",
+        "x-dippy-rs-only": true,
+        "description": "Forwards the JSON body (at most 65536 bytes) with the node's token and relays the node's status and JSON body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The node's answer"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "The node's conflict answer"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/n/{name}/api/approvals/{id}/check": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        },
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Hub: forward /api/approvals/{id}/check to the owning node",
+        "x-dippy-rs-only": true,
+        "description": "Forwards the JSON body (at most 65536 bytes) with the node's token and relays the node's status and JSON body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCandidate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The node's answer"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "The node's conflict answer"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/n/{name}/api/approvals/{id}/rule": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        },
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Hub: forward /api/approvals/{id}/rule to the owning node",
+        "x-dippy-rs-only": true,
+        "description": "Forwards the JSON body (at most 65536 bytes) with the node's token and relays the node's status and JSON body.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCandidate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The node's answer"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "The node's conflict answer"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
     }
   }
 }
