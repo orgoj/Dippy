@@ -3,6 +3,8 @@
 include .dippy-yolo
 
 allow cargo *
+allow rustup show *
+allow **/parity/run *
 
 allow rm tmp/*
 allow debug/check-rule.py*
@@ -11,6 +13,8 @@ allow debug/check-rule.py*
 allow-read ./**
 allow-edit ./**
 allow-read ~/.dippy/audit.log
+
+allow-redirect tmp/**
 
 # Safe reading of rule files for analysis (editing remains protected by global ask-edit)
 allow-read .dippy*
