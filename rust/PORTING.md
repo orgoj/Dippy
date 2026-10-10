@@ -58,6 +58,8 @@ Port the handler's unit tests from `tests/cli/test_<module>.py` into a
 `#[cfg(test)] mod tests` in the same file. Tests that go through the whole
 pipeline (`check(cmd)`) are covered by the parity corpus; port those that
 call the handler directly, and add Rust tests for any tricky branch.
+Take expected values of Python-compatibility unit tests from running the
+Python implementation, never derive them by hand.
 
 ## Verification
 
