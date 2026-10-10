@@ -16,8 +16,8 @@ Phases 1-4 are complete. Out-of-scope items were not started.
 | Handlers ported | 89 of 89 modules (140 command names) |
 | Handler parity (`handler_compare.py`, identical inputs) | 8,843 same, 0 different, 0 unsafe |
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
-| `--claude` hook output (`hook_compare.py`, 609 payloads) | 609 same decision, 595 byte-identical |
-| `cargo test` | 272 tests pass |
+| `--claude` hook output (`hook_compare.py`, 651 payloads) | 651 same decision, 637 byte-identical; all 42 MCP/web/file-tool payloads byte-identical |
+| `cargo test` | 283 tests pass |
 | Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
 
 Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
@@ -52,9 +52,12 @@ asks and Python allows, which the corpus exercises only lightly:
 Wire `dippy-rs --claude` behind a feature flag in a real Claude Code hook
 configuration on a test machine (empty `HOME`, fake askpass) and compare its
 live decisions with Python's for a week of audit logs; in parallel port the
-MCP/web/file-tool matchers (`match_mcp`, `match_web`, `match_edit`,
-`match_read`) so hook mode no longer has to ask for those tools, then the
-Gemini/Codex/Cursor hook output formats.
+Gemini/Codex/Cursor/AGY hook output formats. The MCP/web/file-tool matchers
+(`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
+`after-web`) are ported (2026-10-10).
+
+Rable bugs listed under phase 1 are reported upstream as mpecan/rable#75
+(`$'`), #76 (backticks), #77 (silent recovery) and #78 (`(( ))` span).
 
 
 ## Phase 1 - Rable in Python Dippy
@@ -191,9 +194,8 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
   [--config-only FILE] [--remote]`, same output (Python `json.dumps`
   formatting) and exit codes as `cli_mode`.
 
-Not ported (fail closed or out of scope): MCP/web/file-tool rules in hook mode
-(ask), other hook modes, notifier programs (never run), audit logging,
-execution subcommands.
+Not ported (fail closed or out of scope): other hook modes, notifier programs
+(never run), audit logging, execution subcommands.
 
 ## Phase 4 - Handlers
 

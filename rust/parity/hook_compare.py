@@ -48,6 +48,98 @@ EXTRA = [
     {"tool_name": "Bash", "tool_input": {}},
 ]
 
+# MCP, web and file-tool payloads, run with TOOL_CONFIG.
+TOOL_CONFIG = f"""\
+allow-mcp mcp__fake__*
+deny-mcp mcp__fake__drop "no drop"
+ask-mcp mcp__fake__write*
+after-mcp mcp__fake__get "got it"
+allow-web *rust*
+deny-web *secret* "no secrets"
+ask-web [ci] *build*
+after-web *rust* "read docs"
+allow-edit {WORK}/out/**
+deny-edit {WORK}/out/keep "keep it"
+ask-edit [!ci] {WORK}/out/ci/*
+allow-read {WORK}/**
+ask-read {WORK}/private/*
+deny-read ~/.ssh/**
+"""
+
+TOOL_PAYLOADS = [
+    {"tool_name": "mcp__fake__get"},
+    {"tool_name": "mcp__fake__drop"},
+    {"tool_name": "mcp__fake__write_file"},
+    {"tool_name": "mcp__other__x"},
+    {"tool_name": "mcp__other__x", "permission_mode": "bypassPermissions"},
+    {"tool_name": "mcp__other__x", "permission_mode": "acceptEdits"},
+    {"hook_event_name": "PostToolUse", "tool_name": "mcp__fake__get"},
+    {"hook_event_name": "PostToolUse", "tool_name": "mcp__fake__drop"},
+    {"tool_name": "WebSearch", "tool_input": {"query": "rust book"}},
+    {"tool_name": "WebSearch", "tool_input": {"query": "a secret"}},
+    {"tool_name": "WebSearch", "tool_input": {"query": "build farm"}},
+    {"tool_name": "WebSearch", "tool_input": {"query": "cats"}},
+    {"tool_name": "WebFetch", "tool_input": {"url": "https://x/rust"}},
+    {"tool_name": "google_web_search", "tool_input": {"q": "secret"}},
+    {"tool_name": "web_fetch", "tool_input": {"url": "https://x/y"}},
+    {"tool_name": "WebSearch", "tool_input": {}},
+    {
+        "tool_name": "WebSearch",
+        "tool_input": {"query": "x"},
+        "permission_mode": "dontAsk",
+    },
+    {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "WebSearch",
+        "tool_input": {"query": "rust"},
+    },
+    {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "WebSearch",
+        "tool_input": {"query": "cats"},
+    },
+    {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/out/a.txt"}},
+    {"tool_name": "Edit", "tool_input": {"file_path": f"{WORK}/out/keep"}},
+    {"tool_name": "MultiEdit", "tool_input": {"file_path": f"{WORK}/out/ci/x"}},
+    {"tool_name": "Write", "tool_input": {"file_path": "out/rel.txt"}},
+    {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/src/a.py"}},
+    {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/outx/a"}},
+    {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/out/../../etc/passwd"}},
+    {"tool_name": "Read", "tool_input": {"file_path": f"{WORK}/src/a.py"}},
+    {"tool_name": "Read", "tool_input": {"file_path": f"{WORK}/private/k"}},
+    {"tool_name": "Read", "tool_input": {"file_path": "~/.ssh/id_rsa"}},
+    {"tool_name": "Read", "tool_input": {"file_path": "/etc/hosts"}},
+    {"tool_name": "Grep", "tool_input": {"path": f"{WORK}/src"}},
+    {"tool_name": "Glob", "tool_input": {"path": "/elsewhere"}},
+    {"tool_name": "LS", "tool_input": {"path": f"{WORK}"}},
+    {"tool_name": "write_file", "tool_input": {"filepath": f"{WORK}/out/k"}},
+    {"tool_name": "read", "tool_input": {"path": f"{WORK}/private/k"}},
+    {
+        "tool_name": "Write",
+        "tool_input": {"file_path": f"{WORK}/out/keep"},
+        "permission_mode": "acceptEdits",
+    },
+    {
+        "tool_name": "read_many_files",
+        "tool_input": {"paths": [f"{WORK}/a", f"{WORK}/b"]},
+    },
+    {
+        "tool_name": "read_many_files",
+        "tool_input": {"paths": [f"{WORK}/a", f"{WORK}/private/k"]},
+    },
+    {"tool_name": "read_many_files", "tool_input": {"paths": ["/x/a"]}},
+    {
+        "tool_name": "Edit",
+        "tool_input": {"paths": [f"{WORK}/out/a", f"{WORK}/out/keep"]},
+    },
+    {"tool_name": "Read", "tool_input": {"paths": []}},
+    {
+        "hook_event_name": "PostToolUse",
+        "tool_name": "Write",
+        "tool_input": {"file_path": f"{WORK}/out/a"},
+    },
+]
+
 
 def decision(output: str) -> str:
     try:
@@ -101,6 +193,10 @@ def main() -> int:
         }
         jobs.append((payload, case["config"]))
     jobs += [(dict(p, cwd=str(WORK)), "") for p in EXTRA]
+    config_path_for(TOOL_CONFIG).write_text(TOOL_CONFIG, encoding="utf-8")
+    for payload in TOOL_PAYLOADS:
+        payload = {"hook_event_name": "PreToolUse", "tool_input": {}, **payload}
+        jobs.append((dict(payload, cwd=str(WORK)), TOOL_CONFIG))
 
     def both(job):
         payload, config = job
@@ -119,6 +215,17 @@ def main() -> int:
     print(
         f"{len(jobs)} payloads: {exact} identical output, {same_decision} same decision, {len(unsafe)} unsafe"
     )
+    tool_results = results[len(jobs) - len(TOOL_PAYLOADS) :]
+    tool_diff = [
+        (payload, py, rs)
+        for payload, (py, rs) in zip(TOOL_PAYLOADS, tool_results)
+        if py != rs
+    ]
+    print(f"tool payloads: {len(tool_diff)} of {len(TOOL_PAYLOADS)} not identical")
+    for payload, py, rs in tool_diff:
+        print("  ", json.dumps(payload)[:120])
+        print("     py:", py[:160])
+        print("     rs:", rs[:160])
     shown = 0
     for job, (py, rs) in zip(jobs, results):
         if decision(py) != decision(rs) and shown < 15:

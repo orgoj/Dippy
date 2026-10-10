@@ -80,6 +80,12 @@ pub struct Config {
     pub redirect_rules: Vec<Rule>,
     /// `after` rules (PostToolUse feedback).
     pub after_rules: Vec<Rule>,
+    pub mcp_rules: Vec<Rule>,
+    pub after_mcp_rules: Vec<Rule>,
+    pub edit_rules: Vec<Rule>,
+    pub read_rules: Vec<Rule>,
+    pub web_rules: Vec<Rule>,
+    pub after_web_rules: Vec<Rule>,
     pub wrappers: BTreeMap<String, WrapperInfo>,
     /// Insertion-ordered (Python dict).
     pub aliases: Vec<(String, String)>,
@@ -103,6 +109,12 @@ impl Default for Config {
             rules: Vec::new(),
             redirect_rules: Vec::new(),
             after_rules: Vec::new(),
+            mcp_rules: Vec::new(),
+            after_mcp_rules: Vec::new(),
+            edit_rules: Vec::new(),
+            read_rules: Vec::new(),
+            web_rules: Vec::new(),
+            after_web_rules: Vec::new(),
             wrappers: BTreeMap::new(),
             aliases: Vec::new(),
             python_allow_modules: Vec::new(),
@@ -704,16 +716,37 @@ fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, St
     })
 }
 
-/// Rules for tools other than Bash: validated like Python, not stored.
-fn validate_path_rule(directive: &str, rest: &str, allow_form: &str) -> Result<(), String> {
+/// `allow-/ask-/deny-` rule with context flags; only non-allow forms take a
+/// message (edit, read, web).
+fn parse_flagged_rule(directive: &str, rest: &str, expand_tildes: bool) -> Result<Rule, String> {
+    let (pattern_part, flags, neg) = extract_context_flags(rest);
+    let (pattern, message) = if directive.starts_with("allow-") {
+        (pattern_part, None)
+    } else {
+        extract_message(&pattern_part)?
+    };
+    let decision = directive.split('-').next().unwrap_or("ask");
+    let pattern = if expand_tildes {
+        expand_pattern_tildes(&pattern)
+    } else {
+        pattern
+    };
+    let mut rule = Rule::new(decision, pattern);
+    rule.message = message;
+    rule.required_flags = flags;
+    rule.negated_flags = neg;
+    Ok(rule)
+}
+
+/// Rule with an optional trailing message and no flags (MCP, after-*).
+fn parse_message_rule(decision: &str, rest: &str) -> Result<Rule, String> {
     if rest.is_empty() {
         return Err("requires a pattern".into());
     }
-    let (pattern_part, _, _) = extract_context_flags(rest);
-    if directive != allow_form {
-        extract_message(&pattern_part)?;
-    }
-    Ok(())
+    let (pattern, message) = extract_message(rest)?;
+    let mut rule = Rule::new(decision, pattern);
+    rule.message = message;
+    Ok(rule)
 }
 
 /// `parse_config`. Invalid lines are skipped (as in Python); invalid SSH
@@ -766,16 +799,19 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     rule.message = message;
                     cfg.after_rules.push(rule);
                 }
-                "after-mcp" | "after-web" | "ask-mcp" | "deny-mcp" => {
-                    if rest.is_empty() {
-                        return Err("requires a pattern".into());
-                    }
-                    extract_message(&rest)?;
-                }
+                "ask-mcp" => cfg.mcp_rules.push(parse_message_rule("ask", &rest)?),
+                "deny-mcp" => cfg.mcp_rules.push(parse_message_rule("deny", &rest)?),
+                "after-mcp" => cfg
+                    .after_mcp_rules
+                    .push(parse_message_rule("after", &rest)?),
+                "after-web" => cfg
+                    .after_web_rules
+                    .push(parse_message_rule("after", &rest)?),
                 "allow-mcp" => {
                     if rest.is_empty() {
                         return Err("requires a pattern".into());
                     }
+                    cfg.mcp_rules.push(Rule::new("allow", rest.clone()));
                 }
                 "allow-opt" | "ask-opt" | "deny-opt" => {
                     if rest.is_empty() {
@@ -861,13 +897,20 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     }
                     cfg.wrappers.insert(name, info);
                 }
-                "allow-edit" | "ask-edit" | "deny-edit" => {
-                    validate_path_rule(&directive, &rest, "allow-edit")?
-                }
-                "allow-read" | "ask-read" | "deny-read" => {
-                    validate_path_rule(&directive, &rest, "allow-read")?
+                "allow-edit" | "ask-edit" | "deny-edit" | "allow-read" | "ask-read"
+                | "deny-read" => {
+                    if rest.is_empty() {
+                        return Err("requires a pattern".into());
+                    }
+                    let rule = parse_flagged_rule(&directive, &rest, true)?;
+                    if directive.ends_with("-edit") {
+                        cfg.edit_rules.push(rule);
+                    } else {
+                        cfg.read_rules.push(rule);
+                    }
                 }
                 "allow-web" | "ask-web" | "deny-web" => {
+                    // Bare `allow-web` approves every query.
                     let rest = if rest.is_empty() {
                         if directive != "allow-web" {
                             return Err("requires a pattern".into());
@@ -876,10 +919,8 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     } else {
                         rest.clone()
                     };
-                    let (pattern_part, _, _) = extract_context_flags(&rest);
-                    if directive != "allow-web" {
-                        extract_message(&pattern_part)?;
-                    }
+                    cfg.web_rules
+                        .push(parse_flagged_rule(&directive, &rest, false)?);
                 }
                 "set" => apply_setting(&mut settings, &rest)?,
                 "server" => {
@@ -945,6 +986,12 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
         rules: [base.rules, overlay.rules].concat(),
         redirect_rules: [base.redirect_rules, overlay.redirect_rules].concat(),
         after_rules: [base.after_rules, overlay.after_rules].concat(),
+        mcp_rules: [base.mcp_rules, overlay.mcp_rules].concat(),
+        after_mcp_rules: [base.after_mcp_rules, overlay.after_mcp_rules].concat(),
+        edit_rules: [base.edit_rules, overlay.edit_rules].concat(),
+        read_rules: [base.read_rules, overlay.read_rules].concat(),
+        web_rules: [base.web_rules, overlay.web_rules].concat(),
+        after_web_rules: [base.after_web_rules, overlay.after_web_rules].concat(),
         wrappers,
         aliases,
         python_allow_modules: [base.python_allow_modules, overlay.python_allow_modules].concat(),
@@ -970,12 +1017,18 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
     }
 }
 
-fn tag_rules(mut config: Config, source: &str, scope: &str) -> Config {
+pub(crate) fn tag_rules(mut config: Config, source: &str, scope: &str) -> Config {
     for r in config
         .rules
         .iter_mut()
         .chain(config.redirect_rules.iter_mut())
         .chain(config.after_rules.iter_mut())
+        .chain(config.mcp_rules.iter_mut())
+        .chain(config.after_mcp_rules.iter_mut())
+        .chain(config.edit_rules.iter_mut())
+        .chain(config.read_rules.iter_mut())
+        .chain(config.web_rules.iter_mut())
+        .chain(config.after_web_rules.iter_mut())
     {
         r.source = Some(source.into());
         r.scope = Some(scope.into());
@@ -1732,6 +1785,72 @@ pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<Stri
     result
 }
 
+/// Last rule whose pattern matches `value` (fnmatch), honouring context flags.
+fn match_value(rules: &[Rule], value: &str, active: &Flags) -> Option<Match> {
+    rules
+        .iter()
+        .rev()
+        .find(|r| check_rule_context_flags(r, active) && fnmatchcase(value, &r.pattern))
+        .map(Match::from_rule)
+}
+
+/// Message of the last matching `after-*` rule ("" if silent).
+fn match_after_value(rules: &[Rule], value: &str) -> Option<String> {
+    rules
+        .iter()
+        .rev()
+        .find(|r| fnmatchcase(value, &r.pattern))
+        .map(|r| r.message.clone().unwrap_or_default())
+}
+
+/// `match_mcp`: MCP rules carry no context flags.
+pub fn match_mcp(tool_name: &str, config: &Config) -> Option<Match> {
+    match_value(&config.mcp_rules, tool_name, &Flags::new())
+}
+
+pub fn match_after_mcp(tool_name: &str, config: &Config) -> Option<String> {
+    match_after_value(&config.after_mcp_rules, tool_name)
+}
+
+pub fn match_web(query: &str, config: &Config, active: &Flags) -> Option<Match> {
+    match_value(&config.web_rules, query, active)
+}
+
+pub fn match_after_web(query: &str, config: &Config) -> Option<String> {
+    match_after_value(&config.after_web_rules, query)
+}
+
+/// Last path rule matching `file_path` (same globs as redirect rules).
+fn match_path(
+    rules: &[Rule],
+    file_path: &str,
+    config: &Config,
+    cwd: &Path,
+    active: &Flags,
+) -> Option<Match> {
+    let normalized_path = normalize_path(file_path, cwd);
+    let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
+    rules
+        .iter()
+        .rev()
+        .find(|r| {
+            check_rule_context_flags(r, active)
+                && glob_match(
+                    &normalized_path,
+                    &normalize_redirect_pattern(&r.pattern, base),
+                )
+        })
+        .map(Match::from_rule)
+}
+
+pub fn match_edit(file_path: &str, config: &Config, cwd: &Path, active: &Flags) -> Option<Match> {
+    match_path(&config.edit_rules, file_path, config, cwd, active)
+}
+
+pub fn match_read(file_path: &str, config: &Config, cwd: &Path, active: &Flags) -> Option<Match> {
+    match_path(&config.read_rules, file_path, config, cwd, active)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1815,5 +1934,81 @@ mod tests {
         );
         assert_eq!(extract_message("x\"y\"").unwrap(), ("x\"y\"".into(), None));
         assert!(extract_message("\"only\"").is_err());
+    }
+
+    fn flags(items: &[&str]) -> Flags {
+        items.iter().map(|s| s.to_string()).collect()
+    }
+
+    #[test]
+    fn mcp_rules_last_match_wins() {
+        let c = cfg("allow-mcp mcp__fake__*\ndeny-mcp mcp__fake__drop \"no drop\"");
+        let m = match_mcp("mcp__fake__get", &c).unwrap();
+        assert_eq!((m.decision.as_str(), m.message), ("allow", None));
+        let m = match_mcp("mcp__fake__drop", &c).unwrap();
+        assert_eq!(m.decision, "deny");
+        assert_eq!(m.message.as_deref(), Some("no drop"));
+        assert_eq!(match_mcp("mcp__other__get", &c), None);
+    }
+
+    #[test]
+    fn after_mcp_and_web_messages() {
+        let c = cfg("after-mcp mcp__fake__* \"done\"\nafter-web *rust* \"read docs\"");
+        assert_eq!(match_after_mcp("mcp__fake__x", &c).as_deref(), Some("done"));
+        assert_eq!(match_after_mcp("mcp__y", &c), None);
+        assert_eq!(
+            match_after_web("rust book", &c).as_deref(),
+            Some("read docs")
+        );
+    }
+
+    #[test]
+    fn web_rules_with_context_flags() {
+        let c = cfg("allow-web\ndeny-web *secret* \"no\"\nask-web [ci] *build* \"check\"");
+        assert_eq!(
+            match_web("hello", &c, &Flags::new()).unwrap().decision,
+            "allow"
+        );
+        assert_eq!(
+            match_web("a secret", &c, &Flags::new()).unwrap().decision,
+            "deny"
+        );
+        assert_eq!(
+            match_web("build", &c, &Flags::new()).unwrap().decision,
+            "allow"
+        );
+        assert_eq!(
+            match_web("build", &c, &flags(&["ci"])).unwrap().decision,
+            "ask"
+        );
+    }
+
+    #[test]
+    fn edit_and_read_rules_use_path_globs() {
+        let c = cfg("allow-edit /tmp/w/**\ndeny-edit /tmp/w/secret/* \"keep\"\nallow-read src/*");
+        let cwd = Path::new("/tmp/w");
+        let m = match_edit("/tmp/w/a/b.txt", &c, cwd, &Flags::new()).unwrap();
+        assert_eq!(m.decision, "allow");
+        let m = match_edit("/tmp/w/secret/k", &c, cwd, &Flags::new()).unwrap();
+        assert_eq!(m.decision, "deny");
+        assert_eq!(match_edit("/tmp/wx/a", &c, cwd, &Flags::new()), None);
+        assert_eq!(
+            match_read("src/x.rs", &c, cwd, &Flags::new())
+                .unwrap()
+                .pattern,
+            "src/*"
+        );
+        assert_eq!(match_read("/tmp/w/srcx/y", &c, cwd, &Flags::new()), None);
+        assert_eq!(match_read("/tmp/w/a/b.txt", &c, cwd, &Flags::new()), None);
+    }
+
+    #[test]
+    fn tool_rules_are_tagged_and_merged() {
+        let base = tag_rules(cfg("allow-mcp mcp__a"), "/u", "user");
+        let overlay = tag_rules(cfg("deny-mcp mcp__a"), "/p", "project");
+        let merged = merge_configs(base, overlay);
+        let m = match_mcp("mcp__a", &merged).unwrap();
+        assert_eq!(m.decision, "deny");
+        assert_eq!(m.source.as_deref(), Some("/p"));
     }
 }

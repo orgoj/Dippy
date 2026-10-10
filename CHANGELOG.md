@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Experimental Rust port in `rust/` (`dippy-rs --cmd CMD [--json] [--cwd DIR] [--config FILE]`), parsing with the Rable crate. It is not used by the Python package. `rust/parity/` holds a corpus harvested from the test suite with Python Dippy as the oracle and reports the agreement rate; see `docs/plans/rust-port-report.md`.
+- `dippy-rs --claude` applies MCP, web and file-tool rules (`allow-mcp`, `allow-web`, `allow-edit`, `allow-read` and their `ask-`/`deny-`/`after-` forms) with the same output as Python.
 
 ## [0.4.21] - 2026-10-09
 
