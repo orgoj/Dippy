@@ -4,10 +4,13 @@
 //! share it), Gemini CLI, Codex, Cursor and Antigravity CLI (AGY `toolCall`
 //! payloads, `ask` resolved through the askpass program). Bash
 //! classification, MCP, web and file-tool rules, `after` rules, permission
-//! bypass modes, `Stop`/`Notification` events and invalid JSON are handled.
-//! Not ported: logging and notifier programs (never run). Divergences from
-//! Python: a config error fails closed in Gemini and AGY modes (Python
-//! allows), and Codex output Python prints as `null` is left empty.
+//! bypass modes, `Stop`/`Notification` events and invalid JSON are handled,
+//! and decisions go to the audit log and `hook-approvals.log`. Not ported:
+//! notifier programs (never run) and the stderr copy of warnings.
+//! Divergences from Python: a config error fails closed in Gemini and AGY
+//! modes (Python allows), Codex output Python prints as `null` is left
+//! empty, and an allowed Codex MCP, web or file tool is not followed by
+//! Python's spurious `pass` audit entry.
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -18,6 +21,7 @@ use serde_json::{Value, json};
 
 use crate::analyzer::{self, Action};
 use crate::config::{self, Config};
+use crate::logging::{Entry, Logs};
 use crate::parser::tokenize;
 use crate::paths;
 
@@ -79,53 +83,67 @@ pub enum Mode {
     Codex,
 }
 
-/// `_detect_mode_from_flags` order; pi, moltbot, Windsurf and PearAI use the
-/// Claude output format.
-const MODE_FLAGS: [(&str, &str, Mode); 10] = [
-    ("--claude", "DIPPY_CLAUDE", Mode::Claude),
-    ("--gemini", "DIPPY_GEMINI", Mode::Gemini),
-    ("--agy", "DIPPY_AGY", Mode::Agy),
-    ("--antigravity", "DIPPY_ANTIGRAVITY", Mode::Agy),
-    ("--cursor", "DIPPY_CURSOR", Mode::Cursor),
-    ("--pi", "DIPPY_PI", Mode::Claude),
-    ("--moltbot", "DIPPY_MOLTBOT", Mode::Claude),
-    ("--codex", "DIPPY_CODEX", Mode::Codex),
-    ("--windsurf", "DIPPY_WINDSURF", Mode::Claude),
-    ("--pearai", "DIPPY_PEARAI", Mode::Claude),
+/// `_detect_mode_from_flags` order: flag, variable and agent name (Python's
+/// `MODE`, logged as `agent`).
+const MODE_FLAGS: [(&str, &str, &str); 10] = [
+    ("--claude", "DIPPY_CLAUDE", "claude"),
+    ("--gemini", "DIPPY_GEMINI", "gemini"),
+    ("--agy", "DIPPY_AGY", "agy"),
+    ("--antigravity", "DIPPY_ANTIGRAVITY", "agy"),
+    ("--cursor", "DIPPY_CURSOR", "cursor"),
+    ("--pi", "DIPPY_PI", "pi"),
+    ("--moltbot", "DIPPY_MOLTBOT", "moltbot"),
+    ("--codex", "DIPPY_CODEX", "codex"),
+    ("--windsurf", "DIPPY_WINDSURF", "windsurf"),
+    ("--pearai", "DIPPY_PEARAI", "pearai"),
 ];
 
 pub fn is_mode_flag(arg: &str) -> bool {
     MODE_FLAGS.iter().any(|(flag, _, _)| *flag == arg)
 }
 
-/// Mode from a command-line flag or a truthy `DIPPY_<AGENT>` variable.
-pub fn mode_from_flags(args: &[String], env: impl Fn(&str) -> Option<String>) -> Option<Mode> {
+/// Output format of an agent; pi, moltbot, Windsurf and PearAI use Claude's.
+fn mode_of(agent: &str) -> Mode {
+    match agent {
+        "gemini" => Mode::Gemini,
+        "agy" => Mode::Agy,
+        "cursor" => Mode::Cursor,
+        "codex" => Mode::Codex,
+        _ => Mode::Claude,
+    }
+}
+
+/// Agent from a command-line flag or a truthy `DIPPY_<AGENT>` variable.
+pub fn mode_from_flags(
+    args: &[String],
+    env: impl Fn(&str) -> Option<String>,
+) -> Option<&'static str> {
     let truthy = |name: &str| {
         env(name).is_some_and(|v| matches!(v.to_lowercase().as_str(), "1" | "true" | "yes"))
     };
     MODE_FLAGS
         .iter()
         .find(|(flag, var, _)| args.iter().any(|a| a == flag) || truthy(var))
-        .map(|(_, _, mode)| *mode)
+        .map(|(_, _, agent)| *agent)
 }
 
 /// `_detect_mode_from_input`.
-fn mode_from_input(input: &Value) -> Mode {
+fn mode_from_input(input: &Value) -> &'static str {
     let has = |k: &str| input.get(k).is_some();
     if has("toolCall") {
-        return Mode::Agy;
+        return "agy";
     }
     if (has("command") && !has("tool_name")) || has("cursor_version") {
-        return Mode::Cursor;
+        return "cursor";
     }
     let tool_name = input.get("tool_name").and_then(Value::as_str);
     if matches!(
         tool_name,
         Some("shell" | "run_shell" | "run_shell_command" | "execute_shell")
     ) {
-        return Mode::Gemini;
+        return "gemini";
     }
-    Mode::Claude
+    "claude"
 }
 
 /// Python `json.dumps` with default separators and ASCII escaping.
@@ -210,6 +228,7 @@ struct Hook<'a> {
     config: Option<&'a Config>,
     /// Askpass program: `DIPPY_ASKPASS`, else the config's `askpass`.
     askpass: Option<&'a Path>,
+    log: &'a Logs,
 }
 
 fn non_empty(s: Option<&str>) -> Option<&str> {
@@ -247,7 +266,30 @@ impl<'a> Hook<'a> {
         }
     }
 
+    fn audit(self, entry: Entry) {
+        self.log.decision(entry);
+    }
+
+    /// Unmatched tool: Gemini asks, the others defer to the agent; the audit
+    /// entry records which.
+    fn defer(self, reason: &str, entry: Entry) -> Reply {
+        if self.mode == Mode::Gemini {
+            self.audit(Entry {
+                decision: "ask",
+                ..entry
+            });
+            self.ask(reason, Subject::default())
+        } else {
+            self.audit(Entry {
+                decision: "pass",
+                ..entry
+            });
+            Reply::Json(json!({}))
+        }
+    }
+
     fn approve(self, reason: &str, s: Subject) -> Reply {
+        self.log.info(&format!("APPROVED: {reason}"));
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             Mode::Agy => {
@@ -289,6 +331,7 @@ impl<'a> Hook<'a> {
     }
 
     fn ask(self, reason: &str, s: Subject) -> Reply {
+        self.log.info(&format!("ASK: {reason}"));
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             // AGY ignores `ask` in bypass mode: resolve it through askpass.
@@ -310,6 +353,7 @@ impl<'a> Hook<'a> {
     }
 
     fn deny(self, reason: &str, _s: Subject) -> Reply {
+        self.log.info(&format!("DENY: {reason}"));
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             Mode::Agy => json!({"decision": "deny", "reason": msg}),
@@ -322,6 +366,7 @@ impl<'a> Hook<'a> {
 
     /// No rule matched: defer to the agent (AGY: apply `set default`).
     fn pass(self, reason: &str, s: Subject) -> Reply {
+        self.log.info(&format!("PASS: {reason}"));
         match self.mode {
             Mode::Agy => match self.config.map(|c| c.default.as_str()) {
                 Some("allow") => self.approve(reason, s),
@@ -414,8 +459,19 @@ impl<'a> Hook<'a> {
         if config.askpass_timeout != 0 {
             cmd.env("DIPPY_ASKPASS_TIMEOUT", config.askpass_timeout.to_string());
         }
-        let Ok(mut child) = cmd.spawn() else {
-            return false;
+        let mut child = match cmd.spawn() {
+            Ok(child) => child,
+            Err(e) => {
+                let path = program.display();
+                self.log.warning(&match e.kind() {
+                    std::io::ErrorKind::NotFound => format!("Askpass program not found: {path}"),
+                    std::io::ErrorKind::PermissionDenied => {
+                        format!("Askpass program not executable: {path}")
+                    }
+                    _ => format!("Askpass error: {e}"),
+                });
+                return false;
+            }
         };
         if let Some(mut stdin) = child.stdin.take() {
             // A separate writer cannot block the timeout loop on a full pipe.
@@ -429,9 +485,19 @@ impl<'a> Hook<'a> {
                 Ok(None) if Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_millis(20));
                 }
-                _ => {
+                Ok(None) => {
                     let _ = child.kill();
                     let _ = child.wait();
+                    self.log.warning(&format!(
+                        "Askpass timeout after {}s",
+                        config.askpass_timeout
+                    ));
+                    return false;
+                }
+                Err(e) => {
+                    let _ = child.kill();
+                    let _ = child.wait();
+                    self.log.warning(&format!("Askpass error: {e}"));
                     return false;
                 }
             }
@@ -454,9 +520,9 @@ fn process_cwd() -> PathBuf {
     paths::resolve(&std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")))
 }
 
-/// Run the hook for one stdin payload. `explicit` is the mode from flags or
-/// environment; without it the mode is detected from the payload.
-pub fn run_hook(explicit: Option<Mode>, stdin: &str) -> HookOutput {
+/// Run the hook for one stdin payload. `explicit` is the agent from flags or
+/// environment; without it the agent is detected from the payload.
+pub fn run_hook(explicit: Option<&str>, stdin: &str) -> HookOutput {
     let reply = hook_reply(explicit, stdin);
     let (stdout, stderr, exit_code) = match reply {
         Reply::Json(v) => (Some(py_dumps(&v)), None, 0),
@@ -470,11 +536,14 @@ pub fn run_hook(explicit: Option<Mode>, stdin: &str) -> HookOutput {
     }
 }
 
-fn hook_reply(explicit: Option<Mode>, stdin: &str) -> Reply {
+fn hook_reply(explicit: Option<&str>, stdin: &str) -> Reply {
+    // Python adds the log file only once the agent is known.
+    let no_log = Logs::none("claude");
     let fallback = Hook {
-        mode: explicit.unwrap_or(Mode::Claude),
+        mode: mode_of(explicit.unwrap_or("claude")),
         config: None,
         askpass: None,
+        log: &no_log,
     };
     let error = |reason: &str| match fallback.mode {
         Mode::Gemini => fallback.ask(reason, Subject::default()),
@@ -486,14 +555,20 @@ fn hook_reply(explicit: Option<Mode>, stdin: &str) -> Reply {
     if !input.is_object() {
         return error("error: hook input is not a JSON object");
     }
-    handle(explicit.unwrap_or_else(|| mode_from_input(&input)), &input)
+    let logs = Logs::setup(explicit.unwrap_or_else(|| mode_from_input(&input)));
+    if explicit.is_none() {
+        logs.info(&format!("Auto-detected mode: {}", logs.agent()));
+    }
+    handle(&logs, &input)
 }
 
-fn handle(mode: Mode, input: &Value) -> Reply {
+fn handle(logs: &Logs, input: &Value) -> Reply {
+    let mode = mode_of(logs.agent());
     let base = Hook {
         mode,
         config: None,
         askpass: None,
+        log: logs,
     };
     let tool_input = input.get("tool_input").unwrap_or(NULL);
     let tool_args = input
@@ -502,20 +577,38 @@ fn handle(mode: Mode, input: &Value) -> Reply {
         .unwrap_or(NULL);
     let (cwd, policy_cwd) = if mode == Mode::Agy {
         match agy_cwd(input, tool_args) {
-            Ok(dirs) => dirs,
-            Err(reason) => return base.deny(reason, Subject::default()),
+            Ok((cwd, policy)) => {
+                logs.info(&format!(
+                    "AGY policy cwd: {}; operation cwd: {}",
+                    policy.display(),
+                    cwd.display()
+                ));
+                (cwd, policy)
+            }
+            Err(reason) => {
+                logs.error(reason);
+                return base.deny(reason, Subject::default());
+            }
         }
     } else {
         let cwd = hook_cwd(input, tool_input, tool_args);
         (cwd.clone(), cwd)
     };
-    let mut config = match config::load_config(&policy_cwd, None, None) {
+    let loaded = config::load_config(&policy_cwd, None, None);
+    for warning in config::take_warnings() {
+        logs.warning(&warning);
+    }
+    let mut config = match loaded {
         Ok(c) => c,
-        Err(e) => return base.ask(&format!("config error: {e}"), Subject::default()),
+        Err(e) => {
+            logs.error(&format!("Config error: {e}"));
+            return base.ask(&format!("config error: {e}"), Subject::default());
+        }
     };
     if mode == Mode::Agy {
         config.path_rule_cwd = Some(policy_cwd);
     }
+    logs.configure(&config);
     let askpass = std::env::var("DIPPY_ASKPASS")
         .ok()
         .filter(|v| !v.is_empty())
@@ -525,6 +618,7 @@ fn handle(mode: Mode, input: &Value) -> Reply {
         mode,
         config: Some(&config),
         askpass: askpass.as_deref(),
+        log: logs,
     };
     dispatch(hook, &config, input, &cwd)
 }
@@ -637,6 +731,7 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         return Reply::Json(json!({}));
     }
     if matches!(hook_event.as_str(), "Stop" | "SubagentStop" | "AfterAgent") {
+        hook.log.info(&format!("Stop hook: {hook_event}"));
         return Reply::Json(hook.stop());
     }
     let hook_event = match hook_event.as_str() {
@@ -661,6 +756,15 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         Err(reply) => return reply,
     };
     if !post && matches!(permission_mode, "bypassPermissions" | "dontAsk") {
+        hook.log
+            .info(&format!("Bypass mode ({permission_mode}): {command}"));
+        hook.audit(Entry {
+            decision: "allow",
+            message: Some(permission_mode),
+            command: Some(command),
+            cwd: Some(cwd),
+            ..Entry::default()
+        });
         let s = Subject {
             event: Some(&hook_event),
             ..Subject::default()
@@ -668,13 +772,24 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         return hook.approve(permission_mode, s);
     }
     if post {
+        hook.log.info(&format!("PostToolUse: {command}"));
         let words = tokenize(command, false);
         return match config::match_after(&words, config, cwd).filter(|m| !m.is_empty()) {
             Some(m) => hook.post(&m),
             None => Reply::Silent,
         };
     }
+    hook.log.info(&format!("Checking: {command}"));
     let result = analyzer::analyze(command, config, cwd, None, false);
+    hook.audit(Entry {
+        decision: result.action.as_str(),
+        cmd: Some(&result.reason),
+        command: Some(command),
+        cwd: Some(cwd),
+        context_flags: result.context_flags.as_ref(),
+        suggestion: result.suggestion.as_deref(),
+        ..Entry::default()
+    });
     let s = Subject {
         command: Some(command),
         cwd: Some(cwd),
@@ -730,31 +845,43 @@ fn tool_call<'v>(
             name.to_string()
         };
         if post {
+            hook.log.info(&format!("PostToolUse MCP: {mcp_name}"));
             return Err(after_reply(
                 hook,
                 config::match_after_mcp(&mcp_name, config),
             ));
         }
+        hook.log.info(&format!("Checking MCP: {mcp_name}"));
         let s = Subject {
             tool: Some(&mcp_name),
             ..Subject::default()
         };
         return Err(match config::match_mcp(&mcp_name, config) {
-            Some(m) => hook.rule(&m.decision, &rule_reason(&m), s),
-            None => hook.pass(
-                "no matching rule",
-                Subject {
-                    cwd: Some(cwd),
-                    ..s
-                },
-            ),
+            Some(m) => rule_reply(hook, &m, s),
+            None => {
+                hook.audit(Entry {
+                    decision: "pass",
+                    message: Some("no matching rule"),
+                    tool: Some(&mcp_name),
+                    ..Entry::default()
+                });
+                hook.pass(
+                    "no matching rule",
+                    Subject {
+                        cwd: Some(cwd),
+                        ..s
+                    },
+                )
+            }
         });
     }
     if TOOL_CALL_WEB_NAMES.contains(&name) {
         let value = first_str(args, &["query", "Url", "url", "q"]).unwrap_or("");
         if post {
+            hook.log.info(&format!("PostToolUse {name}: {value}"));
             return Err(after_reply(hook, config::match_after_web(value, config)));
         }
+        hook.log.info(&format!("Checking {name}: {value}"));
         let found = config::match_web(value, config, &config::env_context_flags(config));
         return Err(match found {
             Some(m) => {
@@ -762,9 +889,16 @@ fn tool_call<'v>(
                     tool: Some("WebSearch"),
                     ..Subject::default()
                 };
-                hook.rule(&m.decision, &rule_reason(&m), s)
+                rule_reply(hook, &m, s)
             }
             None => {
+                hook.audit(Entry {
+                    decision: "pass",
+                    message: Some("no matching rule"),
+                    tool: Some(name),
+                    command: Some(value),
+                    ..Entry::default()
+                });
                 let s = Subject {
                     tool: Some(name),
                     match_value: Some(value),
@@ -792,7 +926,17 @@ fn tool_call<'v>(
         return Err(match (file_path, post) {
             (_, true) => Reply::Json(json!({})),
             (Some(path), false) => {
+                hook.log
+                    .info(&format!("Checking file op: {name} -> {path}"));
                 check_file_tool(hook, config, name, path, cwd).unwrap_or_else(|| {
+                    hook.audit(Entry {
+                        decision: "pass",
+                        message: Some("no matching rule"),
+                        tool: Some(name),
+                        file_path: Some(path),
+                        cwd: Some(cwd),
+                        ..Entry::default()
+                    });
                     let s = Subject {
                         tool: Some(name),
                         file_path: Some(path),
@@ -802,13 +946,26 @@ fn tool_call<'v>(
                     hook.pass("no matching rule", s)
                 })
             }
-            (None, false) => hook
-                .without_config()
-                .ask("no file path provided", Subject::default()),
+            (None, false) => {
+                hook.audit(Entry {
+                    decision: "ask",
+                    message: Some(&format!("no file path for {name}")),
+                    tool: Some(name),
+                    ..Entry::default()
+                });
+                hook.without_config()
+                    .ask("no file path provided", Subject::default())
+            }
         });
     }
     if !SHELL_TOOL_NAMES.contains(&name) {
         let reason = format!("unsupported tool: {name}");
+        hook.audit(Entry {
+            decision: "pass",
+            message: Some(&reason),
+            tool: Some(name),
+            ..Entry::default()
+        });
         return Err(hook.without_config().pass(&reason, Subject::default()));
     }
     Ok(first_str(args, &["CommandLine", "command", "cmd"]).unwrap_or(""))
@@ -825,14 +982,6 @@ fn tool_input_payload<'v>(
     post: bool,
     cwd: &Path,
 ) -> Result<&'v str, Reply> {
-    let gemini = hook.mode == Mode::Gemini;
-    let defer = |reason: &str| {
-        if gemini {
-            hook.ask(reason, Subject::default())
-        } else {
-            Reply::Json(json!({}))
-        }
-    };
     let tool_input = input.get("tool_input").unwrap_or(NULL);
     let tool_name = input.get("tool_name").and_then(Value::as_str).unwrap_or("");
     let bypass = matches!(permission_mode, "bypassPermissions" | "dontAsk");
@@ -843,15 +992,28 @@ fn tool_input_payload<'v>(
         } else {
             first_str(tool_input, &["query", "url", "q"]).unwrap_or("")
         };
+        // Python logs the web query as the command; MCP has none.
+        let command = (!is_mcp).then_some(value);
         if post {
             let message = if is_mcp {
+                hook.log.info(&format!("PostToolUse MCP: {tool_name}"));
                 config::match_after_mcp(value, config)
             } else {
+                hook.log.info(&format!("PostToolUse {tool_name}: {value}"));
                 config::match_after_web(value, config)
             };
             return Err(after_reply(hook, message));
         }
         if bypass {
+            hook.log
+                .info(&format!("Bypass mode ({permission_mode}): {tool_name}"));
+            hook.audit(Entry {
+                decision: "allow",
+                message: Some(permission_mode),
+                tool: Some(tool_name),
+                command,
+                ..Entry::default()
+            });
             let s = Subject {
                 event: Some(hook_event),
                 ..Subject::default()
@@ -859,8 +1021,10 @@ fn tool_input_payload<'v>(
             return Err(hook.approve(permission_mode, s));
         }
         let found = if is_mcp {
+            hook.log.info(&format!("Checking MCP: {tool_name}"));
             config::match_mcp(value, config)
         } else {
+            hook.log.info(&format!("Checking {tool_name}: {value}"));
             config::match_web(value, config, &config::env_context_flags(config))
         };
         let s = Subject {
@@ -868,8 +1032,17 @@ fn tool_input_payload<'v>(
             ..Subject::default()
         };
         return Err(match found {
-            Some(m) => hook.rule(&m.decision, &rule_reason(&m), s),
-            None => Reply::Json(json!({})),
+            Some(m) => rule_reply(hook, &m, s),
+            None => {
+                hook.audit(Entry {
+                    decision: "pass",
+                    message: Some("no matching rule"),
+                    tool: Some(tool_name),
+                    command,
+                    ..Entry::default()
+                });
+                Reply::Json(json!({}))
+            }
         });
     }
     if FILE_TOOL_NAMES.contains(&tool_name) {
@@ -879,22 +1052,56 @@ fn tool_input_payload<'v>(
         let Some(file_path) = first_str(tool_input, &["file_path", "path", "filepath"]) else {
             let paths = tool_input.get("paths").and_then(Value::as_array);
             return Err(match paths.filter(|p| !p.is_empty()) {
-                Some(paths) => multi_file(hook, config, tool_name, paths, cwd)
-                    .unwrap_or_else(|| defer("no matching rule")),
-                None => defer("no file path provided"),
+                Some(paths) => multi_file(hook, config, tool_name, paths, cwd),
+                None => hook.defer(
+                    "no file path provided",
+                    Entry {
+                        message: Some(&format!("no file path for {tool_name}")),
+                        tool: Some(tool_name),
+                        ..Entry::default()
+                    },
+                ),
             });
         };
         if matches!(
             permission_mode,
             "bypassPermissions" | "dontAsk" | "acceptEdits"
         ) {
+            hook.log
+                .info(&format!("Bypass mode ({permission_mode}): {tool_name}"));
+            hook.audit(Entry {
+                decision: "allow",
+                message: Some(permission_mode),
+                tool: Some(tool_name),
+                file_path: Some(file_path),
+                cwd: Some(cwd),
+                ..Entry::default()
+            });
             return Err(hook.approve(permission_mode, Subject::default()));
         }
-        return Err(check_file_tool(hook, config, tool_name, file_path, cwd)
-            .unwrap_or_else(|| defer("no matching rule")));
+        hook.log
+            .info(&format!("Checking file op: {tool_name} -> {file_path}"));
+        return Err(
+            check_file_tool(hook, config, tool_name, file_path, cwd).unwrap_or_else(|| {
+                let entry = Entry {
+                    message: Some("no matching rule"),
+                    tool: Some(tool_name),
+                    file_path: Some(file_path),
+                    cwd: Some(cwd),
+                    ..Entry::default()
+                };
+                hook.defer("no matching rule", entry)
+            }),
+        );
     }
     if !SHELL_TOOL_NAMES.contains(&tool_name) {
-        return Err(defer(&format!("unsupported tool: {tool_name}")));
+        let reason = format!("unsupported tool: {tool_name}");
+        let entry = Entry {
+            message: Some(&reason),
+            tool: Some(tool_name),
+            ..Entry::default()
+        };
+        return Err(hook.defer(&reason, entry));
     }
     Ok(first_str(tool_input, &["command", "cmd"]).unwrap_or(""))
 }
@@ -941,6 +1148,18 @@ fn rule_reason(m: &config::Match) -> String {
     }
 }
 
+/// MCP and web rule match (`check_mcp_tool`, `check_web_tool`).
+fn rule_reply(hook: Hook, m: &config::Match, s: Subject) -> Reply {
+    let reason = rule_reason(m);
+    hook.audit(Entry {
+        decision: &m.decision,
+        cmd: Some(&reason),
+        rule: Some(&m.pattern),
+        ..Entry::default()
+    });
+    hook.rule(&m.decision, &reason, s)
+}
+
 /// `check_file_tool`: `None` when no rule matches.
 fn check_file_tool(
     hook: Hook,
@@ -955,6 +1174,14 @@ fn check_file_tool(
     } else {
         config::match_edit(file_path, config, cwd, &active)
     }?;
+    hook.audit(Entry {
+        decision: &found.decision,
+        rule: Some(&found.pattern),
+        tool: Some(tool_name),
+        file_path: Some(file_path),
+        cwd: Some(cwd),
+        ..Entry::default()
+    });
     let s = Subject {
         tool: Some(tool_name),
         file_path: Some(file_path),
@@ -964,16 +1191,9 @@ fn check_file_tool(
     Some(hook.rule(&found.decision, &rule_reason(&found), s))
 }
 
-/// Multi-file branch: the strictest match over `paths`, `None` when no rule
-/// matches. Python matches without context flags and reports the pattern
-/// without its source.
-fn multi_file(
-    hook: Hook,
-    config: &Config,
-    tool_name: &str,
-    paths: &[Value],
-    cwd: &Path,
-) -> Option<Reply> {
+/// Multi-file branch: the strictest match over `paths`. Python matches
+/// without context flags and reports the pattern without its source.
+fn multi_file(hook: Hook, config: &Config, tool_name: &str, paths: &[Value], cwd: &Path) -> Reply {
     const ORDER: [&str; 4] = ["deny", "ask", "allow", "pass"];
     let rank = |d: &str| ORDER.iter().position(|o| *o == d).unwrap_or(0);
     let read = MULTI_READ_TOOL_NAMES.contains(&tool_name);
@@ -984,7 +1204,14 @@ fn multi_file(
     let mut strictest: Option<config::Match> = None;
     for path in paths {
         let Some(path) = path.as_str() else {
-            return Some(hook.ask("dippy-rs: non-string entry in paths", s));
+            let reason = "dippy-rs: non-string entry in paths";
+            hook.audit(Entry {
+                decision: "ask",
+                message: Some(reason),
+                tool: Some(tool_name),
+                ..Entry::default()
+            });
+            return hook.ask(reason, s);
         };
         let found = if read {
             config::match_read(path, config, cwd, &config::Flags::new())
@@ -999,12 +1226,36 @@ fn multi_file(
             strictest = Some(m);
         }
     }
-    let m = strictest?;
+    let first = paths[0].as_str();
+    let command = py_dumps(&Value::Array(paths.to_vec()));
+    let n = paths.len();
+    let Some(m) = strictest else {
+        let message = format!("multi-file ({n} paths): no matching rule");
+        let entry = Entry {
+            message: Some(&message),
+            command: Some(&command),
+            tool: Some(tool_name),
+            file_path: first,
+            cwd: Some(cwd),
+            ..Entry::default()
+        };
+        return hook.defer("no matching rule", entry);
+    };
     let reason = match &m.message {
         Some(msg) if !msg.is_empty() => msg.clone(),
         _ => format!("[{}]", m.pattern),
     };
-    Some(hook.rule(&m.decision, &reason, s))
+    hook.audit(Entry {
+        decision: &m.decision,
+        rule: Some(&m.pattern),
+        message: Some(&format!("multi-file ({n} paths): {reason}")),
+        command: Some(&command),
+        tool: Some(tool_name),
+        file_path: first,
+        cwd: Some(cwd),
+        ..Entry::default()
+    });
+    hook.rule(&m.decision, &reason, s)
 }
 
 #[cfg(test)]
@@ -1022,9 +1273,9 @@ mod tests {
 
     #[test]
     fn invalid_json_passes() {
-        let out = run_hook(Some(Mode::Claude), "not json");
+        let out = run_hook(Some("claude"), "not json");
         assert_eq!(out.stdout.as_deref(), Some("{}"));
-        let out = run_hook(Some(Mode::Gemini), "not json");
+        let out = run_hook(Some("gemini"), "not json");
         assert!(out.stdout.unwrap().contains("\"decision\": \"ask\""));
     }
 
@@ -1032,31 +1283,29 @@ mod tests {
     fn modes_from_flags_env_and_input() {
         let none = |_: &str| None;
         let args = |a: &[&str]| a.iter().map(|s| s.to_string()).collect::<Vec<_>>();
-        assert_eq!(
-            mode_from_flags(&args(&["--gemini"]), none),
-            Some(Mode::Gemini)
-        );
+        assert_eq!(mode_from_flags(&args(&["--gemini"]), none), Some("gemini"));
         assert_eq!(
             mode_from_flags(&args(&["--antigravity"]), none),
-            Some(Mode::Agy)
+            Some("agy")
         );
-        assert_eq!(mode_from_flags(&args(&["--pi"]), none), Some(Mode::Claude));
+        assert_eq!(mode_from_flags(&args(&["--pi"]), none), Some("pi"));
+        assert_eq!(mode_of("pi"), Mode::Claude);
         assert_eq!(mode_from_flags(&args(&[]), none), None);
         let codex_env = |k: &str| (k == "DIPPY_CODEX").then(|| "Yes".to_string());
-        assert_eq!(mode_from_flags(&args(&[]), codex_env), Some(Mode::Codex));
+        assert_eq!(mode_from_flags(&args(&[]), codex_env), Some("codex"));
         let off = |_: &str| Some("0".to_string());
         assert_eq!(mode_from_flags(&args(&[]), off), None);
-        assert_eq!(mode_from_input(&json!({"toolCall": {}})), Mode::Agy);
-        assert_eq!(mode_from_input(&json!({"command": "ls"})), Mode::Cursor);
+        assert_eq!(mode_from_input(&json!({"toolCall": {}})), "agy");
+        assert_eq!(mode_from_input(&json!({"command": "ls"})), "cursor");
         assert_eq!(
             mode_from_input(&json!({"tool_name": "Shell", "cursor_version": "2"})),
-            Mode::Cursor
+            "cursor"
         );
         assert_eq!(
             mode_from_input(&json!({"tool_name": "run_shell_command"})),
-            Mode::Gemini
+            "gemini"
         );
-        assert_eq!(mode_from_input(&json!({"tool_name": "Bash"})), Mode::Claude);
+        assert_eq!(mode_from_input(&json!({"tool_name": "Bash"})), "claude");
     }
 
     const RULES: &str = "allow-mcp mcp__fake__*\n\
@@ -1078,10 +1327,12 @@ mod tests {
     }
 
     fn reply_with(mode: Mode, askpass: Option<&Path>, config: &Config, payload: Value) -> Reply {
+        let logs = Logs::none("claude");
         let hook = Hook {
             mode,
             config: Some(config),
             askpass,
+            log: &logs,
         };
         dispatch(hook, config, &payload, Path::new("/w"))
     }
@@ -1354,6 +1605,148 @@ mod tests {
         assert!(out.contains("[\"mcp__x\"]"), "{out}");
     }
 
+    fn temp_dir(name: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-hook-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    /// Audit entries (without `ts`) and approvals lines (without the time)
+    /// written for each payload.
+    fn logged(mode: Mode, askpass: Option<&Path>, payloads: &[Value]) -> (Vec<Value>, Vec<String>) {
+        let dir = temp_dir(&format!("{mode:?}"));
+        let audit = dir.join("audit.log");
+        let mut c =
+            config::parse_config(&format!("{RULES}set log {}\n", audit.display()), None).unwrap();
+        c = config::tag_rules(c, "/w/.dippy", "project");
+        let logs = Logs::with_approvals("pi", &dir.join("approvals.log"));
+        logs.configure(&c);
+        for payload in payloads {
+            let hook = Hook {
+                mode,
+                config: Some(&c),
+                askpass,
+                log: &logs,
+            };
+            dispatch(hook, &c, payload, Path::new("/w"));
+        }
+        let entries = std::fs::read_to_string(&audit)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| {
+                let mut v: Value = serde_json::from_str(l).unwrap();
+                v.as_object_mut().unwrap().remove("ts");
+                v
+            })
+            .collect();
+        let lines = std::fs::read_to_string(dir.join("approvals.log"))
+            .unwrap()
+            .lines()
+            .map(|l| l[20..].to_string())
+            .collect();
+        std::fs::remove_dir_all(&dir).unwrap();
+        (entries, lines)
+    }
+
+    #[test]
+    fn audit_entries_match_python_call_sites() {
+        let (entries, lines) = logged(
+            Mode::Claude,
+            None,
+            &[
+                bash("frob x"),
+                json!({"tool_name": "mcp__fake__get"}),
+                json!({"tool_name": "mcp__other__x"}),
+                json!({"tool_name": "WebSearch", "tool_input": {"query": "cats"}}),
+                json!({"tool_name": "Write", "tool_input": {"file_path": "/w/out/a.txt"}}),
+                json!({"tool_name": "Write", "tool_input": {"file_path": "/w/src/a"}}),
+                json!({"tool_name": "Read", "tool_input": {}}),
+                json!({"tool_name": "read_many_files", "tool_input": {"paths": ["/w/a", "/w/private/k"]}}),
+                json!({"tool_name": "Bash", "tool_input": {"command": "rm x"}, "permission_mode": "dontAsk"}),
+                json!({"tool_name": "UnknownTool", "tool_input": {}}),
+                json!({"hook_event_name": "Stop"}),
+            ],
+        );
+        assert_eq!(
+            entries,
+            vec![
+                json!({"decision": "allow", "cmd": "frob (frob)", "cwd": "/w", "agent": "pi"}),
+                json!({"decision": "allow", "cmd": "[mcp__fake__* @ /w/.dippy]", "rule": "mcp__fake__*", "agent": "pi"}),
+                json!({"decision": "pass", "message": "no matching rule", "tool": "mcp__other__x", "agent": "pi"}),
+                json!({"decision": "pass", "message": "no matching rule", "tool": "WebSearch", "agent": "pi"}),
+                json!({"decision": "allow", "rule": "/w/out/**", "cwd": "/w", "tool": "Write", "file_path": "/w/out/a.txt", "agent": "pi"}),
+                json!({"decision": "pass", "message": "no matching rule", "cwd": "/w", "tool": "Write", "file_path": "/w/src/a", "agent": "pi"}),
+                json!({"decision": "pass", "message": "no file path for Read", "tool": "Read", "agent": "pi"}),
+                json!({"decision": "ask", "rule": "/w/private/*", "message": "multi-file (2 paths): [/w/private/*]", "cwd": "/w", "tool": "read_many_files", "file_path": "/w/a", "agent": "pi"}),
+                json!({"decision": "allow", "message": "dontAsk", "cwd": "/w", "agent": "pi"}),
+                json!({"decision": "pass", "message": "unsupported tool: UnknownTool", "tool": "UnknownTool", "agent": "pi"}),
+            ]
+        );
+        assert_eq!(
+            lines,
+            [
+                "[INFO] Checking: frob x",
+                "[INFO] APPROVED: frob (frob)",
+                "[INFO] Checking MCP: mcp__fake__get",
+                "[INFO] APPROVED: [mcp__fake__* @ /w/.dippy]",
+                "[INFO] Checking MCP: mcp__other__x",
+                "[INFO] Checking WebSearch: cats",
+                "[INFO] Checking file op: Write -> /w/out/a.txt",
+                "[INFO] APPROVED: [/w/out/** @ /w/.dippy]",
+                "[INFO] Checking file op: Write -> /w/src/a",
+                "[INFO] ASK: [/w/private/*]",
+                "[INFO] Bypass mode (dontAsk): rm x",
+                "[INFO] APPROVED: dontAsk",
+                "[INFO] Stop hook: Stop",
+            ]
+        );
+    }
+
+    #[test]
+    fn agy_logs_askpass_and_pass_chain() {
+        let (entries, lines) = logged(
+            Mode::Agy,
+            Some(Path::new("/nonexistent/askpass")),
+            &[
+                json!({"toolCall": {"name": "run_command", "args": {"CommandLine": "rm x"}}}),
+                json!({"toolCall": {"name": "view_file", "args": {}}}),
+                json!({"toolCall": {"name": "search_web", "args": {"query": "cats"}}}),
+            ],
+        );
+        assert_eq!(entries[0]["decision"], "ask");
+        assert_eq!(
+            entries[1],
+            json!({"decision": "ask", "message": "no file path for view_file", "tool": "view_file", "agent": "pi"})
+        );
+        assert_eq!(
+            entries[2],
+            json!({"decision": "pass", "message": "no matching rule", "tool": "search_web", "agent": "pi"})
+        );
+        let reason = entries[0]["cmd"].as_str().unwrap();
+        assert_eq!(
+            lines[..4],
+            [
+                "[INFO] Checking: rm x".to_string(),
+                format!("[INFO] ASK: {reason}"),
+                "[WARNING] Askpass program not found: /nonexistent/askpass".to_string(),
+                format!("[INFO] DENY: approval denied or unavailable: {reason}"),
+            ]
+        );
+        assert_eq!(
+            lines[4..],
+            [
+                "[INFO] ASK: no file path provided",
+                "[INFO] DENY: approval denied or unavailable: no file path provided",
+                "[INFO] Checking search_web: cats",
+                "[INFO] PASS: no matching rule",
+                "[INFO] ASK: no matching rule",
+                "[WARNING] Askpass program not found: /nonexistent/askpass",
+                "[INFO] DENY: approval denied or unavailable: no matching rule",
+            ]
+        );
+    }
+
     #[test]
     fn askpass_times_out_to_deny() {
         let mut c = config();
@@ -1363,6 +1756,7 @@ mod tests {
             config: Some(&c),
             // Never exits on its own.
             askpass: Some(Path::new("/usr/bin/yes")),
+            log: &Logs::none("agy"),
         };
         let started = Instant::now();
         assert!(!hook.askpass_allows("m", &Subject::default()));

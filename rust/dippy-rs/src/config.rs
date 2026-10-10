@@ -19,6 +19,20 @@ use crate::paths;
 
 pub type Flags = BTreeSet<String>;
 
+thread_local! {
+    static WARNINGS: std::cell::RefCell<Vec<String>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// Python's `logging.warning` while loading configs.
+fn warn(message: String) {
+    WARNINGS.with(|w| w.borrow_mut().push(message));
+}
+
+/// Drain the config warnings recorded on this thread, oldest first.
+pub fn take_warnings() -> Vec<String> {
+    WARNINGS.with(|w| std::mem::take(&mut *w.borrow_mut()))
+}
+
 pub const PROJECT_CONFIG_NAME: &str = ".dippy";
 pub const ENV_CONFIG: &str = "DIPPY_CONFIG";
 pub const ENV_CONFIG_ONLY: &str = "DIPPY_CONFIG_ONLY";
@@ -104,6 +118,12 @@ pub struct Config {
     /// External approval program (SSH_ASKPASS style).
     pub askpass: Option<PathBuf>,
     pub askpass_timeout: i64,
+    /// Audit log (`set log`).
+    pub log: Option<PathBuf>,
+    pub log_full: bool,
+    /// Days to keep rotated audit logs (0 disables rotation).
+    pub log_rotate_max_days: i64,
+    pub log_hook_approvals: bool,
 }
 
 impl Default for Config {
@@ -133,6 +153,10 @@ impl Default for Config {
             notifier_include: None,
             askpass: None,
             askpass_timeout: 59,
+            log: None,
+            log_full: false,
+            log_rotate_max_days: 30,
+            log_hook_approvals: true,
         }
     }
 }
@@ -536,6 +560,10 @@ struct Settings {
     notifier_include: Option<BTreeSet<String>>,
     askpass: Option<PathBuf>,
     askpass_timeout: Option<i64>,
+    log: Option<PathBuf>,
+    log_full: bool,
+    log_rotate_max_days: Option<i64>,
+    log_hook_approvals: Option<bool>,
 }
 
 /// Python `int(str)`.
@@ -584,12 +612,15 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             if value.is_some() {
                 return Err(format!("'{key}' takes no value"));
             }
+            settings.log_full = true;
         }
         "log_hook_approvals" => {
             let v = need(&format!("'{key}' requires 'on' or 'off'"))?;
-            if !matches!(v.to_lowercase().as_str(), "on" | "off") {
-                return Err(format!("'{key}' must be 'on' or 'off', got '{v}'"));
-            }
+            settings.log_hook_approvals = match v.to_lowercase().as_str() {
+                "on" => Some(true),
+                "off" => Some(false),
+                _ => return Err(format!("'{key}' must be 'on' or 'off', got '{v}'")),
+            };
         }
         "default" => match value.as_deref() {
             Some(v @ ("allow" | "ask" | "pass")) => settings.default = Some(v.to_string()),
@@ -620,7 +651,8 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             }
         }
         "log" => {
-            need("'log' requires a path")?;
+            let v = need("'log' requires a path")?;
+            settings.log = Some(PathBuf::from(paths::expanduser(&v)));
         }
         "final" => {
             let v = need("'final' requires a path")?;
@@ -641,11 +673,13 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             if !py_int_ok(&v) {
                 return Err(format!("must be an integer, got '{v}'"));
             }
+            // Python also accepts non-ASCII digits; those lines are skipped here.
+            let n = v.trim().replace('_', "").parse::<i64>();
+            let n = Some(n.map_err(|_| format!("must be an integer, got '{v}'"))?);
             if key_n == "askpass_timeout" {
-                // Python also accepts non-ASCII digits; those lines are skipped here.
-                let n = v.trim().replace('_', "").parse::<i64>();
-                settings.askpass_timeout =
-                    Some(n.map_err(|_| format!("must be an integer, got '{v}'"))?);
+                settings.askpass_timeout = n;
+            } else {
+                settings.log_rotate_max_days = n;
             }
         }
         "run_on_server_timeout" | "run_on_server_poll_interval" => {
@@ -841,7 +875,13 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     }
                     let source = expand_pattern_tildes(&p[0]);
                     match cfg.aliases.iter_mut().find(|(s, _)| *s == source) {
-                        Some(entry) => entry.1 = p[1].clone(),
+                        Some(entry) => {
+                            warn(format!(
+                                "{prefix}line {lineno}: alias '{}' redefined, overwriting",
+                                p[0]
+                            ));
+                            entry.1 = p[1].clone()
+                        }
                         None => cfg.aliases.push((source, p[1].clone())),
                     }
                 }
@@ -853,6 +893,11 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     let name = p[0].clone();
                     if name.starts_with('-') {
                         return Err(format!("wrapper name cannot start with '-': {name}"));
+                    }
+                    if cfg.wrappers.contains_key(&name) {
+                        warn(format!(
+                            "{prefix}line {lineno}: duplicate wrapper definition: {name}"
+                        ));
                     }
                     let mut info = WrapperInfo {
                         name: name.clone(),
@@ -955,18 +1000,19 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
             }
             Ok(())
         })();
-        if let Err(e) = result
-            && directive == "set"
-            && rest
-                .to_lowercase()
-                .replace('_', "-")
-                .starts_with("run-on-server-ssh-")
-        {
-            return Err(ConfigError(format!(
-                "{prefix}line {lineno}: invalid SSH profile: {e}"
-            )));
+        if let Err(e) = result {
+            if directive == "set"
+                && rest
+                    .to_lowercase()
+                    .replace('_', "-")
+                    .starts_with("run-on-server-ssh-")
+            {
+                return Err(ConfigError(format!(
+                    "{prefix}line {lineno}: invalid SSH profile: {e}"
+                )));
+            }
+            warn(format!("{prefix}line {lineno}: {e} (skipped)"));
         }
-        // Python logs a warning and skips the line.
     }
     cfg.default = settings.default.unwrap_or_else(|| "ask".into());
     cfg.final_path = settings.final_path;
@@ -975,6 +1021,10 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
     cfg.notifier_include = settings.notifier_include;
     cfg.askpass = settings.askpass;
     cfg.askpass_timeout = settings.askpass_timeout.unwrap_or(59);
+    cfg.log = settings.log;
+    cfg.log_full = settings.log_full;
+    cfg.log_rotate_max_days = settings.log_rotate_max_days.unwrap_or(30);
+    cfg.log_hook_approvals = settings.log_hook_approvals.unwrap_or(true);
     cfg.configured_settings = settings.names;
     Ok(cfg)
 }
@@ -1034,6 +1084,20 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
             overlay.askpass_timeout
         } else {
             base.askpass_timeout
+        },
+        log: overlay.log.or(base.log),
+        log_full: overlay.log_full || base.log_full,
+        // Python compares these two to their defaults, so a higher scope
+        // cannot restore the default there.
+        log_rotate_max_days: if overlay.configured_settings.contains("log_rotate_max_days") {
+            overlay.log_rotate_max_days
+        } else {
+            base.log_rotate_max_days
+        },
+        log_hook_approvals: if overlay.configured_settings.contains("log_hook_approvals") {
+            overlay.log_hook_approvals
+        } else {
+            base.log_hook_approvals
         },
     }
 }
@@ -1129,7 +1193,8 @@ fn expand_includes(
 ) -> Result<String, ConfigError> {
     included.insert(paths::resolve(current_file));
     let mut out: Vec<String> = Vec::new();
-    for line in text.lines() {
+    for (idx, line) in text.lines().enumerate() {
+        let lineno = idx + 1;
         let stripped = line.trim();
         if !stripped.starts_with("include") {
             out.push(line.to_string());
@@ -1141,7 +1206,9 @@ fn expand_includes(
             continue;
         }
         let pattern = after.iter().collect::<String>().trim().to_string();
+        let file = current_file.display();
         if pattern.is_empty() {
+            warn(format!("{file}:{lineno}: empty include pattern (skipped)"));
             continue;
         }
         let mut pattern_path = PathBuf::from(paths::expanduser(&pattern));
@@ -1149,6 +1216,11 @@ fn expand_includes(
             pattern_path = base_dir.join(pattern_path);
         }
         let mut matches = glob_paths(&pattern_path.to_string_lossy());
+        if matches.is_empty() {
+            warn(format!(
+                "{file}:{lineno}: no files match '{pattern}' (skipped)"
+            ));
+        }
         matches.sort();
         for m in matches {
             let match_path = paths::resolve(Path::new(&m));
@@ -1281,17 +1353,62 @@ pub fn load_config(
         }
         None => load_normal_config(cwd, config_path)?,
     };
-    if let Some(final_path) = config.final_path.clone()
-        && final_path.is_file()
-    {
-        let c = tag_rules(
-            load_config_file(&final_path)?,
-            &final_path.to_string_lossy(),
-            "final",
-        );
-        config = merge_configs(config, c);
+    if let Some(final_path) = config.final_path.clone() {
+        if final_path.is_file() {
+            let c = tag_rules(
+                load_config_file(&final_path)?,
+                &final_path.to_string_lossy(),
+                "final",
+            );
+            config = merge_configs(config, c);
+        } else {
+            warn(format!("Final config not found: {}", final_path.display()));
+        }
     }
+    rotate_logs_on(&config, chrono::Local::now().date_naive());
     Ok(config)
+}
+
+/// `_rotate_logs`: on the first load of a day (local time) rename the audit
+/// log to `audit-<yesterday>.log` and delete rotations older than
+/// `log-rotate-max-days`. File errors are ignored (Python raises).
+fn rotate_logs_on(config: &Config, today: chrono::NaiveDate) {
+    let Some(log) = &config.log else { return };
+    if config.log_rotate_max_days <= 0 {
+        return;
+    }
+    let dir = log
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let yesterday = today - chrono::Days::new(1);
+    let rotated = dir.join(format!("audit-{}.log", yesterday.format("%Y-%m-%d")));
+    if rotated.exists() {
+        return;
+    }
+    if log.exists() {
+        let _ = std::fs::rename(log, &rotated);
+    }
+    let cutoff = (today - chrono::Days::new(config.log_rotate_max_days as u64))
+        .format("%Y-%m-%d")
+        .to_string();
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        let Some(stem) = name
+            .strip_suffix(".log")
+            .filter(|_| name.starts_with("audit-"))
+        else {
+            continue;
+        };
+        // Python: "-".join(stem.split("-")[1:4]) compared as a string.
+        let parts: Vec<&str> = stem.split('-').collect();
+        if parts.len() >= 4 && parts[1..4].join("-") < cutoff {
+            let _ = std::fs::remove_file(entry.path());
+        }
+    }
 }
 
 /// `env_context_flags`: `$NAME=value` for each watched, non-empty variable.
@@ -1899,6 +2016,131 @@ mod tests {
         assert_eq!(merged.askpass_timeout, 59);
         assert_eq!(merged.askpass, Some(PathBuf::from("/bin/ask")));
         assert_eq!(merge_configs(base, cfg("")).askpass_timeout, 30);
+    }
+
+    #[test]
+    fn log_settings_parse_and_merge() {
+        let d = Config::default();
+        assert_eq!(
+            (
+                &d.log,
+                d.log_full,
+                d.log_rotate_max_days,
+                d.log_hook_approvals
+            ),
+            (&None, false, 30, true)
+        );
+        let base = cfg(
+            "set log /x/audit.log\nset log-full\nset log-rotate-max-days 7\n\
+             set log-hook-approvals off",
+        );
+        assert_eq!(base.log, Some(PathBuf::from("/x/audit.log")));
+        assert!(base.log_full);
+        assert_eq!(base.log_rotate_max_days, 7);
+        assert!(!base.log_hook_approvals);
+        let home = std::env::var("HOME").unwrap();
+        assert_eq!(
+            cfg("set log ~/a.log").log,
+            Some(PathBuf::from(format!("{home}/a.log")))
+        );
+        // A higher scope can explicitly restore every default.
+        let merged = merge_configs(
+            base.clone(),
+            cfg("set log /y.log\nset log-rotate-max-days 30\nset log-hook-approvals on"),
+        );
+        assert_eq!(merged.log, Some(PathBuf::from("/y.log")));
+        assert!(merged.log_full);
+        assert_eq!(merged.log_rotate_max_days, 30);
+        assert!(merged.log_hook_approvals);
+        let kept = merge_configs(base, cfg(""));
+        assert_eq!(kept.log, Some(PathBuf::from("/x/audit.log")));
+        assert_eq!(kept.log_rotate_max_days, 7);
+        assert!(!kept.log_hook_approvals);
+    }
+
+    #[test]
+    fn warnings_like_python_logging() {
+        take_warnings();
+        parse_config(
+            "alias a b\nalias a c\nwrapper w\nwrapper w\nbogus x\n",
+            Some("/c"),
+        )
+        .unwrap();
+        assert_eq!(
+            take_warnings(),
+            [
+                "/c: line 2: alias 'a' redefined, overwriting",
+                "/c: line 4: duplicate wrapper definition: w",
+                "/c: line 5: unknown directive 'bogus' (skipped)",
+            ]
+        );
+        let mut included = BTreeSet::new();
+        expand_includes(
+            "x\ninclude\ninclude /nonexistent/*.dippy",
+            Path::new("/"),
+            Path::new("/c"),
+            &mut included,
+        )
+        .unwrap();
+        assert_eq!(
+            take_warnings(),
+            [
+                "/c:2: empty include pattern (skipped)",
+                "/c:3: no files match '/nonexistent/*.dippy' (skipped)",
+            ]
+        );
+        assert!(take_warnings().is_empty());
+    }
+
+    #[test]
+    fn rotate_logs_daily_and_prunes() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-rotate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let log = dir.join("audit.log");
+        let config = cfg(&format!(
+            "set log {}\nset log-rotate-max-days 3",
+            log.display()
+        ));
+        let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 10).unwrap();
+        std::fs::write(&log, "a\n").unwrap();
+        for name in [
+            "audit-2026-10-06.log",
+            "audit-2026-10-07.log",
+            "audit-x-y-z.log",
+        ] {
+            std::fs::write(dir.join(name), "").unwrap();
+        }
+        rotate_logs_on(&config, today);
+        let mut names: Vec<String> = std::fs::read_dir(&dir)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "audit-2026-10-07.log",
+                "audit-2026-10-09.log",
+                "audit-x-y-z.log"
+            ]
+        );
+        // Already rotated today: the new log stays.
+        std::fs::write(&log, "b\n").unwrap();
+        rotate_logs_on(&config, today);
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "b\n");
+        assert_eq!(
+            std::fs::read_to_string(dir.join("audit-2026-10-09.log")).unwrap(),
+            "a\n"
+        );
+        // Rotation disabled.
+        let off = cfg(&format!(
+            "set log {}\nset log-rotate-max-days 0",
+            log.display()
+        ));
+        rotate_logs_on(&off, today.succ_opt().unwrap());
+        assert!(log.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

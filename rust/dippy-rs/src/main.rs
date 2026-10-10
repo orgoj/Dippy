@@ -122,6 +122,13 @@ const EXIT_ALLOW: i32 = 0;
 const EXIT_DENY: i32 = 1;
 const EXIT_ASK: i32 = 2;
 
+/// Config warnings: Python's `logging.warning` falls back to `basicConfig`.
+fn print_config_warnings() {
+    for warning in config::take_warnings() {
+        eprintln!("WARNING:root:{warning}");
+    }
+}
+
 /// Port of `dippy.dippy.cli_mode`.
 fn cli_mode(args: CliArgs) -> i32 {
     let command = match args.cmd {
@@ -140,21 +147,22 @@ fn cli_mode(args: CliArgs) -> i32 {
         Some(c) => paths::resolve(&PathBuf::from(c)),
         None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
     };
-    let config =
-        match config::load_config(&cwd, args.config.as_deref(), args.config_only.as_deref()) {
-            Ok(c) => c,
-            Err(e) => {
-                if args.json {
-                    println!(
-                        "{{\"decision\": \"ask\", \"reason\": {}}}",
-                        py_json_str(&format!("config error: {e}"))
-                    );
-                } else {
-                    println!("ask: config error: {e}");
-                }
-                return EXIT_ASK;
+    let loaded = config::load_config(&cwd, args.config.as_deref(), args.config_only.as_deref());
+    print_config_warnings();
+    let config = match loaded {
+        Ok(c) => c,
+        Err(e) => {
+            if args.json {
+                println!(
+                    "{{\"decision\": \"ask\", \"reason\": {}}}",
+                    py_json_str(&format!("config error: {e}"))
+                );
+            } else {
+                println!("ask: config error: {e}");
             }
-        };
+            return EXIT_ASK;
+        }
+    };
     // The notifier (an external program) is out of scope and never run.
     let result = analyzer::analyze(&command, &config, &cwd, None, args.remote);
     let action = result.action.as_str();
@@ -174,6 +182,79 @@ fn cli_mode(args: CliArgs) -> i32 {
     }
 }
 
+/// `dippy [--cwd DIR] [--config FILE | --config-only FILE] audit ...`;
+/// `None` when the arguments are not an audit invocation.
+fn audit_main(args: &[String]) -> Option<i32> {
+    let mut global = CliArgs::default();
+    let mut i = 0;
+    while i < args.len() {
+        if args[i] == "audit" {
+            return Some(run_audit(&global, &args[i + 1..]));
+        }
+        let (flag, inline) = match args[i].split_once('=') {
+            Some((f, v)) => (f, Some(v.to_string())),
+            None => (args[i].as_str(), None),
+        };
+        let slot = match flag {
+            "--cwd" => &mut global.cwd,
+            "--config" => &mut global.config,
+            "--config-only" => &mut global.config_only,
+            _ => return None,
+        };
+        if inline.is_none() {
+            i += 1;
+        }
+        *slot = inline.or_else(|| args.get(i).cloned());
+        i += 1;
+    }
+    None
+}
+
+/// Port of `handle_audit_subcommand`.
+fn run_audit(global: &CliArgs, args: &[String]) -> i32 {
+    let query = match dippy_rs::audit::parse_args(args) {
+        Ok(q) => q,
+        Err(e) => {
+            eprintln!("usage: dippy-rs audit [options]\ndippy-rs audit: error: {e}");
+            return 2;
+        }
+    };
+    let process_cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+    let cwd = match &global.cwd {
+        Some(c) => paths::resolve(&PathBuf::from(c)),
+        None => process_cwd.clone(),
+    };
+    let loaded = config::load_config(
+        &cwd,
+        global.config.as_deref(),
+        global.config_only.as_deref(),
+    );
+    print_config_warnings();
+    let config = match loaded {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("config error: {e}");
+            return 1;
+        }
+    };
+    let Some(log) = &config.log else {
+        eprintln!("audit log is not configured (set log PATH)");
+        return 1;
+    };
+    match dippy_rs::audit::query(log, &query, &process_cwd) {
+        Ok(lines) => {
+            for line in lines {
+                println!("{line}");
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("audit: {e}");
+            1
+        }
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
@@ -183,6 +264,7 @@ fn main() {
             }
         }
         Some("--handler-jsonl") => handler_jsonl(),
+        _ if let Some(code) = audit_main(&args) => std::process::exit(code),
         _ if args.iter().all(|a| hook::is_mode_flag(a)) => {
             let mut input = String::new();
             let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);

@@ -6,12 +6,14 @@
 pub mod allowlists;
 pub mod analyzer;
 pub mod ast;
+pub mod audit;
 pub mod bash;
 pub mod cli;
 pub mod config;
 pub mod dump;
 pub mod fnmatch;
 pub mod hook;
+pub mod logging;
 pub mod parser;
 pub mod paths;
 pub mod scan;

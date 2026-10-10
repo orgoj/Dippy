@@ -20,8 +20,9 @@ session credit.
 | Handlers ported | 89 of 89 modules (140 command names) |
 | Handler parity (`handler_compare.py`, identical inputs) | 8,843 same, 0 different, 0 unsafe |
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
-| Hook output, all modes (`hook_compare.py`, 1,594 payloads: Claude, Gemini, Codex, Cursor, AGY, auto-detected) | 1,594 same decision, 0 unsafe, 1,570 byte-identical; all 243 hand-written tool/event payloads byte-identical (the rest differ in corpus reason text only) |
-| `cargo test` | 292 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
+| Hook output, all modes (`hook_compare.py`, 1,594 payloads: Claude, Gemini, Codex, Cursor, AGY, auto-detected) | 1,594 same decision, 0 unsafe, 1,588 byte-identical; all 243 hand-written tool/event payloads byte-identical (the rest differ in corpus reason text only) |
+| Hook logs and `audit` (`log_compare.py`: 937 runs of the hook_compare payloads, 24 `audit` queries, rotation) | audit log and `hook-approvals.log` identical (timestamps masked, format checked), 0 query differences, identical rotation; 18 spurious Codex `pass` entries from Python dropped (Python bug, below) |
+| `cargo test` | 303 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
 | Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
 
 Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
@@ -58,11 +59,18 @@ configuration on a test machine (empty `HOME`, fake askpass) and compare its
 live decisions with Python's for a week of audit logs. The MCP/web/file-tool
 matchers (`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
 `after-web`) and the Gemini/Codex/Cursor/AGY hook formats, including AGY
-askpass approval, are ported (2026-10-10). Audit logging is next.
+askpass approval, are ported (2026-10-10), and so are the audit log,
+`hook-approvals.log` and `dippy-rs audit`. The GUI askpass program is next.
 
 Intentional hook divergences: a config error fails closed in Gemini and AGY
 modes (Python allows everything), and where Python prints `null` to Codex
-(rule-matched allows without `hook_event`) dippy-rs prints nothing.
+(rule-matched allows without `hook_event`) dippy-rs prints nothing. For the
+same reason Python follows each such Codex allow with a `pass`/`no matching
+rule` audit entry (`approve()` returns `None`); dippy-rs logs only the
+allow. `log-rotate-max-days` and `log-hook-approvals` merge by membership in
+`configured_settings`, so a higher scope can restore the default (Python
+compares with the default). Rotation file errors are ignored (Python
+raises), and Python's stderr copy of hook warnings is not written.
 
 Rable bugs listed under phase 1 are reported upstream as mpecan/rable#75
 (`$'`), #76 (backticks), #77 (silent recovery) and #78 (`(( ))` span).
@@ -177,6 +185,7 @@ All tools live in `rust/parity/`:
 | `ast_compare.py` / `ast_dump.py` | Parable vs adapter tree comparison, `ast-report.md` |
 | `handler_compare.py` | identical `HandlerContext` fed to Python and Rust handlers |
 | `hook_compare.py` | `dippy` vs `dippy-rs` hook mode on the same payloads in every agent mode (fake askpass) |
+| `log_compare.py` | the same payloads with logging on in a separate HOME per run: audit log, `hook-approvals.log`, `audit` queries and rotation |
 
 The in-process oracle was checked against the real `dippy` executable on 100
 cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`
@@ -202,12 +211,19 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
   `--agy`/`--antigravity`, by flag, `DIPPY_<AGENT>` variable or payload
   shape; AGY `ask` runs the askpass program (`DIPPY_ASKPASS` or
   `set askpass`, `set askpass-timeout`).
+- `logging.rs`: the audit log (`set log`, `log-full`; Python key order and
+  `isoformat()` timestamps) and the per-agent `hook-approvals.log`
+  (`log-hook-approvals`), including config warnings; daily rotation
+  (`log-rotate-max-days`) runs on every config load in `config.rs`.
+- `audit.rs`: `dippy-rs [--cwd DIR] [--config FILE|--config-only FILE]
+  audit` with every Python filter, grouping and limit (dates
+  `YYYY-MM-DD` only).
 - CLI: `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR] [--config FILE]
   [--config-only FILE] [--remote]`, same output (Python `json.dumps`
   formatting) and exit codes as `cli_mode`.
 
 Not ported (fail closed or out of scope): notifier programs (never run),
-audit logging, execution subcommands.
+execution subcommands.
 
 ## Phase 4 - Handlers
 
