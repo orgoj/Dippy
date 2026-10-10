@@ -100,6 +100,9 @@ pub struct Rule {
     pub message: Option<String>,
     pub source: Option<String>,
     pub scope: Option<String>,
+    /// File and line the rule was written on (an included file, unlike `source`).
+    pub file: Option<String>,
+    pub line: Option<usize>,
     /// Pattern ended with `|` (exact match only).
     pub exact: bool,
     /// Option rules: items to match anywhere.
@@ -240,6 +243,8 @@ pub struct Match {
     pub message: Option<String>,
     pub source: Option<String>,
     pub scope: Option<String>,
+    pub file: Option<String>,
+    pub line: Option<usize>,
 }
 
 impl Match {
@@ -250,6 +255,8 @@ impl Match {
             message: rule.message.clone(),
             source: rule.source.clone(),
             scope: rule.scope.clone(),
+            file: rule.file.clone(),
+            line: rule.line,
         }
     }
 }
@@ -927,6 +934,15 @@ fn parse_message_rule(decision: &str, rest: &str) -> Result<Rule, String> {
 /// `parse_config`. Invalid lines are skipped (as in Python); invalid SSH
 /// profile settings are fatal.
 pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigError> {
+    parse_config_from(text, source, None)
+}
+
+/// `origins`: file and line of each line of `text` after include expansion.
+fn parse_config_from(
+    text: &str,
+    source: Option<&str>,
+    origins: Option<&[(String, usize)]>,
+) -> Result<Config, ConfigError> {
     let mut cfg = Config::default();
     let mut settings = Settings::default();
     let prefix = source.map(|s| format!("{s}: ")).unwrap_or_default();
@@ -1146,6 +1162,17 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
             }
             warn(format!("{prefix}line {lineno}: {e} (skipped)"));
         }
+        // A line adds at most one rule, at the end of its list.
+        let (file, line) = match origins.and_then(|o| o.get(idx)) {
+            Some((file, line)) => (Some(file.clone()), *line),
+            None => (source.map(str::to_string), lineno),
+        };
+        for list in rule_lists(&mut cfg) {
+            if let Some(rule) = list.last_mut().filter(|r| r.line.is_none()) {
+                rule.file = file.clone();
+                rule.line = Some(line);
+            }
+        }
     }
     cfg.default = settings.default.unwrap_or_else(|| "ask".into());
     cfg.final_path = settings.final_path;
@@ -1298,21 +1325,25 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
     }
 }
 
+fn rule_lists(config: &mut Config) -> [&mut Vec<Rule>; 9] {
+    [
+        &mut config.rules,
+        &mut config.redirect_rules,
+        &mut config.after_rules,
+        &mut config.mcp_rules,
+        &mut config.after_mcp_rules,
+        &mut config.edit_rules,
+        &mut config.read_rules,
+        &mut config.web_rules,
+        &mut config.after_web_rules,
+    ]
+}
+
 pub(crate) fn tag_rules(mut config: Config, source: &str, scope: &str) -> Config {
-    for r in config
-        .rules
-        .iter_mut()
-        .chain(config.redirect_rules.iter_mut())
-        .chain(config.after_rules.iter_mut())
-        .chain(config.mcp_rules.iter_mut())
-        .chain(config.after_mcp_rules.iter_mut())
-        .chain(config.edit_rules.iter_mut())
-        .chain(config.read_rules.iter_mut())
-        .chain(config.web_rules.iter_mut())
-        .chain(config.after_web_rules.iter_mut())
-    {
+    for r in rule_lists(&mut config).into_iter().flatten() {
         r.source = Some(source.into());
         r.scope = Some(scope.into());
+        r.file.get_or_insert_with(|| source.into());
     }
     config
 }
@@ -1379,26 +1410,31 @@ fn glob_paths(pattern: &str) -> Vec<String> {
     current
 }
 
+/// One line of an include-expanded config with the file and line it came from.
+type SourceLine = (String, String, usize);
+
 /// `_expand_includes` (the SSH-profile path rewrite does not affect
-/// classification and is omitted).
+/// classification and is omitted). Returns the expanded lines.
 fn expand_includes(
     text: &str,
     base_dir: &Path,
     current_file: &Path,
     included: &mut BTreeSet<PathBuf>,
-) -> Result<String, ConfigError> {
+) -> Result<Vec<SourceLine>, ConfigError> {
     included.insert(paths::resolve(current_file));
-    let mut out: Vec<String> = Vec::new();
+    let file_name = current_file.to_string_lossy().into_owned();
+    let mut out: Vec<SourceLine> = Vec::new();
     for (idx, line) in text.lines().enumerate() {
         let lineno = idx + 1;
+        let here = |text: String| (text, file_name.clone(), lineno);
         let stripped = line.trim();
         if !stripped.starts_with("include") {
-            out.push(line.to_string());
+            out.push(here(line.to_string()));
             continue;
         }
         let after: Vec<char> = stripped.chars().skip(7).collect();
         if !after.is_empty() && !after[0].is_whitespace() {
-            out.push(line.to_string());
+            out.push(here(line.to_string()));
             continue;
         }
         let pattern = after.iter().collect::<String>().trim().to_string();
@@ -1442,11 +1478,15 @@ fn expand_includes(
             })?;
             let parent = match_path.parent().unwrap_or(Path::new("/")).to_path_buf();
             let expanded = expand_includes(&included_text, &parent, &match_path, included)?;
-            out.push(format!("# included from: {}", match_path.display()));
-            out.push(expanded);
+            out.push(here(format!("# included from: {}", match_path.display())));
+            if expanded.is_empty() {
+                // Python joins an empty file to one empty line.
+                out.push(here(String::new()));
+            }
+            out.extend(expanded);
         }
     }
-    Ok(out.join("\n"))
+    Ok(out)
 }
 
 fn load_config_file(path: &Path) -> Result<Config, ConfigError> {
@@ -1462,8 +1502,14 @@ fn load_config_file(path: &Path) -> Result<Config, ConfigError> {
     })?;
     let mut included = BTreeSet::new();
     let parent = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    let text = expand_includes(&text, &parent, path, &mut included)?;
-    parse_config(&text, Some(&path.to_string_lossy()))
+    let lines = expand_includes(&text, &parent, path, &mut included)?;
+    let text: Vec<&str> = lines.iter().map(|(t, _, _)| t.as_str()).collect();
+    let origins: Vec<(String, usize)> = lines.iter().map(|(_, f, n)| (f.clone(), *n)).collect();
+    parse_config_from(
+        &text.join("\n"),
+        Some(&path.to_string_lossy()),
+        Some(&origins),
+    )
 }
 
 fn find_project_config(cwd: &Path) -> Option<PathBuf> {
@@ -2580,5 +2626,34 @@ mod tests {
         let m = match_mcp("mcp__a", &merged).unwrap();
         assert_eq!(m.decision, "deny");
         assert_eq!(m.source.as_deref(), Some("/p"));
+    }
+
+    fn origin(rule: &Rule) -> (Option<&str>, Option<usize>) {
+        (rule.file.as_deref(), rule.line)
+    }
+
+    #[test]
+    fn rules_record_their_line() {
+        let c = tag_rules(cfg("# c\nallow foo\n\ndeny-mcp mcp__x"), "/p", "project");
+        assert_eq!(origin(&c.rules[0]), (Some("/p"), Some(2)));
+        let m = match_mcp("mcp__x", &c).unwrap();
+        assert_eq!((m.file.as_deref(), m.line), (Some("/p"), Some(4)));
+    }
+
+    #[test]
+    fn included_rules_record_their_own_file_and_line() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-origin-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("main");
+        let inc = dir.join("inc");
+        std::fs::write(&main, "allow a\ninclude inc\n\nallow c\n").unwrap();
+        std::fs::write(&inc, "# x\nask-redirect /etc/*\n").unwrap();
+        let c = load_config_file(&main).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        let (main, inc) = (main.to_string_lossy(), inc.to_string_lossy());
+        assert_eq!(origin(&c.rules[0]), (Some(main.as_ref()), Some(1)));
+        assert_eq!(origin(&c.redirect_rules[0]), (Some(inc.as_ref()), Some(2)));
+        assert_eq!(origin(&c.rules[1]), (Some(main.as_ref()), Some(4)));
     }
 }

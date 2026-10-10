@@ -1411,6 +1411,24 @@ Additionally, JSON with full details is passed via stdin:
 }
 ```
 
+The Rust implementation (`dippy-rs`) also sends `causes`: one entry per part
+of the request that asked, with the rule kind, the exact target a new rule
+must match, and the config rule that decided (null for built-in
+classification). For `ls && git push origin main > /etc/out` with
+`ask-redirect /etc/*` on line 7 of `~/.dippy/config`, the redirect stops the
+analysis of its command, so one cause is sent:
+
+```json
+"causes": [
+  {"kind": "redirect", "target": "/etc/out", "rule": {
+    "directive": "ask-redirect", "pattern": "/etc/*", "message": null,
+    "scope": "user", "file": "/home/user/.dippy/config", "line": 7}}
+]
+```
+
+`kind` is `command`, `redirect`, `read`, `edit`, `web` or `mcp`; `file` and
+`line` point into an included file when the rule came from `include`.
+
 **Exit codes:**
 - `0` = approve → Dippy returns `allow`
 - `1` = deny → Dippy returns `deny`

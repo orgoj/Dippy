@@ -19,7 +19,7 @@ use std::time::{Duration, Instant};
 
 use serde_json::{Value, json};
 
-use crate::analyzer::{self, Action};
+use crate::analyzer::{self, Action, Cause};
 use crate::config::{self, Config};
 use crate::logging::{Entry, Logs};
 use crate::parser::tokenize;
@@ -221,6 +221,35 @@ struct Subject<'a> {
     cwd: Option<&'a Path>,
     /// Passed only where Python passes `hook_event` (Codex `PermissionRequest`).
     event: Option<&'a str>,
+    /// What asked, for askpass (rule editing).
+    causes: &'a [Cause],
+}
+
+fn cause(kind: &'static str, target: &str, rule: Option<&config::Match>) -> Cause {
+    Cause {
+        kind,
+        target: target.to_string(),
+        rule: rule.cloned(),
+    }
+}
+
+fn cause_json(c: &Cause) -> Value {
+    let rule = c.rule.as_ref().map(|m| {
+        let directive = if c.kind == "command" {
+            m.decision.clone()
+        } else {
+            format!("{}-{}", m.decision, c.kind)
+        };
+        json!({
+            "directive": directive,
+            "pattern": m.pattern,
+            "message": m.message,
+            "scope": m.scope,
+            "file": m.file,
+            "line": m.line,
+        })
+    });
+    json!({"kind": c.kind, "target": c.target, "rule": rule})
 }
 
 #[derive(Clone, Copy)]
@@ -441,6 +470,7 @@ impl<'a> Hook<'a> {
             "tool": tool,
             "source": null,
             "file_path": s.file_path,
+            "causes": s.causes.iter().map(cause_json).collect::<Vec<_>>(),
         }));
         let mut cmd = Command::new(program);
         cmd.env("DIPPY_COMMAND", command)
@@ -795,6 +825,7 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         command: Some(command),
         cwd: Some(cwd),
         event: Some(&hook_event),
+        causes: &result.causes,
         ..Subject::default()
     };
     match result.action {
@@ -853,11 +884,14 @@ fn tool_call<'v>(
             ));
         }
         hook.log.info(&format!("Checking MCP: {mcp_name}"));
+        let found = config::match_mcp(&mcp_name, config);
+        let causes = [cause("mcp", &mcp_name, found.as_ref())];
         let s = Subject {
             tool: Some(&mcp_name),
+            causes: &causes,
             ..Subject::default()
         };
-        return Err(match config::match_mcp(&mcp_name, config) {
+        return Err(match found {
             Some(m) => rule_reply(hook, &m, s),
             None => {
                 hook.audit(Entry {
@@ -884,10 +918,12 @@ fn tool_call<'v>(
         }
         hook.log.info(&format!("Checking {name}: {value}"));
         let found = config::match_web(value, config, &config::env_context_flags(config));
+        let causes = [cause("web", value, found.as_ref())];
         return Err(match found {
             Some(m) => {
                 let s = Subject {
                     tool: Some("WebSearch"),
+                    causes: &causes,
                     ..Subject::default()
                 };
                 rule_reply(hook, &m, s)
@@ -904,6 +940,7 @@ fn tool_call<'v>(
                     tool: Some(name),
                     match_value: Some(value),
                     cwd: Some(cwd),
+                    causes: &causes,
                     ..Subject::default()
                 };
                 hook.pass("no matching rule", s)
@@ -938,10 +975,12 @@ fn tool_call<'v>(
                         cwd: Some(cwd),
                         ..Entry::default()
                     });
+                    let causes = [cause(file_kind(name), path, None)];
                     let s = Subject {
                         tool: Some(name),
                         file_path: Some(path),
                         cwd: Some(cwd),
+                        causes: &causes,
                         ..Subject::default()
                     };
                     hook.pass("no matching rule", s)
@@ -1170,11 +1209,13 @@ fn check_file_tool(
     cwd: &Path,
 ) -> Option<Reply> {
     let active = config::env_context_flags(config);
-    let found = if READ_TOOL_NAMES.contains(&tool_name) {
+    let kind = file_kind(tool_name);
+    let found = if kind == "read" {
         config::match_read(file_path, config, cwd, &active)
     } else {
         config::match_edit(file_path, config, cwd, &active)
     }?;
+    let causes = [cause(kind, file_path, Some(&found))];
     hook.audit(Entry {
         decision: &found.decision,
         rule: Some(&found.pattern),
@@ -1187,9 +1228,19 @@ fn check_file_tool(
         tool: Some(tool_name),
         file_path: Some(file_path),
         cwd: Some(cwd),
+        causes: &causes,
         ..Subject::default()
     };
     Some(hook.rule(&found.decision, &rule_reason(&found), s))
+}
+
+/// Rule kind of a single-path file tool in `check_file_tool`.
+fn file_kind(tool_name: &str) -> &'static str {
+    if READ_TOOL_NAMES.contains(&tool_name) {
+        "read"
+    } else {
+        "edit"
+    }
 }
 
 /// Multi-file branch: the strictest match over `paths`. Python matches
@@ -1745,6 +1796,61 @@ mod tests {
                 "[WARNING] Askpass program not found: /nonexistent/askpass",
                 "[INFO] DENY: approval denied or unavailable: no matching rule",
             ]
+        );
+    }
+
+    /// The payload a denying fake askpass received for one AGY tool call.
+    fn askpass_payload_for(call: Value) -> Value {
+        let dir = temp_dir("payload");
+        let program = dir.join("askpass");
+        let out = dir.join("payload.json");
+        std::fs::write(
+            &program,
+            format!("#!/bin/sh\ncat > '{}'\nexit 1\n", out.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            &program,
+            std::os::unix::fs::PermissionsExt::from_mode(0o755),
+        )
+        .unwrap();
+        assert_eq!(agy(Some(&program), call)["decision"], "deny");
+        let payload = serde_json::from_str(&std::fs::read_to_string(&out).unwrap()).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+        payload
+    }
+
+    #[test]
+    fn askpass_receives_complete_causes() {
+        let shell = askpass_payload_for(
+            json!({"name": "run_command", "args": {"CommandLine": "ls && zorp x"}}),
+        );
+        assert_eq!(shell["command"], "ls && zorp x");
+        assert_eq!(shell["tool"], "run_command");
+        assert_eq!(
+            shell["causes"],
+            json!([{"kind": "command", "target": "zorp x", "rule": null}])
+        );
+        let read = askpass_payload_for(
+            json!({"name": "view_file", "args": {"AbsolutePath": "/w/private/k"}}),
+        );
+        assert_eq!(
+            read["causes"],
+            json!([{"kind": "read", "target": "/w/private/k", "rule": {
+                "directive": "ask-read", "pattern": "/w/private/*", "message": null,
+                "scope": "project", "file": "/w/.dippy", "line": 10}}])
+        );
+        let mcp = askpass_payload_for(
+            json!({"name": "call_mcp_tool", "args": {"ServerName": "s", "ToolName": "x"}}),
+        );
+        assert_eq!(
+            mcp["causes"],
+            json!([{"kind": "mcp", "target": "mcp__s__x", "rule": null}])
+        );
+        let web = askpass_payload_for(json!({"name": "search_web", "args": {"query": "cats"}}));
+        assert_eq!(
+            web["causes"],
+            json!([{"kind": "web", "target": "cats", "rule": null}])
         );
     }
 

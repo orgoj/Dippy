@@ -36,6 +36,18 @@ impl Action {
     }
 }
 
+/// One part of a request that asked or denied, and what a rule must match
+/// to change it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Cause {
+    /// `command` | `redirect`
+    pub kind: &'static str,
+    /// The simple command (or redirect target) a new rule would match.
+    pub target: String,
+    /// The config rule that decided; `None` for built-in classification.
+    pub rule: Option<config::Match>,
+}
+
 /// Result of analyzing an AST node.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Decision {
@@ -44,6 +56,8 @@ pub struct Decision {
     pub context_flags: Option<Flags>,
     /// Env-stripped command for the audit log suggestion (ask only).
     pub suggestion: Option<String>,
+    /// Parts that produced `action` (ask/deny); empty when unknown.
+    pub causes: Vec<Cause>,
 }
 
 impl Decision {
@@ -53,7 +67,22 @@ impl Decision {
             reason: reason.into(),
             context_flags: None,
             suggestion: None,
+            causes: Vec::new(),
         }
+    }
+    /// An outer construct's decision for an inner one: same action and causes.
+    fn wrap(inner: Decision, reason: String) -> Self {
+        let mut d = Self::new(inner.action, reason);
+        d.causes = inner.causes;
+        d
+    }
+    fn cause(mut self, kind: &'static str, target: &str, rule: Option<&config::Match>) -> Self {
+        self.causes.push(Cause {
+            kind,
+            target: target.to_string(),
+            rule: rule.cloned(),
+        });
+        self
     }
     fn allow(reason: impl Into<String>) -> Self {
         Self::new(Action::Allow, reason)
@@ -65,8 +94,12 @@ impl Decision {
         self.context_flags = Some(flags.clone());
         self
     }
+    /// A command ask: the suggestion is also the cause's target.
     fn suggest(mut self, suggestion: &str) -> Self {
         self.suggestion = Some(suggestion.to_string());
+        if self.causes.is_empty() {
+            self = self.cause("command", suggestion, None);
+        }
         self
     }
 }
@@ -374,7 +407,8 @@ fn substitution_decision(
             Node::ProcSub { direction, .. } => format!("{label} {direction}(...)"),
             _ => label.to_string(),
         };
-        return Decision::new(inner.action, format!("{label}: {}", inner.reason));
+        let reason = format!("{label}: {}", inner.reason);
+        return Decision::wrap(inner, reason);
     }
     inner
 }
@@ -861,20 +895,17 @@ fn analyze_command(
                 Node::ProcSub { direction, command } => {
                     let inner = analyze_node(command, config, cwd, flags, remote);
                     if inner.action != Action::Allow {
-                        return Decision::new(
-                            inner.action,
-                            format!("process substitution {direction}(...): {}", inner.reason),
-                        );
+                        let reason =
+                            format!("process substitution {direction}(...): {}", inner.reason);
+                        return Decision::wrap(inner, reason);
                     }
                     decisions.push(inner);
                 }
                 Node::CmdSub { command } => {
                     let inner = analyze_node(command, config, cwd, flags, remote);
                     if inner.action != Action::Allow {
-                        return Decision::new(
-                            inner.action,
-                            format!("command substitution: {}", inner.reason),
-                        );
+                        let reason = format!("command substitution: {}", inner.reason);
+                        return Decision::wrap(inner, reason);
                     }
                     decisions.push(inner);
                     if is_pure_cmdsub
@@ -982,7 +1013,13 @@ fn analyze_redirects(
                         && redirect_writes_file(op)
                         && !redirect_target_is_safe(&target_value)
                     {
-                        decisions.push(Decision::ask(format!("remote redirect to {target_value}")));
+                        decisions.push(
+                            Decision::ask(format!("remote redirect to {target_value}")).cause(
+                                "redirect",
+                                &target_value,
+                                None,
+                            ),
+                        );
                     }
                     continue;
                 }
@@ -1001,14 +1038,18 @@ fn analyze_redirects(
                             } else {
                                 Action::Ask
                             };
-                            decisions.push(Decision::new(
-                                action,
-                                format!("redirect to {target_value}: {msg}"),
-                            ));
+                            decisions.push(
+                                Decision::new(action, format!("redirect to {target_value}: {msg}"))
+                                    .cause("redirect", &target_value, Some(&m)),
+                            );
                         }
-                        None => {
-                            decisions.push(Decision::ask(format!("redirect to {target_value}")))
-                        }
+                        None => decisions.push(
+                            Decision::ask(format!("redirect to {target_value}")).cause(
+                                "redirect",
+                                &target_value,
+                                None,
+                            ),
+                        ),
                     }
                 }
             }
@@ -1038,13 +1079,18 @@ fn config_match_decision(
         }
         "deny" => {
             let msg = m.message.clone().unwrap_or(m.pattern.clone());
-            Some(Decision::new(Action::Deny, format!("{base}: {msg}")).flags(flags))
+            Some(
+                Decision::new(Action::Deny, format!("{base}: {msg}"))
+                    .flags(flags)
+                    .cause("command", suggestion, Some(m)),
+            )
         }
         "ask" => {
             let msg = m.message.clone().unwrap_or(m.pattern.clone());
             Some(
                 Decision::ask(format!("{base}: {msg}"))
                     .flags(flags)
+                    .cause("command", suggestion, Some(m))
                     .suggest(suggestion),
             )
         }
@@ -1082,10 +1128,14 @@ fn analyze_simple_command(
                 _ => None,
             };
             if let Some(action) = action {
-                return Decision::new(action, format!("{var}: {msg}")).flags(flags);
+                return Decision::new(action, format!("{var}: {msg}"))
+                    .flags(flags)
+                    .cause("command", &words.join(" "), Some(&m));
             }
         }
-        return Decision::ask(format!("{var}= changes which code runs")).flags(flags);
+        return Decision::ask(format!("{var}= changes which code runs"))
+            .flags(flags)
+            .cause("command", &words.join(" "), None);
     }
     if i >= words.len() {
         return Decision::allow("env assignment").flags(flags);
@@ -1310,19 +1360,28 @@ fn analyze_simple_command(
                     continue;
                 }
                 if flags.contains("ssh") {
-                    return Decision::ask(format!("remote redirect to {target}"));
+                    return Decision::ask(format!("remote redirect to {target}"))
+                        .cause("redirect", target, None);
                 }
                 match config::match_redirect(target, config, cwd, flags, false) {
                     Some(m) if m.decision == "deny" => {
                         let msg = m.message.clone().unwrap_or(m.pattern.clone());
-                        return Decision::new(Action::Deny, format!("{desc}: {msg}"));
+                        return Decision::new(Action::Deny, format!("{desc}: {msg}")).cause(
+                            "redirect",
+                            target,
+                            Some(&m),
+                        );
                     }
                     Some(m) if m.decision == "ask" => {
                         let msg = m.message.clone().unwrap_or(m.pattern.clone());
-                        return Decision::ask(format!("{desc}: {msg}"));
+                        return Decision::ask(format!("{desc}: {msg}")).cause(
+                            "redirect",
+                            target,
+                            Some(&m),
+                        );
                     }
                     Some(_) => {}
-                    None => return Decision::ask(desc),
+                    None => return Decision::ask(desc).cause("redirect", target, None),
                 }
             }
         }
@@ -1470,10 +1529,8 @@ fn analyze_string_cmdsubs(
     let push = |inner_cmd: String, decisions: &mut Vec<Decision>| {
         let inner = analyze(&inner_cmd, config, cwd, flags, remote);
         if inner.action != Action::Allow {
-            decisions.push(Decision::new(
-                inner.action,
-                format!("cmdsub: {}", inner.reason),
-            ));
+            let reason = format!("cmdsub: {}", inner.reason);
+            decisions.push(Decision::wrap(inner, reason));
         } else {
             decisions.push(inner);
         }
@@ -1575,9 +1632,18 @@ fn combine(decisions: Vec<Decision>) -> Decision {
             .map(|d| d.reason.clone())
             .collect::<Vec<_>>()
     };
+    let causes = |a: Action| {
+        decisions
+            .iter()
+            .filter(|d| d.action == a)
+            .flat_map(|d| d.causes.iter().cloned())
+            .collect::<Vec<_>>()
+    };
     let deny = reasons(Action::Deny);
     if !deny.is_empty() {
-        return Decision::new(Action::Deny, deny.join(", ")).flags(&context_flags);
+        let mut d = Decision::new(Action::Deny, deny.join(", ")).flags(&context_flags);
+        d.causes = causes(Action::Deny);
+        return d;
     }
     let ask = reasons(Action::Ask);
     if !ask.is_empty() {
@@ -1587,6 +1653,7 @@ fn combine(decisions: Vec<Decision>) -> Decision {
             .and_then(|d| d.suggestion.clone());
         let mut d = Decision::ask(ask.join(", ")).flags(&context_flags);
         d.suggestion = suggestion;
+        d.causes = causes(Action::Ask);
         return d;
     }
     Decision::allow(reasons(Action::Allow).join(", ")).flags(&context_flags)
@@ -1668,5 +1735,68 @@ mod tests {
         assert_eq!(spelled.action, Action::Allow);
         let deny = decide_with("deny zorptool *", "LD_PRELOAD=/tmp/x.so zorptool run");
         assert_eq!(deny.action, Action::Deny);
+    }
+
+    /// Kind, target and the matching rule's pattern and line.
+    type Summary = (&'static str, String, Option<(String, usize)>);
+
+    fn causes(rules: &str, cmd: &str) -> Vec<Summary> {
+        decide_with(rules, cmd)
+            .causes
+            .into_iter()
+            .map(|c| {
+                let rule = c.rule.map(|m| (m.pattern, m.line.unwrap_or(0)));
+                (c.kind, c.target, rule)
+            })
+            .collect()
+    }
+
+    #[test]
+    fn causes_name_each_asking_part() {
+        assert_eq!(
+            causes("", "zorp -x a; ls > /etc/foo"),
+            [
+                ("command", "zorp -x a".to_string(), None),
+                ("redirect", "/etc/foo".to_string(), None),
+            ]
+        );
+        // A command's asking redirect stops its analysis (as in Python).
+        assert_eq!(
+            causes("", "zorp -x a > /etc/foo"),
+            [("redirect", "/etc/foo".to_string(), None)]
+        );
+        assert_eq!(
+            causes("", "echo $(zorp x)"),
+            [("command", "zorp x".to_string(), None)]
+        );
+        assert_eq!(
+            causes("# c\nask frob *", "ls && FOO=1 frob x"),
+            [(
+                "command",
+                "frob x".to_string(),
+                Some(("frob *".to_string(), 2))
+            )]
+        );
+        assert_eq!(
+            causes("ask-redirect /etc/*", "ls > /etc/foo"),
+            [(
+                "redirect",
+                "/etc/foo".to_string(),
+                Some(("/etc/*".to_string(), 1))
+            )]
+        );
+        assert!(causes("", "ls -la | grep x").is_empty());
+    }
+
+    #[test]
+    fn causes_of_a_deny_are_only_the_denying_parts() {
+        assert_eq!(
+            causes("deny frob delete", "zorp a; frob delete"),
+            [(
+                "command",
+                "frob delete".to_string(),
+                Some(("frob delete".to_string(), 1))
+            )]
+        );
     }
 }

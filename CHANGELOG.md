@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.29] - 2026-10-10
+
+### Added
+
+- dippy-rs sends askpass a `causes` list with complete information on what asked: rule kind (`command`, `redirect`, `read`, `edit`, `web`, `mcp`), the exact target a rule must match (the simple command inside a compound command, the redirect target, path, URL or MCP tool), and the matching config rule (directive, pattern, message, scope, file and line, following `include`) or null for built-in classification. Existing payload fields and `DIPPY_*` variables are unchanged.
+
 ## [0.4.28] - 2026-10-10
 
 ### Added
