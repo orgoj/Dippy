@@ -7,6 +7,10 @@ Status report for the unattended Rust port described in
 
 Phases 1-4 are complete. Out-of-scope items were not started.
 
+Cost: phases 1-4 ran as one unattended Claude Code cloud session overnight
+on 2026-10-09/10 (Opus 5.5, effort medium) and used about $72 of cloud
+session credit.
+
 | Measure | Result |
 | --- | --- |
 | Decision agreement (`rust/parity/run`, 13,534 cases) | **13,531 (99.98%)** |
