@@ -191,12 +191,11 @@ fn docker_description(tokens: &[String]) -> String {
     let action = tokens[action_idx].as_str();
     let rest = &tokens[action_idx + 1..];
     // Only include subcommand in description for multi-level commands
-    if is_multi_level(action) {
-        if let Some(subcommand) = find_subcommand(rest) {
-            if !subcommand.is_empty() {
-                return format!("{first} {action} {subcommand}");
-            }
-        }
+    if is_multi_level(action)
+        && let Some(subcommand) = find_subcommand(rest)
+        && !subcommand.is_empty()
+    {
+        return format!("{first} {action} {subcommand}");
     }
     format!("{first} {action}")
 }
@@ -234,32 +233,32 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     }
 
     // Check subcommands for multi-level commands
-    if is_multi_level(action) {
-        if let Some(subcommand) = find_subcommand(rest).filter(|s| !s.is_empty()) {
-            // Handle nested subcommands (e.g., buildx imagetools inspect)
-            if action == "buildx" && subcommand == "imagetools" {
-                let sub_rest = match rest.iter().position(|t| t == subcommand) {
-                    Some(pos) => &rest[pos + 1..],
-                    None => &[],
-                };
-                let safe = find_subcommand(sub_rest) == Some("inspect");
-                return if safe {
-                    Classification::allow_desc(desc)
-                } else {
-                    Classification::ask_desc(desc)
-                };
-            }
+    if is_multi_level(action)
+        && let Some(subcommand) = find_subcommand(rest).filter(|s| !s.is_empty())
+    {
+        // Handle nested subcommands (e.g., buildx imagetools inspect)
+        if action == "buildx" && subcommand == "imagetools" {
+            let sub_rest = match rest.iter().position(|t| t == subcommand) {
+                Some(pos) => &rest[pos + 1..],
+                None => &[],
+            };
+            let safe = find_subcommand(sub_rest) == Some("inspect");
+            return if safe {
+                Classification::allow_desc(desc)
+            } else {
+                Classification::ask_desc(desc)
+            };
+        }
 
-            if safe_subcommands(action).is_some_and(|s| s.contains(&subcommand)) {
-                // Special case: image save -o writes to file
-                if action == "image" && subcommand == "save" && has_output_flag(rest) {
-                    return Classification::ask_desc(desc);
-                }
-                return Classification::allow_desc(desc);
-            }
-            if unsafe_subcommands(action).is_some_and(|s| s.contains(&subcommand)) {
+        if safe_subcommands(action).is_some_and(|s| s.contains(&subcommand)) {
+            // Special case: image save -o writes to file
+            if action == "image" && subcommand == "save" && has_output_flag(rest) {
                 return Classification::ask_desc(desc);
             }
+            return Classification::allow_desc(desc);
+        }
+        if unsafe_subcommands(action).is_some_and(|s| s.contains(&subcommand)) {
+            return Classification::ask_desc(desc);
         }
     }
 

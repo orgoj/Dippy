@@ -214,7 +214,7 @@ pub fn extract_options(pattern: &str) -> Result<(String, Option<Options>), Strin
     let mut depth = 1;
     let mut remaining: Option<String> = None;
     let text = |a: usize, b: usize| chars[a..b].iter().collect::<String>();
-    for i in start..chars.len() {
+    for i in "[opts:".len()..chars.len() {
         let c = chars[i];
         if escaped {
             escaped = false;
@@ -941,19 +941,18 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
             }
             Ok(())
         })();
-        if let Err(e) = result {
-            if directive == "set"
-                && rest
-                    .to_lowercase()
-                    .replace('_', "-")
-                    .starts_with("run-on-server-ssh-")
-            {
-                return Err(ConfigError(format!(
-                    "{prefix}line {lineno}: invalid SSH profile: {e}"
-                )));
-            }
-            // Python logs a warning and skips the line.
+        if let Err(e) = result
+            && directive == "set"
+            && rest
+                .to_lowercase()
+                .replace('_', "-")
+                .starts_with("run-on-server-ssh-")
+        {
+            return Err(ConfigError(format!(
+                "{prefix}line {lineno}: invalid SSH profile: {e}"
+            )));
         }
+        // Python logs a warning and skips the line.
     }
     cfg.default = settings.default.unwrap_or_else(|| "ask".into());
     cfg.final_path = settings.final_path;
@@ -1260,15 +1259,15 @@ pub fn load_config(
         }
         None => load_normal_config(cwd, config_path)?,
     };
-    if let Some(final_path) = config.final_path.clone() {
-        if final_path.is_file() {
-            let c = tag_rules(
-                load_config_file(&final_path)?,
-                &final_path.to_string_lossy(),
-                "final",
-            );
-            config = merge_configs(config, c);
-        }
+    if let Some(final_path) = config.final_path.clone()
+        && final_path.is_file()
+    {
+        let c = tag_rules(
+            load_config_file(&final_path)?,
+            &final_path.to_string_lossy(),
+            "final",
+        );
+        config = merge_configs(config, c);
     }
     Ok(config)
 }
@@ -1500,15 +1499,15 @@ fn flag_pattern_matches(pattern: &str, active: &Flags) -> bool {
 }
 
 fn check_rule_context_flags(rule: &Rule, active: &Flags) -> bool {
-    if let Some(req) = &rule.required_flags {
-        if !req.iter().all(|r| flag_pattern_matches(r, active)) {
-            return false;
-        }
+    if let Some(req) = &rule.required_flags
+        && !req.iter().all(|r| flag_pattern_matches(r, active))
+    {
+        return false;
     }
-    if let Some(neg) = &rule.negated_flags {
-        if neg.iter().any(|n| flag_pattern_matches(n, active)) {
-            return false;
-        }
+    if let Some(neg) = &rule.negated_flags
+        && neg.iter().any(|n| flag_pattern_matches(n, active))
+    {
+        return false;
     }
     true
 }
@@ -1637,10 +1636,12 @@ fn match_words(
                 raw_deny_set = rule.decision == "deny";
                 continue;
             }
-            if let Some(sw) = &stripped_words {
-                if !sw.is_empty() && !raw_deny_set && match_option_rule(rule, sw) {
-                    result = Some(Match::from_rule(rule));
-                }
+            if let Some(sw) = &stripped_words
+                && !sw.is_empty()
+                && !raw_deny_set
+                && match_option_rule(rule, sw)
+            {
+                result = Some(Match::from_rule(rule));
             }
             continue;
         }
@@ -1658,30 +1659,24 @@ fn match_words(
             {
                 raw_matched = true;
             }
-            if !raw_matched {
-                if let Some(ns) = stripped {
-                    stripped_matched = fnmatchcase(ns, &prefix_pattern) || ns == normalized_pattern;
-                }
+            if !raw_matched && let Some(ns) = stripped {
+                stripped_matched = fnmatchcase(ns, &prefix_pattern) || ns == normalized_pattern;
             }
         } else {
             raw_matched = fnmatchcase(&normalized_cmd, &normalized_pattern);
-            if !raw_matched {
-                if let Some(base) = normalized_pattern.strip_suffix(" *") {
-                    if !fnmatchcase("", base) {
-                        raw_matched = fnmatchcase(&normalized_cmd, base);
-                    }
-                }
+            if !raw_matched
+                && let Some(base) = normalized_pattern.strip_suffix(" *")
+                && !fnmatchcase("", base)
+            {
+                raw_matched = fnmatchcase(&normalized_cmd, base);
             }
-            if !raw_matched {
-                if let Some(ns) = stripped {
-                    stripped_matched = fnmatchcase(ns, &normalized_pattern);
-                    if !stripped_matched {
-                        if let Some(base) = normalized_pattern.strip_suffix(" *") {
-                            if !fnmatchcase("", base) {
-                                stripped_matched = fnmatchcase(ns, base);
-                            }
-                        }
-                    }
+            if !raw_matched && let Some(ns) = stripped {
+                stripped_matched = fnmatchcase(ns, &normalized_pattern);
+                if !stripped_matched
+                    && let Some(base) = normalized_pattern.strip_suffix(" *")
+                    && !fnmatchcase("", base)
+                {
+                    stripped_matched = fnmatchcase(ns, base);
                 }
             }
         }
@@ -1771,12 +1766,11 @@ pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<Stri
     for rule in &config.after_rules {
         let pattern = normalize_pattern(&rule.pattern, base_cwd);
         let mut matched = fnmatchcase(&normalized_cmd, &pattern);
-        if !matched {
-            if let Some(base) = pattern.strip_suffix(" *") {
-                if !fnmatchcase("", base) {
-                    matched = fnmatchcase(&normalized_cmd, base);
-                }
-            }
+        if !matched
+            && let Some(base) = pattern.strip_suffix(" *")
+            && !fnmatchcase("", base)
+        {
+            matched = fnmatchcase(&normalized_cmd, base);
         }
         if matched {
             result = Some(rule.message.clone().unwrap_or_default());

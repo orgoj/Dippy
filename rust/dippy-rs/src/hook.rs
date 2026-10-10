@@ -133,10 +133,7 @@ pub fn claude_hook(stdin: &str) -> Option<String> {
     let Some(obj) = input.as_object() else {
         return Some("{}".into());
     };
-    Some(py_dumps(&match handle(obj) {
-        Some(v) => v,
-        None => return None,
-    }))
+    Some(py_dumps(&handle(obj)?))
 }
 
 fn handle(input: &Map<String, Value>) -> Option<Value> {

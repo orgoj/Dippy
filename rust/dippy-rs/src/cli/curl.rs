@@ -100,12 +100,12 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
             }
         }
 
-        if t == "-X" || t == "--request" {
-            if let Some(next) = tokens.get(i + 1) {
-                let method = next.to_uppercase();
-                if !SAFE_METHODS.contains(&method.as_str()) {
-                    return Classification::ask_desc(format!("{base} {method}"));
-                }
+        if (t == "-X" || t == "--request")
+            && let Some(next) = tokens.get(i + 1)
+        {
+            let method = next.to_uppercase();
+            if !SAFE_METHODS.contains(&method.as_str()) {
+                return Classification::ask_desc(format!("{base} {method}"));
             }
         }
 
@@ -122,21 +122,23 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
             }
         }
 
-        if t == "-Q" || t == "--quote" {
-            if let Some(next) = tokens.get(i + 1) {
-                match ftp_command(next) {
-                    Some(cmd) if SAFE_FTP_COMMANDS.contains(&cmd.as_str()) => {}
-                    // Unsafe command, or Python IndexError: fail closed.
-                    _ => return Classification::ask_desc(format!("{base} {t}")),
-                }
+        if (t == "-Q" || t == "--quote")
+            && let Some(next) = tokens.get(i + 1)
+        {
+            match ftp_command(next) {
+                Some(cmd) if SAFE_FTP_COMMANDS.contains(&cmd.as_str()) => {}
+                // Unsafe command, or Python IndexError: fail closed.
+                _ => return Classification::ask_desc(format!("{base} {t}")),
             }
         }
     }
 
-    if let Some(output_file) = extract_output_file(tokens) {
-        if !output_file.is_empty() && output_file != "-" && output_file != "/dev/null" {
-            return Classification::allow_desc(base).redirects(vec![output_file]);
-        }
+    if let Some(output_file) = extract_output_file(tokens)
+        && !output_file.is_empty()
+        && output_file != "-"
+        && output_file != "/dev/null"
+    {
+        return Classification::allow_desc(base).redirects(vec![output_file]);
     }
 
     Classification::allow_desc(base)

@@ -36,10 +36,10 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     if !has_operation(tokens) {
         return Classification::allow_desc("compression_tool");
     }
-    if let Some(output_file) = extract_output_file(tokens) {
-        if !output_file.is_empty() {
-            return Classification::allow_desc("compression_tool").redirects(vec![output_file]);
-        }
+    if let Some(output_file) = extract_output_file(tokens)
+        && !output_file.is_empty()
+    {
+        return Classification::allow_desc("compression_tool").redirects(vec![output_file]);
     }
     // No -o means stdout, which is safe
     Classification::allow_desc("compression_tool")

@@ -35,11 +35,10 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
         return Classification::allow_desc(format!("{base} --spider"));
     }
 
-    if let Some(output_file) = extract_output_file(tokens) {
-        if !output_file.is_empty() {
-            return Classification::allow_desc(format!("{base} download"))
-                .redirects(vec![output_file]);
-        }
+    if let Some(output_file) = extract_output_file(tokens)
+        && !output_file.is_empty()
+    {
+        return Classification::allow_desc(format!("{base} download")).redirects(vec![output_file]);
     }
 
     Classification::ask_desc(format!("{base} download"))

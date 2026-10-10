@@ -38,19 +38,19 @@ fn detect_operation(tokens: &[String]) -> Option<&'static str> {
             "--delete" => return Some("delete"),
             _ => {}
         }
-        if t.starts_with('-') && !t.starts_with("--") {
-            if let Some(op) = first_operation(t) {
-                return Some(op);
-            }
+        if t.starts_with('-')
+            && !t.starts_with("--")
+            && let Some(op) = first_operation(t)
+        {
+            return Some(op);
         }
     }
     // Old-style (no dash) like "cvf", "xzf"
-    if let Some(first_arg) = tokens.get(1) {
-        if !first_arg.starts_with('-') {
-            if let Some(op) = first_operation(first_arg) {
-                return Some(op);
-            }
-        }
+    if let Some(first_arg) = tokens.get(1)
+        && !first_arg.starts_with('-')
+        && let Some(op) = first_operation(first_arg)
+    {
+        return Some(op);
     }
     None
 }
@@ -72,10 +72,10 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     let tokens = &ctx.tokens;
     let base = tokens.first().map(String::as_str).unwrap_or("tar");
 
-    if let Some(to_command) = extract_to_command(tokens) {
-        if !to_command.is_empty() {
-            return Classification::delegate(to_command).desc(format!("{base} --to-command"));
-        }
+    if let Some(to_command) = extract_to_command(tokens)
+        && !to_command.is_empty()
+    {
+        return Classification::delegate(to_command).desc(format!("{base} --to-command"));
     }
 
     match detect_operation(tokens) {

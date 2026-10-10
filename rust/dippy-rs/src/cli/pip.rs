@@ -80,28 +80,28 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     }
 
     // Check subcommands
-    if let Some(safe) = safe_subcommands(action) {
-        if !rest.is_empty() {
-            for token in rest {
-                if !token.starts_with('-') {
-                    if safe.contains(&token.as_str()) {
-                        return Classification::allow_desc(format!("{desc} {token}"));
-                    }
-                    break;
+    if let Some(safe) = safe_subcommands(action)
+        && !rest.is_empty()
+    {
+        for token in rest {
+            if !token.starts_with('-') {
+                if safe.contains(&token.as_str()) {
+                    return Classification::allow_desc(format!("{desc} {token}"));
                 }
+                break;
             }
         }
     }
 
-    if let Some(unsafe_subs) = unsafe_subcommands(action) {
-        if !rest.is_empty() {
-            for token in rest {
-                if !token.starts_with('-') {
-                    if unsafe_subs.contains(&token.as_str()) {
-                        return Classification::ask_desc(format!("{desc} {token}"));
-                    }
-                    break;
+    if let Some(unsafe_subs) = unsafe_subcommands(action)
+        && !rest.is_empty()
+    {
+        for token in rest {
+            if !token.starts_with('-') {
+                if unsafe_subs.contains(&token.as_str()) {
+                    return Classification::ask_desc(format!("{desc} {token}"));
                 }
+                break;
             }
         }
     }

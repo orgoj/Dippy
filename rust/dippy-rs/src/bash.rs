@@ -27,9 +27,9 @@ pub fn decode_literal_word(raw: &str, reject_globs: bool) -> Option<String> {
                 return None;
             }
             output.push(c);
-        } else if c == '`' {
-            return None;
-        } else if reject_globs && quote.is_none() && ("*?[{}".contains(c) || (c == '~' && i == 0)) {
+        } else if c == '`'
+            || (reject_globs && quote.is_none() && ("*?[{}".contains(c) || (c == '~' && i == 0)))
+        {
             return None;
         } else if c == '\\' {
             let following = *chars.get(i + 1)?;

@@ -151,10 +151,11 @@ fn quoted_heredoc_content(redirects: &[Node]) -> Option<String> {
             if fd_target != "-" && !is_digits(fd_target.strip_suffix('-').unwrap_or(fd_target)) {
                 return None;
             }
-            if let Some(n) = fd_target.strip_suffix('-') {
-                if is_digits(n) && n.parse::<u64>().ok() == Some(0) {
-                    return None;
-                }
+            if let Some(n) = fd_target.strip_suffix('-')
+                && is_digits(n)
+                && n.parse::<u64>().ok() == Some(0)
+            {
+                return None;
             }
         }
     }
@@ -212,10 +213,11 @@ fn analyze_node(node: &Node, config: &Config, cwd: &Path, flags: &Flags, remote:
                 .filter(|p| !matches!(p, Node::Operator { .. }))
                 .collect();
             let mut effective_cwd = cwd.to_path_buf();
-            if !parts.is_empty() && !remote {
-                if let Some(target) = extract_cd_target(parts[0]) {
-                    effective_cwd = resolve_cd_target(&target, cwd);
-                }
+            if !parts.is_empty()
+                && !remote
+                && let Some(target) = extract_cd_target(parts[0])
+            {
+                effective_cwd = resolve_cd_target(&target, cwd);
             }
             let mut decisions = Vec::new();
             for p in parts {
@@ -418,19 +420,18 @@ fn extract_wrapper_args(
             String::new()
         };
         let mut context_value = None;
-        if let Some(cf) = &context_flag {
-            if let Some(c) = index_in(cf, 0, idx) {
-                if c + 1 < idx {
-                    context_value = Some(tokens[c + 1].clone());
-                }
-            }
+        if let Some(cf) = &context_flag
+            && let Some(c) = index_in(cf, 0, idx)
+            && c + 1 < idx
+        {
+            context_value = Some(tokens[c + 1].clone());
         }
         let mut dest = None;
         if let Some(tf) = &target_flag {
-            if let Some(t) = index_in(tf, 0, idx) {
-                if t + 1 < idx {
-                    dest = Some(tokens[t + 1].clone());
-                }
+            if let Some(t) = index_in(tf, 0, idx)
+                && t + 1 < idx
+            {
+                dest = Some(tokens[t + 1].clone());
             }
             if dest.is_none() {
                 let mut i = 1;
@@ -475,12 +476,11 @@ fn extract_wrapper_args(
         String::new()
     };
     let mut context_value = None;
-    if let Some(cf) = &context_flag {
-        if let Some(c) = index_in(cf, 0, tokens.len()) {
-            if c + 1 < tokens.len() {
-                context_value = Some(tokens[c + 1].clone());
-            }
-        }
+    if let Some(cf) = &context_flag
+        && let Some(c) = index_in(cf, 0, tokens.len())
+        && c + 1 < tokens.len()
+    {
+        context_value = Some(tokens[c + 1].clone());
     }
     (Some(dest), inner, context_value)
 }
@@ -877,22 +877,22 @@ fn analyze_command(
                         );
                     }
                     decisions.push(inner);
-                    if is_pure_cmdsub && !simple_safe && position > base_idx {
-                        if let Some(h) = handler {
-                            let ctx = HandlerContext {
-                                tokens: words[base_idx..].to_vec(),
-                                remote,
-                                cwd: cwd.to_path_buf(),
-                                config: None,
-                                word_has_expansions: Vec::new(),
-                                raw_words: Vec::new(),
-                            };
-                            if (h.classify)(&ctx).action != HAction::Allow {
-                                let inner_cmd = strip_dollar_parens(&word_value(word)).to_string();
-                                return Decision::ask(format!(
-                                    "cmdsub injection risk: {inner_cmd}"
-                                ));
-                            }
+                    if is_pure_cmdsub
+                        && !simple_safe
+                        && position > base_idx
+                        && let Some(h) = handler
+                    {
+                        let ctx = HandlerContext {
+                            tokens: words[base_idx..].to_vec(),
+                            remote,
+                            cwd: cwd.to_path_buf(),
+                            config: None,
+                            word_has_expansions: Vec::new(),
+                            raw_words: Vec::new(),
+                        };
+                        if (h.classify)(&ctx).action != HAction::Allow {
+                            let inner_cmd = strip_dollar_parens(&word_value(word)).to_string();
+                            return Decision::ask(format!("cmdsub injection risk: {inner_cmd}"));
                         }
                     }
                 }
@@ -1087,12 +1087,11 @@ fn analyze_simple_command(
 
     let wrapper_offset = unwrap_all_transparent_wrappers(tokens, Some(config));
     if wrapper_offset > 0 {
-        if let Some(m) = config::match_command(&sc, config, cwd, flags, remote) {
-            if !is_catch_all_pattern(&m.pattern) {
-                if let Some(d) = config_match_decision(&m, base, flags, &suggestion) {
-                    return d;
-                }
-            }
+        if let Some(m) = config::match_command(&sc, config, cwd, flags, remote)
+            && !is_catch_all_pattern(&m.pattern)
+            && let Some(d) = config_match_decision(&m, base, flags, &suggestion)
+        {
+            return d;
         }
         let k = i + wrapper_offset;
         return analyze_simple_command(
@@ -1108,19 +1107,20 @@ fn analyze_simple_command(
     }
 
     // 1. Config rules (highest priority); delegate falls through.
-    if let Some(m) = config::match_command(&sc, config, cwd, flags, remote) {
-        if let Some(d) = config_match_decision(&m, base, flags, &suggestion) {
-            return d;
-        }
+    if let Some(m) = config::match_command(&sc, config, cwd, flags, remote)
+        && let Some(d) = config_match_decision(&m, base, flags, &suggestion)
+    {
+        return d;
     }
 
     // 2. Dippy execution subcommands with one literal script on stdin.
     if base == "dippy" && tokens.len() > 1 && (tokens[1] == "run" || tokens[1] == "run-on-server") {
         let content = quoted_heredoc_content(redirects);
-        if tokens[1] == "run" && tokens.len() == 2 {
-            if let Some(content) = &content {
-                return analyze(content, config, cwd, Some(flags), remote);
-            }
+        if tokens[1] == "run"
+            && tokens.len() == 2
+            && let Some(content) = &content
+        {
+            return analyze(content, config, cwd, Some(flags), remote);
         }
         if tokens[1] == "run-on-server"
             && tokens.len() == 3
@@ -1205,10 +1205,10 @@ fn analyze_simple_command(
             return Decision::ask(reason).flags(flags).suggest(&suggestion);
         }
         let mut wrapper_context = vec![base.to_string()];
-        if let Some(d) = dest.as_ref().filter(|d| !d.is_empty()) {
-            if info.context_first {
-                wrapper_context.push(d.clone());
-            }
+        if let Some(d) = dest.as_ref().filter(|d| !d.is_empty())
+            && info.context_first
+        {
+            wrapper_context.push(d.clone());
         }
         if let Some(c) = context_value.as_ref().filter(|c| !c.is_empty()) {
             wrapper_context.push(c.clone());

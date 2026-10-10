@@ -43,15 +43,15 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     if has_pipe_flag(tokens) {
         return Classification::allow_desc(base);
     }
-    if let Some(output_file) = flag_value(tokens, &["-o", "--rename"]) {
-        if !output_file.is_empty() {
-            return Classification::allow_desc(base).redirects(vec![output_file]);
-        }
+    if let Some(output_file) = flag_value(tokens, &["-o", "--rename"])
+        && !output_file.is_empty()
+    {
+        return Classification::allow_desc(base).redirects(vec![output_file]);
     }
-    if let Some(output_dir) = flag_value(tokens, &["-C", "--directory"]) {
-        if !output_dir.is_empty() {
-            return Classification::ask_desc(base);
-        }
+    if let Some(output_dir) = flag_value(tokens, &["-C", "--directory"])
+        && !output_dir.is_empty()
+    {
+        return Classification::ask_desc(base);
     }
     if tokens.len() > 1 && (tokens[1] == "encode" || tokens[1] == "decode") {
         return Classification::ask_desc(format!("{base} {}", tokens[1]));

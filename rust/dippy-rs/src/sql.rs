@@ -94,14 +94,8 @@ fn is_blank(s: &[char]) -> bool {
 }
 
 fn starts_with(s: &[char], i: usize, pat: &str) -> bool {
-    let mut k = i;
-    for p in pat.chars() {
-        if s.get(k) != Some(&p) {
-            return false;
-        }
-        k += 1;
-    }
-    true
+    let pat: Vec<char> = pat.chars().collect();
+    s.get(i..).is_some_and(|rest| rest.starts_with(&pat))
 }
 
 fn find_seq(s: &[char], pat: &[char], from: usize) -> Option<usize> {
@@ -1912,7 +1906,7 @@ mod grammar {
             }
             self.select_list()?;
             if self.eat_kw("FROM") {
-                self.from_list()?;
+                self.parse_from_list()?;
             }
             self.select_tail()
         }
@@ -2024,16 +2018,16 @@ mod grammar {
             Some(())
         }
 
-        fn from_list(&mut self) -> Option<()> {
+        fn parse_from_list(&mut self) -> Option<()> {
             loop {
-                self.from_item()?;
+                self.parse_from_item()?;
                 if !self.eat_op(",") {
                     return Some(());
                 }
             }
         }
 
-        fn from_item(&mut self) -> Option<()> {
+        fn parse_from_item(&mut self) -> Option<()> {
             self.table_factor()?;
             loop {
                 if self.eat_kw("CROSS") {

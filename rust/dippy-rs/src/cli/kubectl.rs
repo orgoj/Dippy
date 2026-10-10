@@ -162,11 +162,12 @@ fn is_secret_data_exposure(
             break;
         }
         // Python: len(token) > 2 and token[:2] == "-o" and token[2] != "-"
-        if let Some(value) = token.strip_prefix("-o") {
-            if !value.is_empty() && !value.starts_with('-') {
-                output_format = Some(value);
-                break;
-            }
+        if let Some(value) = token.strip_prefix("-o")
+            && !value.is_empty()
+            && !value.starts_with('-')
+        {
+            output_format = Some(value);
+            break;
         }
     }
 

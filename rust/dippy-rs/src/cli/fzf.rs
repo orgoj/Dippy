@@ -46,7 +46,7 @@ fn has_exec_bind_action(bind_value: &str) -> bool {
         if bind_value.contains(&format!("{action}:")) {
             return true;
         }
-        let replaced = bind_value.replace(',', ":").replace('+', ":");
+        let replaced = bind_value.replace([',', '+'], ":");
         if replaced.split(':').any(|part| part == *action) {
             return true;
         }
