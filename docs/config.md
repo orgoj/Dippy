@@ -1828,7 +1828,7 @@ dippy audit --grep 'curl -X POST' --limit 5
 
 **Live dashboard:** `dippy dashboard` serves the audit log entries since yesterday (UTC) as a web page that refreshes every 2 seconds, with filters for decision, agent, absolute cwd and text. It only reads the log and never changes configuration. Open the URL it prints: the `#token=...` part authorizes the API. The token is kept in `~/.dippy/dashboard-token` (created with mode 0600 when missing; `--token-file PATH` selects another file), so it survives restarts. It listens on `127.0.0.1:8765`; use `--port` to change the port and `--host` (IPv4 only) only deliberately, for example a Tailscale address. For remote viewing, an SSH tunnel (`ssh -L 8765:127.0.0.1:8765 host`) keeps the default address. Unlike `dippy audit`, it requires approval when an agent runs it.
 
-**Dashboard hub:** `dippy dashboard --hub NODES_FILE` serves the same page for several machines. Each machine runs a plain `dippy dashboard` (a node); the hub stores every node's URL and token in `NODES_FILE` (JSON, written with mode 0600) and connects to the nodes, which know nothing about the hub. Add or remove nodes while it runs with the form on the page, `PUT /api/nodes/NAME` with `{"url": "...", "token": "..."}` and `DELETE /api/nodes/NAME`, or by editing the file. The page then shows all nodes merged by time with a node column and marks unreachable ones. If the network fails, open a node's own page directly. The hub proxies only each node's entries API, sends a node's token only to that node's URL, ignores `http_proxy`, follows no redirects and accepts only JSON responses. The full REST contract is [`dashboard-api.json`](dashboard-api.json).
+**Dashboard hub:** `dippy dashboard --hub NODES_FILE` serves the same page for several machines. Each machine runs a plain `dippy dashboard` (a node); the hub stores every node's URL and token in `NODES_FILE` (JSON, written with mode 0600) and connects to the nodes, which know nothing about the hub. Add or remove nodes while it runs with the form on the page, `PUT /api/nodes/NAME` with `{"url": "...", "token": "..."}` and `DELETE /api/nodes/NAME`, or by editing the file. The page then shows all nodes merged by time with a node column and marks unreachable ones. If the network fails, open a node's own page directly. The hub proxies only each node's entries API, sends a node's token only to that node's URL, ignores `http_proxy`, follows no redirects and accepts only JSON responses. The full REST contract is [`dashboard-api.json`](dashboard-api.json). The dippy-rs dashboard is a port with the same API plus the approval queue; see [Dashboard Approvals](#dashboard-approvals-dippy-rs).
 
 ```bash
 dippy dashboard
@@ -1851,6 +1851,130 @@ npx @vscode/vsce package
 code --install-extension dippy-syntax-*.vsix
 ```
 Highlights `.dippy` files and files named `config` (for `~/.dippy/config`).
+
+## Dashboard Approvals (dippy-rs)
+
+With `set approval dashboard`, an `ask` is not shown as the agent's own
+prompt (or the askpass dialog): Dippy queues it on the local dashboard node
+and answers the agent only with allow or deny after you decide in the web
+UI. `set approval ask` (the default) keeps everything as before.
+
+```text
+# ~/.dippy/config
+set approval dashboard
+set askpass-timeout 59                       # wait budget = askpass-timeout - 3
+set dashboard-url http://127.0.0.1:8765      # user config only (default)
+set dashboard-token-file ~/.dippy/dashboard-token  # user config only (default)
+set approval-timeout-message "Wait for the user and retry the same request, or continue with another safe solution."
+```
+
+Start the node (`dippy dashboard`, needs `set log`) and open the printed URL.
+The **Approvals** view lists pending requests with a countdown; clicking one
+opens a popup laid out like `dippy-askpass`: the whole request, the causes
+with their current decision, a rule editor with a live check, and
+Approve/Deny with an optional note for the agent. Decisions are ignored for
+one second after the popup opens or the window regains focus; only
+Ctrl+Enter approves from the keyboard and Esc denies.
+
+`dashboard-url` and `dashboard-token-file` are read only from the user config
+(`~/.dippy/config` and its includes). A project `.dippy`, `--config`,
+`--config-only` or `final` file that sets them gets a warning and is ignored,
+so a cloned repository cannot send requests to a server that approves
+everything. `approval` and `approval-timeout-message` work in every scope and
+merge like other settings; an unknown `approval` value is a config error.
+
+What is queued:
+
+| Caller | Queued | Not queued |
+| --- | --- | --- |
+| Claude Code (also moltbot, Windsurf, PearAI) | every `ask` | `pass` (unmatched tools left to Claude) |
+| Antigravity CLI (AGY) | every `ask`, replacing the askpass call (including unmatched tools, which AGY sends to askpass today) | |
+| Gemini CLI | every `ask` (also unmatched tools, which Gemini asks for today) | |
+| Cursor | every `ask` | `pass` |
+| Codex | `ask` in `PermissionRequest` | PreToolUse (an allow there does not approve; a deny still blocks); commands Codex runs without a `PermissionRequest` |
+| pi (`dippy --pi`) | `{action: ask}` replies | |
+| `dippy run`, `run-on-server` | every `ask`, replacing the askpass call; the `STATUS: Approval required` line stays | |
+
+A config error keeps today's behaviour (without a config there is no
+`approval` setting).
+
+**Timing.** The whole wait (config load, connect, request, polling) counts
+from the start of the Dippy process and ends at `askpass-timeout - 3`
+seconds; the request's deadline is that moment. An `askpass-timeout` of 3 or
+less (also 0 or negative) means no queue wait: Dippy denies at once with the
+timeout message. On timeout the agent gets `Approval timed out after N
+seconds. The requested command was not executed.` followed by
+`approval-timeout-message`; only that instruction is configurable and an
+empty value is rejected. The native askpass timeouts keep their texts.
+
+**Fallback.** Dippy falls back to the `set approval ask` behaviour only when
+the node provably did not receive the request: missing or unreadable token
+file, connection refused, connect timeout (at most 1 s), or an HTTP 401/404
+answer to the request (a wrong token, a hub, or a Python node without the
+queue). Any other outcome after the request was sent (reset, read timeout,
+5xx, malformed answer) is indeterminate: Dippy never sends the request
+twice; it polls the same id until the budget ends and then denies with the
+timeout message, also when the node restarted and lost the request. A
+request the node rejects (another 4xx) is denied at once. Only the state
+`allowed` allows.
+
+**Audit.** The hook keeps its `ask` entry; the outcome adds one entry with
+`allow` or `deny`, the agent, the note (or `approval timed out`) and the
+`approval` id. `hook-approvals.log` follows `log-hook-approvals`.
+
+**Agent hook timeouts.** Each agent cancels a hook that runs longer than its
+own timeout, so the agent's hook timeout must be greater than
+`askpass-timeout`:
+
+| Agent | Hook timeout | When it is too short |
+| --- | --- | --- |
+| Claude Code | `timeout` on the hook handler, seconds (default 600 for command hooks) | Claude cancels the hook and the call continues through its normal permission flow (its own prompt); the queued request stays in the dashboard until it expires |
+| Gemini CLI | `timeout` on the hook, milliseconds (default 60000) | Gemini treats a failed hook as a warning and may continue the tool call; set `timeout` above `askpass-timeout` × 1000 |
+| Cursor | `timeout` on the hook, seconds | Cursor's own fallback applies; set it explicitly |
+| Codex | `timeout` on the hook, seconds (default 600) | the normal Codex approval prompt applies |
+| pi | the extension waits for `dippy --pi` without a timeout | — |
+| AGY | AGY's own hook limit (the same as for the askpass dialog today) | AGY's handling of a failed hook applies; keep its limit above `askpass-timeout` |
+
+With the default `askpass-timeout 59` the budget is 56 s, inside the
+defaults of Claude Code, Gemini CLI and Codex.
+
+**Payload.** Dashboard requests use version 2 of the approval payload
+(`docs/dashboard-api.json`, schema `ApprovalRequest`): `version`, `id`
+(random, 32 hex digits, generated by the client), `command`, `cwd`
+(absolute), `tool`, `file_path`, `message`, `agent`, `server`, `decision`,
+`reason`, `context_flags`, `flags`, `remote`, `causes` (each with `kind`,
+`target`, `rule` and `flags`) and `deadline` (Unix milliseconds, UTC). The
+node rejects a missing or relative `cwd`, unknown fields and wrong types
+with 400 and never falls back to environment variables. Native askpass
+payloads (the unversioned hook payload, version 1 of `dippy run`) are
+unchanged.
+
+**Queue.** Pending requests live only in the node process: they are lost when
+the node restarts (the waiting agent then times out). Decided and expired
+requests are kept for the list (the last 200). A hub (`dippy dashboard --hub`)
+has no queue of its own: it lists the queues of all nodes with a node column
+and forwards decisions, rule checks and saves to the owning node.
+
+Run the node as a systemd user service (example, not installed):
+
+```ini
+# ~/.config/systemd/user/dippy-dashboard.service
+[Unit]
+Description=Dippy dashboard node
+
+[Service]
+ExecStart=%h/.local/bin/dippy dashboard --host 127.0.0.1 --port 8765
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now dippy-dashboard
+journalctl --user -u dippy-dashboard   # the URL with the token
+```
 
 ## File Operation Rules
 
