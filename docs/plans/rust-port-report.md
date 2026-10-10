@@ -72,7 +72,8 @@ for compatibility with existing projects. Python `dippy` stays installed
 while it serves the deferred subcommands below.
 
 Deferred, Python `dippy` keeps serving them after the switch:
-`run`/`run-on-server`/`recover` (rarely used), `dashboard`, and the GUI
+`run`/`run-on-server`/`recover` (unused; ported together when `run` is
+next worked on), `dashboard`, and the GUI
 askpass program. The askpass dialog will be redesigned rather than ported
 (show the whole command, edit it, approve and write a rule to the Dippy
 config). Not ported: `dippy-statusline` (a generic Claude Code status line,
