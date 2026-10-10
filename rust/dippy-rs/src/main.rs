@@ -183,12 +183,18 @@ fn main() {
             }
         }
         Some("--handler-jsonl") => handler_jsonl(),
-        Some("--claude") if args.len() == 1 => {
+        _ if args.iter().all(|a| hook::is_mode_flag(a)) => {
             let mut input = String::new();
             let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
-            if let Some(out) = hook::claude_hook(&input) {
-                println!("{out}");
+            let mode = hook::mode_from_flags(&args, |name| std::env::var(name).ok());
+            let out = hook::run_hook(mode, &input);
+            if let Some(stdout) = out.stdout {
+                println!("{stdout}");
             }
+            if let Some(stderr) = out.stderr {
+                eprintln!("{stderr}");
+            }
+            std::process::exit(out.exit_code);
         }
         _ => match parse_args(&args) {
             Ok(a) => std::process::exit(cli_mode(a)),

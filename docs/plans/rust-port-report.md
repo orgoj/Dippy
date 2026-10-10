@@ -20,8 +20,8 @@ session credit.
 | Handlers ported | 89 of 89 modules (140 command names) |
 | Handler parity (`handler_compare.py`, identical inputs) | 8,843 same, 0 different, 0 unsafe |
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
-| `--claude` hook output (`hook_compare.py`, 651 payloads) | 651 same decision, 637 byte-identical; all 42 MCP/web/file-tool payloads byte-identical |
-| `cargo test` | 283 tests pass |
+| Hook output, all modes (`hook_compare.py`, 1,594 payloads: Claude, Gemini, Codex, Cursor, AGY, auto-detected) | 1,594 same decision, 0 unsafe, 1,570 byte-identical; all 243 hand-written tool/event payloads byte-identical (the rest differ in corpus reason text only) |
+| `cargo test` | 292 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
 | Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
 
 Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
@@ -55,10 +55,14 @@ asks and Python allows, which the corpus exercises only lightly:
 
 Wire `dippy-rs --claude` behind a feature flag in a real Claude Code hook
 configuration on a test machine (empty `HOME`, fake askpass) and compare its
-live decisions with Python's for a week of audit logs; in parallel port the
-Gemini/Codex/Cursor/AGY hook output formats. The MCP/web/file-tool matchers
-(`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
-`after-web`) are ported (2026-10-10).
+live decisions with Python's for a week of audit logs. The MCP/web/file-tool
+matchers (`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
+`after-web`) and the Gemini/Codex/Cursor/AGY hook formats, including AGY
+askpass approval, are ported (2026-10-10). Audit logging is next.
+
+Intentional hook divergences: a config error fails closed in Gemini and AGY
+modes (Python allows everything), and where Python prints `null` to Codex
+(rule-matched allows without `hook_event`) dippy-rs prints nothing.
 
 Rable bugs listed under phase 1 are reported upstream as mpecan/rable#75
 (`$'`), #76 (backticks), #77 (silent recovery) and #78 (`(( ))` span).
@@ -172,7 +176,7 @@ All tools live in `rust/parity/`:
 | `run` | run `dippy-rs` per case, write `report.md`; exit 1 on any unsafe divergence |
 | `ast_compare.py` / `ast_dump.py` | Parable vs adapter tree comparison, `ast-report.md` |
 | `handler_compare.py` | identical `HandlerContext` fed to Python and Rust handlers |
-| `hook_compare.py` | `dippy --claude` vs `dippy-rs --claude` on the same payloads |
+| `hook_compare.py` | `dippy` vs `dippy-rs` hook mode on the same payloads in every agent mode (fake askpass) |
 
 The in-process oracle was checked against the real `dippy` executable on 100
 cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`
@@ -193,13 +197,17 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
   matching, context flags, last-match-wins.
 - `allowlists.rs`: generated at build time from `core/allowlists.py`
   (`build.rs`), so the lists cannot drift.
-- `hook.rs`: `--claude` hook mode.
+- `hook.rs`: hook mode for Claude Code (also `--pi`, `--moltbot`,
+  `--windsurf`, `--pearai`), `--gemini`, `--codex`, `--cursor` and
+  `--agy`/`--antigravity`, by flag, `DIPPY_<AGENT>` variable or payload
+  shape; AGY `ask` runs the askpass program (`DIPPY_ASKPASS` or
+  `set askpass`, `set askpass-timeout`).
 - CLI: `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR] [--config FILE]
   [--config-only FILE] [--remote]`, same output (Python `json.dumps`
   formatting) and exit codes as `cli_mode`.
 
-Not ported (fail closed or out of scope): other hook modes, notifier programs
-(never run), audit logging, execution subcommands.
+Not ported (fail closed or out of scope): notifier programs (never run),
+audit logging, execution subcommands.
 
 ## Phase 4 - Handlers
 

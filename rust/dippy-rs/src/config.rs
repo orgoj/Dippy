@@ -101,6 +101,9 @@ pub struct Config {
     pub final_path: Option<PathBuf>,
     pub notifier_command: Option<String>,
     pub notifier_include: Option<BTreeSet<String>>,
+    /// External approval program (SSH_ASKPASS style).
+    pub askpass: Option<PathBuf>,
+    pub askpass_timeout: i64,
 }
 
 impl Default for Config {
@@ -128,6 +131,8 @@ impl Default for Config {
             final_path: None,
             notifier_command: None,
             notifier_include: None,
+            askpass: None,
+            askpass_timeout: 59,
         }
     }
 }
@@ -529,6 +534,8 @@ struct Settings {
     context_env: Vec<String>,
     notifier_command: Option<String>,
     notifier_include: Option<BTreeSet<String>>,
+    askpass: Option<PathBuf>,
+    askpass_timeout: Option<i64>,
 }
 
 /// Python `int(str)`.
@@ -620,7 +627,8 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             settings.final_path = Some(PathBuf::from(paths::expanduser(&v)));
         }
         "askpass" => {
-            need("'askpass' requires a path")?;
+            let v = need("'askpass' requires a path")?;
+            settings.askpass = Some(PathBuf::from(paths::expanduser(&v)));
         }
         "approval_wait_message" => {
             let v = need("'approval-wait-message' requires a message")?;
@@ -632,6 +640,12 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             let v = need("requires a number")?;
             if !py_int_ok(&v) {
                 return Err(format!("must be an integer, got '{v}'"));
+            }
+            if key_n == "askpass_timeout" {
+                // Python also accepts non-ASCII digits; those lines are skipped here.
+                let n = v.trim().replace('_', "").parse::<i64>();
+                settings.askpass_timeout =
+                    Some(n.map_err(|_| format!("must be an integer, got '{v}'"))?);
             }
         }
         "run_on_server_timeout" | "run_on_server_poll_interval" => {
@@ -959,6 +973,8 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
     cfg.context_env = settings.context_env;
     cfg.notifier_command = settings.notifier_command;
     cfg.notifier_include = settings.notifier_include;
+    cfg.askpass = settings.askpass;
+    cfg.askpass_timeout = settings.askpass_timeout.unwrap_or(59);
     cfg.configured_settings = settings.names;
     Ok(cfg)
 }
@@ -1013,6 +1029,12 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
         final_path: overlay.final_path.or(base.final_path),
         notifier_command: overlay.notifier_command.or(base.notifier_command),
         notifier_include: overlay.notifier_include.or(base.notifier_include),
+        askpass: overlay.askpass.or(base.askpass),
+        askpass_timeout: if overlay.configured_settings.contains("askpass_timeout") {
+            overlay.askpass_timeout
+        } else {
+            base.askpass_timeout
+        },
     }
 }
 
@@ -1865,6 +1887,18 @@ mod tests {
             word_has_expansions: &[],
         };
         match_command(&sc, config, Path::new("/tmp"), &Flags::new(), false).map(|m| m.decision)
+    }
+
+    #[test]
+    fn askpass_settings_merge_by_membership() {
+        let base = cfg("set askpass /bin/ask\nset askpass-timeout 30");
+        assert_eq!(base.askpass, Some(PathBuf::from("/bin/ask")));
+        assert_eq!(base.askpass_timeout, 30);
+        assert_eq!(Config::default().askpass_timeout, 59);
+        let merged = merge_configs(base.clone(), cfg("set askpass-timeout 59"));
+        assert_eq!(merged.askpass_timeout, 59);
+        assert_eq!(merged.askpass, Some(PathBuf::from("/bin/ask")));
+        assert_eq!(merge_configs(base, cfg("")).askpass_timeout, 30);
     }
 
     #[test]
