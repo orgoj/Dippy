@@ -281,6 +281,11 @@ fn hook_mode(matches: &ArgMatches) -> i32 {
         .map(|name| format!("--{name}"))
         .collect();
     let mode = hook::mode_from_flags(&flags, |name| std::env::var(name).ok());
+    if mode == Some("pi") {
+        let (stdout, code) = dippy_rs::pi::run(&input);
+        println!("{stdout}");
+        return code;
+    }
     let out = hook::run_hook(mode, &input);
     if let Some(stdout) = out.stdout {
         println!("{stdout}");

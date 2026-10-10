@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.27] - 2026-10-10
+
+### Added
+
+- `dippy-rs --pi` (and `DIPPY_PI=1`) speaks the pi extension protocol of `src/dippy/pi_wrapper.py`: `bash`, `read`, `edit` and `idle` requests, `deny-format`/`deny-format-AGENT` templates and audit log entries as in Python; `note` is always null because the notifier is not ported. Invalid JSON reports serde's message and a non-object payload a fixed message instead of a Python exception. In Python Dippy, `dippy --pi` stays the Claude hook format. `rust/parity/pi_compare.py` compares both implementations.
+
+### Changed
+
+- The pi extension runs `dippy --pi` instead of `python3 pi_wrapper.py` and blocks the tool call on a reply without a known action; it needs the Rust `dippy` on `PATH`.
+
 ## [0.4.26] - 2026-10-10
 
 ### Added

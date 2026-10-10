@@ -86,11 +86,17 @@ command containing `/dippy` and removed such unrelated hooks on install), the
 upgrade hint has no double space without `--global`, and a malformed hook
 structure is an error instead of a traceback.
 
+Done (0.4.27): `dippy-rs --pi` speaks the `pi_wrapper.py` JSON protocol
+(`bash`/`read`/`edit`/`idle`, `deny-format` templates, audit log;
+`rust/parity/pi_compare.py`: 166 payloads, 145 audit entries, 0
+differences). `note` is always null (no notifier). The pi extension calls
+`dippy --pi` and blocks on any reply without a known action, so the Python
+`dippy --pi` (Claude format) cannot fail open.
+
 Remaining before the switch, in order:
 
-1. `doctor` subcommand. pi is supported as the
-   `dippy --pi` hook mode speaking the `pi_wrapper.py` JSON protocol, and
-   `pi-extension/dippy-extension.ts` calls it instead of Python.
+1. `doctor` subcommand (`resolve_dippy_command` gives `dippy --pi` for pi;
+   moltbot dropped).
 2. The GUI askpass dialog in Rust, redesigned rather than ported (show the
    whole command, edit it, approve and write a rule to the Dippy config).
 3. `run`/`run-on-server`/`recover` (unused today; ported together).

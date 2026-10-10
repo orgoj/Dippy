@@ -1,7 +1,7 @@
 //! Port of the hook path of `dippy.dippy.main` for every agent mode.
 //!
-//! Output formats: Claude Code (also pi, moltbot, Windsurf and PearAI, which
-//! share it), Gemini CLI, Codex, Cursor and Antigravity CLI (AGY `toolCall`
+//! Output formats: Claude Code (also moltbot, Windsurf and PearAI, which
+//! share it; `--pi` is the pi extension protocol in `pi.rs`), Gemini CLI, Codex, Cursor and Antigravity CLI (AGY `toolCall`
 //! payloads, `ask` resolved through the askpass program). Bash
 //! classification, MCP, web and file-tool rules, `after` rules, permission
 //! bypass modes, `Stop`/`Notification` events and invalid JSON are handled,

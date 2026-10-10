@@ -27,10 +27,9 @@ ln -s /path/to/dippy/pi-extension/dippy-extension.ts \
 
 ## Requirements
 
-- **Dippy installed** in system Python:
-  ```bash
-  pip install dippy  # or: pip install -e /path/to/dippy
-  ```
+- **Rust `dippy`** on `PATH` (`just install-rs`). The extension runs
+  `dippy --pi`; the Python package's `dippy --pi` answers in Claude's hook
+  format, which the extension rejects and blocks the tool call.
 - **pi-mono** with extension support
 
 ## Configuration
@@ -64,9 +63,7 @@ pi-mono tool call (bash|read|write|edit)
     ↓
 dippy-extension.ts intercepts
     ↓
-spawns python3 src/dippy/pi_wrapper.py
-    ↓
-wrapper calls dippy matching logic
+spawns dippy --pi (JSON request on stdin)
     ↓
 returns decision: allow | ask | deny | pass
     ↓
@@ -74,13 +71,16 @@ extension handles decision:
   - allow: execute immediately
   - ask: show confirmation dialog
   - deny: block with message
+  - anything else: block
 ```
+
+`note` is always null: the notifier is not part of the Rust port.
 
 ## Maintenance
 
-- Keep the shared `src/dippy/pi_wrapper.py` entry point aligned with
-  `src/dippy/dippy.py` when logging, agent identification or tool handling
-  changes.
+- The protocol lives in `rust/dippy-rs/src/pi.rs`;
+  `rust/parity/pi_compare.py` compares it with the Python
+  `src/dippy/pi_wrapper.py` until the Python package is removed.
 - Send every pi-initiated user message with `deliverAs: "followUp"`; direct
   delivery can collide with user input.
 
@@ -88,13 +88,13 @@ extension handles decision:
 
 ```bash
 # Test bash command
-echo '{"type":"bash","command":"ls","cwd":"."}' | python3 src/dippy/pi_wrapper.py
+echo '{"type":"bash","command":"ls","cwd":"."}' | dippy --pi
 
 # Test file edit (uses allow-edit rules)
-echo '{"type":"edit","path":"src/main.ts","cwd":"."}' | python3 src/dippy/pi_wrapper.py
+echo '{"type":"edit","path":"src/main.ts","cwd":"."}' | dippy --pi
 
 # Test file read (uses allow-read rules)
-echo '{"type":"read","path":"README.md","cwd":"."}' | python3 src/dippy/pi_wrapper.py
+echo '{"type":"read","path":"README.md","cwd":"."}' | dippy --pi
 ```
 
 ## Deny Message Formatting

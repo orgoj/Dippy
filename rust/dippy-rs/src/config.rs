@@ -163,6 +163,10 @@ pub struct Config {
     pub final_path: Option<PathBuf>,
     pub notifier_command: Option<String>,
     pub notifier_include: Option<BTreeSet<String>>,
+    /// `deny-format` template (pi protocol deny reasons).
+    pub deny_format: Option<String>,
+    /// `deny-format-AGENT` templates by agent.
+    pub deny_format_agents: BTreeMap<String, String>,
     /// External approval program (SSH_ASKPASS style).
     pub askpass: Option<PathBuf>,
     pub askpass_timeout: i64,
@@ -209,6 +213,8 @@ impl Default for Config {
             final_path: None,
             notifier_command: None,
             notifier_include: None,
+            deny_format: None,
+            deny_format_agents: BTreeMap::new(),
             askpass: None,
             askpass_timeout: 59,
             approval_wait_message: DEFAULT_APPROVAL_WAIT_MESSAGE.into(),
@@ -623,6 +629,8 @@ struct Settings {
     context_env: Vec<String>,
     notifier_command: Option<String>,
     notifier_include: Option<BTreeSet<String>>,
+    deny_format: Option<String>,
+    deny_format_agents: BTreeMap<String, String>,
     askpass: Option<PathBuf>,
     askpass_timeout: Option<i64>,
     approval_wait_message: Option<String>,
@@ -814,11 +822,19 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
                 .collect();
             settings.notifier_include = Some(items);
         }
-        "idle_notifier_command" | "deny_format" => {
-            need("requires a value")?;
+        "idle_notifier_command" => {
+            need("'idle-notifier-command' requires a command string")?;
+        }
+        "deny_format" => {
+            let v = need("'deny-format' requires a format template")?;
+            settings.deny_format = Some(strip_quotes(&v).to_string());
         }
         k if k.starts_with("deny_format_") => {
-            need("requires a format template")?;
+            let v = need(&format!("'{key}' requires a format template"))?;
+            settings.deny_format_agents.insert(
+                k["deny_format_".len()..].to_string(),
+                strip_quotes(&v).to_string(),
+            );
             settings.names.insert("deny_format_agents".into());
             return Ok(());
         }
@@ -1136,6 +1152,8 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
     cfg.context_env = settings.context_env;
     cfg.notifier_command = settings.notifier_command;
     cfg.notifier_include = settings.notifier_include;
+    cfg.deny_format = settings.deny_format;
+    cfg.deny_format_agents = settings.deny_format_agents;
     cfg.askpass = settings.askpass;
     cfg.askpass_timeout = settings.askpass_timeout.unwrap_or(59);
     let d = Config::default();
@@ -1216,6 +1234,12 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
         final_path: overlay.final_path.or(base.final_path),
         notifier_command: overlay.notifier_command.or(base.notifier_command),
         notifier_include: overlay.notifier_include.or(base.notifier_include),
+        deny_format: overlay.deny_format.or(base.deny_format),
+        deny_format_agents: {
+            let mut agents = base.deny_format_agents;
+            agents.extend(overlay.deny_format_agents);
+            agents
+        },
         askpass: overlay.askpass.or(base.askpass),
         askpass_timeout: if overlay.configured_settings.contains("askpass_timeout") {
             overlay.askpass_timeout
@@ -2223,6 +2247,22 @@ mod tests {
             word_has_expansions: &[],
         };
         match_command(&sc, config, Path::new("/tmp"), &Flags::new(), false).map(|m| m.decision)
+    }
+
+    #[test]
+    fn deny_format_settings_merge() {
+        let base = cfg("set deny-format \"All: {reason}\"\nset deny-format-pi 'Pi: {reason}'");
+        assert_eq!(base.deny_format.as_deref(), Some("All: {reason}"));
+        assert_eq!(
+            base.deny_format_agents.get("pi").map(String::as_str),
+            Some("Pi: {reason}")
+        );
+        let merged = merge_configs(base, cfg("set deny_format_claude C"));
+        assert_eq!(merged.deny_format.as_deref(), Some("All: {reason}"));
+        assert_eq!(merged.deny_format_agents.len(), 2);
+        let merged = merge_configs(merged, cfg("set deny-format-pi P2\nset deny-format X"));
+        assert_eq!(merged.deny_format.as_deref(), Some("X"));
+        assert_eq!(merged.deny_format_agents["pi"], "P2");
     }
 
     #[test]

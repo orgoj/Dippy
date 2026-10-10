@@ -521,7 +521,9 @@ ln -s /path/to/dippy/pi-extension/dippy-extension.ts \
       ~/.pi/agent/extensions/dippy-extension.ts
 ```
 
-Uses your existing `~/.dippy/config` and `.dippy` files.
+Uses your existing `~/.dippy/config` and `.dippy` files. The extension runs
+`dippy --pi`, which needs the Rust `dippy` (`just install-rs`); see
+[pi-extension/README.md](pi-extension/README.md).
 
 ---
 

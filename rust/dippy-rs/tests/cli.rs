@@ -131,6 +131,36 @@ fn hook_mode_without_cmd_reads_payload() {
     }
 }
 
+#[test]
+fn pi_mode_speaks_the_pi_extension_protocol() {
+    let dir = sandbox("pi");
+    std::fs::create_dir_all(dir.join("proj")).unwrap();
+    std::fs::write(dir.join("proj/.dippy"), "allow-edit src/**\n").unwrap();
+    let payload = format!(
+        r#"{{"type": "edit", "path": "src/a.rs", "cwd": "{}"}}"#,
+        dir.join("proj").display()
+    );
+    let o = run(&dir, &["--pi"], &payload);
+    assert_eq!(o.status.code(), Some(0));
+    assert_eq!(
+        stdout(&o),
+        "{\"action\": \"allow\", \"reason\": \"edit src/a.rs: src/**\", \
+         \"context_flags\": [], \"note\": null, \"error\": false}\n"
+    );
+    let mut child = Command::new(env!("CARGO_BIN_EXE_dippy-rs"))
+        .env("HOME", dir.join("home"))
+        .env("DIPPY_PI", "1")
+        .current_dir(&dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child.stdin.take().unwrap().write_all(b"not json").unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    assert!(stdout(&o).contains("\"error\": true"), "{}", stdout(&o));
+}
+
 fn config(dir: &PathBuf, args: &[&str]) -> (i32, String, String) {
     let argv: Vec<&str> = std::iter::once("config")
         .chain(args.iter().copied())

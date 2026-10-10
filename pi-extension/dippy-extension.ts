@@ -10,13 +10,6 @@
  */
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import { spawn } from "child_process";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-import { existsSync, realpathSync } from "fs";
-
-// Resolve symlinks to get actual file location
-const extensionPath = realpathSync(fileURLToPath(import.meta.url));
-const __dirname = dirname(extensionPath);
 
 interface DippyInput {
   type: 'bash' | 'read' | 'edit' | 'idle';
@@ -34,32 +27,26 @@ interface DippyDecision {
 }
 
 /**
- * Validate a tool call through dippy's Python wrapper.
+ * Validate a tool call through `dippy --pi`.
  */
-async function validateDippy(
-  wrapperScript: string,
-  input: DippyInput
-): Promise<DippyDecision> {
+async function validateDippy(input: DippyInput): Promise<DippyDecision> {
   return new Promise((resolve, reject) => {
-    const python = spawn("python3", [wrapperScript], {
-      cwd: input.cwd,
-      env: { ...process.env, PYTHONUNBUFFERED: "1" },
-    });
+    const dippy = spawn("dippy", ["--pi"], { cwd: input.cwd });
 
     let stdout = "";
     let stderr = "";
 
-    python.stdout.on("data", (data) => {
+    dippy.stdout.on("data", (data) => {
       stdout += data.toString();
     });
 
-    python.stderr.on("data", (data) => {
+    dippy.stderr.on("data", (data) => {
       stderr += data.toString();
     });
 
-    python.on("close", (code) => {
+    dippy.on("close", (code) => {
       if (code !== 0) {
-        reject(new Error(`Python script failed (exit ${code}): ${stderr}`));
+        reject(new Error(`dippy --pi failed (exit ${code}): ${stderr}`));
         return;
       }
 
@@ -71,12 +58,12 @@ async function validateDippy(
       }
     });
 
-    python.on("error", (error) => {
-      reject(new Error(`Failed to spawn Python: ${error.message}`));
+    dippy.on("error", (error) => {
+      reject(new Error(`Failed to spawn dippy: ${error.message}`));
     });
 
-    python.stdin.write(JSON.stringify(input));
-    python.stdin.end();
+    dippy.stdin.write(JSON.stringify(input));
+    dippy.stdin.end();
   });
 }
 
@@ -84,13 +71,6 @@ async function validateDippy(
  * Main extension function.
  */
 export default function dippyExtension(pi: ExtensionAPI) {
-  const wrapperScript = join(__dirname, "../src/dippy/pi_wrapper.py");
-
-  if (!existsSync(wrapperScript)) {
-    console.error(`[dippy] Wrapper script not found: ${wrapperScript}`);
-    return;
-  }
-
   console.log("[dippy] Extension loaded (Bash + File Access + Notifier)");
 
   let isIdleChecking = false;
@@ -99,7 +79,7 @@ export default function dippyExtension(pi: ExtensionAPI) {
     if (isIdleChecking) return;
     isIdleChecking = true;
     try {
-      const decision = await validateDippy(wrapperScript, {
+      const decision = await validateDippy({
         type: "idle",
         cwd: ctx.cwd,
       });
@@ -150,7 +130,7 @@ export default function dippyExtension(pi: ExtensionAPI) {
     if (!dippyInput) return undefined;
 
     try {
-      const decision = await validateDippy(wrapperScript, dippyInput);
+      const decision = await validateDippy(dippyInput);
 
       // Log decision for debugging
       console.log(`[dippy] ${decision.action} [${event.toolName}]: ${decision.reason}`);
@@ -193,6 +173,13 @@ export default function dippyExtension(pi: ExtensionAPI) {
           return {
             block: true,
             reason: denyReason,
+          };
+
+        default:
+          // e.g. an old `dippy --pi` that answers in Claude's hook format
+          return {
+            block: true,
+            reason: `Unexpected Dippy reply: ${JSON.stringify(decision)}`,
           };
       }
     } catch (error) {
