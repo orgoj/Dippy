@@ -33,6 +33,51 @@ pub fn take_warnings() -> Vec<String> {
     WARNINGS.with(|w| std::mem::take(&mut *w.borrow_mut()))
 }
 
+/// Print the drained warnings as Python's `logging.warning` does without
+/// handlers (`basicConfig` fallback).
+pub fn print_warnings() {
+    for warning in take_warnings() {
+        eprintln!("WARNING:root:{warning}");
+    }
+}
+
+/// `validate_server` (execution.py): a safe SSH-config alias.
+pub fn validate_server(server: &str) -> Result<(), String> {
+    if SERVER_ALIAS_RE.is_match(server) && !server.contains('@') {
+        Ok(())
+    } else {
+        Err(format!("invalid server alias: {}", py_repr(server)))
+    }
+}
+
+/// Python `repr(str)` for messages.
+fn py_repr(s: &str) -> String {
+    let quote = if s.contains('\'') && !s.contains('"') {
+        '"'
+    } else {
+        '\''
+    };
+    let mut out = String::from(quote);
+    for c in s.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            c if c == quote => {
+                out.push('\\');
+                out.push(c);
+            }
+            c if (c as u32) < 0x20 || c as u32 == 0x7f => {
+                out.push_str(&format!("\\x{:02x}", c as u32));
+            }
+            c => out.push(c),
+        }
+    }
+    out.push(quote);
+    out
+}
+
 pub const PROJECT_CONFIG_NAME: &str = ".dippy";
 pub const ENV_CONFIG: &str = "DIPPY_CONFIG";
 pub const ENV_CONFIG_ONLY: &str = "DIPPY_CONFIG_ONLY";
@@ -74,6 +119,9 @@ impl Rule {
         }
     }
 }
+
+pub const DEFAULT_APPROVAL_WAIT_MESSAGE: &str =
+    "Stop work and wait for the user unless you can continue safely without this command.";
 
 /// Configuration for a wrapper command.
 #[derive(Debug, Clone, PartialEq, Default)]
@@ -118,6 +166,16 @@ pub struct Config {
     /// External approval program (SSH_ASKPASS style).
     pub askpass: Option<PathBuf>,
     pub askpass_timeout: i64,
+    pub approval_wait_message: String,
+    /// 'ssh' | 'tmux' | 'herdr'
+    pub run_on_server_backend: String,
+    pub run_on_server_session: String,
+    pub run_on_server_timeout: f64,
+    pub run_on_server_poll_interval: f64,
+    /// `None` for `none` or unset.
+    pub run_on_server_ssh_config: Option<PathBuf>,
+    /// `none` is kept as the string "none".
+    pub run_on_server_ssh_auth_sock: Option<String>,
     /// Audit log (`set log`).
     pub log: Option<PathBuf>,
     pub log_full: bool,
@@ -153,6 +211,13 @@ impl Default for Config {
             notifier_include: None,
             askpass: None,
             askpass_timeout: 59,
+            approval_wait_message: DEFAULT_APPROVAL_WAIT_MESSAGE.into(),
+            run_on_server_backend: "ssh".into(),
+            run_on_server_session: "dippy".into(),
+            run_on_server_timeout: 300.0,
+            run_on_server_poll_interval: 0.1,
+            run_on_server_ssh_config: None,
+            run_on_server_ssh_auth_sock: None,
             log: None,
             log_full: false,
             log_rotate_max_days: 30,
@@ -560,10 +625,29 @@ struct Settings {
     notifier_include: Option<BTreeSet<String>>,
     askpass: Option<PathBuf>,
     askpass_timeout: Option<i64>,
+    approval_wait_message: Option<String>,
+    run_on_server_backend: Option<String>,
+    run_on_server_session: Option<String>,
+    run_on_server_timeout: Option<f64>,
+    run_on_server_poll_interval: Option<f64>,
+    run_on_server_ssh_config: Option<PathBuf>,
+    run_on_server_ssh_auth_sock: Option<String>,
     log: Option<PathBuf>,
     log_full: bool,
     log_rotate_max_days: Option<i64>,
     log_hook_approvals: Option<bool>,
+}
+
+/// `_local_profile_path`: relative paths resolve against the config file's
+/// directory.
+fn local_profile_path(value: &str, base: &Path) -> PathBuf {
+    let path = PathBuf::from(paths::expanduser(value));
+    let path = if path.is_absolute() {
+        path
+    } else {
+        base.join(path)
+    };
+    std::path::absolute(&path).unwrap_or(path)
 }
 
 /// Python `int(str)`.
@@ -597,7 +681,7 @@ fn py_float(value: &str) -> Option<f64> {
 }
 
 /// `_apply_setting`.
-fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
+fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(), String> {
     if rest.is_empty() {
         return Err("'set' requires a setting name".into());
     }
@@ -639,16 +723,34 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             if v.contains(['\0', '\r', '\n']) {
                 return Err(format!("'{key}' must be a single path"));
             }
-        }
-        "run_on_server_backend" => {
-            if !matches!(value.as_deref(), Some("ssh" | "tmux" | "herdr")) {
-                return Err("'run-on-server-backend' must be 'ssh', 'tmux' or 'herdr'".into());
+            if key_n == "run_on_server_ssh_config" {
+                settings.run_on_server_ssh_config =
+                    (v != "none").then(|| local_profile_path(v, base));
+            } else {
+                settings.run_on_server_ssh_auth_sock = Some(if v == "none" {
+                    v.to_string()
+                } else {
+                    paths::py_path_str(&local_profile_path(v, base))
+                });
             }
         }
+        "run_on_server_backend" => match value.as_deref() {
+            Some(v @ ("ssh" | "tmux" | "herdr")) => {
+                settings.run_on_server_backend = Some(v.to_string());
+            }
+            other => {
+                return Err(format!(
+                    "'run-on-server-backend' must be 'ssh', 'tmux' or 'herdr', got '{}'",
+                    other.unwrap_or("None")
+                ));
+            }
+        },
         "run_on_server_session" => {
-            if value.as_deref().is_none_or(|v| v.trim().is_empty()) {
+            let v = need("'run-on-server-session' requires a name")?;
+            if v.trim().is_empty() {
                 return Err("'run-on-server-session' requires a name".into());
             }
+            settings.run_on_server_session = Some(strip_quotes(&v).to_string());
         }
         "log" => {
             let v = need("'log' requires a path")?;
@@ -664,18 +766,22 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
         }
         "approval_wait_message" => {
             let v = need("'approval-wait-message' requires a message")?;
-            if strip_quotes(&v).trim().is_empty() {
+            let message = strip_quotes(&v).trim();
+            if message.is_empty() {
                 return Err("'approval-wait-message' must not be empty".into());
             }
+            settings.approval_wait_message = Some(message.to_string());
         }
         "log_rotate_max_days" | "askpass_timeout" => {
-            let v = need("requires a number")?;
+            let name = key_n.replace('_', "-");
+            let v = need(&format!("'{name}' requires a number"))?;
+            let invalid = || format!("'{name}' must be an integer, got '{v}'");
             if !py_int_ok(&v) {
-                return Err(format!("must be an integer, got '{v}'"));
+                return Err(invalid());
             }
             // Python also accepts non-ASCII digits; those lines are skipped here.
             let n = v.trim().replace('_', "").parse::<i64>();
-            let n = Some(n.map_err(|_| format!("must be an integer, got '{v}'"))?);
+            let n = Some(n.map_err(|_| invalid())?);
             if key_n == "askpass_timeout" {
                 settings.askpass_timeout = n;
             } else {
@@ -687,6 +793,11 @@ fn apply_setting(settings: &mut Settings, rest: &str) -> Result<(), String> {
             let n = py_float(&v).ok_or_else(|| format!("'{key}' must be a number, got '{v}'"))?;
             if n <= 0.0 {
                 return Err(format!("'{key}' must be positive"));
+            }
+            if key_n == "run_on_server_timeout" {
+                settings.run_on_server_timeout = Some(n);
+            } else {
+                settings.run_on_server_poll_interval = Some(n);
             }
         }
         "notifier_command" => {
@@ -803,6 +914,12 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
     let mut cfg = Config::default();
     let mut settings = Settings::default();
     let prefix = source.map(|s| format!("{s}: ")).unwrap_or_default();
+    // Base of relative SSH profile paths: the config file's directory.
+    let base = match source.map(|s| Path::new(s).parent().unwrap_or(Path::new(s))) {
+        Some(dir) if !dir.as_os_str().is_empty() => dir.to_path_buf(),
+        Some(_) => PathBuf::from("."),
+        None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
+    };
     for (idx, raw_line) in text.lines().enumerate() {
         let lineno = idx + 1;
         let line = raw_line.trim();
@@ -981,7 +1098,7 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
                     cfg.web_rules
                         .push(parse_flagged_rule(&directive, &rest, false)?);
                 }
-                "set" => apply_setting(&mut settings, &rest)?,
+                "set" => apply_setting(&mut settings, &rest, &base)?,
                 "server" => {
                     if rest.is_empty() || py_split(&rest).len() != 1 {
                         return Err("'server' requires exactly one SSH alias".into());
@@ -1021,6 +1138,24 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
     cfg.notifier_include = settings.notifier_include;
     cfg.askpass = settings.askpass;
     cfg.askpass_timeout = settings.askpass_timeout.unwrap_or(59);
+    let d = Config::default();
+    cfg.approval_wait_message = settings
+        .approval_wait_message
+        .unwrap_or(d.approval_wait_message);
+    cfg.run_on_server_backend = settings
+        .run_on_server_backend
+        .unwrap_or(d.run_on_server_backend);
+    cfg.run_on_server_session = settings
+        .run_on_server_session
+        .unwrap_or(d.run_on_server_session);
+    cfg.run_on_server_timeout = settings
+        .run_on_server_timeout
+        .unwrap_or(d.run_on_server_timeout);
+    cfg.run_on_server_poll_interval = settings
+        .run_on_server_poll_interval
+        .unwrap_or(d.run_on_server_poll_interval);
+    cfg.run_on_server_ssh_config = settings.run_on_server_ssh_config;
+    cfg.run_on_server_ssh_auth_sock = settings.run_on_server_ssh_auth_sock;
     cfg.log = settings.log;
     cfg.log_full = settings.log_full;
     cfg.log_rotate_max_days = settings.log_rotate_max_days.unwrap_or(30);
@@ -1032,6 +1167,8 @@ pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigEr
 // === Loading ===
 
 fn merge_configs(base: Config, overlay: Config) -> Config {
+    let overlay_settings = overlay.configured_settings.clone();
+    let set = |name: &str| overlay_settings.contains(name);
     let mut aliases = base.aliases.clone();
     for (s, t) in overlay.aliases {
         match aliases.iter_mut().find(|(x, _)| *x == s) {
@@ -1084,6 +1221,41 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
             overlay.askpass_timeout
         } else {
             base.askpass_timeout
+        },
+        approval_wait_message: if set("approval_wait_message") {
+            overlay.approval_wait_message
+        } else {
+            base.approval_wait_message
+        },
+        run_on_server_backend: if set("run_on_server_backend") {
+            overlay.run_on_server_backend
+        } else {
+            base.run_on_server_backend
+        },
+        run_on_server_session: if set("run_on_server_session") {
+            overlay.run_on_server_session
+        } else {
+            base.run_on_server_session
+        },
+        run_on_server_timeout: if set("run_on_server_timeout") {
+            overlay.run_on_server_timeout
+        } else {
+            base.run_on_server_timeout
+        },
+        run_on_server_poll_interval: if set("run_on_server_poll_interval") {
+            overlay.run_on_server_poll_interval
+        } else {
+            base.run_on_server_poll_interval
+        },
+        run_on_server_ssh_config: if set("run_on_server_ssh_config") {
+            overlay.run_on_server_ssh_config
+        } else {
+            base.run_on_server_ssh_config
+        },
+        run_on_server_ssh_auth_sock: if set("run_on_server_ssh_auth_sock") {
+            overlay.run_on_server_ssh_auth_sock
+        } else {
+            base.run_on_server_ssh_auth_sock
         },
         log: overlay.log.or(base.log),
         log_full: overlay.log_full || base.log_full,
@@ -1285,7 +1457,7 @@ fn find_project_config(cwd: &Path) -> Option<PathBuf> {
     }
 }
 
-fn user_config_path() -> PathBuf {
+pub fn user_config_path() -> PathBuf {
     paths::home().join(".dippy").join("config")
 }
 
@@ -2235,6 +2407,47 @@ mod tests {
         assert!(glob_match("/a/b", "/a/*"));
         assert!(glob_match("/a/x/y/out.log", "/a/**/out.log"));
         assert!(!glob_match("/a/xout.log", "/a/**/out.log"));
+    }
+
+    #[test]
+    fn run_on_server_settings_parse_and_merge_by_membership() {
+        let d = Config::default();
+        assert_eq!(d.run_on_server_backend, "ssh");
+        assert_eq!(d.run_on_server_session, "dippy");
+        assert_eq!(d.run_on_server_timeout, 300.0);
+        assert_eq!(d.run_on_server_poll_interval, 0.1);
+        assert_eq!(d.run_on_server_ssh_config, None);
+        assert_eq!(d.run_on_server_ssh_auth_sock, None);
+        assert!(d.approval_wait_message.starts_with("Stop work and wait"));
+        let c = parse_config(
+            "set run-on-server-backend tmux\n\
+             set run-on-server-session 'work'\n\
+             set run-on-server-timeout 5\n\
+             set run-on-server-poll-interval 1e-1\n\
+             set run-on-server-ssh-config ssh/cfg\n\
+             set run-on-server-ssh-auth-sock none\n\
+             set approval-wait-message ' Wait. '",
+            Some("/etc/dippy/config"),
+        )
+        .unwrap();
+        assert_eq!(c.run_on_server_backend, "tmux");
+        assert_eq!(c.run_on_server_session, "work");
+        assert_eq!(c.run_on_server_timeout, 5.0);
+        assert_eq!(c.run_on_server_poll_interval, 0.1);
+        assert_eq!(
+            c.run_on_server_ssh_config,
+            Some(PathBuf::from("/etc/dippy/ssh/cfg"))
+        );
+        assert_eq!(c.run_on_server_ssh_auth_sock.as_deref(), Some("none"));
+        assert_eq!(c.approval_wait_message, "Wait.");
+        let none = cfg("set run-on-server-ssh-config none");
+        assert_eq!(none.run_on_server_ssh_config, None);
+        let restored = merge_configs(c.clone(), cfg("set run-on-server-backend ssh"));
+        assert_eq!(restored.run_on_server_backend, "ssh");
+        assert_eq!(restored.run_on_server_session, "work");
+        let kept = merge_configs(c, cfg(""));
+        assert_eq!(kept.run_on_server_timeout, 5.0);
+        assert_eq!(kept.approval_wait_message, "Wait.");
     }
 
     #[test]

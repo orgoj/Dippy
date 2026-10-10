@@ -3,6 +3,7 @@
 //! The Python implementation in `src/dippy` is the specification; each
 //! module names the Python module it ports.
 
+pub mod admin;
 pub mod allowlists;
 pub mod analyzer;
 pub mod ast;

@@ -42,6 +42,27 @@ pub fn home() -> PathBuf {
     PathBuf::from(std::env::var("HOME").unwrap_or_else(|_| "/".into()))
 }
 
+/// `str(PurePosixPath(path))`: no empty or `.` components, no trailing slash;
+/// exactly two leading slashes are kept.
+pub fn py_path_str(path: &Path) -> String {
+    let s = path.to_string_lossy();
+    let lead = if s.starts_with("//") && !s.starts_with("///") {
+        "//"
+    } else if s.starts_with('/') {
+        "/"
+    } else {
+        ""
+    };
+    let parts: Vec<&str> = s
+        .split('/')
+        .filter(|c| !c.is_empty() && *c != ".")
+        .collect();
+    if lead.is_empty() && parts.is_empty() {
+        return ".".into();
+    }
+    format!("{lead}{}", parts.join("/"))
+}
+
 /// `os.path.normpath` for POSIX paths (lexical).
 pub fn normpath(path: &str) -> String {
     if path.is_empty() {
@@ -144,6 +165,21 @@ pub fn pathlib_str(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn py_path_str_cases() {
+        for (path, expected) in [
+            ("/a//b/./c/", "/a/b/c"),
+            ("./x/..", "x/.."),
+            ("//a", "//a"),
+            ("///a", "/a"),
+            ("", "."),
+            ("./", "."),
+            ("/", "/"),
+        ] {
+            assert_eq!(py_path_str(Path::new(path)), expected, "{path}");
+        }
+    }
 
     #[test]
     fn normpath_cases() {

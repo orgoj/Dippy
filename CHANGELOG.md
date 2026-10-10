@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.25] - 2026-10-10
+
+### Added
+
+- `dippy-rs config get/set/unset [--user|--project]` and `dippy-rs config server add/remove/list`, with Python's output, comment-preserving one-line edits, kept file mode and atomic writes. `dippy-rs config set` rejects a value containing a line break (Python writes it into the file as extra config lines). `rust/parity/config_compare.py` compares both implementations.
+
 ## [0.4.24] - 2026-10-10
 
 ### Added

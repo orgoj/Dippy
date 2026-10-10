@@ -331,7 +331,7 @@ toml = [
 
 [[package]]
 name = "dippy"
-version = "0.4.24"
+version = "0.4.25"
 source = { editable = "." }
 dependencies = [
     { name = "sqlglot" },

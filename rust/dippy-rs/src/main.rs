@@ -133,6 +133,8 @@ enum Subcommand {
                       Filters combine with AND;\ndates are UTC."
     )]
     Audit(dippy_rs::audit::Query),
+    /// Manage Dippy configuration
+    Config(dippy_rs::admin::ConfigArgs),
 }
 
 /// The derived parser plus the hidden agent hook flags (`--claude`, ...).
@@ -154,13 +156,6 @@ const EXIT_ALLOW: i32 = 0;
 const EXIT_DENY: i32 = 1;
 const EXIT_ASK: i32 = 2;
 
-/// Config warnings: Python's `logging.warning` falls back to `basicConfig`.
-fn print_config_warnings() {
-    for warning in config::take_warnings() {
-        eprintln!("WARNING:root:{warning}");
-    }
-}
-
 /// Port of `dippy.dippy.cli_mode`.
 fn cli_mode(args: &Cli) -> i32 {
     let command = match args.cmd.clone() {
@@ -180,7 +175,7 @@ fn cli_mode(args: &Cli) -> i32 {
         None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
     };
     let loaded = config::load_config(&cwd, args.config.as_deref(), args.config_only.as_deref());
-    print_config_warnings();
+    config::print_warnings();
     let config = match loaded {
         Ok(c) => c,
         Err(e) => {
@@ -226,7 +221,7 @@ fn run_audit(global: &Cli, query: &dippy_rs::audit::Query) -> i32 {
         global.config.as_deref(),
         global.config_only.as_deref(),
     );
-    print_config_warnings();
+    config::print_warnings();
     let config = match loaded {
         Ok(c) => c,
         Err(e) => {
@@ -265,6 +260,7 @@ fn main() {
             let (cli, matches) = parse_cli();
             let code = match &cli.command {
                 Some(Subcommand::Audit(query)) => run_audit(&cli, query),
+                Some(Subcommand::Config(args)) => dippy_rs::admin::run(args),
                 None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),
                 None => hook_mode(&matches),
             };
