@@ -601,7 +601,9 @@ def test_api_contract_matches_routes():
     documented = {
         (method.upper(), path)
         for path, item in contract["paths"].items()
-        for method in item
+        for method, operation in item.items()
         if method in ("get", "put", "post", "delete")
+        # The approval queue exists only in dippy-rs.
+        and not operation.get("x-dippy-rs-only")
     }
     assert documented == {(method, path) for method, path, _, _ in dashboard.ROUTES}

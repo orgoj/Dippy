@@ -19,7 +19,7 @@ use serde_json::{Map, Value, json};
 
 use crate::hook::py_dumps;
 use crate::http::{self, Request};
-use crate::{audit, config, paths};
+use crate::{audit, config, paths, queue};
 
 pub const DECISIONS: [&str; 4] = ["allow", "ask", "deny", "pass"];
 pub const DEFAULT_LIMIT: i64 = 200;
@@ -95,6 +95,32 @@ pub const ROUTES: &[(&str, &str, Mode, Handler)] = &[
     ("PUT", "/api/nodes/{name}", Mode::Hub, put_node),
     ("DELETE", "/api/nodes/{name}", Mode::Hub, delete_node),
     ("GET", "/n/{name}/api/entries", Mode::Hub, proxy_entries),
+    ("POST", "/api/approvals", Mode::Node, queue::post_approval),
+    ("GET", "/api/approvals", Mode::Node, queue::list_approvals),
+    (
+        "GET",
+        "/api/approvals/{id}",
+        Mode::Node,
+        queue::get_approval,
+    ),
+    (
+        "POST",
+        "/api/approvals/{id}/decision",
+        Mode::Node,
+        queue::decide_approval,
+    ),
+    (
+        "POST",
+        "/api/approvals/{id}/check",
+        Mode::Node,
+        queue::check_rule,
+    ),
+    (
+        "POST",
+        "/api/approvals/{id}/rule",
+        Mode::Node,
+        queue::save_rule,
+    ),
 ];
 
 /// Path segments of `path` captured by `template`, if it matches.
@@ -125,6 +151,10 @@ pub struct Server {
     nodes_lock: Mutex<()>,
     /// Fixed "today" (UTC) for tests.
     pub today: Option<NaiveDate>,
+    /// Node: the approval queue (in memory).
+    pub approvals: queue::Queue,
+    /// The user config rules are checked with and saved to.
+    pub user_config: PathBuf,
 }
 
 impl Server {
@@ -140,6 +170,8 @@ impl Server {
             nodes,
             nodes_lock: Mutex::new(()),
             today: None,
+            approvals: queue::Queue::default(),
+            user_config: config::user_config_path(),
         }
     }
 
@@ -168,6 +200,7 @@ impl Server {
         };
         let (status, content_type, body) = self.dispatch(&mut req);
         let _ = http::respond(req.stream(), status, content_type, &SECURITY_HEADERS, &body);
+        req.finish();
     }
 
     fn dispatch(&self, req: &mut Request) -> (u16, &'static str, Vec<u8>) {

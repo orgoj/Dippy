@@ -218,6 +218,15 @@ impl Request {
     pub fn stream(&self) -> &TcpStream {
         self.reader.get_ref()
     }
+
+    /// After the response: drain a little unread input so closing the
+    /// socket does not reset the connection before the client reads it.
+    pub fn finish(mut self) {
+        let stream = self.reader.get_ref();
+        let _ = stream.shutdown(std::net::Shutdown::Write);
+        let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+        let _ = io::copy(&mut (&mut self.reader).take(1 << 20), &mut io::sink());
+    }
 }
 
 fn read_line_limited(reader: &mut impl BufRead, budget: &mut usize) -> io::Result<String> {

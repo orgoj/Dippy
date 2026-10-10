@@ -2,64 +2,669 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Dippy dashboard API",
-    "version": "1",
-    "description": "REST API of `dippy dashboard`. A node serves /api/entries from its audit log. A hub (`--hub NODES_FILE`) serves /api/nodes and proxies /n/{name}/api/entries to registered nodes; it has no /api/entries. Every operation requires the server token in X-Dippy-Token. Errors are JSON objects {\"error\": \"...\"}."
+    "version": "2",
+    "description": "REST API of `dippy dashboard`. A node serves /api/entries from its audit log. A hub (`--hub NODES_FILE`) serves /api/nodes and proxies /n/{name}/api/entries to registered nodes; it has no /api/entries. Every operation requires the server token in X-Dippy-Token. Errors are JSON objects {\"error\": \"...\"}. dippy-rs nodes also serve the approval queue (/api/approvals, operations marked x-dippy-rs-only): requests from agent hooks and dippy run with `set approval dashboard`, decided in the web UI. The queue is in memory; pending requests are lost when the node restarts. Request bodies are JSON, at most 65536 bytes; unknown fields and wrong types are 400. Times are Unix milliseconds (UTC)."
   },
   "components": {
     "securitySchemes": {
-      "token": {"type": "apiKey", "in": "header", "name": "X-Dippy-Token"}
+      "token": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Dippy-Token"
+      }
     },
     "parameters": {
       "name": {
-        "name": "name", "in": "path", "required": true,
-        "schema": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"}
+        "name": "name",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$"
+        }
       },
-      "limit": {"name": "limit", "in": "query", "schema": {"type": "integer", "minimum": 1, "maximum": 1000, "default": 200}},
-      "decision": {"name": "decision", "in": "query", "description": "Repeatable; decisions combine with OR.", "schema": {"type": "array", "items": {"enum": ["allow", "ask", "deny", "pass"]}}, "explode": true},
-      "not_allow": {"name": "not_allow", "in": "query", "schema": {"enum": ["1"]}},
-      "agent": {"name": "agent", "in": "query", "schema": {"type": "string"}},
-      "cwd": {"name": "cwd", "in": "query", "description": "Absolute path; matches cwd at or below it.", "schema": {"type": "string"}},
-      "grep": {"name": "grep", "in": "query", "description": "Substring of command, cmd, message, file_path, tool or suggestion.", "schema": {"type": "string"}}
+      "limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 200
+        }
+      },
+      "decision": {
+        "name": "decision",
+        "in": "query",
+        "description": "Repeatable; decisions combine with OR.",
+        "schema": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny",
+              "pass"
+            ]
+          }
+        },
+        "explode": true
+      },
+      "not_allow": {
+        "name": "not_allow",
+        "in": "query",
+        "schema": {
+          "enum": [
+            "1"
+          ]
+        }
+      },
+      "agent": {
+        "name": "agent",
+        "in": "query",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "cwd": {
+        "name": "cwd",
+        "in": "query",
+        "description": "Absolute path; matches cwd at or below it.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "grep": {
+        "name": "grep",
+        "in": "query",
+        "description": "Substring of command, cmd, message, file_path, tool or suggestion.",
+        "schema": {
+          "type": "string"
+        }
+      },
+      "id": {
+        "name": "id",
+        "in": "path",
+        "required": true,
+        "schema": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{32}$"
+        }
+      }
     },
     "schemas": {
-      "Error": {"type": "object", "required": ["error"], "properties": {"error": {"type": "string"}}},
+      "Error": {
+        "type": "object",
+        "required": [
+          "error"
+        ],
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        }
+      },
       "Entry": {
         "type": "object",
         "description": "One audit log line; fields beyond decision and ts are optional.",
-        "required": ["decision", "ts"],
+        "required": [
+          "decision",
+          "ts"
+        ],
         "properties": {
-          "decision": {"enum": ["allow", "ask", "deny", "pass"]},
-          "ts": {"type": "string", "format": "date-time"},
-          "cmd": {"type": "string"}, "command": {"type": "string"},
-          "rule": {"type": "string"}, "message": {"type": "string"},
-          "cwd": {"type": "string"}, "policy_cwd": {"type": "string"},
-          "tool": {"type": "string"}, "file_path": {"type": "string"},
-          "context_flags": {"type": "array", "items": {"type": "string"}},
-          "agent": {"type": "string"}, "suggestion": {"type": "string"}
+          "decision": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny",
+              "pass"
+            ]
+          },
+          "ts": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cmd": {
+            "type": "string"
+          },
+          "command": {
+            "type": "string"
+          },
+          "rule": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string"
+          },
+          "policy_cwd": {
+            "type": "string"
+          },
+          "tool": {
+            "type": "string"
+          },
+          "file_path": {
+            "type": "string"
+          },
+          "context_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "agent": {
+            "type": "string"
+          },
+          "suggestion": {
+            "type": "string"
+          }
         }
       },
-      "Node": {"type": "object", "required": ["name", "url"], "properties": {"name": {"type": "string"}, "url": {"type": "string"}}}
+      "Node": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ],
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        }
+      },
+      "Cause": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "target",
+          "rule",
+          "flags"
+        ],
+        "properties": {
+          "kind": {
+            "enum": [
+              "command",
+              "redirect",
+              "read",
+              "edit",
+              "web",
+              "mcp"
+            ]
+          },
+          "target": {
+            "type": "string",
+            "description": "What a rule must match: the simple command, redirect target, path, URL or MCP tool."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "directive",
+                  "pattern"
+                ],
+                "properties": {
+                  "directive": {
+                    "type": "string"
+                  },
+                  "pattern": {
+                    "type": "string"
+                  },
+                  "message": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "scope": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "file": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "line": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                }
+              }
+            ]
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Context flags active where it asked."
+          }
+        }
+      },
+      "ApprovalRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "Version-2 approval payload, built by the client (agent hook or dippy run). Every field is required.",
+        "required": [
+          "version",
+          "id",
+          "command",
+          "cwd",
+          "tool",
+          "file_path",
+          "message",
+          "agent",
+          "server",
+          "decision",
+          "reason",
+          "context_flags",
+          "flags",
+          "remote",
+          "causes",
+          "deadline"
+        ],
+        "properties": {
+          "version": {
+            "const": 2
+          },
+          "id": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{32}$",
+            "description": "Random, generated by the client before the POST; a retry reuses it."
+          },
+          "command": {
+            "type": "string"
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Absolute working directory; rules are checked against it."
+          },
+          "tool": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "file_path": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "agent": {
+            "type": "string",
+            "description": "claude, agy, gemini, cursor, codex, pi, run, run-on-server, ..."
+          },
+          "server": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "decision": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny"
+            ]
+          },
+          "reason": {
+            "type": "string"
+          },
+          "context_flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "flags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Flags the command was analysed with (run-on-server)."
+          },
+          "remote": {
+            "type": "boolean"
+          },
+          "causes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Cause"
+            }
+          },
+          "deadline": {
+            "type": "integer",
+            "description": "Unix milliseconds; in the future and at most one hour ahead at POST time."
+          }
+        }
+      },
+      "Approval": {
+        "type": "object",
+        "required": [
+          "id",
+          "state",
+          "request",
+          "statuses",
+          "created",
+          "deadline",
+          "decided",
+          "note"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "allowed",
+              "denied",
+              "expired"
+            ]
+          },
+          "request": {
+            "$ref": "#/components/schemas/ApprovalRequest"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "allow",
+                "ask",
+                "deny"
+              ]
+            },
+            "description": "Current decision of each cause under the config on disk, recomputed on every read (ask for every cause when the config has an error)."
+          },
+          "created": {
+            "type": "integer"
+          },
+          "deadline": {
+            "type": "integer"
+          },
+          "decided": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "description": "When the state left pending (the deadline for expired)."
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          }
+        }
+      },
+      "Decision": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "decision"
+        ],
+        "properties": {
+          "decision": {
+            "enum": [
+              "allow",
+              "deny"
+            ]
+          },
+          "note": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 1000
+          }
+        }
+      },
+      "RuleCandidate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "cause",
+          "action",
+          "kind",
+          "tags",
+          "pattern",
+          "target"
+        ],
+        "properties": {
+          "cause": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "minimum": 0,
+            "description": "Index into the stored request's causes; null for a request without causes (the whole request)."
+          },
+          "action": {
+            "enum": [
+              "allow",
+              "ask",
+              "deny"
+            ]
+          },
+          "kind": {
+            "enum": [
+              "command",
+              "redirect",
+              "read",
+              "edit",
+              "web",
+              "mcp"
+            ]
+          },
+          "tags": {
+            "type": "string",
+            "description": "Comma-separated context flags, e.g. run-on-server,srv."
+          },
+          "pattern": {
+            "type": "string"
+          },
+          "target": {
+            "enum": [
+              "project",
+              "user"
+            ],
+            "description": "project: the project config Dippy loads for the request cwd (else .dippy in its Git root or the cwd); user: ~/.dippy/config."
+          }
+        }
+      },
+      "Check": {
+        "type": "object",
+        "required": [
+          "line",
+          "outcome",
+          "error",
+          "broad",
+          "can_save",
+          "file"
+        ],
+        "properties": {
+          "line": {
+            "type": "string",
+            "description": "The rule line that would be saved."
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "type": "object",
+                "required": [
+                  "cause",
+                  "request"
+                ],
+                "properties": {
+                  "cause": {
+                    "enum": [
+                      "allow",
+                      "ask",
+                      "deny"
+                    ]
+                  },
+                  "request": {
+                    "enum": [
+                      "allow",
+                      "ask",
+                      "deny"
+                    ]
+                  }
+                }
+              }
+            ],
+            "description": "Decisions of the selected cause and the whole request with the rule; null when the rule is invalid."
+          },
+          "error": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "broad": {
+            "type": "boolean",
+            "description": "A bare * or a command pattern without a literal command word."
+          },
+          "can_save": {
+            "type": "boolean",
+            "description": "The rule is valid and gives the selected cause the chosen action."
+          },
+          "file": {
+            "type": "string",
+            "description": "The config file the rule would be appended to."
+          }
+        }
+      },
+      "Saved": {
+        "type": "object",
+        "required": [
+          "file",
+          "line",
+          "statuses"
+        ],
+        "properties": {
+          "file": {
+            "type": "string"
+          },
+          "line": {
+            "type": "string"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "allow",
+                "ask",
+                "deny"
+              ]
+            }
+          }
+        }
+      }
     },
     "responses": {
-      "Entries": {"description": "Entries since yesterday (UTC), oldest first, at most limit.", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Entry"}}}}},
-      "Error": {"description": "Error", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Error"}}}}
+      "Entries": {
+        "description": "Entries since yesterday (UTC), oldest first, at most limit.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/Entry"
+              }
+            }
+          }
+        }
+      },
+      "Error": {
+        "description": "Error",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Approval": {
+        "description": "The approval item",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Approval"
+            }
+          }
+        }
+      }
     }
   },
-  "security": [{"token": []}],
+  "security": [
+    {
+      "token": []
+    }
+  ],
   "paths": {
     "/api/entries": {
       "get": {
         "summary": "Node: audit log entries",
         "parameters": [
-          {"$ref": "#/components/parameters/limit"}, {"$ref": "#/components/parameters/decision"},
-          {"$ref": "#/components/parameters/not_allow"}, {"$ref": "#/components/parameters/agent"},
-          {"$ref": "#/components/parameters/cwd"}, {"$ref": "#/components/parameters/grep"}
+          {
+            "$ref": "#/components/parameters/limit"
+          },
+          {
+            "$ref": "#/components/parameters/decision"
+          },
+          {
+            "$ref": "#/components/parameters/not_allow"
+          },
+          {
+            "$ref": "#/components/parameters/agent"
+          },
+          {
+            "$ref": "#/components/parameters/cwd"
+          },
+          {
+            "$ref": "#/components/parameters/grep"
+          }
         ],
         "responses": {
-          "200": {"$ref": "#/components/responses/Entries"},
-          "400": {"$ref": "#/components/responses/Error"},
-          "401": {"$ref": "#/components/responses/Error"},
-          "500": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "$ref": "#/components/responses/Entries"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
@@ -67,50 +672,390 @@
       "get": {
         "summary": "Hub: registered nodes (tokens are never returned)",
         "responses": {
-          "200": {"description": "Nodes", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Node"}}}}},
-          "401": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "description": "Nodes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Node"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/api/nodes/{name}": {
-      "parameters": [{"$ref": "#/components/parameters/name"}],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        }
+      ],
       "put": {
         "summary": "Hub: add or replace a node",
         "requestBody": {
           "required": true,
-          "content": {"application/json": {"schema": {
-            "type": "object", "required": ["url", "token"],
-            "properties": {
-              "url": {"type": "string", "description": "http:// or https:// with host; no credentials, query or fragment. A path prefix is kept."},
-              "token": {"type": "string", "minLength": 1, "description": "The node's X-Dippy-Token."}
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "url",
+                  "token"
+                ],
+                "properties": {
+                  "url": {
+                    "type": "string",
+                    "description": "http:// or https:// with host; no credentials, query or fragment. A path prefix is kept."
+                  },
+                  "token": {
+                    "type": "string",
+                    "minLength": 1,
+                    "description": "The node's X-Dippy-Token."
+                  }
+                }
+              }
             }
-          }}}
+          }
         },
         "responses": {
-          "200": {"description": "Stored", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/Node"}}}},
-          "400": {"$ref": "#/components/responses/Error"},
-          "401": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "description": "Stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Node"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       },
       "delete": {
         "summary": "Hub: remove a node",
         "responses": {
-          "200": {"description": "Removed", "content": {"application/json": {"schema": {"type": "object", "properties": {"name": {"type": "string"}}}}}},
-          "401": {"$ref": "#/components/responses/Error"},
-          "404": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "description": "Removed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     },
     "/n/{name}/api/entries": {
-      "parameters": [{"$ref": "#/components/parameters/name"}],
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/name"
+        }
+      ],
       "get": {
         "summary": "Hub: proxy to the node's /api/entries",
         "description": "Forwards the query string with the node's token. Relays the node's status and JSON body; no environment proxy, no redirects, response capped.",
         "responses": {
-          "200": {"$ref": "#/components/responses/Entries"},
-          "401": {"$ref": "#/components/responses/Error"},
-          "404": {"$ref": "#/components/responses/Error"},
-          "502": {"$ref": "#/components/responses/Error"}
+          "200": {
+            "$ref": "#/components/responses/Entries"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "502": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/approvals": {
+      "post": {
+        "summary": "Node: queue an approval request",
+        "x-dippy-rs-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/Approval"
+          },
+          "200": {
+            "description": "The same id with the same body again: the existing item (idempotent)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "The id exists with a different body",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "summary": "Node: approval items, newest first",
+        "x-dippy-rs-only": true,
+        "parameters": [
+          {
+            "name": "state",
+            "in": "query",
+            "schema": {
+              "enum": [
+                "pending",
+                "done"
+              ]
+            },
+            "description": "pending, or done (allowed, denied, expired; the last 200 are kept). Omitted: both."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Items",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Approval"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/approvals/{id}": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "get": {
+        "summary": "Node: one approval item",
+        "x-dippy-rs-only": true,
+        "parameters": [
+          {
+            "name": "wait",
+            "in": "query",
+            "schema": {
+              "type": "number",
+              "minimum": 0
+            },
+            "description": "Long-poll: wait up to this many seconds (server cap 10) while the item is pending, then return it in its current state."
+          }
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Approval"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/approvals/{id}/decision": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Node: allow or deny a pending request (first decision wins)",
+        "x-dippy-rs-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Decision"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/Approval"
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "Already decided or expired: the item in its final state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Approval"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/approvals/{id}/check": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Node: live check of a candidate rule against the stored request",
+        "x-dippy-rs-only": true,
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCandidate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Check"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          }
+        }
+      }
+    },
+    "/api/approvals/{id}/rule": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/id"
+        }
+      ],
+      "post": {
+        "summary": "Node: save the checked rule line when it can be saved",
+        "x-dippy-rs-only": true,
+        "description": "Recomputes the check from the stored request and appends exactly the checked line to the target file only when can_save; saves are serialized in the node and the config is loaded per request.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RuleCandidate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Saved"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/Error"
+          },
+          "401": {
+            "$ref": "#/components/responses/Error"
+          },
+          "404": {
+            "$ref": "#/components/responses/Error"
+          },
+          "409": {
+            "description": "The rule cannot be saved: the check",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Check"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/Error"
+          }
         }
       }
     }

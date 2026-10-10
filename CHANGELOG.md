@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.36] - 2026-10-10
+
+### Added
+
+- dippy-rs dashboard node: in-memory approval queue `/api/approvals` (contract in `docs/dashboard-api.json`, operations marked `x-dippy-rs-only`; a Rust test compares it with the router table). `POST` takes the version-2 payload (201, the same id and body again 200, a different body 409; a deadline in the past or more than one hour ahead is 400); `GET ?state=pending|done` lists newest first and keeps the last 200 done items; `GET /{id}?wait=SECONDS` long-polls (cap 10 s); `POST /{id}/decision` (`allow`/`deny`, note up to 1000 characters) is first-wins, a later decision gets 409 with the final item; items expire atomically at their deadline. `POST /{id}/check` and `/{id}/rule` run `askpass::check` against the stored request and save exactly the checked line with `admin::add_rule` only when it can be saved (409 otherwise); saves are serialized and the config is loaded per request. Item statuses (current decision per cause) are recomputed on every read.
+
 ## [0.4.35] - 2026-10-10
 
 ### Added
