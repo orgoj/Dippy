@@ -192,7 +192,7 @@ pub fn edit_config(path: &Path, edit: Edit) -> std::io::Result<()> {
 }
 
 /// Python `repr(float)`.
-fn py_float_repr(x: f64) -> String {
+pub fn py_float_repr(x: f64) -> String {
     if x.is_nan() {
         return "nan".into();
     }

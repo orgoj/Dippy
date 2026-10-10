@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.26] - 2026-10-10
+
+### Added
+
+- `dippy-rs hooks list/install/uninstall/setup-gemini-yolo` with Python's output, `--dry-run` diff, sorted JSON, backups and Codex `config.toml` edits. dippy-rs counts a hook as Dippy's only when its program is `dippy` or `dippy-hook`; Python also matched any command containing `/dippy` and removed such unrelated hooks on install. The upgrade hint has no double space without `--global`, and a malformed hook structure is an error instead of a traceback. `rust/parity/hooks_compare.py` compares both implementations in a sandbox HOME.
+
 ## [0.4.25] - 2026-10-10
 
 ### Added

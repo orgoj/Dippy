@@ -14,6 +14,7 @@ pub mod config;
 pub mod dump;
 pub mod fnmatch;
 pub mod hook;
+pub mod hooks;
 pub mod logging;
 pub mod parser;
 pub mod paths;

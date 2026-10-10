@@ -243,3 +243,35 @@ fn audit_takes_global_config_options() {
     );
     assert_eq!(stdout(&o), "1\trm\n");
 }
+
+#[test]
+fn hooks_install_and_uninstall_stay_in_the_sandbox() {
+    let dir = sandbox("hooks");
+    let settings = dir.join(".claude/settings.json");
+    let o = run(&dir, &["hooks", "install", "claude"], "");
+    assert_eq!(
+        o.status.code(),
+        Some(0),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+    let text = std::fs::read_to_string(&settings).unwrap();
+    assert!(text.contains("\"command\": \"dippy --claude\""), "{text}");
+    assert_eq!(
+        run(&dir, &["hooks", "uninstall", "claude"], "")
+            .status
+            .code(),
+        Some(0)
+    );
+    assert_eq!(std::fs::read_to_string(&settings).unwrap(), "{}");
+    // No ~/.claude in the sandbox HOME: a global install refuses.
+    let o = run(&dir, &["hooks", "install", "claude", "--global"], "");
+    assert_eq!(o.status.code(), Some(1));
+    assert!(!dir.join("home/.claude").exists());
+    let o = run(&dir, &["hooks"], "");
+    assert_eq!(o.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&o.stderr),
+        "Error: Please specify an action (list, install, uninstall)\n"
+    );
+}

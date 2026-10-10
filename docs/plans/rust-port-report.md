@@ -77,9 +77,18 @@ Done (0.4.25): `config get/set/unset` and `config server add/remove/list`
 rejects a value containing a line break; Python writes it and so adds the
 following text as a new config line.
 
+Done (0.4.26): `hooks list/install/uninstall/setup-gemini-yolo` with
+Python's output (including the `--dry-run` difflib diff), JSON formatting,
+backups and Codex `config.toml` edits (`rust/parity/hooks_compare.py`: 34
+scenarios, 198 steps, 0 differences). Intentional divergences: a hook is
+Dippy's only when its program is `dippy` or `dippy-hook` (Python matched any
+command containing `/dippy` and removed such unrelated hooks on install), the
+upgrade hint has no double space without `--global`, and a malformed hook
+structure is an error instead of a traceback.
+
 Remaining before the switch, in order:
 
-1. `hooks` and `doctor` subcommands. pi is supported as the
+1. `doctor` subcommand. pi is supported as the
    `dippy --pi` hook mode speaking the `pi_wrapper.py` JSON protocol, and
    `pi-extension/dippy-extension.ts` calls it instead of Python.
 2. The GUI askpass dialog in Rust, redesigned rather than ported (show the
@@ -219,6 +228,7 @@ All tools live in `rust/parity/`:
 | `hook_compare.py` | `dippy` vs `dippy-rs` hook mode on the same payloads in every agent mode (fake askpass) |
 | `log_compare.py` | the same payloads with logging on in a separate HOME per run: audit log, `hook-approvals.log`, `audit` queries and rotation |
 | `config_compare.py` | `dippy config` scenarios in one sandbox per implementation: output of every step, resulting files and their modes |
+| `hooks_compare.py` | `dippy hooks` scenarios in a sandbox HOME and project per implementation: output of every step, the whole resulting tree (backups included) and modes |
 
 The in-process oracle was checked against the real `dippy` executable on 100
 cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`
@@ -255,6 +265,9 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
   add/remove/list`; edits one line, keeps every other line and the file
   mode, writes atomically (a new file gets 0600). `config.rs` keeps the
   `approval-wait-message` and `run-on-server-*` values for it.
+- `hooks.rs`: `hooks list/install/uninstall/setup-gemini-yolo` for Claude,
+  Gemini, AGY, Cursor, Windsurf and Codex (`config.toml` included), with a
+  port of difflib's unified diff for `--dry-run`.
 - CLI (`main.rs`, clap): `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR]
   [--config FILE|--config-only FILE] [--agent NAME] [--remote]`, same output
   (Python `json.dumps` formatting) and exit codes as `cli_mode`; `--help`,

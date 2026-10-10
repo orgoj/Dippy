@@ -135,6 +135,8 @@ enum Subcommand {
     Audit(dippy_rs::audit::Query),
     /// Manage Dippy configuration
     Config(dippy_rs::admin::ConfigArgs),
+    /// Manage Dippy hooks for AI coding assistants
+    Hooks(dippy_rs::hooks::HooksArgs),
 }
 
 /// The derived parser plus the hidden agent hook flags (`--claude`, ...).
@@ -261,6 +263,7 @@ fn main() {
             let code = match &cli.command {
                 Some(Subcommand::Audit(query)) => run_audit(&cli, query),
                 Some(Subcommand::Config(args)) => dippy_rs::admin::run(args),
+                Some(Subcommand::Hooks(args)) => dippy_rs::hooks::run(args, cli.cwd.as_deref()),
                 None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),
                 None => hook_mode(&matches),
             };
