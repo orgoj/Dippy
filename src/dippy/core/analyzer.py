@@ -12,7 +12,15 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal
 
-from dippy.core.config import Config, env_context_flags, match_redirect, WrapperInfo
+from dippy.core.config import (
+    Config,
+    SimpleCommand,
+    WrapperInfo,
+    code_env_name,
+    env_context_flags,
+    match_command,
+    match_redirect,
+)
 from dippy.core.allowlists import SIMPLE_SAFE, WRAPPER_COMMANDS
 from dippy.cli import get_handler, get_description, HandlerContext
 from dippy.vendor.parable import parse, ParseError
@@ -1040,6 +1048,25 @@ def _analyze_simple_command(
     while i < len(words) and "=" in words[i] and not words[i].startswith("-"):
         i += 1
 
+    code_env = next(filter(None, map(code_env_name, words[:i])), None)
+    if code_env:
+        cmd = SimpleCommand(
+            words=words, raw_words=raw_words, word_has_expansions=word_has_expansions
+        )
+        config_match = match_command(cmd, config, cwd, context_flags, remote=remote)
+        if config_match and config_match.decision in ("allow", "ask", "deny"):
+            msg = config_match.message or config_match.pattern
+            return Decision(
+                config_match.decision,
+                f"{code_env}: {msg}",
+                context_flags=context_flags,
+            )
+        return Decision(
+            "ask",
+            f"{code_env}= changes which code runs",
+            context_flags=context_flags,
+        )
+
     if i >= len(words):
         return Decision("allow", "env assignment", context_flags=context_flags)
 
@@ -1055,8 +1082,6 @@ def _analyze_simple_command(
     wrapper_offset = _unwrap_all_transparent_wrappers(tokens, config)
     if wrapper_offset > 0:
         # Check if the outer wrapper command itself is explicitly matched by a non-catch-all rule
-        from dippy.core.config import SimpleCommand, match_command
-
         cmd = SimpleCommand(
             words=words, raw_words=raw_words, word_has_expansions=word_has_expansions
         )
@@ -1099,8 +1124,6 @@ def _analyze_simple_command(
         )
 
     # 1. Check config rules first (highest priority)
-    from dippy.core.config import SimpleCommand, match_command
-
     cmd = SimpleCommand(
         words=words, raw_words=raw_words, word_has_expansions=word_has_expansions
     )

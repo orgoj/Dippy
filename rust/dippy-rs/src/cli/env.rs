@@ -19,6 +19,9 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
         return Classification::allow(); // Just "env" prints environment
     }
 
+    // Assignments stay with the inner command so the analyzer can judge
+    // variables that change which code runs.
+    let mut assignments = Vec::new();
     let mut i = 1;
     while i < tokens.len() {
         let token = tokens[i].as_str();
@@ -35,6 +38,7 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
             continue;
         }
         if token.contains('=') && !token.starts_with('-') {
+            assignments.push(tokens[i].clone());
             i += 1;
             continue;
         }
@@ -45,7 +49,8 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
         return Classification::allow();
     }
 
-    Classification::delegate(bash_join(&tokens[i..]))
+    assignments.extend_from_slice(&tokens[i..]);
+    Classification::delegate(bash_join(&assignments))
 }
 
 #[cfg(test)]
@@ -70,12 +75,12 @@ mod tests {
     fn delegates_inner() {
         let cases: &[(&[&str], &str)] = &[
             (&["env", "ls"], "ls"),
-            (&["env", "FOO=bar", "BAZ=qux", "ls"], "ls"),
+            (&["env", "FOO=bar", "BAZ=qux", "ls"], "FOO=bar BAZ=qux ls"),
             (&["env", "-u", "PATH", "ls"], "ls"),
             (&["env", "--chdir=/tmp", "ls"], "ls"),
             (&["env", "-", "ls"], "ls"),
-            (&["env", "FOO=bar", "--", "rm", "f"], "rm f"),
-            (&["env", "FOO=1", "echo", "(a)"], "echo '(a)'"),
+            (&["env", "FOO=bar", "--", "rm", "f"], "FOO=bar rm f"),
+            (&["env", "FOO=1", "echo", "(a)"], "FOO=1 echo '(a)'"),
         ];
         for (tokens, inner) in cases {
             let r = run(tokens);

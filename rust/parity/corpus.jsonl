@@ -486,6 +486,10 @@
 {"cmd": "?limit=x 2>/dev/null", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "env assignment"}
 {"cmd": "?not_allow=yes", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "env assignment"}
 {"cmd": "?since=2026-10-01", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "env assignment"}
+{"cmd": "BASH_ENV", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "BASH_ENV"}
+{"cmd": "BASH_ENV=/tmp/evil ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "BASH_ENV= changes which code runs"}
+{"cmd": "BASH_FUNC_ls%%", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "BASH_FUNC_ls%%"}
+{"cmd": "BASH_FUNC_ls%%=x ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "BASH_FUNC_ls%%= changes which code runs"}
 {"cmd": "BOOL", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "BOOL"}
 {"cmd": "COPY (SELECT 1) TO 'https://example.com/out'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "parse error: Syntax error"}
 {"cmd": "COPY (SELECT 1) TO 'tmp/$(touch /tmp/dippy-bypass)'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "parse error: Syntax error"}
@@ -517,6 +521,7 @@
 {"cmd": "FOO=bar 7zz a archive.7z file.txt", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "7zz a"}
 {"cmd": "FOO=bar BAZ=$(rm x) ls", "cwd": "$PARITY_WORK", "config": "", "src": "parser", "expected": "ask", "reason": "command substitution: rm x"}
 {"cmd": "FOO=bar BAZ=qux git log", "cwd": "$PARITY_WORK", "config": "", "src": "analyze", "expected": "allow", "reason": "git log"}
+{"cmd": "FOO=bar LD_PRELOAD=/tmp/x.so git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "LD_PRELOAD= changes which code runs"}
 {"cmd": "FOO=bar ansible-console all -i inventory.ini", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "ansible-console interactive"}
 {"cmd": "FOO=bar aws athena list-prepared-statements --work-group primary", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "aws athena list-prepared-statements"}
 {"cmd": "FOO=bar aws athena start-query-execution --query-string '  WITH x AS (SELECT 1) SELECT * FROM x'", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "aws athena start-query-execution (read-only)"}
@@ -558,6 +563,7 @@
 {"cmd": "FOO=bar echo `", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "parse error: Unterminated backtick"}
 {"cmd": "FOO=bar echo `whoami`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "whoami, echo"}
 {"cmd": "FOO=bar echo hello | tee", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "echo, tee"}
+{"cmd": "FOO=bar env BAZ=1 git status", "cwd": "$PARITY_WORK", "config": "", "src": "analyze", "expected": "allow", "reason": "git status"}
 {"cmd": "FOO=bar fd --changed-within 1week pattern", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "fd"}
 {"cmd": "FOO=bar find . -exec cat {} \\;", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "cat"}
 {"cmd": "FOO=bar find . -exec sh -c 'rm $0' {} \\;", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "rm $0"}
@@ -609,16 +615,34 @@
 {"cmd": "FOO=bar xargs -0 sh -c 'cat'", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "cat"}
 {"cmd": "FOO=bar xargs -J % cat %", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "cat"}
 {"cmd": "FROM 'tmp/in'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "FROM tmp/in"}
+{"cmd": "GIT_CONFIG_GLOBAL", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_CONFIG_GLOBAL"}
+{"cmd": "GIT_CONFIG_GLOBAL=/tmp/evil git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_CONFIG_GLOBAL= changes which code runs"}
+{"cmd": "GIT_CONFIG_KEY_0", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_CONFIG_KEY_0"}
+{"cmd": "GIT_CONFIG_KEY_0=core.pager git log", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_CONFIG_KEY_0= changes which code runs"}
+{"cmd": "GIT_SSH_COMMAND", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_SSH_COMMAND"}
+{"cmd": "GIT_SSH_COMMAND=/tmp/evil git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "GIT_SSH_COMMAND= changes which code runs"}
 {"cmd": "INSERT INTO t SELECT 1", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "INSERT INTO"}
 {"cmd": "INSTALL httpfs", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "INSTALL httpfs"}
 {"cmd": "INTEGER", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "INTEGER"}
+{"cmd": "LD_PRELOAD", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "LD_PRELOAD"}
+{"cmd": "LD_PRELOAD=/tmp/x.so git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "LD_PRELOAD= changes which code runs"}
+{"cmd": "LD_PRELOAD=/tmp/x.so timeout 5 git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "LD_PRELOAD= changes which code runs"}
 {"cmd": "M!", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "M!"}
 {"cmd": "MODE=test ", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "env assignment"}
 {"cmd": "MODE=test  && echo done", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "env assignment, echo"}
+{"cmd": "NODE_OPTIONS", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "NODE_OPTIONS"}
+{"cmd": "NODE_OPTIONS=--require=/tmp/x.js ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "NODE_OPTIONS= changes which code runs"}
 {"cmd": "NUMERIC", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "NUMERIC"}
 {"cmd": "Needs manual review", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "Needs manual"}
+{"cmd": "PAGER", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PAGER"}
+{"cmd": "PAGER=/tmp/evil git log", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PAGER= changes which code runs"}
+{"cmd": "PATH", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PATH"}
+{"cmd": "PATH=/tmp/evil", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PATH= changes which code runs"}
+{"cmd": "PATH=/tmp/evil ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PATH= changes which code runs"}
 {"cmd": "POST", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "POST"}
 {"cmd": "PUT", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PUT"}
+{"cmd": "PYTHONPATH", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PYTHONPATH"}
+{"cmd": "PYTHONPATH=src git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PYTHONPATH= changes which code runs"}
 {"cmd": "SELECT \"evil\".\"to_milliseconds\"(1)", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "parse error: Syntax error"}
 {"cmd": "SELECT '/*!50000 INTO OUTFILE */'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "SELECT /*!50000 INTO OUTFILE */"}
 {"cmd": "SELECT '/*M!50000 INTO OUTFILE */'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "SELECT /*M!50000 INTO OUTFILE */"}
@@ -5340,7 +5364,7 @@
 {"cmd": "echo `echo \\`date\\``", "cwd": "$PARITY_WORK", "config": "", "src": "parser", "expected": "allow", "reason": "date, echo, echo"}
 {"cmd": "echo `echo \\`date\\`` 2>&1 | tee log", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "tee log"}
 {"cmd": "echo `env -- rm file.txt`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "command substitution: rm file.txt"}
-{"cmd": "echo `env --ignore-environment PATH=/bin ls`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "ls, echo"}
+{"cmd": "echo `env --ignore-environment PATH=/bin ls`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "command substitution: PATH= changes which code runs"}
 {"cmd": "echo `false`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "false, echo"}
 {"cmd": "echo `find . -exec sh -c 'rm $0' {} \\;`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "command substitution: rm $0"}
 {"cmd": "echo `find . -mtime -7`", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "allow", "reason": "find, echo"}
@@ -5506,7 +5530,8 @@
 {"cmd": "env - ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
 {"cmd": "env -- rm file.txt", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "rm file.txt"}
 {"cmd": "env --chdir=/tmp ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
-{"cmd": "env --ignore-environment PATH=/bin ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
+{"cmd": "env --ignore-environment LANG=C ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
+{"cmd": "env --ignore-environment PATH=/bin ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PATH= changes which code runs"}
 {"cmd": "env --ignore-environment ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
 {"cmd": "env --null", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "env --null"}
 {"cmd": "env --unset PATH ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
@@ -5514,6 +5539,7 @@
 {"cmd": "env -C /tmp ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
 {"cmd": "env -S 'FOO=bar ls'", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "env -S"}
 {"cmd": "env -i FOO=bar BAR=baz ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
+{"cmd": "env -i PATH=/tmp/evil ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "PATH= changes which code runs"}
 {"cmd": "env -i ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
 {"cmd": "env -i rm -rf /", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "rm -rf"}
 {"cmd": "env -u HOME -- git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "git status"}
@@ -5613,6 +5639,7 @@
 {"cmd": "env FOO=bar xargs -d '\\n' rm", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "rm"}
 {"cmd": "env FOO=bar xargs chown root", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "chown root"}
 {"cmd": "env FOO=bar yarn remove lodash", "cwd": "$PARITY_WORK", "config": "", "src": "fuzz", "expected": "ask", "reason": "yarn remove"}
+{"cmd": "env LD_PRELOAD=/tmp/x.so git status", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "LD_PRELOAD= changes which code runs"}
 {"cmd": "env cat /etc/passwd", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "cat"}
 {"cmd": "env ls", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "allow", "reason": "ls"}
 {"cmd": "env mv src dst", "cwd": "$PARITY_WORK", "config": "", "src": "param", "expected": "ask", "reason": "mv src"}
@@ -12557,6 +12584,7 @@
 {"cmd": "FOO=1 frob x", "cwd": "$PARITY_WORK", "config": "allow FOO=1 frob *\n", "src": "handwritten", "expected": "allow", "reason": "frob (FOO=1 frob *)"}
 {"cmd": "FOO=2 frob x", "cwd": "$PARITY_WORK", "config": "allow FOO=1 frob *\n", "src": "handwritten", "expected": "ask", "reason": "frob x"}
 {"cmd": "frob x", "cwd": "$PARITY_WORK", "config": "allow FOO=1 frob *\n", "src": "handwritten", "expected": "ask", "reason": "frob x"}
+{"cmd": "PYTHONPATH=src zorptool run", "cwd": "$PARITY_WORK", "config": "allow PYTHONPATH=src zorptool *", "src": "analyze", "expected": "allow", "reason": "PYTHONPATH: PYTHONPATH=src zorptool *"}
 {"cmd": "SECRET=key uv run pytest -q", "cwd": "$PARITY_WORK", "config": "allow SECRET=* uv run *\ndeny uv run *", "src": "analyze", "expected": "deny", "reason": "uv: uv run *"}
 {"cmd": "deploy-tool x", "cwd": "$PARITY_WORK", "config": "allow [$DIPPY_PARITY_UNSET_VAR=bot1] deploy-tool *\n", "src": "handwritten", "expected": "ask", "reason": "deploy-tool x"}
 {"cmd": "fictionalcmd x", "cwd": "$PARITY_WORK", "config": "allow [$DIPPY_TEST_AGENT=mail] fictionalcmd *", "src": "analyze", "expected": "ask", "reason": "fictionalcmd x"}
@@ -12900,6 +12928,7 @@
 {"cmd": "zork push --force origin", "cwd": "$PARITY_WORK", "config": "allow zork *\ndeny zork push --force * \"Use --force-with-lease instead\"\n", "src": "handwritten", "expected": "deny", "reason": "zork: Use --force-with-lease instead"}
 {"cmd": "zork push --force-with-lease origin", "cwd": "$PARITY_WORK", "config": "allow zork *\ndeny zork push --force * \"Use --force-with-lease instead\"\n", "src": "handwritten", "expected": "allow", "reason": "zork *"}
 {"cmd": "zork push origin", "cwd": "$PARITY_WORK", "config": "allow zork *\ndeny zork push --force * \"Use --force-with-lease instead\"\n", "src": "handwritten", "expected": "allow", "reason": "zork *"}
+{"cmd": "LD_PRELOAD=/tmp/x.so zorptool run", "cwd": "$PARITY_WORK", "config": "allow zorptool *", "src": "analyze", "expected": "ask", "reason": "LD_PRELOAD= changes which code runs"}
 {"cmd": "zorptool /srv/proj/../../etc/shadow", "cwd": "$PARITY_WORK", "config": "allow zorptool ~/proj/*\nallow zorptool /srv/proj/*\n", "src": "analyze", "expected": "ask", "reason": "zorptool /srv/proj/../../etc/shadow"}
 {"cmd": "zorptool /srv/proj/notes.txt", "cwd": "$PARITY_WORK", "config": "allow zorptool ~/proj/*\nallow zorptool /srv/proj/*\n", "src": "analyze", "expected": "allow", "reason": "zorptool /srv/proj/*"}
 {"cmd": "zorptool ~/proj/../.ssh/id_rsa", "cwd": "$PARITY_WORK", "config": "allow zorptool ~/proj/*\nallow zorptool /srv/proj/*\n", "src": "analyze", "expected": "ask", "reason": "zorptool ~/proj/../.ssh/id_rsa"}
@@ -13205,6 +13234,7 @@
 {"cmd": "sed -i s/a/b/ f", "cwd": "$PARITY_WORK", "config": "deny sed -i *\n", "src": "handwritten", "expected": "deny", "reason": "sed: sed -i *"}
 {"cmd": "sed -n p f", "cwd": "$PARITY_WORK", "config": "deny sed -i *\n", "src": "handwritten", "expected": "allow", "reason": "sed"}
 {"cmd": "uv run pytest -q", "cwd": "$PARITY_WORK", "config": "deny uv run *", "src": "analyze", "expected": "deny", "reason": "uv: uv run *"}
+{"cmd": "LD_PRELOAD=/tmp/x.so zorptool run", "cwd": "$PARITY_WORK", "config": "deny zorptool *", "src": "analyze", "expected": "deny", "reason": "LD_PRELOAD: zorptool *"}
 {"cmd": "fictgit commit -- --no-verify", "cwd": "$PARITY_WORK", "config": "deny-opt \"fictgit commit\" --no-verify \"Don't skip pre-commit hooks\"\nallow fictgit *\n", "src": "handwritten", "expected": "allow", "reason": "fictgit *"}
 {"cmd": "fictgit commit --no-verify -m x", "cwd": "$PARITY_WORK", "config": "deny-opt \"fictgit commit\" --no-verify \"Don't skip pre-commit hooks\"\nallow fictgit *\n", "src": "handwritten", "expected": "allow", "reason": "fictgit *"}
 {"cmd": "fictgit commit -m '--no-verify'", "cwd": "$PARITY_WORK", "config": "deny-opt \"fictgit commit\" --no-verify \"Don't skip pre-commit hooks\"\nallow fictgit *\n", "src": "handwritten", "expected": "allow", "reason": "fictgit *"}

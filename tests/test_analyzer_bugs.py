@@ -45,6 +45,55 @@ class TestEnvVarPrefixHandling:
         assert result.reason == "git push"
 
 
+class TestCodeEnvAssignment:
+    """An assignment that changes which code runs must not be stripped away."""
+
+    @pytest.mark.parametrize(
+        "cmd, var",
+        [
+            ("LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("PATH=/tmp/evil ls", "PATH"),
+            ("PYTHONPATH=src git status", "PYTHONPATH"),
+            ("NODE_OPTIONS=--require=/tmp/x.js ls", "NODE_OPTIONS"),
+            ("BASH_ENV=/tmp/evil ls", "BASH_ENV"),
+            ("GIT_CONFIG_GLOBAL=/tmp/evil git status", "GIT_CONFIG_GLOBAL"),
+            ("GIT_CONFIG_KEY_0=core.pager git log", "GIT_CONFIG_KEY_0"),
+            ("GIT_SSH_COMMAND=/tmp/evil git status", "GIT_SSH_COMMAND"),
+            ("PAGER=/tmp/evil git log", "PAGER"),
+            ("BASH_FUNC_ls%%=x ls", "BASH_FUNC_ls%%"),
+            ("FOO=bar LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("env LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("env -i PATH=/tmp/evil ls", "PATH"),
+            ("LD_PRELOAD=/tmp/x.so timeout 5 git status", "LD_PRELOAD"),
+            ("PATH=/tmp/evil", "PATH"),
+        ],
+    )
+    def test_asks(self, cmd, var):
+        result = analyze(cmd, Config(), Path.cwd())
+        assert result.action == "ask"
+        assert var in result.reason
+
+    def test_harmless_assignment_still_stripped(self):
+        result = analyze("FOO=bar env BAZ=1 git status", Config(), Path.cwd())
+        assert result.action == "allow"
+
+    def test_generic_rule_does_not_cover_assignment(self):
+        config = parse_config("allow zorptool *")
+        result = analyze("LD_PRELOAD=/tmp/x.so zorptool run", config, Path.cwd())
+        assert result.action == "ask"
+        assert "LD_PRELOAD" in result.reason
+
+    def test_rule_spelling_out_assignment_allows(self):
+        config = parse_config("allow PYTHONPATH=src zorptool *")
+        result = analyze("PYTHONPATH=src zorptool run", config, Path.cwd())
+        assert result.action == "allow"
+
+    def test_deny_rule_still_wins(self):
+        config = parse_config("deny zorptool *")
+        result = analyze("LD_PRELOAD=/tmp/x.so zorptool run", config, Path.cwd())
+        assert result.action == "deny"
+
+
 class TestCmdsubInjectionWarning:
     """Pure cmdsubs in handler CLIs should warn about injection risk."""
 

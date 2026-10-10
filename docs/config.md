@@ -773,6 +773,19 @@ allow hcom * agent show *    # also allows: hcom kill boom agent show x
 Spell out the intervening tokens instead - one rule per option form is verbose
 but cannot be walked through.
 
+**Leading assignments are skipped, except those that change which code runs.**
+`allow uv run *` also matches `FOO=1 uv run x`. An assignment to `PATH`,
+`LD_PRELOAD`, `PYTHONPATH`, `NODE_OPTIONS`, `BASH_ENV`, `GIT_CONFIG*`,
+`GIT_SSH_COMMAND`, `PAGER`, `EDITOR`, `BASH_FUNC_*` or a similar variable asks
+instead, also behind `env` or a wrapper such as `timeout`. A rule matching the
+command without the assignment can still ask or deny it; only a rule that
+spells out the assignment allows it:
+
+```
+allow PYTHONPATH=src pytest *   # allows PYTHONPATH=src pytest -q
+allow pytest *                  # does not allow PYTHONPATH=/tmp/x pytest
+```
+
 ### Option-aware Command Patterns
 
 Add an optional `[opts: ...]` block before the command pattern, after any

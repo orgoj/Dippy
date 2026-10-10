@@ -1628,6 +1628,51 @@ def _check_rule_context_flags(rule: Rule, active_flags: frozenset[str] | None) -
     return True
 
 
+# Variables that change which code a command runs: loader, interpreter and
+# shell startup paths, git config and helpers, pagers and editors.
+CODE_ENV_VARS = frozenset(
+    {
+        "PATH",
+        "LD_PRELOAD",
+        "LD_LIBRARY_PATH",
+        "LD_AUDIT",
+        "PYTHONPATH",
+        "PYTHONHOME",
+        "PYTHONSTARTUP",
+        "PERL5LIB",
+        "PERL5OPT",
+        "PERLLIB",
+        "RUBYLIB",
+        "RUBYOPT",
+        "NODE_OPTIONS",
+        "NODE_PATH",
+        "BASH_ENV",
+        "ENV",
+        "GIT_DIR",
+        "GIT_EXEC_PATH",
+        "GIT_SSH",
+        "GIT_SSH_COMMAND",
+        "GIT_ASKPASS",
+        "SSH_ASKPASS",
+        "GIT_EXTERNAL_DIFF",
+        "GIT_PAGER",
+        "PAGER",
+        "GIT_EDITOR",
+        "EDITOR",
+        "VISUAL",
+    }
+)
+CODE_ENV_PREFIXES = ("BASH_FUNC_", "GIT_CONFIG", "DYLD_")
+
+
+def code_env_name(word: str) -> str | None:
+    """Return the variable name when WORD assigns a code-influencing variable."""
+    name = word.split("=", 1)[0].rstrip("+")
+    if name in CODE_ENV_VARS or name.startswith(CODE_ENV_PREFIXES):
+        return name
+    return None
+
+
 def _match_words(
     words: list[str],
     config: Config,
@@ -1675,6 +1720,9 @@ def _match_words(
     i = 0
     while i < len(words) and "=" in words[i] and not words[i].startswith("-"):
         i += 1
+    # Without an assignment that changes which code runs, the stripped form may
+    # still ask or deny, but only a rule spelling out the assignment allows.
+    strip_only_restricts = any(code_env_name(word) for word in words[:i])
     if i > 0:
         stripped_words = words[i:]
         normalized_stripped = (
@@ -1689,6 +1737,7 @@ def _match_words(
         # Check context flags first - rule only applies if all required flags are present
         if not _check_rule_context_flags(rule, active_flags):
             continue
+        may_strip = not strip_only_restricts or rule.decision in ("ask", "deny")
 
         if rule.options is not None:
             raw_matched = _match_option_block(
@@ -1696,6 +1745,7 @@ def _match_words(
             )
             stripped_matched = (
                 i > 0
+                and may_strip
                 and literal_words is not None
                 and not raw_deny_set
                 and _match_option_block(
@@ -1725,6 +1775,7 @@ def _match_words(
             # Try env-stripped words for option rules too
             if (
                 stripped_words
+                and may_strip
                 and not raw_deny_set
                 and _match_option_rule(rule, stripped_words)
             ):
@@ -1788,7 +1839,7 @@ def _match_words(
                 scope=rule.scope,
             )
             raw_deny_set = rule.decision == "deny"
-        elif stripped_matched and not raw_deny_set:
+        elif stripped_matched and may_strip and not raw_deny_set:
             result = Match(
                 decision=rule.decision,
                 pattern=rule.pattern,

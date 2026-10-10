@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.23] - 2026-10-10
+
+### Fixed
+
+- A command prefixed with an assignment that changes which code runs (`PATH`, `LD_PRELOAD`, `PYTHONPATH`, `NODE_OPTIONS`, `BASH_ENV`, `GIT_CONFIG*`, `GIT_SSH_COMMAND`, `PAGER`, `BASH_FUNC_*` and similar) now asks instead of being judged as the bare command, also through `env` and transparent wrappers, and so does a bare assignment of such a variable. Only a rule that spells out the assignment itself can still allow it. Python and `dippy-rs`.
+
 ## [0.4.22] - 2026-10-09
 
 ### Added

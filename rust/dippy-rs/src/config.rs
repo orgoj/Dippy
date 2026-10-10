@@ -1651,6 +1651,47 @@ fn check_rule_context_flags(rule: &Rule, active: &Flags) -> bool {
     true
 }
 
+/// Variables that change which code a command runs: loader, interpreter and
+/// shell startup paths, git config and helpers, pagers and editors.
+const CODE_ENV_VARS: &[&str] = &[
+    "PATH",
+    "LD_PRELOAD",
+    "LD_LIBRARY_PATH",
+    "LD_AUDIT",
+    "PYTHONPATH",
+    "PYTHONHOME",
+    "PYTHONSTARTUP",
+    "PERL5LIB",
+    "PERL5OPT",
+    "PERLLIB",
+    "RUBYLIB",
+    "RUBYOPT",
+    "NODE_OPTIONS",
+    "NODE_PATH",
+    "BASH_ENV",
+    "ENV",
+    "GIT_DIR",
+    "GIT_EXEC_PATH",
+    "GIT_SSH",
+    "GIT_SSH_COMMAND",
+    "GIT_ASKPASS",
+    "SSH_ASKPASS",
+    "GIT_EXTERNAL_DIFF",
+    "GIT_PAGER",
+    "PAGER",
+    "GIT_EDITOR",
+    "EDITOR",
+    "VISUAL",
+];
+const CODE_ENV_PREFIXES: &[&str] = &["BASH_FUNC_", "GIT_CONFIG", "DYLD_"];
+
+/// The variable name when `word` assigns a code-influencing variable.
+pub fn code_env_name(word: &str) -> Option<&str> {
+    let name = word.split('=').next().unwrap_or("").trim_end_matches('+');
+    (CODE_ENV_VARS.contains(&name) || CODE_ENV_PREFIXES.iter().any(|p| name.starts_with(p)))
+        .then_some(name)
+}
+
 fn match_option_block(
     rule: &Rule,
     words: Option<&[String]>,
@@ -1736,6 +1777,9 @@ fn match_words(
     while i < words.len() && words[i].contains('=') && !words[i].starts_with('-') {
         i += 1;
     }
+    // Without an assignment that changes which code runs, the stripped form may
+    // still ask or deny, but only a rule spelling out the assignment allows.
+    let strip_only_restricts = words[..i].iter().any(|w| code_env_name(w).is_some());
     let (stripped_words, normalized_stripped) = if i > 0 {
         let s = words[i..].to_vec();
         let n = if remote {
@@ -1753,10 +1797,12 @@ fn match_words(
         if !check_rule_context_flags(rule, active) {
             continue;
         }
+        let may_strip = !strip_only_restricts || rule.decision == "ask" || rule.decision == "deny";
         if rule.options.is_some() {
             let raw_matched =
                 match_option_block(rule, literal_words.as_deref(), config, cwd, remote);
             let stripped_matched = i > 0
+                && may_strip
                 && !raw_deny_set
                 && literal_words.as_ref().is_some_and(|lw| {
                     match_option_block(rule, Some(&lw[i.min(lw.len())..]), config, cwd, remote)
@@ -1777,6 +1823,7 @@ fn match_words(
             }
             if let Some(sw) = &stripped_words
                 && !sw.is_empty()
+                && may_strip
                 && !raw_deny_set
                 && match_option_rule(rule, sw)
             {
@@ -1822,7 +1869,7 @@ fn match_words(
         if raw_matched {
             result = Some(Match::from_rule(rule));
             raw_deny_set = rule.decision == "deny";
-        } else if stripped_matched && !raw_deny_set {
+        } else if stripped_matched && may_strip && !raw_deny_set {
             result = Some(Match::from_rule(rule));
         }
     }

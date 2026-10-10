@@ -3922,7 +3922,8 @@ TESTS = [
     ("aws --cli-connect-timeout 30 --ca-bundle /path ec2 describe-instances", True),
     # env wrapper with mixed flags and VAR=val
     ("env -i FOO=bar BAR=baz ls", True),
-    ("env --ignore-environment PATH=/bin ls", True),
+    ("env --ignore-environment LANG=C ls", True),
+    ("env --ignore-environment PATH=/bin ls", False),
     ("env -u HOME -- git status", True),
     # uv run with multiple flags consuming args
     ("uv run --python 3.12 --with requests --group dev pytest", False),

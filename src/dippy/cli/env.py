@@ -31,7 +31,9 @@ def classify(ctx: HandlerContext) -> Classification:
     if len(tokens) < 2:
         return Classification("allow")  # Just "env" prints environment
 
-    # Find where the inner command starts
+    # Find where the inner command starts; assignments stay with it so the
+    # analyzer can judge variables that change which code runs.
+    assignments = []
     i = 1
     while i < len(tokens):
         token = tokens[i]
@@ -50,6 +52,7 @@ def classify(ctx: HandlerContext) -> Classification:
 
         # Skip VAR=value assignments
         if "=" in token and not token.startswith("-"):
+            assignments.append(token)
             i += 1
             continue
 
@@ -59,6 +62,6 @@ def classify(ctx: HandlerContext) -> Classification:
         return Classification("allow")  # Just env with no command
 
     # Delegate to inner command check
-    inner_tokens = tokens[i:]
+    inner_tokens = assignments + tokens[i:]
     inner_cmd = bash_join(inner_tokens)
     return Classification("delegate", inner_command=inner_cmd)

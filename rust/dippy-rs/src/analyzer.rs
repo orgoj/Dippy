@@ -1067,6 +1067,26 @@ fn analyze_simple_command(
         return Decision::allow("empty").flags(flags);
     }
     let i = base_index(words);
+    if let Some(var) = words[..i].iter().find_map(|w| config::code_env_name(w)) {
+        let sc = SimpleCommand {
+            words,
+            raw_words,
+            word_has_expansions: has_exp,
+        };
+        if let Some(m) = config::match_command(&sc, config, cwd, flags, remote) {
+            let msg = m.message.as_deref().unwrap_or(&m.pattern);
+            let action = match m.decision.as_str() {
+                "allow" => Some(Action::Allow),
+                "ask" => Some(Action::Ask),
+                "deny" => Some(Action::Deny),
+                _ => None,
+            };
+            if let Some(action) = action {
+                return Decision::new(action, format!("{var}: {msg}")).flags(flags);
+            }
+        }
+        return Decision::ask(format!("{var}= changes which code runs")).flags(flags);
+    }
     if i >= words.len() {
         return Decision::allow("env assignment").flags(flags);
     }
@@ -1600,5 +1620,53 @@ mod tests {
         // Rable would drop everything after `$'` inside double quotes.
         assert_eq!(decide("echo \"x '$'\" > out.txt"), Action::Ask);
         assert_eq!(decide("mysql -e \"SELECT 'a$'\""), Action::Allow);
+    }
+
+    fn decide_with(rules: &str, cmd: &str) -> Decision {
+        let config = config::parse_config(rules, None).unwrap();
+        analyze(cmd, &config, Path::new("/tmp"), None, false)
+    }
+
+    #[test]
+    fn code_env_assignment_asks() {
+        let cases = [
+            ("LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("PATH=/tmp/evil ls", "PATH"),
+            ("PYTHONPATH=src git status", "PYTHONPATH"),
+            ("NODE_OPTIONS=--require=/tmp/x.js ls", "NODE_OPTIONS"),
+            ("BASH_ENV=/tmp/evil ls", "BASH_ENV"),
+            (
+                "GIT_CONFIG_GLOBAL=/tmp/evil git status",
+                "GIT_CONFIG_GLOBAL",
+            ),
+            ("GIT_CONFIG_KEY_0=core.pager git log", "GIT_CONFIG_KEY_0"),
+            ("GIT_SSH_COMMAND=/tmp/evil git status", "GIT_SSH_COMMAND"),
+            ("PAGER=/tmp/evil git log", "PAGER"),
+            ("BASH_FUNC_ls%%=x ls", "BASH_FUNC_ls%%"),
+            ("FOO=bar LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("env LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),
+            ("env -i PATH=/tmp/evil ls", "PATH"),
+            ("LD_PRELOAD=/tmp/x.so timeout 5 git status", "LD_PRELOAD"),
+            ("PATH=/tmp/evil", "PATH"),
+        ];
+        for (cmd, var) in cases {
+            let d = decide_with("", cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}");
+            assert!(d.reason.contains(var), "{cmd}: {}", d.reason);
+        }
+        assert_eq!(decide("FOO=bar env BAZ=1 git status"), Action::Allow);
+    }
+
+    #[test]
+    fn code_env_assignment_rules() {
+        let generic = decide_with("allow zorptool *", "LD_PRELOAD=/tmp/x.so zorptool run");
+        assert_eq!(generic.action, Action::Ask);
+        let spelled = decide_with(
+            "allow PYTHONPATH=src zorptool *",
+            "PYTHONPATH=src zorptool run",
+        );
+        assert_eq!(spelled.action, Action::Allow);
+        let deny = decide_with("deny zorptool *", "LD_PRELOAD=/tmp/x.so zorptool run");
+        assert_eq!(deny.action, Action::Deny);
     }
 }
