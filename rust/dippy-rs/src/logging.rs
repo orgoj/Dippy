@@ -42,6 +42,8 @@ pub struct Entry<'a> {
     pub context_flags: Option<&'a Flags>,
     /// Logged only with `set log-full`.
     pub suggestion: Option<&'a str>,
+    /// Dashboard approval id (outcome entries of `set approval dashboard`).
+    pub approval: Option<&'a str>,
 }
 
 struct Audit {
@@ -161,6 +163,9 @@ impl Logs {
             entry.insert("context_flags".into(), json!(flags));
         }
         entry.insert("agent".into(), json!(self.agent));
+        if let Some(id) = e.approval {
+            entry.insert("approval".into(), json!(id));
+        }
         if a.full
             && let Some(s) = e.suggestion
         {

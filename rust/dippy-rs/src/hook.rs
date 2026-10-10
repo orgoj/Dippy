@@ -20,6 +20,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::analyzer::{self, Action, Cause};
+use crate::approval::{self, Outcome};
 use crate::config::{self, Config, Flags};
 use crate::logging::{Entry, Logs};
 use crate::parser::tokenize;
@@ -223,6 +224,8 @@ struct Subject<'a> {
     event: Option<&'a str>,
     /// What asked, for askpass (rule editing).
     causes: &'a [Cause],
+    /// Context flags of an analysed command (dashboard approvals).
+    context_flags: Option<&'a Flags>,
 }
 
 fn cause(kind: &'static str, target: &str, rule: Option<&config::Match>, flags: Flags) -> Cause {
@@ -260,6 +263,8 @@ struct Hook<'a> {
     /// Askpass program: `DIPPY_ASKPASS`, else the config's `askpass`.
     askpass: Option<&'a Path>,
     log: &'a Logs,
+    /// The operation cwd (dashboard approvals need an absolute one).
+    cwd: Option<&'a Path>,
 }
 
 fn non_empty(s: Option<&str>) -> Option<&str> {
@@ -363,6 +368,9 @@ impl<'a> Hook<'a> {
 
     fn ask(self, reason: &str, s: Subject) -> Reply {
         self.log.info(&format!("ASK: {reason}"));
+        if let Some(reply) = self.dashboard(reason, &s) {
+            return reply;
+        }
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             // AGY ignores `ask` in bypass mode: resolve it through askpass.
@@ -447,6 +455,77 @@ impl<'a> Hook<'a> {
             Mode::Codex => json!({"continue": false}),
             Mode::Cursor | Mode::Claude => json!({"decision": "approve", "continue": true}),
         }
+    }
+
+    /// Whether an `ask` of this agent goes to the dashboard queue.
+    fn queues(self, _s: &Subject) -> bool {
+        matches!(self.mode, Mode::Claude | Mode::Agy)
+    }
+
+    /// `set approval dashboard`: the node's queue replaces the agent's prompt
+    /// (AGY: the askpass call). `None` keeps the native flow: another
+    /// approval setting, no config, or a node that provably never received
+    /// the request.
+    fn dashboard(self, reason: &str, s: &Subject) -> Option<Reply> {
+        let config = self.config.filter(|c| c.approval == "dashboard")?;
+        if !self.queues(s) {
+            return None;
+        }
+        let cwd = s
+            .cwd
+            .or(self.cwd)
+            .map_or_else(process_cwd, Path::to_path_buf);
+        let cwd_text = cwd.to_string_lossy();
+        let ask = approval::Ask {
+            command: s.command.unwrap_or(""),
+            cwd: &cwd_text,
+            tool: non_empty(s.tool),
+            file_path: non_empty(s.file_path),
+            message: reason,
+            agent: self.log.agent(),
+            server: None,
+            decision: "ask",
+            reason,
+            context_flags: s.context_flags.into_iter().flatten().cloned().collect(),
+            flags: Vec::new(),
+            remote: false,
+            causes: s.causes,
+        };
+        let outcome = approval::wait(config, &ask, &|line| self.log.info(line), &|| {});
+        if let Outcome::Fallback(why) = &outcome {
+            self.log.warning(&format!(
+                "Dashboard approval unavailable, using the native flow: {why}"
+            ));
+            return None;
+        }
+        let allowed = matches!(outcome, Outcome::Allowed { .. });
+        self.audit(Entry {
+            decision: if allowed { "allow" } else { "deny" },
+            message: Some(&approval::outcome_message(&outcome)),
+            command: s.command,
+            cwd: Some(&cwd),
+            tool: s.tool,
+            file_path: s.file_path,
+            approval: outcome.id(),
+            ..Entry::default()
+        });
+        let with_note = |text: String, note: &Option<String>| match note {
+            Some(n) => format!("{text} (user note: {n})"),
+            None => text,
+        };
+        Some(match &outcome {
+            Outcome::Allowed { note, .. } => {
+                self.approve(&with_note(format!("approved by user: {reason}"), note), *s)
+            }
+            Outcome::Denied { note, .. } => {
+                self.deny(&with_note(format!("approval denied: {reason}"), note), *s)
+            }
+            Outcome::TimedOut { .. } => self.deny(&approval::timeout_message(config), *s),
+            Outcome::Failed { message, .. } => {
+                self.deny(&format!("approval failed: {message}"), *s)
+            }
+            Outcome::Fallback(_) => unreachable!("handled above"),
+        })
     }
 
     /// `_run_askpass`: exit 0 allows; anything else (exit 1, other codes,
@@ -576,6 +655,7 @@ fn hook_reply(explicit: Option<&str>, stdin: &str) -> Reply {
         config: None,
         askpass: None,
         log: &no_log,
+        cwd: None,
     };
     let error = |reason: &str| match fallback.mode {
         Mode::Gemini => fallback.ask(reason, Subject::default()),
@@ -601,6 +681,7 @@ fn handle(logs: &Logs, input: &Value) -> Reply {
         config: None,
         askpass: None,
         log: logs,
+        cwd: None,
     };
     let tool_input = input.get("tool_input").unwrap_or(NULL);
     let tool_args = input
@@ -651,6 +732,7 @@ fn handle(logs: &Logs, input: &Value) -> Reply {
         config: Some(&config),
         askpass: askpass.as_deref(),
         log: logs,
+        cwd: Some(&cwd),
     };
     dispatch(hook, &config, input, &cwd)
 }
@@ -827,6 +909,7 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         cwd: Some(cwd),
         event: Some(&hook_event),
         causes: &result.causes,
+        context_flags: result.context_flags.as_ref(),
         ..Subject::default()
     };
     match result.action {
@@ -1389,6 +1472,7 @@ mod tests {
             config: Some(config),
             askpass,
             log: &logs,
+            cwd: None,
         };
         dispatch(hook, config, &payload, Path::new("/w"))
     }
@@ -1684,6 +1768,7 @@ mod tests {
                 config: Some(&c),
                 askpass,
                 log: &logs,
+                cwd: None,
             };
             dispatch(hook, &c, payload, Path::new("/w"));
         }
@@ -1872,6 +1957,7 @@ mod tests {
             // Never exits on its own.
             askpass: Some(Path::new("/usr/bin/yes")),
             log: &Logs::none("agy"),
+            cwd: None,
         };
         let started = Instant::now();
         assert!(!hook.askpass_allows("m", &Subject::default()));

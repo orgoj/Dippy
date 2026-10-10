@@ -268,6 +268,8 @@ fn run_audit(global: &Cli, query: &dippy_rs::audit::Query) -> i32 {
 }
 
 fn main() {
+    // The dashboard approval budget counts from the process start.
+    dippy_rs::approval::mark_start();
     // Started as `dippy-askpass` (a link to this binary): the approval dialog.
     let argv0 = std::env::args_os().next().map(PathBuf::from);
     if argv0

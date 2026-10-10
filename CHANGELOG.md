@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.37] - 2026-10-10
+
+### Added
+
+- `set approval dashboard` for dippy-rs Claude-format hooks (Claude Code, also moltbot, Windsurf, PearAI), AGY and `run`/`run-on-server`: an `ask` is queued on the dashboard node (`dashboard-url`, token from `dashboard-token-file`) and the agent gets only allow or deny; AGY's and `run`'s askpass call is replaced, `run` keeps its `STATUS: Approval required` line. The whole wait counts from process start and ends at `askpass-timeout - 3` seconds (3 or less: immediate deny); the payload deadline is that moment. The client generates the approval id; connect timeout is at most 1 s. It falls back to the `ask` behaviour only when the node provably never got the request (missing token file, connection refused, connect timeout, HTTP 401/404 to the POST); a rejected request (other 4xx) denies; any other outcome after sending polls the same id until the budget ends and then denies with the timeout message (`Approval timed out after N seconds. The requested command was not executed.` plus `approval-timeout-message`). A user deny carries the note to the agent. The audit log keeps the `ask` entry and adds an `allow`/`deny` entry with the note (or `approval timed out`) and the `approval` id. `pass` (an unmatched tool Dippy leaves to the agent) and config errors never enter the queue; `set approval ask` and no setting are byte-identical to before (tested per hook mode).
+
 ## [0.4.36] - 2026-10-10
 
 ### Added

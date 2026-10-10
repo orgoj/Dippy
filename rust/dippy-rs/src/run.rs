@@ -418,6 +418,85 @@ fn approve_with_askpass(
     }
 }
 
+/// `set approval dashboard`: the node's queue replaces the askpass call.
+/// `None` when the node provably never received the request (use askpass).
+fn approve_with_dashboard(
+    config: &Config,
+    command: &str,
+    decision: &Decision,
+    server: Option<&str>,
+    cwd: &Path,
+) -> Option<(Approval, Option<String>)> {
+    let refuse = |note: String| Approval {
+        allowed: false,
+        note: Some(note),
+    };
+    let cwd_text = cwd.to_string_lossy();
+    let agent = if server.is_some() {
+        "run-on-server"
+    } else {
+        "run"
+    };
+    let ask = crate::approval::Ask {
+        command,
+        cwd: &cwd_text,
+        tool: Some(agent),
+        file_path: None,
+        message: &decision.reason,
+        agent,
+        server,
+        decision: decision.action.as_str(),
+        reason: &decision.reason,
+        context_flags: decision.context_flags.iter().flatten().cloned().collect(),
+        flags: server
+            .map(server_flags)
+            .unwrap_or_default()
+            .into_iter()
+            .collect(),
+        remote: server.is_some(),
+        causes: &decision.causes,
+    };
+    let seconds = crate::approval::budget_seconds(config);
+    let tty = io::stderr().is_terminal();
+    let printed = std::cell::Cell::new(false);
+    let waiting = || {
+        eprint!(
+            "STATUS: Approval required; waiting up to {seconds} seconds. \
+             The requested command has not started. {}{}",
+            config.approval_wait_message,
+            if tty { "" } else { "\n" }
+        );
+        printed.set(true);
+    };
+    let outcome = crate::approval::wait(config, &ask, &|_| {}, &waiting);
+    if tty && printed.get() {
+        eprint!("\r\x1b[2K");
+    }
+    use crate::approval::Outcome;
+    let id = outcome.id().map(str::to_string);
+    let approval = match outcome {
+        Outcome::Fallback(_) => return None,
+        Outcome::Allowed { note, .. } => Approval {
+            allowed: true,
+            note,
+        },
+        Outcome::Denied { note, .. } => refuse(denied(command, note.as_deref())),
+        Outcome::TimedOut { .. } => refuse(blocked(
+            command,
+            &format!("Approval timed out after {seconds} seconds"),
+            None,
+            &config.approval_timeout_message,
+        )),
+        Outcome::Failed { .. } => refuse(blocked(
+            command,
+            "Approval failed",
+            Some("The approval service rejected the request."),
+            RETRY_LATER,
+        )),
+    };
+    Some((approval, id))
+}
+
 // ----------------------------------------------------------------- markers
 
 fn marker_re(pattern: &str, marker: &str) -> Regex {
@@ -1059,14 +1138,27 @@ pub fn execute(
             return 1;
         }
         Action::Ask => {
-            let program = askpass_program(config);
-            let approval =
-                approve_with_askpass(program.as_deref(), config, command, &decision, server, cwd);
+            let dashboard = (config.approval == "dashboard")
+                .then(|| approve_with_dashboard(config, command, &decision, server, cwd))
+                .flatten();
+            let (approval, id) = dashboard.unwrap_or_else(|| {
+                let program = askpass_program(config);
+                let approval = approve_with_askpass(
+                    program.as_deref(),
+                    config,
+                    command,
+                    &decision,
+                    server,
+                    cwd,
+                );
+                (approval, None)
+            });
             logs.decision(Entry {
                 decision: if approval.allowed { "allow" } else { "deny" },
                 message: Some(approval.note.as_deref().unwrap_or(&decision.reason)),
                 command: Some(command),
                 cwd: Some(cwd),
+                approval: id.as_deref(),
                 ..Entry::default()
             });
             if !approval.allowed {
