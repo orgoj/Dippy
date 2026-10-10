@@ -117,8 +117,9 @@ Done (0.4.33): askpass causes carry their context flags; `run`/
 `run-on-server` send causes, `flags` and `remote`, and the dialog saves
 tagged rules (`allow [run-on-server,srv] ...`).
 
-Remaining before the switch: `dashboard` (node and hub), last: new and not
-yet used.
+Done (0.4.34-0.4.41): `dashboard` (node and hub) and the dashboard
+approval queue; see [Dashboard and approval queue](#dashboard-and-approval-queue).
+Nothing remains before the switch.
 
 Nothing calls Python after the switch. Not ported: `dippy-statusline` (a generic
 Claude Code status line, unrelated to approvals), `idle-notifier-command` and
@@ -140,6 +141,98 @@ raises), and Python's stderr copy of hook warnings is not written.
 Rable bugs listed under phase 1 are reported upstream as mpecan/rable#75
 (`$'`), #76 (backticks), #77 (silent recovery) and #78 (`(( ))` span).
 
+
+## Dashboard and approval queue
+
+Second unattended session (2026-10-10, brief
+[`rust-dashboard.md`](rust-dashboard.md)). All nine steps were done in the
+brief's order; none was skipped. Every step ended green and was committed
+and pushed separately.
+
+| Step | Version | Result |
+| --- | --- | --- |
+| 1. Dashboard port (parity) | 0.4.34 | `dippy-rs dashboard [--host] [--port] [--token-file] [--hub]`; `dashboard_compare.py`: 136 steps, 0 differences |
+| 2. Settings, payload v2 | 0.4.35 | `approval`, `approval-timeout-message`, user-only `dashboard-url`/`dashboard-token-file`; `approval.rs` builds and validates version 2 |
+| 3. Node queue (REST) | 0.4.36 | `/api/approvals` contract first, router compared with it by a test |
+| 4. Claude, AGY, `run` client | 0.4.37 | end-to-end tests against an in-process node; per-mode identity test for `set approval ask` |
+| 5. Web UI (node) | 0.4.38 | Approvals view and popup; smoke-tested headless with Playwright/Chromium (queue, live check, save, arming, Ctrl+Enter, deny with note) |
+| 6. Gemini, Cursor, Codex, pi | 0.4.39 | Codex only on `PermissionRequest`; the pi extension has no timeout of its own, unchanged |
+| 7. Hub | 0.4.40 | aggregated list and forwarded decision/check/rule; smoke-tested headless through a hub |
+| 8. Docs | - | `docs/config.md` "Dashboard Approvals (dippy-rs)", README, systemd user unit, `docs/dashboard-api.json` |
+| 9. Report | - | this section |
+
+A fix found in review (0.4.41): a Gemini `ask` for an unmatched tool reached
+the queue without its tool name.
+
+### Verification
+
+Every parity tool was run on the pre-session commit (`1039435`) and on the
+final code with identical inputs; the outputs are identical (only sandbox
+paths differ):
+
+| Tool | Result (before = after) |
+| --- | --- |
+| `rust/parity/run` | 13,422 cases, 13,418 agree, 0 unsafe |
+| `hook_compare.py` | 1,594 payloads, 1,585 identical output, 1,594 same decision, 0 unsafe |
+| `log_compare.py` | audit/`hook-approvals.log` differences in corpus reason text only (exit 1 before and after), 24 queries 0 differ, rotation identical |
+| `config_compare.py` | 90 steps, 0 differ |
+| `hooks_compare.py` | 198 steps, 0 differ |
+| `pi_compare.py` | 166 payloads, 0 differ |
+| `doctor_compare.py` | 129 steps, 0 differ |
+| `run_compare.py` | 63 steps, 0 differ |
+| `dashboard_compare.py` (new) | 136 steps, 0 differences |
+
+The corpus numbers differ from the summary table above (13,419 agree, 3
+divergences): the pre-session code already gives 13,418 in this container;
+the fourth divergence, `cd ~ && ./script arg` (Python allow, Rust ask), is
+safe and depends on the parity environment. `rust/parity/report.md` was left
+as committed. `cargo test`: 422 tests (395 unit, 19 CLI, 8 approval
+end-to-end); clippy and fmt clean. `just check`/`just test`: everything
+passes except `tests/test_config.py::TestLoadConfig::test_unreadable_user_config`,
+which fails only as root (as before); it was run as an unprivileged user
+and passes.
+
+### New dependencies
+
+- `rustls` 0.23 (features `ring`, `std`, `tls12`; no default features) and
+  `rustls-native-certs` 0.8: TLS for `https` node URLs and `https`
+  `dashboard-url`, matching Python's `HTTPSHandler` (certificate
+  verification against the system store, honouring `SSL_CERT_FILE`). Both
+  are maintained by the rustls project; `ring` needs only a C compiler (no
+  cmake, unlike the default `aws-lc-rs`). They add `ring`, `untrusted`,
+  `rustls-webpki`, `rustls-pki-types`, `subtle`, `zeroize` and
+  `openssl-probe`.
+- No HTTP framework and no async runtime: the server is std `TcpListener`
+  with one thread per request (`http.rs`, about 700 lines with tests, including a small
+  client and Python's `urlsplit`/`parse_qs`). A client library (`ureq`) was
+  not used because the approval client must tell "never sent" (connection
+  refused, connect timeout) from "maybe received" apart, which needs control
+  over each phase.
+
+### Intentional divergences (dashboard)
+
+- `--port` outside 0-65535 is reported by the listener ("port must be
+  0-65535") instead of Python's `OverflowError` text; `--host` accepts IPv6
+  and names (Python's server is IPv4 only).
+- Unsupported methods answer `501` with a JSON error (Python sends its HTML
+  error page); `POST` is a real method on the Rust node (approval routes).
+- Proxy and registry errors carry Rust's wording after the fixed prefix
+  (`node unreachable: ...`, the JSON parser message after the file name);
+  the parity script normalizes these.
+- An `https` node is verified with rustls and the system roots; TLS
+  failures are `node unreachable: TLS handshake failed: ...`.
+- The UI is a new page (approvals view first); the legacy API is unchanged.
+- `docs/dashboard-api.json` marks the queue operations `x-dippy-rs-only`;
+  the Python contract test skips them (test-only change, Python Dippy
+  unchanged).
+
+### Next step
+
+The switch: install the Rust binary as `dippy` (`just install-rs`), remove
+the Python package. Python Dippy is no longer needed for anything: the
+dashboard was the last part. Before relying on `set approval dashboard`,
+raise each agent's hook timeout above `askpass-timeout` (table in
+`docs/config.md`) and run the node as a user service.
 
 ## Phase 1 - Rable in Python Dippy
 
@@ -254,6 +347,7 @@ All tools live in `rust/parity/`:
 | `config_compare.py` | `dippy config` scenarios in one sandbox per implementation: output of every step, resulting files and their modes |
 | `hooks_compare.py` | `dippy hooks` scenarios in a sandbox HOME and project per implementation: output of every step, the whole resulting tree (backups included) and modes |
 | `doctor_compare.py` | `dippy doctor` scenarios in a sandbox HOME, project and PATH (fake `dippy`) per implementation: output of every step and the resulting tree |
+| `dashboard_compare.py` | Python and Rust dashboard node and hub on port 0 in sandbox HOMEs: the legacy REST API (`/api/entries`, `/api/nodes`, `/n/{name}/api/entries`, tokens, errors), status and body after normalizing ports and platform error texts |
 | `run_compare.py` | `dippy run`/`run-on-server`/`recover` scenarios in a sandbox HOME, project and PATH (fake `ssh`, `tmux`, `herdr`, askpass) per implementation: output of every step, run state, audit log and pane logs |
 
 The in-process oracle was checked against the real `dippy` executable on 100
@@ -291,6 +385,9 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
   add/remove/list`; edits one line, keeps every other line and the file
   mode, writes atomically (a new file gets 0600). `config.rs` keeps the
   `approval-wait-message` and `run-on-server-*` values for it.
+- `dashboard.rs`, `http.rs`: `dashboard` node and hub (std server, rustls
+  client); `queue.rs`: the node's approval queue; `approval.rs`: the
+  version-2 payload and the hook/`run` client for `set approval dashboard`.
 - `hooks.rs`: `hooks list/install/uninstall/setup-gemini-yolo` for Claude,
   Gemini, AGY, Cursor, Windsurf and Codex (`config.toml` included), with a
   port of difflib's unified diff for `--dry-run`.
