@@ -66,8 +66,10 @@ Plan for the switch from Python (decided 2026-10-10):
 2. `config`, `hooks` and `doctor` subcommands. `hooks` and `doctor` install
    hook entries calling `dippy-rs` and remove the old Python `dippy` entries.
 
-The project and repository will be renamed to `dippy-rs`. Python `dippy`
-stays installed while it serves the deferred subcommands below.
+The project is renamed to `dippy-rs` in the binary and documentation; the
+repository rename comes later. Config paths stay `~/.dippy/` and `.dippy`
+for compatibility with existing projects. Python `dippy` stays installed
+while it serves the deferred subcommands below.
 
 Deferred, Python `dippy` keeps serving them after the switch:
 `run`/`run-on-server`/`recover` (rarely used), `dashboard`, and the GUI
