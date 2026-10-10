@@ -408,3 +408,76 @@ fn approval_ask_is_identical_to_no_setting_in_every_mode() {
         }
     }
 }
+
+#[test]
+fn gemini_cursor_codex_and_pi_wait_for_the_dashboard() {
+    let sb = Sandbox::new("agents");
+    let (server, addr) = node(&sb);
+    sb.config(&format!(
+        "set approval dashboard\nset dashboard-url http://{addr}\n"
+    ));
+    let proj = sb.proj().canonicalize().unwrap();
+    let decide = |allow: bool, args: &[&str], stdin: String| {
+        decide_soon(&server, allow, Some("n"));
+        let before = server.approvals.list(None).len();
+        let o = sb.run(args, &stdin);
+        assert_eq!(server.approvals.list(None).len(), before + 1, "{args:?}");
+        o
+    };
+    // Gemini: allow and deny in its own format.
+    let gemini = json!({"hook_event_name": "BeforeTool", "tool_name": "run_shell_command",
+                        "tool_input": {"command": "zorp x"}, "cwd": proj})
+    .to_string();
+    let out: Value =
+        serde_json::from_str(&stdout(&decide(true, &["--gemini"], gemini.clone()))).unwrap();
+    assert_eq!(
+        (out["decision"].as_str(), out["continue"].as_bool()),
+        (Some("allow"), Some(true))
+    );
+    let out: Value = serde_json::from_str(&stdout(&decide(false, &["--gemini"], gemini))).unwrap();
+    assert_eq!(out["decision"], "deny");
+    // Cursor.
+    let cursor =
+        json!({"hook_event_name": "beforeShellExecution", "command": "zorp x", "cwd": proj})
+            .to_string();
+    let out: Value = serde_json::from_str(&stdout(&decide(true, &["--cursor"], cursor))).unwrap();
+    assert_eq!(out["permission"], "allow");
+    // Codex: only PermissionRequest is queued; a deny blocks with exit 2.
+    let codex = |event: &str| {
+        json!({"hook_event_name": event, "tool_name": "Bash",
+               "tool_input": {"command": "zorp x"}, "cwd": proj})
+        .to_string()
+    };
+    let out: Value = serde_json::from_str(&stdout(&decide(
+        true,
+        &["--codex"],
+        codex("PermissionRequest"),
+    )))
+    .unwrap();
+    assert_eq!(out["hookSpecificOutput"]["decision"]["behavior"], "allow");
+    let o = decide(false, &["--codex"], codex("PermissionRequest"));
+    assert_eq!(o.status.code(), Some(2));
+    assert!(stderr(&o).contains("approval denied"));
+    let before = server.approvals.list(None).len();
+    let o = sb.run(&["--codex"], &codex("PreToolUse"));
+    assert_eq!(server.approvals.list(None).len(), before);
+    assert!(stdout(&o).contains("systemMessage"), "{}", stdout(&o));
+    // pi: bash and edit.
+    let pi = json!({"type": "bash", "command": "zorp x", "cwd": proj}).to_string();
+    let out: Value = serde_json::from_str(&stdout(&decide(true, &["--pi"], pi))).unwrap();
+    assert_eq!(out["action"], "allow");
+    assert_eq!(out["reason"], "approved by user: zorp x (user note: n)");
+    let edit = json!({"type": "edit", "path": "/etc/zorp.conf", "cwd": proj}).to_string();
+    let out: Value = serde_json::from_str(&stdout(&decide(false, &["--pi"], edit))).unwrap();
+    assert_eq!(out["action"], "deny");
+    let item = &server.approvals.list(None)[0];
+    assert_eq!(
+        (
+            item.request["tool"].as_str(),
+            item.request["file_path"].as_str()
+        ),
+        (Some("Edit"), Some("/etc/zorp.conf"))
+    );
+    assert_eq!(item.request["causes"][0]["kind"], "edit");
+    assert!(!sb.askpass_ran());
+}

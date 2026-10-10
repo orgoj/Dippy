@@ -273,6 +273,26 @@ pub fn timeout_message(config: &Config) -> String {
     )
 }
 
+/// Whether an outcome allows, and the agent-facing text for `reason`;
+/// `None` for a fallback.
+pub fn verdict(outcome: &Outcome, reason: &str, config: &Config) -> Option<(bool, String)> {
+    let with_note = |text: String, note: &Option<String>| match note {
+        Some(n) => format!("{text} (user note: {n})"),
+        None => text,
+    };
+    Some(match outcome {
+        Outcome::Allowed { note, .. } => {
+            (true, with_note(format!("approved by user: {reason}"), note))
+        }
+        Outcome::Denied { note, .. } => {
+            (false, with_note(format!("approval denied: {reason}"), note))
+        }
+        Outcome::TimedOut { .. } => (false, timeout_message(config)),
+        Outcome::Failed { message, .. } => (false, format!("approval failed: {message}")),
+        Outcome::Fallback(_) => return None,
+    })
+}
+
 /// Audit message of an outcome entry.
 pub fn outcome_message(outcome: &Outcome) -> String {
     match outcome {

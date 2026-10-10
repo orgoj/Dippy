@@ -11,7 +11,8 @@ use std::path::Path;
 
 use serde_json::{Value, json};
 
-use crate::analyzer;
+use crate::analyzer::{self, Cause};
+use crate::approval;
 use crate::config::{self, Config, Flags};
 use crate::hook::py_dumps;
 use crate::logging::{Entry, Logs};
@@ -61,12 +62,14 @@ fn respond(config: &Config, input: &Value, cwd: &Path, logs: &Logs) -> Value {
     };
     let mut flags = Flags::new();
     let mut suggestion = None;
+    let mut causes = Vec::new();
     let (action, reason) = match req_type.as_str() {
         "bash" if text("command").is_empty() => ("ask".to_string(), "Empty command".to_string()),
         "bash" => {
             let d = analyzer::analyze(text("command"), config, cwd, None, false);
             flags = d.context_flags.unwrap_or_default();
             suggestion = d.suggestion;
+            causes = d.causes;
             (d.action.as_str().to_string(), d.reason)
         }
         "idle" => ("allow".to_string(), "idle".to_string()),
@@ -94,6 +97,19 @@ fn respond(config: &Config, input: &Value, cwd: &Path, logs: &Logs) -> Value {
         }),
         _ => {}
     }
+    if (req_type == "edit" || req_type == "read") && !text("path").is_empty() {
+        causes.push(Cause {
+            kind: if req_type == "edit" { "edit" } else { "read" },
+            target: text("path").to_string(),
+            rule: None,
+            flags: Flags::new(),
+        });
+    }
+    let (action, reason) = if action == "ask" && config.approval == "dashboard" {
+        dashboard(config, input, cwd, logs, &reason, &flags, &causes).unwrap_or((action, reason))
+    } else {
+        (action, reason)
+    };
     let reason = if action == "deny" {
         let command = (req_type == "bash").then(|| text("command"));
         let agent = input.get("agent").and_then(Value::as_str).unwrap_or("pi");
@@ -108,6 +124,63 @@ fn respond(config: &Config, input: &Value, cwd: &Path, logs: &Logs) -> Value {
         "note": null,
         "error": false,
     })
+}
+
+/// `set approval dashboard`: wait for the node's decision; `None` keeps the
+/// `ask` reply (the node provably never got the request).
+fn dashboard(
+    config: &Config,
+    input: &Value,
+    cwd: &Path,
+    logs: &Logs,
+    reason: &str,
+    flags: &Flags,
+    causes: &[Cause],
+) -> Option<(String, String)> {
+    let text = |key: &str| {
+        input
+            .get(key)
+            .and_then(Value::as_str)
+            .filter(|s| !s.is_empty())
+    };
+    let tool = match input.get("type").and_then(Value::as_str) {
+        Some("edit") => Some("Edit"),
+        Some("read") => Some("Read"),
+        _ => None,
+    };
+    let cwd_text = cwd.to_string_lossy();
+    let ask = approval::Ask {
+        command: if tool.is_none() {
+            text("command").unwrap_or("")
+        } else {
+            ""
+        },
+        cwd: &cwd_text,
+        tool,
+        file_path: tool.and(text("path")),
+        message: reason,
+        agent: logs.agent(),
+        server: None,
+        decision: "ask",
+        reason,
+        context_flags: flags.iter().cloned().collect(),
+        flags: Vec::new(),
+        remote: false,
+        causes,
+    };
+    let outcome = approval::wait(config, &ask, &|_| {}, &|| {});
+    let (allowed, text) = approval::verdict(&outcome, reason, config)?;
+    logs.decision(Entry {
+        decision: if allowed { "allow" } else { "deny" },
+        message: Some(&approval::outcome_message(&outcome)),
+        command: ask.file_path.is_none().then_some(ask.command),
+        cwd: Some(cwd),
+        tool,
+        file_path: ask.file_path,
+        approval: outcome.id(),
+        ..Entry::default()
+    });
+    Some(((if allowed { "allow" } else { "deny" }).to_string(), text))
 }
 
 /// Edit and read rules without context flags, else the config default.

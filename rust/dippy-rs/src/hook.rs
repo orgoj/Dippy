@@ -457,9 +457,14 @@ impl<'a> Hook<'a> {
         }
     }
 
-    /// Whether an `ask` of this agent goes to the dashboard queue.
-    fn queues(self, _s: &Subject) -> bool {
-        matches!(self.mode, Mode::Claude | Mode::Agy)
+    /// Whether an `ask` of this agent goes to the dashboard queue. Codex
+    /// approves only in `PermissionRequest` (a PreToolUse allow is silent),
+    /// so only that event is queued; PreToolUse keeps today's reply.
+    fn queues(self, s: &Subject) -> bool {
+        match self.mode {
+            Mode::Claude | Mode::Agy | Mode::Gemini | Mode::Cursor => true,
+            Mode::Codex => s.event == Some("PermissionRequest"),
+        }
     }
 
     /// `set approval dashboard`: the node's queue replaces the agent's prompt
@@ -498,7 +503,7 @@ impl<'a> Hook<'a> {
             ));
             return None;
         }
-        let allowed = matches!(outcome, Outcome::Allowed { .. });
+        let (allowed, text) = approval::verdict(&outcome, reason, config)?;
         self.audit(Entry {
             decision: if allowed { "allow" } else { "deny" },
             message: Some(&approval::outcome_message(&outcome)),
@@ -509,22 +514,10 @@ impl<'a> Hook<'a> {
             approval: outcome.id(),
             ..Entry::default()
         });
-        let with_note = |text: String, note: &Option<String>| match note {
-            Some(n) => format!("{text} (user note: {n})"),
-            None => text,
-        };
-        Some(match &outcome {
-            Outcome::Allowed { note, .. } => {
-                self.approve(&with_note(format!("approved by user: {reason}"), note), *s)
-            }
-            Outcome::Denied { note, .. } => {
-                self.deny(&with_note(format!("approval denied: {reason}"), note), *s)
-            }
-            Outcome::TimedOut { .. } => self.deny(&approval::timeout_message(config), *s),
-            Outcome::Failed { message, .. } => {
-                self.deny(&format!("approval failed: {message}"), *s)
-            }
-            Outcome::Fallback(_) => unreachable!("handled above"),
+        Some(if allowed {
+            self.approve(&text, *s)
+        } else {
+            self.deny(&text, *s)
         })
     }
 

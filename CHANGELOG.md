@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.39] - 2026-10-10
+
+### Added
+
+- `set approval dashboard` for the dippy-rs Gemini, Cursor, Codex and pi hooks. Gemini and Cursor queue where Dippy asks today. Codex queues only on `PermissionRequest` (the only event whose allow approves); PreToolUse keeps today's reply and commands Codex runs without a `PermissionRequest` are not queued. `dippy-rs --pi` waits for the queue and answers `allow`/`deny` (the pi extension waits for `dippy --pi` without a timeout of its own).
+
 ## [0.4.38] - 2026-10-10
 
 ### Added
