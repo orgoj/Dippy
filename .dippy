@@ -2,6 +2,8 @@
 
 include .dippy-yolo
 
+allow cargo *
+
 allow rm tmp/*
 allow debug/check-rule.py*
 
