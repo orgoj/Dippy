@@ -252,6 +252,41 @@ fn config_server_add_remove_list_and_project_scope() {
 }
 
 #[test]
+fn config_add_rule_validates_and_appends() {
+    let dir = sandbox("config-add-rule");
+    let (code, out, _) = config(&dir, &["add-rule", "allow zorp *"]);
+    let user = dir.join("home/.dippy/config");
+    assert_eq!((code, out), (0, format!("{}\n", user.display())));
+    let text = std::fs::read_to_string(&user).unwrap();
+    assert!(text.starts_with("# added by dippy 20"), "{text}");
+    assert!(text.ends_with("\nallow zorp *\n"), "{text}");
+    let (code, _, err) = config(&dir, &["add-rule", "set askpass /x"]);
+    assert_eq!((code, err.as_str()), (1, "not a rule: set askpass /x\n"));
+    let (code, _, err) = config(&dir, &["add-rule", "allow a\nallow *"]);
+    assert_eq!((code, err.as_str()), (1, "a rule must be one line\n"));
+    std::fs::create_dir_all(dir.join("repo/.git")).unwrap();
+    std::fs::create_dir_all(dir.join("repo/x")).unwrap();
+    let o = run(
+        &dir,
+        &[
+            "--cwd",
+            "repo/x",
+            "config",
+            "add-rule",
+            "--project",
+            "deny-redirect /etc/* \"no\"",
+        ],
+        "",
+    );
+    assert_eq!(o.status.code(), Some(0));
+    let project = std::fs::read_to_string(dir.join("repo/.dippy")).unwrap();
+    assert!(
+        project.ends_with("\ndeny-redirect /etc/* \"no\"\n"),
+        "{project}"
+    );
+}
+
+#[test]
 fn audit_takes_global_config_options() {
     let dir = sandbox("audit");
     std::fs::write(dir.join("config"), "set log audit.log\n").unwrap();

@@ -61,6 +61,14 @@ enum Action {
     },
     /// Manage allowed `run-on-server` targets
     Server(ServerArgs),
+    /// Append one allow/ask/deny rule line; `--project` writes the project
+    /// config loaded for the cwd, else `.dippy` in the Git root or the cwd
+    AddRule {
+        #[arg(allow_hyphen_values = true)]
+        rule: String,
+        #[command(flatten)]
+        scope: Scope,
+    },
 }
 
 #[derive(clap::Args)]
@@ -191,6 +199,67 @@ pub fn edit_config(path: &Path, edit: Edit) -> std::io::Result<()> {
     write_atomic(path, &text)
 }
 
+/// Rule directive suffixes `add-rule` writes (after `allow`/`ask`/`deny`).
+const RULE_KINDS: [&str; 6] = ["", "-redirect", "-read", "-edit", "-web", "-mcp"];
+
+/// One `allow`/`ask`/`deny` rule line (optionally `-redirect`, `-read`,
+/// `-edit`, `-web`, `-mcp`) that the config parser accepts.
+pub fn validate_rule(line: &str) -> Result<(), String> {
+    if line.contains(['\n', '\r', '\0']) {
+        return Err("a rule must be one line".into());
+    }
+    let directive = line.split_whitespace().next().unwrap_or("").to_lowercase();
+    let is_rule = ["allow", "ask", "deny"]
+        .iter()
+        .any(|a| RULE_KINDS.iter().any(|k| format!("{a}{k}") == directive));
+    if !is_rule {
+        return Err(format!("not a rule: {line}"));
+    }
+    let parsed = config::parse_config(line, None).map_err(|e| e.to_string())?;
+    let warnings = config::take_warnings();
+    let count = parsed.rules.len()
+        + parsed.redirect_rules.len()
+        + parsed.mcp_rules.len()
+        + parsed.edit_rules.len()
+        + parsed.read_rules.len()
+        + parsed.web_rules.len();
+    if count != 1 {
+        return Err(warnings
+            .into_iter()
+            .next()
+            .unwrap_or_else(|| format!("invalid rule: {line}")));
+    }
+    Ok(())
+}
+
+/// The project config Dippy loads for `cwd`; without one, `.dippy` in the
+/// enclosing Git work tree's root, else in `cwd`.
+pub fn project_rule_path(cwd: &Path) -> PathBuf {
+    if let Some(path) = config::find_project_config(cwd) {
+        return path;
+    }
+    let cwd = crate::paths::resolve(cwd);
+    let root = cwd
+        .ancestors()
+        .find(|dir| dir.join(".git").exists())
+        .unwrap_or(&cwd);
+    root.join(PROJECT_CONFIG_NAME)
+}
+
+/// Append `rule` after a dated comment, creating the file if needed.
+pub fn add_rule(path: &Path, rule: &str, date: &str) -> std::io::Result<()> {
+    let mut text = match std::fs::read_to_string(path) {
+        Ok(text) => text,
+        Err(e) if e.kind() == ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(e),
+    };
+    if !text.is_empty() && !text.ends_with('\n') {
+        text.push('\n');
+    }
+    text.push_str(&format!("# added by dippy {date}\n{rule}\n"));
+    write_atomic(path, &text)
+}
+
 /// Python `repr(float)`.
 pub fn py_float_repr(x: f64) -> String {
     if x.is_nan() {
@@ -274,13 +343,35 @@ fn known_key(key: &str) -> Result<String, String> {
     }
 }
 
-/// `handle_config_subcommand`.
-pub fn run(args: &ConfigArgs) -> i32 {
+/// `handle_config_subcommand`; `cwd` is the global `--cwd` (for `add-rule`).
+pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
     let Some(action) = &args.action else {
         return fail("config action required".into());
     };
     match action {
         Action::Server(server) => run_server(server),
+        Action::AddRule { rule, scope } => {
+            if let Err(e) = validate_rule(rule) {
+                return fail(e);
+            }
+            let path = if scope.project {
+                let process_cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
+                let cwd = cwd.map_or(process_cwd.clone(), |c| {
+                    crate::paths::resolve(&process_cwd.join(c))
+                });
+                project_rule_path(&cwd)
+            } else {
+                config::user_config_path()
+            };
+            let date = chrono::Local::now().format("%Y-%m-%d").to_string();
+            match add_rule(&path, rule, &date) {
+                Ok(()) => {
+                    println!("{}", path.display());
+                    0
+                }
+                Err(e) => fail(format!("{}: {e}", path.display())),
+            }
+        }
         Action::Get { key: None, scope } => {
             if let Ok(text) = std::fs::read_to_string(scope_path(scope)) {
                 print!("{text}");
@@ -387,5 +478,75 @@ mod tests {
         );
         assert_eq!(setting_key("set"), None);
         assert_eq!(setting_key("allow set x"), None);
+    }
+
+    #[test]
+    fn rule_lines_must_be_one_valid_rule() {
+        for ok in [
+            "allow git push origin *",
+            "ask zorp * \"careful\"",
+            "deny-redirect /etc/* \"no\"",
+            "allow-read src/**",
+            "ask-edit .env",
+            "allow-web *docs*",
+            "deny-mcp mcp__x__drop",
+        ] {
+            assert_eq!(validate_rule(ok), Ok(()), "{ok}");
+        }
+        for bad in [
+            "",
+            "# allow x",
+            "allow",
+            "set askpass /x",
+            "include other",
+            "alias a b",
+            "after zorp \"m\"",
+            "allow-opt zorp -x",
+            "delegate zorp *",
+            "bogus x",
+            "allow a\nallow b",
+            "allow a\rb",
+        ] {
+            assert!(validate_rule(bad).is_err(), "{bad:?}");
+        }
+    }
+
+    fn temp(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("dippy-rs-admin-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn project_rule_path_prefers_loaded_config_then_git_root() {
+        let dir = temp("project");
+        let sub = dir.join("repo/a/b");
+        std::fs::create_dir_all(&sub).unwrap();
+        assert_eq!(project_rule_path(&sub), sub.join(".dippy"));
+        std::fs::create_dir(dir.join("repo/.git")).unwrap();
+        assert_eq!(project_rule_path(&sub), dir.join("repo/.dippy"));
+        std::fs::write(dir.join("repo/a/.dippy"), "").unwrap();
+        assert_eq!(project_rule_path(&sub), dir.join("repo/a/.dippy"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn add_rule_appends_a_dated_line() {
+        let dir = temp("append");
+        let path = dir.join("sub/.dippy");
+        add_rule(&path, "allow a", "2026-10-10").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "# added by dippy 2026-10-10\nallow a\n"
+        );
+        std::fs::write(&path, "# keep\nallow x").unwrap();
+        add_rule(&path, "deny-redirect /etc/* \"no\"", "2026-10-11").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&path).unwrap(),
+            "# keep\nallow x\n# added by dippy 2026-10-11\ndeny-redirect /etc/* \"no\"\n"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

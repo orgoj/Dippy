@@ -1512,7 +1512,7 @@ fn load_config_file(path: &Path) -> Result<Config, ConfigError> {
     )
 }
 
-fn find_project_config(cwd: &Path) -> Option<PathBuf> {
+pub fn find_project_config(cwd: &Path) -> Option<PathBuf> {
     let mut current = paths::resolve(cwd);
     loop {
         let candidate = current.join(PROJECT_CONFIG_NAME);

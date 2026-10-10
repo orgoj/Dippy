@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.30] - 2026-10-10
+
+### Added
+
+- `dippy-rs config add-rule [--user|--project] RULE` appends one `allow`/`ask`/`deny` rule line (optionally `-redirect`, `-read`, `-edit`, `-web`, `-mcp`) after a `# added by dippy DATE` comment and prints the file. The line must parse to exactly one rule; settings, includes, aliases and multi-line values are rejected. `--project` writes the project config Dippy loads for the cwd (global `--cwd` applies), else `.dippy` in the enclosing Git root, else in the cwd. Not available in Python Dippy.
+
 ## [0.4.29] - 2026-10-10
 
 ### Added

@@ -267,7 +267,7 @@ fn main() {
             let (cli, matches) = parse_cli();
             let code = match &cli.command {
                 Some(Subcommand::Audit(query)) => run_audit(&cli, query),
-                Some(Subcommand::Config(args)) => dippy_rs::admin::run(args),
+                Some(Subcommand::Config(args)) => dippy_rs::admin::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Hooks(args)) => dippy_rs::hooks::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Doctor(args)) => dippy_rs::doctor::run(args, cli.cwd.as_deref()),
                 None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),

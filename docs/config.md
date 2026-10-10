@@ -253,6 +253,20 @@ an existing underscore spelling in place instead of creating a duplicate.
 Global `--config` and `--cwd` options apply to `run`, `run-on-server`, and
 `recover` as well as validation mode.
 
+The Rust implementation also appends rules:
+
+```bash
+dippy config add-rule 'allow git push origin *'
+dippy --cwd ~/work/app config add-rule --project 'deny-redirect /etc/* "Never write to /etc"'
+```
+
+The rule must be one `allow`, `ask` or `deny` line, optionally with
+`-redirect`, `-read`, `-edit`, `-web` or `-mcp`, that parses to exactly one
+rule. It is written last (last match wins) after a `# added by dippy DATE`
+comment, and the file path is printed. Here `--project` means the `.dippy`
+Dippy loads for the cwd; without one, `.dippy` in the Git root, else in the
+cwd.
+
 ### Usage
 
 ```bash
