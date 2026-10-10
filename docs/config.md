@@ -1176,6 +1176,16 @@ set final ~/.dippy/emergency  # emergency overrides (loaded last)
 set askpass /path/to/askpass  # external approval program (e.g., dippy-askpass-gui)
 set askpass-timeout 59        # seconds to wait (default: 59)
 
+# Where `ask` goes (dippy-rs): the agent's prompt or askpass (default), or
+# the queue of the local dashboard node (see "Dashboard approvals")
+set approval ask
+set approval dashboard
+# Instruction after a dashboard approval timed out
+set approval-timeout-message "Wait for the user and retry the same request, or continue with another safe solution."
+# User config only (ignored with a warning in .dippy, --config, final):
+set dashboard-url http://127.0.0.1:8765     # the node (default)
+set dashboard-token-file ~/.dippy/dashboard-token  # the node's token (default)
+
 # Environment variables exposed as context flags (repeatable)
 set context-env HCOM_INSTANCE_NAME
 set context-env CI

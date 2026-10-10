@@ -11,10 +11,14 @@ use crate::config::{self, Config, PROJECT_CONFIG_NAME};
 use crate::paths::py_path_str;
 
 /// `_CONFIG_KEYS`: the settings `dippy config` reads and writes.
-pub const KEYS: [&str; 9] = [
+pub const KEYS: [&str; 13] = [
     "askpass",
     "askpass-timeout",
     "approval-wait-message",
+    "approval",
+    "approval-timeout-message",
+    "dashboard-url",
+    "dashboard-token-file",
     "run-on-server-backend",
     "run-on-server-session",
     "run-on-server-timeout",
@@ -292,6 +296,10 @@ fn setting_value(config: &Config, key: &str) -> String {
         "askpass" => path(&config.askpass),
         "askpass-timeout" => config.askpass_timeout.to_string(),
         "approval-wait-message" => config.approval_wait_message.clone(),
+        "approval" => config.approval.clone(),
+        "approval-timeout-message" => config.approval_timeout_message.clone(),
+        "dashboard-url" => config.dashboard_url.clone(),
+        "dashboard-token-file" => py_path_str(&config.dashboard_token_path()),
         "run-on-server-backend" => config.run_on_server_backend.clone(),
         "run-on-server-session" => config.run_on_server_session.clone(),
         "run-on-server-timeout" => py_float_repr(config.run_on_server_timeout),
@@ -402,6 +410,11 @@ pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
                 Ok(k) => k,
                 Err(e) => return fail(e),
             };
+            if scope.project
+                && config::USER_ONLY_SETTINGS.contains(&normalized.replace('-', "_").as_str())
+            {
+                return fail(format!("{normalized} is allowed only in the user config"));
+            }
             // Python accepts these and writes the extra lines into the file.
             let one_line = !value.contains(['\n', '\r', '\0']);
             let candidate = config::parse_config(&format!("set {normalized} {value}"), None);

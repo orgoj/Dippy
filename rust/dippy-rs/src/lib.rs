@@ -6,6 +6,7 @@
 pub mod admin;
 pub mod allowlists;
 pub mod analyzer;
+pub mod approval;
 pub mod askpass;
 pub mod askpass_gui;
 pub mod ast;

@@ -126,6 +126,17 @@ impl Rule {
 pub const DEFAULT_APPROVAL_WAIT_MESSAGE: &str =
     "Stop work and wait for the user unless you can continue safely without this command.";
 
+/// Final instruction after a dashboard approval timed out.
+pub const DEFAULT_APPROVAL_TIMEOUT_MESSAGE: &str =
+    "Wait for the user and retry the same request, or continue with another safe solution.";
+
+/// The dashboard node's default URL (`dippy dashboard` defaults).
+pub const DEFAULT_DASHBOARD_URL: &str = "http://127.0.0.1:8765";
+
+/// Settings only the user config may set: a cloned repository must not
+/// send approval requests to a server of its choosing.
+pub const USER_ONLY_SETTINGS: [&str; 2] = ["dashboard_url", "dashboard_token_file"];
+
 /// Configuration for a wrapper command.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WrapperInfo {
@@ -174,6 +185,13 @@ pub struct Config {
     pub askpass: Option<PathBuf>,
     pub askpass_timeout: i64,
     pub approval_wait_message: String,
+    /// 'ask' (the agent's prompt or askpass) | 'dashboard' (the node's queue)
+    pub approval: String,
+    pub approval_timeout_message: String,
+    /// User config only.
+    pub dashboard_url: String,
+    /// User config only; `None` means `~/.dippy/dashboard-token`.
+    pub dashboard_token_file: Option<PathBuf>,
     /// 'ssh' | 'tmux' | 'herdr'
     pub run_on_server_backend: String,
     pub run_on_server_session: String,
@@ -221,6 +239,10 @@ impl Default for Config {
             askpass: None,
             askpass_timeout: 59,
             approval_wait_message: DEFAULT_APPROVAL_WAIT_MESSAGE.into(),
+            approval: "ask".into(),
+            approval_timeout_message: DEFAULT_APPROVAL_TIMEOUT_MESSAGE.into(),
+            dashboard_url: DEFAULT_DASHBOARD_URL.into(),
+            dashboard_token_file: None,
             run_on_server_backend: "ssh".into(),
             run_on_server_session: "dippy".into(),
             run_on_server_timeout: 300.0,
@@ -642,6 +664,10 @@ struct Settings {
     askpass: Option<PathBuf>,
     askpass_timeout: Option<i64>,
     approval_wait_message: Option<String>,
+    approval: Option<String>,
+    approval_timeout_message: Option<String>,
+    dashboard_url: Option<String>,
+    dashboard_token_file: Option<PathBuf>,
     run_on_server_backend: Option<String>,
     run_on_server_session: Option<String>,
     run_on_server_timeout: Option<f64>,
@@ -694,6 +720,16 @@ fn py_float(value: &str) -> Option<f64> {
         return None;
     }
     cleaned.parse::<f64>().ok()
+}
+
+/// Settings whose invalid values are config errors (an approval route must
+/// never be guessed).
+fn is_approval_setting(rest: &str) -> bool {
+    let key = rest.split_whitespace().next().unwrap_or("");
+    matches!(
+        key,
+        "approval" | "approval-timeout-message" | "dashboard-url" | "dashboard-token-file"
+    )
 }
 
 /// `_apply_setting`.
@@ -780,13 +816,43 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
             let v = need("'askpass' requires a path")?;
             settings.askpass = Some(PathBuf::from(paths::expanduser(&v)));
         }
-        "approval_wait_message" => {
-            let v = need("'approval-wait-message' requires a message")?;
+        "approval_wait_message" | "approval_timeout_message" => {
+            let name = key_n.replace('_', "-");
+            let v = need(&format!("'{name}' requires a message"))?;
             let message = strip_quotes(&v).trim();
             if message.is_empty() {
-                return Err("'approval-wait-message' must not be empty".into());
+                return Err(format!("'{name}' must not be empty"));
             }
-            settings.approval_wait_message = Some(message.to_string());
+            if key_n == "approval_wait_message" {
+                settings.approval_wait_message = Some(message.to_string());
+            } else {
+                settings.approval_timeout_message = Some(message.to_string());
+            }
+        }
+        "approval" => match value.as_deref().map(strip_quotes) {
+            Some(v @ ("ask" | "dashboard")) => settings.approval = Some(v.to_string()),
+            other => {
+                return Err(format!(
+                    "'approval' must be 'ask' or 'dashboard', got '{}'",
+                    other.unwrap_or("None")
+                ));
+            }
+        },
+        "dashboard_url" => {
+            let v = need("'dashboard-url' requires a URL")?;
+            let url = strip_quotes(&v).trim().to_string();
+            crate::http::validate_url(&url)
+                .and_then(|()| crate::http::Target::parse(&url).map(drop))
+                .map_err(|e| format!("'dashboard-url': {e}"))?;
+            settings.dashboard_url = Some(url);
+        }
+        "dashboard_token_file" => {
+            let v = need("'dashboard-token-file' requires a path")?;
+            let v = strip_quotes(&v).trim().to_string();
+            if v.is_empty() || v.contains(['\0', '\r', '\n']) {
+                return Err("'dashboard-token-file' requires a single path".into());
+            }
+            settings.dashboard_token_file = Some(local_profile_path(&v, base));
         }
         "log_rotate_max_days" | "askpass_timeout" => {
             let name = key_n.replace('_', "-");
@@ -1151,15 +1217,14 @@ fn parse_config_from(
             Ok(())
         })();
         if let Err(e) = result {
-            if directive == "set"
-                && rest
-                    .to_lowercase()
-                    .replace('_', "-")
-                    .starts_with("run-on-server-ssh-")
-            {
+            let setting = rest.to_lowercase().replace('_', "-");
+            if directive == "set" && setting.starts_with("run-on-server-ssh-") {
                 return Err(ConfigError(format!(
                     "{prefix}line {lineno}: invalid SSH profile: {e}"
                 )));
+            }
+            if directive == "set" && is_approval_setting(&setting) {
+                return Err(ConfigError(format!("{prefix}line {lineno}: {e}")));
             }
             warn(format!("{prefix}line {lineno}: {e} (skipped)"));
         }
@@ -1188,6 +1253,12 @@ fn parse_config_from(
     cfg.approval_wait_message = settings
         .approval_wait_message
         .unwrap_or(d.approval_wait_message);
+    cfg.approval = settings.approval.unwrap_or(d.approval);
+    cfg.approval_timeout_message = settings
+        .approval_timeout_message
+        .unwrap_or(d.approval_timeout_message);
+    cfg.dashboard_url = settings.dashboard_url.unwrap_or(d.dashboard_url);
+    cfg.dashboard_token_file = settings.dashboard_token_file;
     cfg.run_on_server_backend = settings
         .run_on_server_backend
         .unwrap_or(d.run_on_server_backend);
@@ -1278,6 +1349,26 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
             overlay.approval_wait_message
         } else {
             base.approval_wait_message
+        },
+        approval: if set("approval") {
+            overlay.approval
+        } else {
+            base.approval
+        },
+        approval_timeout_message: if set("approval_timeout_message") {
+            overlay.approval_timeout_message
+        } else {
+            base.approval_timeout_message
+        },
+        dashboard_url: if set("dashboard_url") {
+            overlay.dashboard_url
+        } else {
+            base.dashboard_url
+        },
+        dashboard_token_file: if set("dashboard_token_file") {
+            overlay.dashboard_token_file
+        } else {
+            base.dashboard_token_file
         },
         run_on_server_backend: if set("run_on_server_backend") {
             overlay.run_on_server_backend
@@ -1553,6 +1644,25 @@ pub fn load_config_with_rule(
     load_scopes(cwd, user, None, Some((target, rule)))
 }
 
+/// Drop user-only settings from a config that is not the user config.
+fn without_user_only(mut config: Config, path: &Path) -> Config {
+    let d = Config::default();
+    for name in USER_ONLY_SETTINGS {
+        if config.configured_settings.remove(name) {
+            warn(format!(
+                "{}: '{}' is allowed only in the user config (ignored)",
+                path.display(),
+                name.replace('_', "-")
+            ));
+            match name {
+                "dashboard_url" => config.dashboard_url = d.dashboard_url.clone(),
+                _ => config.dashboard_token_file = None,
+            }
+        }
+    }
+    config
+}
+
 /// User, project and override scopes; `extra` appends a rule to one file.
 fn load_scopes(
     cwd: &Path,
@@ -1568,6 +1678,9 @@ fn load_scopes(
         };
         if let Some((_, rule)) = extra.filter(|(target, _)| *target == path) {
             c = merge_configs(c, parse_config(rule, None)?);
+        }
+        if scope != "user" {
+            c = without_user_only(c, path);
         }
         Ok(tag_rules(c, &path.to_string_lossy(), scope))
     };
@@ -1585,7 +1698,8 @@ fn load_scopes(
     if let Some(p) = override_path {
         let path = PathBuf::from(paths::expanduser(&p));
         if path.is_file() {
-            let c = tag_rules(load_config_file(&path)?, &path.to_string_lossy(), "env");
+            let c = without_user_only(load_config_file(&path)?, &path);
+            let c = tag_rules(c, &path.to_string_lossy(), "env");
             config = merge_configs(config, c);
         } else if config_path.is_some_and(|c| !c.is_empty()) {
             return Err(ConfigError(format!(
@@ -1598,6 +1712,13 @@ fn load_scopes(
 }
 
 impl Config {
+    /// The dashboard token file (`~/.dippy/dashboard-token` by default).
+    pub fn dashboard_token_path(&self) -> PathBuf {
+        self.dashboard_token_file.clone().unwrap_or_else(|| {
+            PathBuf::from(paths::expanduser(crate::dashboard::DEFAULT_TOKEN_FILE))
+        })
+    }
+
     fn clone_override(&self, config_path: Option<&str>, env: Option<&str>) -> Option<String> {
         match config_path {
             Some(p) if !p.is_empty() => Some(p.to_string()),
@@ -1625,14 +1746,15 @@ pub fn load_config(
                     path.display()
                 )));
             }
-            tag_rules(load_config_file(&path)?, &path.to_string_lossy(), "env")
+            let c = without_user_only(load_config_file(&path)?, &path);
+            tag_rules(c, &path.to_string_lossy(), "env")
         }
         None => load_normal_config(cwd, config_path)?,
     };
     if let Some(final_path) = config.final_path.clone() {
         if final_path.is_file() {
             let c = tag_rules(
-                load_config_file(&final_path)?,
+                without_user_only(load_config_file(&final_path)?, &final_path),
                 &final_path.to_string_lossy(),
                 "final",
             );
@@ -2327,6 +2449,70 @@ mod tests {
             word_has_expansions: &[],
         };
         match_command(&sc, config, Path::new("/tmp"), &Flags::new(), false).map(|m| m.decision)
+    }
+
+    #[test]
+    fn approval_settings_parse_and_merge_by_membership() {
+        let d = Config::default();
+        assert_eq!(
+            (d.approval.as_str(), d.dashboard_url.as_str()),
+            ("ask", DEFAULT_DASHBOARD_URL)
+        );
+        assert!(d.approval_timeout_message.starts_with("Wait for the user"));
+        let base = cfg("set approval dashboard\n\
+                        set approval-timeout-message ' Ping the lead. '\n\
+                        set dashboard-url http://127.0.0.1:9000/\n\
+                        set dashboard-token-file /t/token");
+        assert_eq!(base.approval, "dashboard");
+        assert_eq!(base.approval_timeout_message, "Ping the lead.");
+        assert_eq!(base.dashboard_url, "http://127.0.0.1:9000/");
+        assert_eq!(base.dashboard_token_path(), PathBuf::from("/t/token"));
+        // A higher scope can restore the default explicitly.
+        let restored = merge_configs(base.clone(), cfg("set approval ask"));
+        assert_eq!(restored.approval, "ask");
+        let kept = merge_configs(base.clone(), cfg("allow frob"));
+        assert_eq!(kept.approval, "dashboard");
+        assert_eq!(kept.approval_timeout_message, "Ping the lead.");
+        for bad in [
+            "set approval maybe",
+            "set approval",
+            "set approval-timeout-message ''",
+            "set dashboard-url ftp://h",
+            "set dashboard-url http://u:p@h",
+            "set dashboard-url http://h:99999",
+            "set dashboard-token-file",
+        ] {
+            assert!(parse_config(bad, None).is_err(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn dashboard_url_and_token_file_are_user_config_only() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-useronly-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("proj")).unwrap();
+        let user = dir.join("user.config");
+        std::fs::write(&user, "set dashboard-url http://127.0.0.1:1111\n").unwrap();
+        std::fs::write(
+            dir.join("proj/.dippy"),
+            "set approval dashboard\nset dashboard-url http://evil:1\nset dashboard-token-file /x\n",
+        )
+        .unwrap();
+        take_warnings();
+        let c = load_config_from(&dir.join("proj"), &user).unwrap();
+        assert_eq!(c.approval, "dashboard");
+        assert_eq!(c.dashboard_url, "http://127.0.0.1:1111");
+        assert_eq!(c.dashboard_token_file, None);
+        let warnings = take_warnings();
+        assert_eq!(warnings.len(), 2, "{warnings:?}");
+        assert!(
+            warnings[0].ends_with("'dashboard-url' is allowed only in the user config (ignored)")
+        );
+        // Without a user setting the default stays.
+        let c = load_config_from(&dir.join("proj"), &dir.join("none")).unwrap();
+        take_warnings();
+        assert_eq!(c.dashboard_url, DEFAULT_DASHBOARD_URL);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

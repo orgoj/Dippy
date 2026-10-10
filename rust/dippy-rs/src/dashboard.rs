@@ -330,18 +330,7 @@ pub fn validate_node(name: &str, body: &Value) -> Result<Node, String> {
         (Some(Value::String(u)), Some(Value::String(t))) if !t.is_empty() => (u, t),
         _ => return Err("url and token must be non-empty strings".into()),
     };
-    let parts = http::urlsplit(url)?;
-    if !matches!(parts.scheme.as_str(), "http" | "https") || parts.hostname().is_none() {
-        return Err("url must be http:// or https:// with a host".into());
-    }
-    let truthy = |s: Option<&str>| s.is_some_and(|s| !s.is_empty());
-    if truthy(parts.username())
-        || truthy(parts.password())
-        || !parts.query.is_empty()
-        || !parts.fragment.is_empty()
-    {
-        return Err("url must not contain credentials, query or fragment".into());
-    }
+    http::validate_url(url)?;
     Ok(Node {
         url: url.clone(),
         token: token.clone(),

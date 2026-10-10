@@ -66,6 +66,24 @@ pub fn urlsplit(url: &str) -> Result<SplitUrl, String> {
     Ok(out)
 }
 
+/// An `http(s)://host[:port][/path]` URL without credentials, query or
+/// fragment (`_validate_node`'s URL rules).
+pub fn validate_url(url: &str) -> Result<(), String> {
+    let parts = urlsplit(url)?;
+    if !matches!(parts.scheme.as_str(), "http" | "https") || parts.hostname().is_none() {
+        return Err("url must be http:// or https:// with a host".into());
+    }
+    let truthy = |s: Option<&str>| s.is_some_and(|s| !s.is_empty());
+    if truthy(parts.username())
+        || truthy(parts.password())
+        || !parts.query.is_empty()
+        || !parts.fragment.is_empty()
+    {
+        return Err("url must not contain credentials, query or fragment".into());
+    }
+    Ok(())
+}
+
 impl SplitUrl {
     fn userinfo(&self) -> Option<&str> {
         self.netloc.rsplit_once('@').map(|(u, _)| u)

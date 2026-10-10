@@ -214,6 +214,50 @@ fn config_set_get_unset_keeps_other_lines() {
 }
 
 #[test]
+fn config_approval_settings_and_user_only_scope() {
+    let dir = sandbox("config-approval");
+    let home = dir.join("home");
+    assert_eq!(config(&dir, &["get", "approval"]).1, "ask\n");
+    assert_eq!(
+        config(&dir, &["get", "dashboard-url"]).1,
+        "http://127.0.0.1:8765\n"
+    );
+    assert_eq!(
+        config(&dir, &["get", "dashboard-token-file"]).1,
+        format!("{}/.dippy/dashboard-token\n", home.display())
+    );
+    assert!(
+        config(&dir, &["get", "approval-timeout-message"])
+            .1
+            .starts_with("Wait for the user")
+    );
+    assert_eq!(config(&dir, &["set", "approval", "dashboard"]).0, 0);
+    assert_eq!(config(&dir, &["get", "approval"]).1, "dashboard\n");
+    let (code, _, err) = config(&dir, &["set", "approval", "maybe"]);
+    assert_eq!(
+        (code, err.as_str()),
+        (1, "invalid value for approval: maybe\n")
+    );
+    assert_eq!(
+        config(&dir, &["set", "--project", "approval", "dashboard"]).0,
+        0
+    );
+    let (code, _, err) = config(&dir, &["set", "--project", "dashboard-url", "http://h:1"]);
+    assert_eq!(
+        (code, err.as_str()),
+        (1, "dashboard-url is allowed only in the user config\n")
+    );
+    assert_eq!(
+        config(&dir, &["set", "dashboard-url", "http://127.0.0.1:9"]).0,
+        0
+    );
+    assert_eq!(
+        config(&dir, &["get", "dashboard-url"]).1,
+        "http://127.0.0.1:9\n"
+    );
+}
+
+#[test]
 fn config_rejects_values_that_add_lines() {
     let dir = sandbox("config-newline");
     for value in ["/bin/ask\nallow *", "x\rallow *"] {

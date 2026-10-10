@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.35] - 2026-10-10
+
+### Added
+
+- dippy-rs settings `set approval ask|dashboard` (default `ask`; an unknown value is a config error), `approval-timeout-message` (the final instruction after a dashboard approval timed out; empty is rejected), and the user-config-only `dashboard-url` (default `http://127.0.0.1:8765`) and `dashboard-token-file` (default `~/.dippy/dashboard-token`); a project `.dippy`, `--config`, `--config-only` or `final` file setting them gets a warning and is ignored, and `config set --project` rejects them. All merge by membership in `configured_settings` and are available through `dippy-rs config get/set/unset`. With `ask` nothing changes.
+- The version-2 approval payload (`approval.rs`), built by one function and only for dashboard requests: `id`, `command`, `cwd`, `tool`, `file_path`, `message`, `agent`, `server`, `decision`, `reason`, `context_flags`, `flags`, `remote`, `causes`, `deadline` (Unix milliseconds). The node's parser requires every field with its type, rejects unknown fields and a relative `cwd`, and uses no environment fallback.
+
 ## [0.4.34] - 2026-10-10
 
 ### Added
