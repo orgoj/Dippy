@@ -23,6 +23,7 @@ allow-edit ./**
 allow-read ~/.dippy/audit.log
 
 allow-redirect tmp/**
+allow rm tmp/*
 
 # Safe reading of rule files for analysis (editing remains protected by global ask-edit)
 allow-read .dippy*
