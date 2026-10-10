@@ -61,23 +61,24 @@ askpass approval, the audit log, `hook-approvals.log` and `dippy-rs audit`.
 
 Plan for the switch from Python (decided 2026-10-10):
 
-1. Installation and switch: the hooks call `dippy-rs`, `--version` and
-   `--help`, an install method (`cargo install --path` or a recipe).
-2. `config`, `hooks` and `doctor` subcommands. `hooks` and `doctor` install
-   hook entries calling `dippy-rs` and remove the old Python `dippy` entries.
+The installed binary stays `dippy`; "dippy-rs" only names the Rust
+implementation (and the development binary). Config paths stay `~/.dippy/`
+and `.dippy`. There is one switch, when the Rust port covers everything: the
+Rust binary is installed as `dippy` and the Python package removed; rollback
+is reinstalling the Python package.
 
-The project is renamed to `dippy-rs` in the binary and documentation; the
-repository rename comes later. Config paths stay `~/.dippy/` and `.dippy`
-for compatibility with existing projects. Python `dippy` stays installed
-while it serves the deferred subcommands below.
+Remaining before the switch:
 
-Deferred, Python `dippy` keeps serving them after the switch:
-`run`/`run-on-server`/`recover` (unused; ported together when `run` is
-next worked on), `dashboard`, and the GUI
-askpass program. The askpass dialog will be redesigned rather than ported
-(show the whole command, edit it, approve and write a rule to the Dippy
-config). Not ported: `dippy-statusline` (a generic Claude Code status line,
-unrelated to approvals) and `idle-notifier-command`.
+1. `--version`, `--help` and an install method (`cargo install --path` or a
+   recipe).
+2. `config`, `hooks` and `doctor` subcommands.
+3. `dashboard` (node and hub).
+4. `run`/`run-on-server`/`recover` (unused today; ported together last).
+
+The GUI askpass dialog will be redesigned rather than ported (show the whole
+command, edit it, approve and write a rule to the Dippy config); whether the
+switch waits for it is open. Not ported: `dippy-statusline` (a generic
+Claude Code status line, unrelated to approvals) and `idle-notifier-command`.
 
 From 0.4.23 on, safety fixes go to `dippy-rs` only; a Python difference is
 recorded as an intentional divergence (Rust asks, Python allows).
