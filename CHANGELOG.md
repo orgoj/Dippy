@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.32] - 2026-10-10
+
+### Added
+
+- `dippy-rs run [COMMAND]`, `run-on-server SERVER [COMMAND]` and `recover SERVER [--clear]` (command from stdin when omitted; global `--cwd`, `--config` and `--config-only` apply): one classification, askpass approval with the version-1 payload and `DIPPY_*` variables, local execution with Bash in the cwd, the ssh, tmux and herdr backends with completion markers, isolated SSH profiles (`run-on-server-ssh-config`/`-ssh-auth-sock`, private control socket per operation) and the per-project run state in `~/.dippy/run-state` in Python's format, so a state left by Python Dippy can be recovered by dippy-rs. Ctrl-C during a remote command leaves the target indeterminate, as in Python. Intentional divergences: a failed tmux command reports its stderr as text (Python shows `b'...'`), a corrupt state file reports serde's JSON error, and OS errors Python raised as tracebacks are printed as messages. `rust/parity/run_compare.py` compares both implementations with fake `ssh`, `tmux`, `herdr` and askpass programs.
+
 ## [0.4.31] - 2026-10-10
 
 ### Added

@@ -22,5 +22,6 @@ pub mod logging;
 pub mod parser;
 pub mod paths;
 pub mod pi;
+pub mod run;
 pub mod scan;
 pub mod sql;

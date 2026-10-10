@@ -101,12 +101,20 @@ Intentional divergences: no `--agent moltbot`; legacy hooks detected as in
 a non-object hook config or `--agent` with only a project config no longer
 raises a Python exception.
 
-Remaining before the switch, in order:
+Done (0.4.31): the `dippy-askpass` approval dialog, redesigned rather than
+ported (whole request, per-cause rule editor, `config add-rule`).
 
-1. The GUI askpass dialog in Rust, redesigned rather than ported (show the
-   whole command, edit it, approve and write a rule to the Dippy config).
-2. `run`/`run-on-server`/`recover` (unused today; ported together).
-3. `dashboard` (node and hub), last: new and not yet used.
+Done (0.4.32): `run`, `run-on-server` and `recover` with the ssh, tmux and
+herdr backends, isolated SSH profiles and Python-compatible run state
+(`~/.dippy/run-state`, same keys and JSON), so `recover` works across the
+switch (`rust/parity/run_compare.py`: 15 scenarios, 63 steps, 0
+differences; fake `ssh`/`tmux`/`herdr`/askpass, nothing connects).
+Intentional divergences: a failed tmux command reports its stderr as text
+(Python shows `b'...'`), a corrupt state file reports serde's JSON error, and
+OS errors Python raised as tracebacks are printed as messages.
+
+Remaining before the switch: `dashboard` (node and hub), last: new and not
+yet used.
 
 Nothing calls Python after the switch. Not ported: `dippy-statusline` (a generic
 Claude Code status line, unrelated to approvals), `idle-notifier-command` and
@@ -242,6 +250,7 @@ All tools live in `rust/parity/`:
 | `config_compare.py` | `dippy config` scenarios in one sandbox per implementation: output of every step, resulting files and their modes |
 | `hooks_compare.py` | `dippy hooks` scenarios in a sandbox HOME and project per implementation: output of every step, the whole resulting tree (backups included) and modes |
 | `doctor_compare.py` | `dippy doctor` scenarios in a sandbox HOME, project and PATH (fake `dippy`) per implementation: output of every step and the resulting tree |
+| `run_compare.py` | `dippy run`/`run-on-server`/`recover` scenarios in a sandbox HOME, project and PATH (fake `ssh`, `tmux`, `herdr`, askpass) per implementation: output of every step, run state, audit log and pane logs |
 
 The in-process oracle was checked against the real `dippy` executable on 100
 cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`

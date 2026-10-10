@@ -51,7 +51,7 @@ pub fn validate_server(server: &str) -> Result<(), String> {
 }
 
 /// Python `repr(str)` for messages.
-fn py_repr(s: &str) -> String {
+pub(crate) fn py_repr(s: &str) -> String {
     let quote = if s.contains('\'') && !s.contains('"') {
         '"'
     } else {
@@ -466,7 +466,8 @@ static MODULE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$").unwrap());
 static IDENTIFIER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap());
-static SERVER_ALIAS_RE: LazyLock<Regex> =
+/// Also the `run-on-server-session` name pattern (execution.py `_SESSION_RE`).
+pub(crate) static SERVER_ALIAS_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$").unwrap());
 
 fn strip_comment(rest: &str) -> &str {
