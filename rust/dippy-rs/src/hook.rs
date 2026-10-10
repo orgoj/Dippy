@@ -98,8 +98,9 @@ const MODE_FLAGS: [(&str, &str, &str); 10] = [
     ("--pearai", "DIPPY_PEARAI", "pearai"),
 ];
 
-pub fn is_mode_flag(arg: &str) -> bool {
-    MODE_FLAGS.iter().any(|(flag, _, _)| *flag == arg)
+/// Mode flags without the leading `--`.
+pub fn mode_flag_names() -> impl Iterator<Item = &'static str> {
+    MODE_FLAGS.iter().map(|(flag, _, _)| &flag[2..])
 }
 
 /// Output format of an agent; pi, moltbot, Windsurf and PearAI use Claude's.

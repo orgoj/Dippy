@@ -1,6 +1,7 @@
 use std::io::BufRead;
 use std::path::PathBuf;
 
+use clap::{Arg, ArgAction, ArgMatches, CommandFactory, FromArgMatches, Parser};
 use dippy_rs::analyzer::{self, Action};
 use dippy_rs::cli::{self, HandlerContext};
 use dippy_rs::config::{self, Config};
@@ -69,53 +70,84 @@ fn handler_jsonl() {
     }
 }
 
-#[derive(Default)]
-struct CliArgs {
+const AFTER_HELP: &str = "\
+Exit codes (CLI mode):
+  0 = allow (command is safe)
+  1 = deny (blocked by rule)
+  2 = ask (needs user approval)
+
+Without --cmd, --stdin or a subcommand, dippy runs as an agent hook and reads
+the hook payload from stdin.
+
+Examples:
+  dippy --cmd 'rm -rf /'
+  dippy --cmd 'ls -la' --json
+  echo 'git status' | dippy --stdin --cwd /repo";
+
+#[derive(Parser)]
+#[command(
+    name = "dippy",
+    version,
+    about = "Validate shell commands against Dippy rules.",
+    after_help = AFTER_HELP
+)]
+struct Cli {
+    /// Command to validate
+    #[arg(
+        long,
+        value_name = "COMMAND",
+        conflicts_with = "stdin",
+        allow_hyphen_values = true
+    )]
     cmd: Option<String>,
+    /// Read command from stdin (plain text, not JSON)
+    #[arg(long)]
     stdin: bool,
-    json: bool,
+    /// Working directory (default: current)
+    #[arg(long, value_name = "PATH")]
     cwd: Option<String>,
+    /// Output as JSON
+    #[arg(long)]
+    json: bool,
+    /// Config file path override
+    #[arg(long, value_name = "PATH", conflicts_with = "config_only")]
     config: Option<String>,
+    /// Load only this config file, skipping user and project config
+    #[arg(long, value_name = "PATH")]
     config_only: Option<String>,
+    /// Agent name for audit log
+    #[arg(long, value_name = "NAME")]
+    agent: Option<String>,
+    /// Remote context (skip local path checks)
+    #[arg(long)]
     remote: bool,
+    #[command(subcommand)]
+    command: Option<Subcommand>,
 }
 
-fn parse_args(args: &[String]) -> Result<CliArgs, String> {
-    let mut out = CliArgs::default();
-    let mut i = 0;
-    while i < args.len() {
-        let (flag, inline) = match args[i].split_once('=') {
-            Some((f, v)) if f.starts_with("--") => (f.to_string(), Some(v.to_string())),
-            _ => (args[i].clone(), None),
-        };
-        let mut value = || -> Result<String, String> {
-            if let Some(v) = inline.clone() {
-                return Ok(v);
-            }
-            i += 1;
-            args.get(i)
-                .cloned()
-                .ok_or_else(|| format!("{flag} requires a value"))
-        };
-        match flag.as_str() {
-            "--cmd" => out.cmd = Some(value()?),
-            "--cwd" => out.cwd = Some(value()?),
-            "--config" => out.config = Some(value()?),
-            "--config-only" => out.config_only = Some(value()?),
-            "--agent" => {
-                value()?;
-            }
-            "--stdin" => out.stdin = true,
-            "--json" => out.json = true,
-            "--remote" => out.remote = true,
-            other => return Err(format!("unrecognized argument: {other}")),
-        }
-        i += 1;
-    }
-    if out.cmd.is_some() == out.stdin {
-        return Err("exactly one of --cmd or --stdin is required".into());
-    }
-    Ok(out)
+#[derive(clap::Subcommand)]
+enum Subcommand {
+    /// Query the audit log (read-only)
+    #[command(
+        after_help = "Filters the configured audit log and its daily rotations. \
+                      Filters combine with AND;\ndates are UTC."
+    )]
+    Audit(dippy_rs::audit::Query),
+}
+
+/// The derived parser plus the hidden agent hook flags (`--claude`, ...).
+fn parse_cli() -> (Cli, ArgMatches) {
+    let command = hook::mode_flag_names().fold(Cli::command(), |c, name| {
+        c.arg(
+            Arg::new(name)
+                .long(name)
+                .hide(true)
+                .action(ArgAction::SetTrue),
+        )
+    });
+    let matches = command.get_matches();
+    let cli = Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
+    (cli, matches)
 }
 
 const EXIT_ALLOW: i32 = 0;
@@ -130,8 +162,8 @@ fn print_config_warnings() {
 }
 
 /// Port of `dippy.dippy.cli_mode`.
-fn cli_mode(args: CliArgs) -> i32 {
-    let command = match args.cmd {
+fn cli_mode(args: &Cli) -> i32 {
+    let command = match args.cmd.clone() {
         Some(c) => c,
         None => {
             let mut s = String::new();
@@ -182,43 +214,8 @@ fn cli_mode(args: CliArgs) -> i32 {
     }
 }
 
-/// `dippy [--cwd DIR] [--config FILE | --config-only FILE] audit ...`;
-/// `None` when the arguments are not an audit invocation.
-fn audit_main(args: &[String]) -> Option<i32> {
-    let mut global = CliArgs::default();
-    let mut i = 0;
-    while i < args.len() {
-        if args[i] == "audit" {
-            return Some(run_audit(&global, &args[i + 1..]));
-        }
-        let (flag, inline) = match args[i].split_once('=') {
-            Some((f, v)) => (f, Some(v.to_string())),
-            None => (args[i].as_str(), None),
-        };
-        let slot = match flag {
-            "--cwd" => &mut global.cwd,
-            "--config" => &mut global.config,
-            "--config-only" => &mut global.config_only,
-            _ => return None,
-        };
-        if inline.is_none() {
-            i += 1;
-        }
-        *slot = inline.or_else(|| args.get(i).cloned());
-        i += 1;
-    }
-    None
-}
-
 /// Port of `handle_audit_subcommand`.
-fn run_audit(global: &CliArgs, args: &[String]) -> i32 {
-    let query = match dippy_rs::audit::parse_args(args) {
-        Ok(q) => q,
-        Err(e) => {
-            eprintln!("usage: dippy-rs audit [options]\ndippy-rs audit: error: {e}");
-            return 2;
-        }
-    };
+fn run_audit(global: &Cli, query: &dippy_rs::audit::Query) -> i32 {
     let process_cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
     let cwd = match &global.cwd {
         Some(c) => paths::resolve(&PathBuf::from(c)),
@@ -241,7 +238,7 @@ fn run_audit(global: &CliArgs, args: &[String]) -> i32 {
         eprintln!("audit log is not configured (set log PATH)");
         return 1;
     };
-    match dippy_rs::audit::query(log, &query, &process_cwd) {
+    match dippy_rs::audit::query(log, query, &process_cwd) {
         Ok(lines) => {
             for line in lines {
                 println!("{line}");
@@ -264,28 +261,33 @@ fn main() {
             }
         }
         Some("--handler-jsonl") => handler_jsonl(),
-        _ if let Some(code) = audit_main(&args) => std::process::exit(code),
-        _ if args.iter().all(|a| hook::is_mode_flag(a)) => {
-            let mut input = String::new();
-            let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
-            let mode = hook::mode_from_flags(&args, |name| std::env::var(name).ok());
-            let out = hook::run_hook(mode, &input);
-            if let Some(stdout) = out.stdout {
-                println!("{stdout}");
-            }
-            if let Some(stderr) = out.stderr {
-                eprintln!("{stderr}");
-            }
-            std::process::exit(out.exit_code);
+        _ => {
+            let (cli, matches) = parse_cli();
+            let code = match &cli.command {
+                Some(Subcommand::Audit(query)) => run_audit(&cli, query),
+                None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),
+                None => hook_mode(&matches),
+            };
+            std::process::exit(code);
         }
-        _ => match parse_args(&args) {
-            Ok(a) => std::process::exit(cli_mode(a)),
-            Err(e) => {
-                eprintln!(
-                    "usage: dippy-rs --cmd CMD [--json] [--cwd DIR] [--config FILE]\nerror: {e}"
-                );
-                std::process::exit(EXIT_ASK);
-            }
-        },
     }
+}
+
+/// Agent hook: the payload arrives on stdin.
+fn hook_mode(matches: &ArgMatches) -> i32 {
+    let mut input = String::new();
+    let _ = std::io::Read::read_to_string(&mut std::io::stdin(), &mut input);
+    let flags: Vec<String> = hook::mode_flag_names()
+        .filter(|name| matches.get_flag(name))
+        .map(|name| format!("--{name}"))
+        .collect();
+    let mode = hook::mode_from_flags(&flags, |name| std::env::var(name).ok());
+    let out = hook::run_hook(mode, &input);
+    if let Some(stdout) = out.stdout {
+        println!("{stdout}");
+    }
+    if let Some(stderr) = out.stderr {
+        eprintln!("{stderr}");
+    }
+    out.exit_code
 }

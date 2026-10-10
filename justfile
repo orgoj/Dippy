@@ -62,16 +62,23 @@ bump-version VERSION:
     for path, pattern in (
         ("pyproject.toml", r'^version = "[^"]+"$'),
         ("src/dippy/__init__.py", r'^__version__ = "[^"]+"$'),
+        ("rust/dippy-rs/Cargo.toml", r'^version = "[^"]+"$'),
     ):
         file = Path(path)
-        prefix = "version" if path == "pyproject.toml" else "__version__"
+        prefix = "__version__" if path.endswith(".py") else "version"
         text, count = re.subn(pattern, f'{prefix} = "{new}"', file.read_text(), count=1, flags=re.M)
         if count != 1:
             sys.exit(f"version line not found in {path}")
         file.write_text(text)
     PY
     uv lock
+    cargo update --workspace --manifest-path rust/Cargo.toml
     echo "Version set to {{VERSION}}"
+
+# Install the Rust port as DEST/dippy (for the switch from Python; see docs/plans/rust-port-report.md)
+install-rs DEST="~/.local/bin":
+    cargo build --release --manifest-path rust/Cargo.toml
+    install -Dm755 rust/target/release/dippy-rs {{DEST}}/dippy
 
 # Update vendored parable.py from GitHub
 update-parable:

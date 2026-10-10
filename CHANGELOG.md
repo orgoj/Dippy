@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.24] - 2026-10-10
+
+### Added
+
+- `dippy-rs --help` (also for `audit`) and `dippy-rs --version`, which prints `dippy X.Y.Z` with the package version; `just bump-version` now also sets the crate version. `dippy-rs --cmd` accepts a command that starts with `-`, as before.
+- `just install-rs [DEST]` installs the Rust release binary as `DEST/dippy` (default `~/.local/bin`), for the switch from the Python package.
+
 ## [0.4.23] - 2026-10-10
 
 ### Fixed

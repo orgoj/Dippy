@@ -18,21 +18,39 @@ const GREP_FIELDS: [&str; 6] = [
     "tool",
     "suggestion",
 ];
-const DECISIONS: [&str; 4] = ["allow", "ask", "deny", "pass"];
-
 /// Filters of `dippy audit`; they combine with AND.
-#[derive(Debug, Default, PartialEq)]
+#[derive(Debug, Default, PartialEq, clap::Args)]
 pub struct Query {
+    #[arg(long, value_name = "YYYY-MM-DD")]
     pub since: Option<String>,
+    #[arg(long, value_name = "YYYY-MM-DD")]
     pub until: Option<String>,
+    /// Keep only this decision (repeatable)
+    #[arg(long = "decision", value_name = "DECISION", value_parser = ["allow", "ask", "deny", "pass"])]
     pub decisions: Vec<String>,
+    /// Drop allow decisions
+    #[arg(long)]
     pub not_allow: bool,
+    /// claude, codex, agy, ...
+    #[arg(long, value_name = "CLI")]
     pub agent: Option<String>,
+    /// cwd at or below PATH
+    #[arg(long, value_name = "PATH")]
     pub cwd: Option<String>,
+    /// policy_cwd at or below PATH
+    #[arg(long, value_name = "PATH")]
     pub policy_cwd: Option<String>,
+    /// Agent tool name
+    #[arg(long, value_name = "NAME")]
     pub tool: Option<String>,
+    /// Substring of command, cmd, message or path
+    #[arg(long, value_name = "TEXT")]
     pub grep: Option<String>,
+    /// Count entries by field, e.g. cmd, command, cwd, tool (repeatable)
+    #[arg(long, value_name = "FIELD")]
     pub group_by: Vec<String>,
+    /// Last N entries or top N groups
+    #[arg(long, value_name = "N", allow_negative_numbers = true)]
     pub limit: Option<i64>,
 }
 
@@ -215,56 +233,6 @@ pub fn query(log: &Path, q: &Query, cwd: &Path) -> Result<Vec<String>, String> {
     Ok(lines.into_iter().skip(skip).collect())
 }
 
-/// Parse the arguments after `audit`.
-pub fn parse_args(args: &[String]) -> Result<Query, String> {
-    let mut q = Query::default();
-    let mut i = 0;
-    while i < args.len() {
-        let (flag, inline) = match args[i].split_once('=') {
-            Some((f, v)) if f.starts_with("--") => (f.to_string(), Some(v.to_string())),
-            _ => (args[i].clone(), None),
-        };
-        let mut value = || -> Result<String, String> {
-            if let Some(v) = inline.clone() {
-                return Ok(v);
-            }
-            i += 1;
-            args.get(i)
-                .cloned()
-                .ok_or_else(|| format!("argument {flag}: expected one argument"))
-        };
-        match flag.as_str() {
-            "--since" => q.since = Some(value()?),
-            "--until" => q.until = Some(value()?),
-            "--decision" => {
-                let v = value()?;
-                if !DECISIONS.contains(&v.as_str()) {
-                    return Err(format!("argument --decision: invalid choice: '{v}'"));
-                }
-                q.decisions.push(v);
-            }
-            "--not-allow" => q.not_allow = true,
-            "--agent" => q.agent = Some(value()?),
-            "--cwd" => q.cwd = Some(value()?),
-            "--policy-cwd" => q.policy_cwd = Some(value()?),
-            "--tool" => q.tool = Some(value()?),
-            "--grep" => q.grep = Some(value()?),
-            "--group-by" => q.group_by.push(value()?),
-            "--limit" => {
-                let v = value()?;
-                let n = v
-                    .trim()
-                    .parse()
-                    .map_err(|_| format!("argument --limit: invalid int value: '{v}'"))?;
-                q.limit = Some(n);
-            }
-            other => return Err(format!("unrecognized arguments: {other}")),
-        }
-        i += 1;
-    }
-    Ok(q)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -364,9 +332,21 @@ mod tests {
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
+    #[derive(clap::Parser)]
+    struct Audit {
+        #[command(flatten)]
+        query: Query,
+    }
+
+    fn parse_args(args: &[&str]) -> Result<Query, clap::Error> {
+        use clap::Parser;
+        let argv = std::iter::once("audit").chain(args.iter().copied());
+        Audit::try_parse_from(argv).map(|a| a.query)
+    }
+
     #[test]
     fn parses_audit_arguments() {
-        let args: Vec<String> = [
+        let args = [
             "--decision",
             "ask",
             "--decision=deny",
@@ -374,15 +354,12 @@ mod tests {
             "3",
             "--cwd",
             ".",
-        ]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
+        ];
         let q = parse_args(&args).unwrap();
         assert_eq!(q.decisions, ["ask", "deny"]);
         assert_eq!(q.limit, Some(3));
         assert_eq!(q.cwd.as_deref(), Some("."));
-        assert!(parse_args(&["--decision".into(), "maybe".into()]).is_err());
-        assert!(parse_args(&["--bogus".into()]).is_err());
+        assert!(parse_args(&["--decision", "maybe"]).is_err());
+        assert!(parse_args(&["--bogus"]).is_err());
     }
 }

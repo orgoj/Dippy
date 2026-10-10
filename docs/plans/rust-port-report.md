@@ -22,7 +22,7 @@ session credit.
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
 | Hook output, all modes (`hook_compare.py`, 1,594 payloads: Claude, Gemini, Codex, Cursor, AGY, auto-detected) | 1,594 same decision, 0 unsafe, 1,588 byte-identical; all 243 hand-written tool/event payloads byte-identical (the rest differ in corpus reason text only) |
 | Hook logs and `audit` (`log_compare.py`: 937 runs of the hook_compare payloads, 24 `audit` queries, rotation) | audit log and `hook-approvals.log` identical (timestamps masked, format checked), 0 query differences, identical rotation; 18 spurious Codex `pass` entries from Python dropped (Python bug, below) |
-| `cargo test` | 305 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
+| `cargo test` | 313 tests pass (305 unit, 8 CLI); `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
 | Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
 
 Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
@@ -67,18 +67,24 @@ and `.dippy`. There is one switch, when the Rust port covers everything: the
 Rust binary is installed as `dippy` and the Python package removed; rollback
 is reinstalling the Python package.
 
-Remaining before the switch:
+Done (0.4.24): `--help`, `--version` (the crate version follows
+`just bump-version`) and `just install-rs [DEST]`, which installs the release
+binary as `DEST/dippy` (default `~/.local/bin`); it is run for real only at
+the switch.
 
-1. `--version`, `--help` and an install method (`cargo install --path` or a
-   recipe).
-2. `config`, `hooks` and `doctor` subcommands.
-3. `dashboard` (node and hub).
-4. `run`/`run-on-server`/`recover` (unused today; ported together).
-5. The GUI askpass dialog in Rust, redesigned rather than ported (show the
+Remaining before the switch, in order:
+
+1. `config`, `hooks` and `doctor` subcommands. pi is supported as the
+   `dippy --pi` hook mode speaking the `pi_wrapper.py` JSON protocol, and
+   `pi-extension/dippy-extension.ts` calls it instead of Python.
+2. The GUI askpass dialog in Rust, redesigned rather than ported (show the
    whole command, edit it, approve and write a rule to the Dippy config).
+3. `run`/`run-on-server`/`recover` (unused today; ported together).
+4. `dashboard` (node and hub), last: new and not yet used.
 
 Nothing calls Python after the switch. Not ported: `dippy-statusline` (a generic
-Claude Code status line, unrelated to approvals) and `idle-notifier-command`.
+Claude Code status line, unrelated to approvals), `idle-notifier-command` and
+moltbot (renamed upstream many times).
 
 From 0.4.23 on, safety fixes go to `dippy-rs` only; a Python difference is
 recorded as an intentional divergence (Rust asks, Python allows).
@@ -239,9 +245,11 @@ Crate `rust/dippy-rs` (binary `dippy-rs`, library `dippy_rs`):
 - `audit.rs`: `dippy-rs [--cwd DIR] [--config FILE|--config-only FILE]
   audit` with every Python filter, grouping and limit (dates
   `YYYY-MM-DD` only).
-- CLI: `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR] [--config FILE]
-  [--config-only FILE] [--remote]`, same output (Python `json.dumps`
-  formatting) and exit codes as `cli_mode`.
+- CLI (`main.rs`, clap): `dippy-rs --cmd CMD|--stdin [--json] [--cwd DIR]
+  [--config FILE|--config-only FILE] [--agent NAME] [--remote]`, same output
+  (Python `json.dumps` formatting) and exit codes as `cli_mode`; `--help`,
+  `--version`; hidden hook mode flags. Without `--cmd`, `--stdin` or a
+  subcommand it runs as a hook, as Python does.
 
 Not ported (fail closed or out of scope): notifier programs (never run),
 execution subcommands.
