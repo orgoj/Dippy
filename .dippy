@@ -6,8 +6,14 @@ allow cargo *
 allow rustup show *
 allow **/parity/run *
 
-allow rm tmp/*
-allow debug/check-rule.py*
+# Locally built Dippy binaries (same trust as `allow dippy *` in .dippy-yolo)
+allow ./rust/target/release/dippy-rs *
+allow ./rust/target/debug/dippy-rs *
+allow ./.venv-3.12/bin/dippy *
+
+# Exactly one tmp/ path per rm; `allow rm tmp/*` also matched `rm tmp/x /etc/passwd`
+allow [opts: -r, -f] rm tmp/*
+allow [opts: -r, -f] rm tmp/*/*
 
 #---- File Operations ----#
 allow-read ./**
@@ -70,6 +76,12 @@ allow HCOM_INSTANCE_NAME=* dippy *
 allow HCOM_INSTANCE_NAME=* ./scripts/debug/try-rules.sh *
 
 #---- dippy_dev bundle ----#
-# An exact path, not a glob over ~/.hcom/agents/**: allow-redirect ignores
-# context flags, so a glob would let every agent write to every other bundle.
-allow-redirect ~/.hcom/agents/dippy_dev/TODO.md
+# Exact paths, scoped to dippy_dev; SOUL.md edits stay on ask.
+set context-env HCOM_INSTANCE_NAME
+allow-redirect [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
+allow-read [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/**
+allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/NOTES.md
+allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
+
+#---- hcom ----#
+allow [$HCOM_INSTANCE_NAME=dippy_dev] hcom send @* --name dippy_dev *
