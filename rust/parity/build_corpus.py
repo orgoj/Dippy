@@ -5,7 +5,8 @@ Steps:
 1. ``--harvest``: run the Python suite with ``collect_plugin`` to harvest
    command strings and inline configs (written to a scratch directory).
 2. Merge harvested cases with ``handwritten.jsonl``, deduplicate and drop
-   configs that would execute programs or write files.
+   configs that would execute programs or write files, and cases naming
+   pytest ``tmp_path`` files.
 3. Run ``dippy --cmd CMD --json --cwd CWD [--config FILE]`` semantics for every
    case in a child process with an empty temporary ``HOME`` and record the
    expected decision.
@@ -38,6 +39,7 @@ sys.path.insert(0, str(HERE))
 
 from parity_env import (  # noqa: E402
     CWD_PLACEHOLDER,
+    HOME,
     ROOT,
     child_env,
     prepare_root,
@@ -53,6 +55,10 @@ UNSAFE_CONFIG_WORDS = (
     "audit",
 )
 
+# Pytest tmp_path files exist only while the harvest runs, so decisions on
+# commands or configs naming them are not reproducible.
+TRANSIENT_PATH = "/pytest-of-"
+
 
 def harvest(out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -60,6 +66,9 @@ def harvest(out_dir: Path) -> None:
         old.unlink()
     env = dict(os.environ)
     env["DIPPY_PARITY_OUT"] = str(out_dir)
+    # Tests that embed Path.home() then produce the same text on every machine.
+    HOME.mkdir(parents=True, exist_ok=True)
+    env["HOME"] = str(HOME)
     env["PYTHONPATH"] = str(HERE)
     subprocess.run(
         [
@@ -87,6 +96,8 @@ def load_cases(harvest_dir: Path) -> list[dict]:
         if not isinstance(cmd, str) or not cmd.strip() or "\x00" in cmd:
             return
         if any(word in config for word in UNSAFE_CONFIG_WORDS):
+            return
+        if TRANSIENT_PATH in cmd or TRANSIENT_PATH in config:
             return
         key = (cmd, config)
         if key not in cases:

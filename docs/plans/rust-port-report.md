@@ -13,10 +13,10 @@ session credit.
 
 | Measure | Result |
 | --- | --- |
-| Decision agreement (`rust/parity/run`, 13,534 cases) | **13,531 (99.98%)** |
+| Decision agreement (`rust/parity/run`, 13,392 cases) | **13,389 (99.98%)** |
 | Unsafe divergences (Rust allow, Python not allow) | **0** |
 | Remaining divergences | 3, all Python bugs where Rust deliberately asks (below) |
-| Identical reason text (informational) | 13,323 (98.4%) |
+| Identical reason text (informational) | 13,182 (98.4%) |
 | Handlers ported | 89 of 89 modules (140 command names) |
 | Handler parity (`handler_compare.py`, identical inputs) | 8,843 same, 0 different, 0 unsafe |
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
@@ -172,7 +172,7 @@ All tools live in `rust/parity/`:
 | `handwritten.jsonl` | 721 config cases covering every directive in `docs/config.md` |
 | `parser_cases.jsonl` | 164 parser stress cases (quoting, substitutions, redirects, heredocs, compound commands, malformed input) |
 | `gen_fuzz.py` / `fuzz_cases.jsonl` | 3,578 corpus commands placed in 40 shell contexts (wrappers, pipelines, lists, substitutions, redirects, `sudo`, `ssh`, ...) |
-| `build_corpus.py` + `oracle.py` | dedupe, drop configs that run programs or write files, run Python `cli_mode` in process with an empty `HOME`, write `corpus.jsonl` |
+| `build_corpus.py` + `oracle.py` | harvest with `HOME` set to the parity home, dedupe, drop configs that run programs or write files and cases naming pytest `tmp_path` files, run Python `cli_mode` in process with an empty `HOME`, write `corpus.jsonl` |
 | `run` | run `dippy-rs` per case, write `report.md`; exit 1 on any unsafe divergence |
 | `ast_compare.py` / `ast_dump.py` | Parable vs adapter tree comparison, `ast-report.md` |
 | `handler_compare.py` | identical `HandlerContext` fed to Python and Rust handlers |
