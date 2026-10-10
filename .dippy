@@ -5,6 +5,7 @@ include .dippy-yolo
 allow cargo *
 allow rustup show *
 allow **/parity/run *
+allow tsc *
 
 # Locally built Dippy binaries (same trust as `allow dippy *` in .dippy-yolo)
 allow ./rust/target/release/dippy-rs *
