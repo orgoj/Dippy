@@ -20,7 +20,7 @@ use std::time::{Duration, Instant};
 use serde_json::{Value, json};
 
 use crate::analyzer::{self, Action, Cause};
-use crate::config::{self, Config};
+use crate::config::{self, Config, Flags};
 use crate::logging::{Entry, Logs};
 use crate::parser::tokenize;
 use crate::paths;
@@ -225,15 +225,16 @@ struct Subject<'a> {
     causes: &'a [Cause],
 }
 
-fn cause(kind: &'static str, target: &str, rule: Option<&config::Match>) -> Cause {
+fn cause(kind: &'static str, target: &str, rule: Option<&config::Match>, flags: Flags) -> Cause {
     Cause {
         kind,
         target: target.to_string(),
         rule: rule.cloned(),
+        flags,
     }
 }
 
-fn cause_json(c: &Cause) -> Value {
+pub(crate) fn cause_json(c: &Cause) -> Value {
     let rule = c.rule.as_ref().map(|m| {
         let directive = if c.kind == "command" {
             m.decision.clone()
@@ -249,7 +250,7 @@ fn cause_json(c: &Cause) -> Value {
             "line": m.line,
         })
     });
-    json!({"kind": c.kind, "target": c.target, "rule": rule})
+    json!({"kind": c.kind, "target": c.target, "rule": rule, "flags": c.flags})
 }
 
 #[derive(Clone, Copy)]
@@ -885,7 +886,8 @@ fn tool_call<'v>(
         }
         hook.log.info(&format!("Checking MCP: {mcp_name}"));
         let found = config::match_mcp(&mcp_name, config);
-        let causes = [cause("mcp", &mcp_name, found.as_ref())];
+        // `-mcp` rules take no context flags.
+        let causes = [cause("mcp", &mcp_name, found.as_ref(), Flags::new())];
         let s = Subject {
             tool: Some(&mcp_name),
             causes: &causes,
@@ -917,8 +919,9 @@ fn tool_call<'v>(
             return Err(after_reply(hook, config::match_after_web(value, config)));
         }
         hook.log.info(&format!("Checking {name}: {value}"));
-        let found = config::match_web(value, config, &config::env_context_flags(config));
-        let causes = [cause("web", value, found.as_ref())];
+        let active = config::env_context_flags(config);
+        let found = config::match_web(value, config, &active);
+        let causes = [cause("web", value, found.as_ref(), active)];
         return Err(match found {
             Some(m) => {
                 let s = Subject {
@@ -975,7 +978,8 @@ fn tool_call<'v>(
                         cwd: Some(cwd),
                         ..Entry::default()
                     });
-                    let causes = [cause(file_kind(name), path, None)];
+                    let active = config::env_context_flags(config);
+                    let causes = [cause(file_kind(name), path, None, active)];
                     let s = Subject {
                         tool: Some(name),
                         file_path: Some(path),
@@ -1215,7 +1219,7 @@ fn check_file_tool(
     } else {
         config::match_edit(file_path, config, cwd, &active)
     }?;
-    let causes = [cause(kind, file_path, Some(&found))];
+    let causes = [cause(kind, file_path, Some(&found), active)];
     hook.audit(Entry {
         decision: &found.decision,
         rule: Some(&found.pattern),
@@ -1829,8 +1833,12 @@ mod tests {
         assert_eq!(shell["tool"], "run_command");
         assert_eq!(
             shell["causes"],
-            json!([{"kind": "command", "target": "zorp x", "rule": null}])
+            json!([{"kind": "command", "target": "zorp x", "rule": null, "flags": ["@compound"]}])
         );
+        let ssh = askpass_payload_for(
+            json!({"name": "run_command", "args": {"CommandLine": "ssh host 'zorp x'"}}),
+        );
+        assert_eq!(ssh["causes"][0]["flags"], json!(["host", "ssh"]));
         let read = askpass_payload_for(
             json!({"name": "view_file", "args": {"AbsolutePath": "/w/private/k"}}),
         );
@@ -1838,19 +1846,19 @@ mod tests {
             read["causes"],
             json!([{"kind": "read", "target": "/w/private/k", "rule": {
                 "directive": "ask-read", "pattern": "/w/private/*", "message": null,
-                "scope": "project", "file": "/w/.dippy", "line": 10}}])
+                "scope": "project", "file": "/w/.dippy", "line": 10}, "flags": []}])
         );
         let mcp = askpass_payload_for(
             json!({"name": "call_mcp_tool", "args": {"ServerName": "s", "ToolName": "x"}}),
         );
         assert_eq!(
             mcp["causes"],
-            json!([{"kind": "mcp", "target": "mcp__s__x", "rule": null}])
+            json!([{"kind": "mcp", "target": "mcp__s__x", "rule": null, "flags": []}])
         );
         let web = askpass_payload_for(json!({"name": "search_web", "args": {"query": "cats"}}));
         assert_eq!(
             web["causes"],
-            json!([{"kind": "web", "target": "cats", "rule": null}])
+            json!([{"kind": "web", "target": "cats", "rule": null, "flags": []}])
         );
     }
 

@@ -27,6 +27,26 @@ pub struct Cause {
     pub target: String,
     /// The deciding rule as `directive pattern (file:line)`.
     pub rule: Option<String>,
+    /// The context flags active where it asked.
+    pub flags: Vec<String>,
+}
+
+/// Rule tags from context flags: all but the structural `@` ones,
+/// comma-separated.
+fn tags_of(flags: &[String]) -> String {
+    let tags: Vec<&str> = flags
+        .iter()
+        .map(String::as_str)
+        .filter(|f| !f.starts_with('@'))
+        .collect();
+    tags.join(",")
+}
+
+impl Cause {
+    /// The tags a rule for this cause starts with.
+    pub fn tags(&self) -> String {
+        tags_of(&self.flags)
+    }
 }
 
 /// What the agent asked for.
@@ -38,7 +58,23 @@ pub struct Request {
     pub message: String,
     pub file_path: Option<String>,
     pub causes: Vec<Cause>,
+    /// Context flags and remoteness the command was analysed with
+    /// (`dippy run-on-server`); empty and false for hooks.
+    pub flags: Vec<String>,
+    pub remote: bool,
     pub timeout: Option<Duration>,
+}
+
+fn strings(v: &Value, key: &str) -> Vec<String> {
+    v.get(key)
+        .and_then(Value::as_array)
+        .map(|a| {
+            a.iter()
+                .filter_map(Value::as_str)
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn text(v: &Value, key: &str) -> Option<String> {
@@ -64,6 +100,7 @@ fn cause(v: &Value) -> Option<Cause> {
         kind: text(v, "kind")?,
         target: text(v, "target")?,
         rule,
+        flags: strings(v, "flags"),
     })
 }
 
@@ -92,6 +129,8 @@ impl Request {
                 .and_then(Value::as_array)
                 .map(|a| a.iter().filter_map(cause).collect())
                 .unwrap_or_default(),
+            flags: strings(&v, "flags"),
+            remote: v.get("remote").and_then(Value::as_bool).unwrap_or(false),
             timeout: env("DIPPY_ASKPASS_TIMEOUT")
                 .and_then(|t| t.parse::<u64>().ok())
                 .filter(|t| *t > 0)
@@ -106,6 +145,13 @@ impl Request {
             _ if !self.command.is_empty() => ("command", &self.command),
             _ => ("command", self.file_path.as_deref().unwrap_or("")),
         }
+    }
+
+    /// Initial rule tags: the first cause's, else the request's.
+    pub fn prefill_tags(&self) -> String {
+        self.causes
+            .first()
+            .map_or_else(|| tags_of(&self.flags), Cause::tags)
     }
 
     /// The whole request as shown (command, else file path or tool).
@@ -129,14 +175,37 @@ pub fn tilde(text: &str, home: &Path) -> String {
     text.replace(&format!("{home}/"), "~/")
 }
 
-/// `allow git *`, `deny-redirect /etc/*`, ...
-pub fn rule_line(action: &str, kind: &str, pattern: &str) -> String {
+/// `allow git *`, `deny-redirect /etc/*`, `allow [ssh,host] ls`, ...;
+/// `tags` is a comma-separated flag list.
+pub fn rule_line(action: &str, kind: &str, tags: &str, pattern: &str) -> String {
     let directive = if kind == "command" {
         action.to_string()
     } else {
         format!("{action}-{kind}")
     };
-    format!("{directive} {}", pattern.trim())
+    let tags: Vec<&str> = tags
+        .split(',')
+        .map(str::trim)
+        .filter(|t| !t.is_empty())
+        .collect();
+    if tags.is_empty() {
+        format!("{directive} {}", pattern.trim())
+    } else {
+        format!("{directive} [{}] {}", tags.join(","), pattern.trim())
+    }
+}
+
+fn analyze(
+    command: &str,
+    flags: &[String],
+    remote: bool,
+    cwd: &Path,
+    config: &Config,
+) -> &'static str {
+    let flags: config::Flags = flags.iter().cloned().collect();
+    analyzer::analyze(command, config, cwd, Some(&flags), remote)
+        .action
+        .as_str()
 }
 
 /// The decision the request gets under `config`, as the AGY hook applies it
@@ -146,9 +215,7 @@ pub fn decide(req: &Request, config: &Config) -> &'static str {
         Some(c) if !matches!(c.kind.as_str(), "command" | "redirect") => {
             decide_cause(req, c, config)
         }
-        _ => analyzer::analyze(&req.command, config, &req.cwd, None, false)
-            .action
-            .as_str(),
+        _ => analyze(&req.command, &req.flags, req.remote, &req.cwd, config),
     }
 }
 
@@ -163,7 +230,8 @@ pub fn decide_cause(req: &Request, cause: &Cause, config: &Config) -> &'static s
             _ => "ask",
         }
     };
-    let flags = config::env_context_flags(config);
+    let mut flags = config::env_context_flags(config);
+    flags.extend(cause.flags.iter().cloned());
     let (t, cwd, default) = (&cause.target, &req.cwd, config.default.as_str());
     match cause.kind.as_str() {
         "redirect" => verdict(config::match_redirect(t, config, cwd, &flags, false), "ask"),
@@ -171,9 +239,7 @@ pub fn decide_cause(req: &Request, cause: &Cause, config: &Config) -> &'static s
         "edit" => verdict(config::match_edit(t, config, cwd, &flags), default),
         "web" => verdict(config::match_web(t, config, &flags), default),
         "mcp" => verdict(config::match_mcp(t, config), default),
-        _ => analyzer::analyze(t, config, cwd, None, false)
-            .action
-            .as_str(),
+        _ => analyze(t, &cause.flags, req.remote, cwd, config),
     }
 }
 
@@ -215,10 +281,11 @@ pub fn check(
     cause: Option<&Cause>,
     action: &str,
     kind: &str,
+    tags: &str,
     pattern: &str,
     files: &Files,
 ) -> Check {
-    let line = rule_line(action, kind, pattern);
+    let line = rule_line(action, kind, tags, pattern);
     let first = pattern.split_whitespace().next().unwrap_or("");
     let broad = first == "*" || (kind == "command" && first.contains(['*', '?', '[']));
     let outcome = crate::admin::validate_rule(&line).and_then(|()| {
@@ -357,14 +424,18 @@ mod tests {
     #[test]
     fn rule_lines_follow_action_and_kind() {
         assert_eq!(
-            rule_line("allow", "command", " git push * "),
+            rule_line("allow", "command", "", " git push * "),
             "allow git push *"
         );
         assert_eq!(
-            rule_line("deny", "redirect", "/etc/*"),
+            rule_line("deny", "redirect", "", "/etc/*"),
             "deny-redirect /etc/*"
         );
-        assert_eq!(rule_line("ask", "read", ".env"), "ask-read .env");
+        assert_eq!(rule_line("ask", "read", "", ".env"), "ask-read .env");
+        assert_eq!(
+            rule_line("allow", "command", " ssh , host ", "ls"),
+            "allow [ssh,host] ls"
+        );
     }
 
     fn temp(name: &str) -> PathBuf {
@@ -391,19 +462,19 @@ mod tests {
         ));
         let cause = r.causes.first();
         let both = |cause, request| Ok(Outcome { cause, request });
-        let c = check(&r, cause, "allow", "command", "zorp x", &files);
+        let c = check(&r, cause, "allow", "command", "", "zorp x", &files);
         assert_eq!(
             (c.line.as_str(), c.outcome.clone()),
             ("allow zorp x", both("allow", "allow"))
         );
         assert!(c.can_save("allow") && !c.broad);
         // A rule for another command leaves the request asking.
-        let other = check(&r, cause, "allow", "command", "frob", &files);
+        let other = check(&r, cause, "allow", "command", "", "frob", &files);
         assert_eq!(other.outcome, both("ask", "ask"));
         assert!(!other.can_save("allow"));
-        assert!(check(&r, cause, "allow", "command", "*", &files).broad);
-        assert!(check(&r, cause, "allow", "command", "zo* x", &files).broad);
-        let bad = check(&r, cause, "allow", "command", "", &files);
+        assert!(check(&r, cause, "allow", "command", "", "*", &files).broad);
+        assert!(check(&r, cause, "allow", "command", "", "zo* x", &files).broad);
+        let bad = check(&r, cause, "allow", "command", "", "", &files);
         assert!(bad.outcome.is_err() && !bad.can_save("allow"));
         assert!(!target.exists());
         // File tools are decided by their path rules.
@@ -413,7 +484,16 @@ mod tests {
             dir.display()
         ));
         assert_eq!(
-            check(&read, read.causes.first(), "deny", "read", "/w/*", &files).outcome,
+            check(
+                &read,
+                read.causes.first(),
+                "deny",
+                "read",
+                "",
+                "/w/*",
+                &files
+            )
+            .outcome,
             both("deny", "deny")
         );
         // Without causes the whole request is the subject.
@@ -421,7 +501,7 @@ mod tests {
             r#"{{"command": "zorp x", "cwd": "{}"}}"#,
             dir.display()
         ));
-        assert!(check(&bare, None, "allow", "command", "zorp x", &files).can_save("allow"));
+        assert!(check(&bare, None, "allow", "command", "", "zorp x", &files).can_save("allow"));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -442,7 +522,15 @@ mod tests {
         ));
         assert_eq!(statuses(&r, &user), Ok(vec!["ask", "ask"]));
         // The command rule resolves its cause; the redirect still asks.
-        let c = check(&r, r.causes.first(), "allow", "command", "zorp x", &files);
+        let c = check(
+            &r,
+            r.causes.first(),
+            "allow",
+            "command",
+            "",
+            "zorp x",
+            &files,
+        );
         assert_eq!(
             c.outcome,
             Ok(Outcome {
@@ -454,7 +542,15 @@ mod tests {
         crate::admin::add_rule(&target, &c.line, "2026-10-10").unwrap();
         assert_eq!(statuses(&r, &user), Ok(vec!["allow", "ask"]));
         let redirect = r.causes.get(1);
-        let c = check(&r, redirect, "allow", "redirect", "/etc/zorp.conf", &files);
+        let c = check(
+            &r,
+            redirect,
+            "allow",
+            "redirect",
+            "",
+            "/etc/zorp.conf",
+            &files,
+        );
         assert_eq!(
             c.outcome,
             Ok(Outcome {
@@ -463,7 +559,72 @@ mod tests {
             })
         );
         // An `ask` rule confirms the cause keeps asking and stays savable.
-        assert!(check(&r, redirect, "ask", "redirect", "/etc/*", &files).can_save("ask"));
+        assert!(check(&r, redirect, "ask", "redirect", "", "/etc/*", &files).can_save("ask"));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn tags_scope_rules_like_the_request() {
+        let dir = temp("tags");
+        let target = dir.join(".dippy");
+        let user = dir.join("no-user-config");
+        let files = Files {
+            user: &user,
+            target: &target,
+        };
+        let r = req(&format!(
+            r#"{{"command": "zorp x | cat", "cwd": "{}", "server": "srv",
+            "flags": ["run-on-server", "srv"], "remote": true,
+            "causes": [{{"kind": "command", "target": "zorp x", "rule": null,
+            "flags": ["@compound", "@pipeline", "run-on-server", "srv"]}}]}}"#,
+            dir.display()
+        ));
+        assert_eq!(r.flags, ["run-on-server", "srv"]);
+        assert!(r.remote);
+        // Structural `@` flags are not prefilled.
+        assert_eq!(r.causes[0].tags(), "run-on-server,srv");
+        assert_eq!(r.prefill_tags(), "run-on-server,srv");
+        let bare = Request {
+            causes: Vec::new(),
+            ..r.clone()
+        };
+        assert_eq!(bare.prefill_tags(), "run-on-server,srv");
+        assert_eq!(statuses(&r, &user), Ok(vec!["ask"]));
+        let cause = r.causes.first();
+        let both = |cause, request| Ok(Outcome { cause, request });
+        let tagged = check(
+            &r,
+            cause,
+            "allow",
+            "command",
+            "run-on-server,srv",
+            "zorp x",
+            &files,
+        );
+        assert_eq!(tagged.line, "allow [run-on-server,srv] zorp x");
+        assert_eq!(tagged.outcome, both("allow", "allow"));
+        let other = check(&r, cause, "allow", "command", "other", "zorp x", &files);
+        assert_eq!(other.line, "allow [other] zorp x");
+        assert_eq!(other.outcome, both("ask", "ask"));
+        assert_eq!(
+            check(&r, cause, "allow", "command", " ", "zorp x", &files).line,
+            "allow zorp x"
+        );
+        // The request is analysed as remote: a remote redirect target is
+        // not a local file.
+        let remote = req(&format!(
+            r#"{{"command": "ls > /etc/zorp", "cwd": "{}", "remote": true}}"#,
+            dir.display()
+        ));
+        let local = Request {
+            remote: false,
+            ..remote.clone()
+        };
+        let config = config::load_config_from(&dir, &user).unwrap();
+        assert_eq!(
+            (decide(&remote, &config), decide(&local, &config)),
+            ("allow", "ask")
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

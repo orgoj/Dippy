@@ -13,13 +13,15 @@ state, locks, audit log, pane logs) must be identical.
 
 Python divergences fixed in dippy-rs (tracebacks, `b'...'` stderr of failed
 tmux commands, a corrupt state file's JSON error wording) are covered by
-Rust unit tests, not here.
+Rust unit tests, not here. The askpass payload is compared without the keys
+only dippy-rs sends (`flags`, `remote`, `causes`), which must be present.
 
 Usage: run_compare.py [SCENARIO-SUBSTRING]
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -45,6 +47,8 @@ MARKER = re.compile(r"(?<![0-9a-f])[0-9a-f]{32}(?![0-9a-f])")
 # A pane log shows the typed transport, whose base64 encodes the markers.
 ENCODED = re.compile(r"printf %s [A-Za-z0-9+/=]{40,}")
 TS = re.compile(r'"ts": "[^"]*"')
+# Askpass payload keys dippy-rs adds for its dialog (rule causes and tags).
+RUST_ONLY = ("flags", "remote", "causes")
 
 FAKE_SSH = r"""#!/bin/bash
 # -G prints the effective profile; otherwise run the remote Bash locally.
@@ -404,7 +408,16 @@ def run(binary: str, s: dict) -> tuple[int, str, str]:
     return proc.returncode, normalize(proc.stdout), normalize(proc.stderr)
 
 
-def tree() -> list[tuple[str, str, str]]:
+def askpass_input(binary: str, text: str) -> str:
+    """The askpass payload without the keys only dippy-rs sends."""
+    payload = json.loads(text)
+    extra = {key: payload.pop(key, None) for key in RUST_ONLY}
+    if binary == RS:
+        assert None not in extra.values(), f"dippy-rs payload lacks {RUST_ONLY}"
+    return json.dumps(payload)
+
+
+def tree(binary: str) -> list[tuple[str, str, str]]:
     result = []
     for path in sorted(BOX.rglob("*")):
         rel = normalize(str(path.relative_to(BOX)))
@@ -412,6 +425,8 @@ def tree() -> list[tuple[str, str, str]]:
             continue
         mode = oct(path.lstat().st_mode & 0o777)
         content = "<dir>" if path.is_dir() else normalize(path.read_text())
+        if rel == "askpass-input":
+            content = askpass_input(binary, content)
         result.append((rel, content, mode))
     return result
 
@@ -431,7 +446,7 @@ def play(binary: str, seed: dict[str, str], steps: list[dict]):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(text)
     outputs = [run(binary, s) for s in steps]
-    return outputs, tree()
+    return outputs, tree(binary)
 
 
 def main() -> int:

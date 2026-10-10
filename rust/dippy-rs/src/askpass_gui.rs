@@ -103,6 +103,8 @@ struct Dialog {
     was_focused: bool,
     action: &'static str,
     kind: &'static str,
+    /// Comma-separated context flags of the rule.
+    tags: String,
     pattern: String,
     project: bool,
     home: PathBuf,
@@ -112,8 +114,8 @@ struct Dialog {
     selected: usize,
     /// Current decision of each cause; refreshed after saving.
     statuses: Result<Vec<&'static str>, String>,
-    /// (selected, action, kind, pattern, project) of `check`.
-    checked: Option<(usize, &'static str, &'static str, String, bool)>,
+    /// (selected, action, kind, tags, pattern, project) of `check`.
+    checked: Option<(usize, &'static str, &'static str, String, String, bool)>,
     check: Option<Check>,
     saved: Option<Result<PathBuf, String>>,
     outcome: Outcome,
@@ -133,6 +135,7 @@ impl Dialog {
             self.selected,
             self.action,
             self.kind,
+            self.tags.clone(),
             self.pattern.clone(),
             self.project,
         );
@@ -146,6 +149,7 @@ impl Dialog {
                 self.req.causes.get(self.selected),
                 self.action,
                 self.kind,
+                &self.tags,
                 &self.pattern,
                 &files,
             ));
@@ -259,7 +263,12 @@ impl Dialog {
                 || "built-in (no rule matched)".to_string(),
                 |r| format!("rule  {}", askpass::tilde(r, &home)),
             );
-            ui.indent(("cause", i), |ui| ui.weak(rule));
+            ui.indent(("cause", i), |ui| {
+                ui.weak(rule);
+                if !c.flags.is_empty() {
+                    ui.weak(format!("context  {}", c.flags.join(", ")));
+                }
+            });
         }
         if let Err(e) = &self.statuses {
             ui.colored_label(ui.visuals().error_fg_color, e);
@@ -268,6 +277,7 @@ impl Dialog {
             let c = &self.req.causes[i];
             self.selected = i;
             self.kind = kind_of(&c.kind);
+            self.tags = c.tags();
             self.pattern = c.target.clone();
         }
 
@@ -285,6 +295,14 @@ impl Dialog {
                     ui.radio_value(&mut self.kind, k, k);
                 }
             });
+        });
+        field(ui, "Tags", |ui| {
+            ui.add(
+                egui::TextEdit::singleline(&mut self.tags)
+                    .hint_text("none: the rule applies in every context")
+                    .desired_width(f32::INFINITY)
+                    .code_editor(),
+            );
         });
         field(ui, "Pattern", |ui| {
             ui.add(
@@ -475,6 +493,7 @@ fn show(req: Request) -> Result<(Option<&'static str>, String), String> {
     let outcome: Outcome = Rc::new(RefCell::new((None, String::new())));
     let shared = outcome.clone();
     let (kind, pattern) = req.prefill();
+    let tags = req.prefill_tags();
     let kind = kind_of(kind);
     let pattern = pattern.to_string();
     let options = eframe::NativeOptions {
@@ -513,6 +532,7 @@ fn show(req: Request) -> Result<(Option<&'static str>, String), String> {
                 was_focused: false,
                 action: "allow",
                 kind,
+                tags,
                 pattern,
                 project: true,
                 checked: None,

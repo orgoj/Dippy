@@ -46,6 +46,8 @@ pub struct Cause {
     pub target: String,
     /// The config rule that decided; `None` for built-in classification.
     pub rule: Option<config::Match>,
+    /// The context flags active where it asked (a rule's `[flags]`).
+    pub flags: Flags,
 }
 
 /// Result of analyzing an AST node.
@@ -76,11 +78,18 @@ impl Decision {
         d.causes = inner.causes;
         d
     }
-    fn cause(mut self, kind: &'static str, target: &str, rule: Option<&config::Match>) -> Self {
+    fn cause(
+        mut self,
+        kind: &'static str,
+        target: &str,
+        rule: Option<&config::Match>,
+        flags: &Flags,
+    ) -> Self {
         self.causes.push(Cause {
             kind,
             target: target.to_string(),
             rule: rule.cloned(),
+            flags: flags.clone(),
         });
         self
     }
@@ -94,11 +103,13 @@ impl Decision {
         self.context_flags = Some(flags.clone());
         self
     }
-    /// A command ask: the suggestion is also the cause's target.
+    /// A command ask: the suggestion is also the cause's target; call after
+    /// `flags`.
     fn suggest(mut self, suggestion: &str) -> Self {
         self.suggestion = Some(suggestion.to_string());
         if self.causes.is_empty() {
-            self = self.cause("command", suggestion, None);
+            let flags = self.context_flags.clone().unwrap_or_default();
+            self = self.cause("command", suggestion, None, &flags);
         }
         self
     }
@@ -1018,6 +1029,7 @@ fn analyze_redirects(
                                 "redirect",
                                 &target_value,
                                 None,
+                                flags_ref,
                             ),
                         );
                     }
@@ -1040,7 +1052,7 @@ fn analyze_redirects(
                             };
                             decisions.push(
                                 Decision::new(action, format!("redirect to {target_value}: {msg}"))
-                                    .cause("redirect", &target_value, Some(&m)),
+                                    .cause("redirect", &target_value, Some(&m), flags_ref),
                             );
                         }
                         None => decisions.push(
@@ -1048,6 +1060,7 @@ fn analyze_redirects(
                                 "redirect",
                                 &target_value,
                                 None,
+                                flags_ref,
                             ),
                         ),
                     }
@@ -1082,7 +1095,7 @@ fn config_match_decision(
             Some(
                 Decision::new(Action::Deny, format!("{base}: {msg}"))
                     .flags(flags)
-                    .cause("command", suggestion, Some(m)),
+                    .cause("command", suggestion, Some(m), flags),
             )
         }
         "ask" => {
@@ -1090,7 +1103,7 @@ fn config_match_decision(
             Some(
                 Decision::ask(format!("{base}: {msg}"))
                     .flags(flags)
-                    .cause("command", suggestion, Some(m))
+                    .cause("command", suggestion, Some(m), flags)
                     .suggest(suggestion),
             )
         }
@@ -1130,12 +1143,12 @@ fn analyze_simple_command(
             if let Some(action) = action {
                 return Decision::new(action, format!("{var}: {msg}"))
                     .flags(flags)
-                    .cause("command", &words.join(" "), Some(&m));
+                    .cause("command", &words.join(" "), Some(&m), flags);
             }
         }
         return Decision::ask(format!("{var}= changes which code runs"))
             .flags(flags)
-            .cause("command", &words.join(" "), None);
+            .cause("command", &words.join(" "), None, flags);
     }
     if i >= words.len() {
         return Decision::allow("env assignment").flags(flags);
@@ -1361,7 +1374,7 @@ fn analyze_simple_command(
                 }
                 if flags.contains("ssh") {
                     return Decision::ask(format!("remote redirect to {target}"))
-                        .cause("redirect", target, None);
+                        .cause("redirect", target, None, flags);
                 }
                 match config::match_redirect(target, config, cwd, flags, false) {
                     Some(m) if m.decision == "deny" => {
@@ -1370,6 +1383,7 @@ fn analyze_simple_command(
                             "redirect",
                             target,
                             Some(&m),
+                            flags,
                         );
                     }
                     Some(m) if m.decision == "ask" => {
@@ -1378,10 +1392,11 @@ fn analyze_simple_command(
                             "redirect",
                             target,
                             Some(&m),
+                            flags,
                         );
                     }
                     Some(_) => {}
-                    None => return Decision::ask(desc).cause("redirect", target, None),
+                    None => return Decision::ask(desc).cause("redirect", target, None, flags),
                 }
             }
         }
@@ -1786,6 +1801,29 @@ mod tests {
             )]
         );
         assert!(causes("", "ls -la | grep x").is_empty());
+    }
+
+    #[test]
+    fn causes_carry_the_flags_active_where_they_asked() {
+        let flags = |cmd: &str, base: &[&str], remote: bool| -> Vec<Vec<String>> {
+            let base: Flags = base.iter().map(|s| s.to_string()).collect();
+            let config = Config::default();
+            analyze(cmd, &config, Path::new("/"), Some(&base), remote)
+                .causes
+                .into_iter()
+                .map(|c| c.flags.into_iter().collect())
+                .collect()
+        };
+        assert_eq!(
+            flags("zorp x", &["run-on-server", "srv"], true),
+            [["run-on-server", "srv"]]
+        );
+        assert_eq!(flags("ssh host 'zorp x'", &[], false), [["host", "ssh"]]);
+        assert_eq!(flags("ls > /etc/foo", &["srv"], false), [["srv"]]);
+        assert_eq!(
+            flags("zorp x | cat", &[], false),
+            [["@compound", "@pipeline"]]
+        );
     }
 
     #[test]

@@ -113,6 +113,10 @@ Intentional divergences: a failed tmux command reports its stderr as text
 (Python shows `b'...'`), a corrupt state file reports serde's JSON error, and
 OS errors Python raised as tracebacks are printed as messages.
 
+Done (0.4.33): askpass causes carry their context flags; `run`/
+`run-on-server` send causes, `flags` and `remote`, and the dialog saves
+tagged rules (`allow [run-on-server,srv] ...`).
+
 Remaining before the switch: `dashboard` (node and hub), last: new and not
 yet used.
 

@@ -1436,12 +1436,23 @@ analysis of its command, so one cause is sent:
 "causes": [
   {"kind": "redirect", "target": "/etc/out", "rule": {
     "directive": "ask-redirect", "pattern": "/etc/*", "message": null,
-    "scope": "user", "file": "/home/user/.dippy/config", "line": 7}}
+    "scope": "user", "file": "/home/user/.dippy/config", "line": 7},
+   "flags": []}
 ]
 ```
 
 `kind` is `command`, `redirect`, `read`, `edit`, `web` or `mcp`; `file` and
 `line` point into an included file when the rule came from `include`.
+`flags` are the [context flags](#context-flags) active where the cause asked
+(for `ssh host 'zorp x'`: `["host", "ssh"]`), i.e. the `[flags]` a rule can
+be scoped to.
+
+`dippy run` and `run-on-server` send their own payload: `version` (1),
+`command`, `cwd`, `server` (null for `run`), `decision`, `reason`,
+`context_flags` (all flags seen during the analysis), and in dippy-rs also
+`causes`, `flags` (the flags the command was analysed with:
+`["run-on-server", SERVER]` or `[]`) and `remote` (true for
+`run-on-server`).
 
 ### Rust Dialog (`dippy-askpass`)
 
@@ -1453,8 +1464,11 @@ set askpass ~/.local/bin/dippy-askpass
 ```
 
 It shows the whole request read-only with its causes and their current
-decisions, and a rule editor: action (`allow`, `ask`, `deny`), kind and
-pattern (prefilled from the selected cause; the first one initially) and
+decisions, and a rule editor: action (`allow`, `ask`, `deny`), kind, tags
+and pattern (prefilled from the selected cause, the first one initially;
+tags are its context flags without the structural `@` ones, so a rule saved
+for `dippy run-on-server srv` reads `allow [run-on-server,srv] ...`; clear
+them for a rule that applies everywhere) and
 target file (the project config Dippy loads, else `.dippy` in the Git root,
 or `~/.dippy/config`). A live check shows the decision the selected cause and
 the whole request would get with the rule; **Save rule** writes it (as `dippy

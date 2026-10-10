@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.33] - 2026-10-10
+
+### Added
+
+- Each askpass cause carries `flags`, the context flags active where it asked (`ssh`, the host, `run-on-server`, the server, `$VAR=value`, `@` flags). `dippy-rs run`/`run-on-server` send `causes` too, plus `flags` and `remote`, the context the command was analysed with.
+- `dippy-askpass` has a **Tags** field, prefilled with the selected cause's flags without the structural `@` ones, and saves the rule as `allow [run-on-server,srv] ...`; the live check analyses each cause with its flags and the request with its `flags` and `remote`, so a rule saved for a remote command is checked as Dippy will apply it.
+
 ## [0.4.32] - 2026-10-10
 
 ### Added

@@ -22,7 +22,7 @@ use sha2::{Digest, Sha256};
 
 use crate::analyzer::{self, Action, Decision};
 use crate::config::{self, Config, Flags, SERVER_ALIAS_RE, py_repr};
-use crate::hook::py_dumps;
+use crate::hook::{cause_json, py_dumps};
 use crate::logging::{Entry, Logs};
 use crate::paths;
 
@@ -304,7 +304,8 @@ fn approve_with_askpass(
         ));
     };
     let cwd = cwd.to_string_lossy();
-    let flags: Vec<&String> = decision.context_flags.iter().flatten().collect();
+    let context_flags: Vec<&String> = decision.context_flags.iter().flatten().collect();
+    // The dialog re-analyses the command as here: same flags and remoteness.
     let payload = py_dumps(&json!({
         "version": 1,
         "command": command,
@@ -312,7 +313,10 @@ fn approve_with_askpass(
         "server": server,
         "decision": decision.action.as_str(),
         "reason": decision.reason,
-        "context_flags": flags,
+        "context_flags": context_flags,
+        "flags": server.map(server_flags).unwrap_or_default(),
+        "remote": server.is_some(),
+        "causes": decision.causes.iter().map(cause_json).collect::<Vec<_>>(),
     }));
     let prompt = match server {
         Some(s) => format!("Approve command on {s}?"),
@@ -1002,6 +1006,11 @@ fn run_terminal(
 
 // --------------------------------------------------------------- execution
 
+/// The context flags of a command run on `server`.
+fn server_flags(server: &str) -> Flags {
+    ["run-on-server", server].map(String::from).into()
+}
+
 /// `execute`: classify exactly once, approve if needed, and execute the
 /// original string.
 pub fn execute(
@@ -1028,8 +1037,7 @@ pub fn execute(
                 eprintln!("server is not allowed: {server}");
                 return 1;
             }
-            let flags: Flags = ["run-on-server", server].map(String::from).into();
-            analyzer::analyze(command, config, cwd, Some(&flags), true)
+            analyzer::analyze(command, config, cwd, Some(&server_flags(server)), true)
         }
         None => analyzer::analyze(command, config, cwd, None, false),
     };
@@ -1347,7 +1355,9 @@ mod tests {
             "Approve command on host-1?\nfrob --write\nnext\nrun-on-server\nhost-1\n\
              {\"version\": 1, \"command\": \"frob --write\\nnext\", \"cwd\": \"/w\", \
              \"server\": \"host-1\", \"decision\": \"ask\", \"reason\": \"unknown\", \
-             \"context_flags\": []}"
+             \"context_flags\": [], \"flags\": [\"host-1\", \"run-on-server\"], \
+             \"remote\": true, \"causes\": [{\"kind\": \"command\", \
+             \"target\": \"fictional-tool\", \"rule\": null, \"flags\": []}]}"
         );
     }
 
