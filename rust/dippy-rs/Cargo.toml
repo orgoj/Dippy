@@ -1,6 +1,6 @@
 [package]
 name = "dippy-rs"
-version = "0.4.33"
+version = "0.4.34"
 edition = "2024"
 license = "MIT"
 description = "Rust port of Dippy approval decisions"
@@ -23,6 +23,8 @@ eframe = { version = "=0.36.2", default-features = false, features = ["glow", "x
 raw-window-handle = "0.6"
 sha2 = "0.10"
 libc = "0.2"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-native-certs = "0.8"
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 x11rb = "0.13"

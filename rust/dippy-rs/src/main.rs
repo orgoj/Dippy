@@ -148,6 +148,13 @@ enum Subcommand {
     RunOnServer(dippy_rs::run::RunOnServerArgs),
     /// Recover an indeterminate run-on-server target
     Recover(dippy_rs::run::RecoverArgs),
+    /// Serve a live web view of the audit log, or a hub over nodes
+    #[command(
+        long_about = "Serve the audit log since yesterday (UTC) as a live web page (node), or \
+                      with --hub the same page over registered nodes. Open the printed URL; its \
+                      token guards the API."
+    )]
+    Dashboard(dippy_rs::dashboard::DashboardArgs),
 }
 
 /// The derived parser plus the hidden agent hook flags (`--claude`, ...).
@@ -289,6 +296,7 @@ fn main() {
                 Some(Subcommand::Run(args)) => dippy_rs::run::run(args, &global),
                 Some(Subcommand::RunOnServer(args)) => dippy_rs::run::run_on_server(args, &global),
                 Some(Subcommand::Recover(args)) => dippy_rs::run::recover(args, &global),
+                Some(Subcommand::Dashboard(args)) => dippy_rs::dashboard::run(args, &global),
                 Some(Subcommand::Audit(query)) => run_audit(&cli, query),
                 Some(Subcommand::Config(args)) => dippy_rs::admin::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Hooks(args)) => dippy_rs::hooks::run(args, cli.cwd.as_deref()),

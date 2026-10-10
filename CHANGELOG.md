@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.34] - 2026-10-10
+
+### Added
+
+- `dippy-rs dashboard [--host] [--port] [--token-file] [--hub NODES_FILE]`: port of the dashboard node and hub with Python's routes, status codes, JSON bodies, token file (0600, `X-Dippy-Token`), node registry (`GET/PUT/DELETE /api/nodes`, atomic 0600 writes, hand edits picked up) and allowlisted proxy (`/n/{name}/api/entries`: 5 s timeouts, no redirects, no environment proxy, 8 MiB response cap). The server is std `TcpListener` with a thread per request; the static UI is embedded in the binary. `https` node URLs use rustls with the system certificate store. `rust/parity/dashboard_compare.py` compares the legacy API of both implementations (136 steps, 0 differences).
+
 ## [0.4.33] - 2026-10-10
 
 ### Added

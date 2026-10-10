@@ -118,12 +118,17 @@ fn setting_key(line: &str) -> Option<String> {
 /// `_write_atomic`: replace `path` through a temporary file in its
 /// directory, keeping an existing file's mode (a new file gets 0600).
 fn write_atomic(path: &Path, text: &str) -> std::io::Result<()> {
+    write_atomic_mode(path, text, None)
+}
+
+/// `_write_atomic` with `mode`: the file gets `mode`, else keeps its own.
+pub fn write_atomic_mode(path: &Path, text: &str, mode: Option<u32>) -> std::io::Result<()> {
     let dir = path
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
     std::fs::create_dir_all(dir)?;
-    let mode = std::fs::metadata(path).ok().map(|m| m.permissions().mode());
+    let mode = mode.or_else(|| std::fs::metadata(path).ok().map(|m| m.permissions().mode()));
     let name = path.file_name().unwrap_or_default().to_string_lossy();
     let mut n = 0;
     let (temporary, mut file) = loop {
