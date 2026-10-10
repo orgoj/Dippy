@@ -481,3 +481,20 @@ fn gemini_cursor_codex_and_pi_wait_for_the_dashboard() {
     assert_eq!(item.request["causes"][0]["kind"], "edit");
     assert!(!sb.askpass_ran());
 }
+
+#[test]
+fn gemini_unmatched_tool_is_queued_with_its_name() {
+    let sb = Sandbox::new("gemini-tool");
+    let (server, addr) = node(&sb);
+    sb.config(&format!(
+        "set approval dashboard\nset dashboard-url http://{addr}\n"
+    ));
+    decide_soon(&server, true, None);
+    let payload = json!({"hook_event_name": "BeforeTool", "tool_name": "frobnicate_tool",
+                         "tool_input": {}, "cwd": sb.proj().canonicalize().unwrap()})
+    .to_string();
+    let out: Value = serde_json::from_str(&stdout(&sb.run(&["--gemini"], &payload))).unwrap();
+    assert_eq!(out["decision"], "allow");
+    let item = &server.approvals.list(None)[0];
+    assert_eq!(item.request["tool"], "frobnicate_tool");
+}

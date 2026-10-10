@@ -314,7 +314,15 @@ impl<'a> Hook<'a> {
                 decision: "ask",
                 ..entry
             });
-            self.ask(reason, Subject::default())
+            // The subject only names the request in a dashboard approval.
+            let s = Subject {
+                tool: entry.tool,
+                file_path: entry.file_path,
+                command: entry.command,
+                cwd: entry.cwd,
+                ..Subject::default()
+            };
+            self.ask(reason, s)
         } else {
             self.audit(Entry {
                 decision: "pass",
