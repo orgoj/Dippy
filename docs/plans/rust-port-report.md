@@ -13,7 +13,7 @@ session credit.
 
 | Measure | Result |
 | --- | --- |
-| Decision agreement (`rust/parity/run`, 13,392 cases) | **13,389 (99.98%)** |
+| Decision agreement (`rust/parity/run`, 13,422 cases, regenerated 2026-10-10 for 0.4.23) | **13,419 (99.98%)** |
 | Unsafe divergences (Rust allow, Python not allow) | **0** |
 | Remaining divergences | 3, all Python bugs where Rust deliberately asks (below) |
 | Identical reason text (informational) | 13,182 (98.4%) |
@@ -22,7 +22,7 @@ session credit.
 | Parser trees identical to Parable (`ast_compare.py`) | 13,259 of 13,286 commands; the rest fail closed |
 | Hook output, all modes (`hook_compare.py`, 1,594 payloads: Claude, Gemini, Codex, Cursor, AGY, auto-detected) | 1,594 same decision, 0 unsafe, 1,588 byte-identical; all 243 hand-written tool/event payloads byte-identical (the rest differ in corpus reason text only) |
 | Hook logs and `audit` (`log_compare.py`: 937 runs of the hook_compare payloads, 24 `audit` queries, rotation) | audit log and `hook-approvals.log` identical (timestamps masked, format checked), 0 query differences, identical rotation; 18 spurious Codex `pass` entries from Python dropped (Python bug, below) |
-| `cargo test` | 303 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
+| `cargo test` | 305 tests pass; `cargo clippy --all-targets -- -D warnings` clean on the pinned toolchain (`rust/rust-toolchain.toml`, 1.99.0) |
 | Latency per call (same command, warm cache) | Python ~184 ms, dippy-rs ~2 ms |
 
 Remaining divergences (Python allows, Rust asks): `echo $((1 + $(rm x)))`,
@@ -54,13 +54,27 @@ asks and Python allows, which the corpus exercises only lightly:
 
 ### Next concrete step
 
-Wire `dippy-rs --claude` behind a feature flag in a real Claude Code hook
-configuration on a test machine (empty `HOME`, fake askpass) and compare its
-live decisions with Python's for a week of audit logs. The MCP/web/file-tool
-matchers (`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
-`after-web`) and the Gemini/Codex/Cursor/AGY hook formats, including AGY
-askpass approval, are ported (2026-10-10), and so are the audit log,
-`hook-approvals.log` and `dippy-rs audit`. The GUI askpass program is next.
+Ported (2026-10-10): classification, the MCP/web/file-tool matchers
+(`match_mcp`, `match_web`, `match_edit`, `match_read`, `after-mcp`,
+`after-web`), the Claude/Gemini/Codex/Cursor/AGY hook formats including AGY
+askpass approval, the audit log, `hook-approvals.log` and `dippy-rs audit`.
+
+Plan for the switch from Python (decided 2026-10-10):
+
+1. Installation and switch: the hooks call the Rust binary (named `dippy`
+   or the hook commands rewired), `--version` and `--help`, an install
+   method (`cargo install --path` or a recipe).
+2. `config`, `hooks` and `doctor` subcommands.
+
+Deferred, Python `dippy` keeps serving them after the switch:
+`run`/`run-on-server`/`recover` (rarely used), `dashboard`, and the GUI
+askpass program. The askpass dialog will be redesigned rather than ported
+(show the whole command, edit it, approve and write a rule to the Dippy
+config). Not ported: `dippy-statusline` (a generic Claude Code status line,
+unrelated to approvals) and `idle-notifier-command`.
+
+From 0.4.23 on, safety fixes go to `dippy-rs` only; a Python difference is
+recorded as an intentional divergence (Rust asks, Python allows).
 
 Intentional hook divergences: a config error fails closed in Gemini and AGY
 modes (Python allows everything), and where Python prints `null` to Codex
