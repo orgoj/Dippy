@@ -61,10 +61,13 @@ askpass approval, the audit log, `hook-approvals.log` and `dippy-rs audit`.
 
 Plan for the switch from Python (decided 2026-10-10):
 
-1. Installation and switch: the hooks call the Rust binary (named `dippy`
-   or the hook commands rewired), `--version` and `--help`, an install
-   method (`cargo install --path` or a recipe).
-2. `config`, `hooks` and `doctor` subcommands.
+1. Installation and switch: the hooks call `dippy-rs`, `--version` and
+   `--help`, an install method (`cargo install --path` or a recipe).
+2. `config`, `hooks` and `doctor` subcommands. `hooks` and `doctor` install
+   hook entries calling `dippy-rs` and remove the old Python `dippy` entries.
+
+The project and repository will be renamed to `dippy-rs`. Python `dippy`
+stays installed while it serves the deferred subcommands below.
 
 Deferred, Python `dippy` keeps serving them after the switch:
 `run`/`run-on-server`/`recover` (rarely used), `dashboard`, and the GUI
