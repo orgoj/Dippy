@@ -255,6 +255,15 @@ fn run_audit(global: &Cli, query: &dippy_rs::audit::Query) -> i32 {
 }
 
 fn main() {
+    // Started as `dippy-askpass` (a link to this binary): the approval dialog.
+    let argv0 = std::env::args_os().next().map(PathBuf::from);
+    if argv0
+        .as_deref()
+        .and_then(|p| p.file_stem())
+        .is_some_and(|s| s == "dippy-askpass")
+    {
+        std::process::exit(dippy_rs::askpass_gui::main());
+    }
     let args: Vec<String> = std::env::args().skip(1).collect();
     match args.first().map(String::as_str) {
         Some("--dump-ast-jsonl") => {

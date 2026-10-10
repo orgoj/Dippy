@@ -1443,6 +1443,31 @@ analysis of its command, so one cause is sent:
 `kind` is `command`, `redirect`, `read`, `edit`, `web` or `mcp`; `file` and
 `line` point into an included file when the rule came from `include`.
 
+### Rust Dialog (`dippy-askpass`)
+
+`just install-rs` links `~/.local/bin/dippy-askpass` to the Rust `dippy`;
+started under that name it is the approval dialog:
+
+```
+set askpass ~/.local/bin/dippy-askpass
+```
+
+It shows the whole request read-only with its causes and their current
+decisions, and a rule editor: action (`allow`, `ask`, `deny`), kind and
+pattern (prefilled from the selected cause; the first one initially) and
+target file (the project config Dippy loads, else `.dippy` in the Git root,
+or `~/.dippy/config`). A live check shows the decision the selected cause and
+the whole request would get with the rule; **Save rule** writes it (as `dippy
+config add-rule` does) only when the rule parses and gives the selected cause
+the chosen decision, and the dialog stays open, so a compound command is
+resolved one rule per cause. Approve and Deny decide the request itself.
+
+Typing elsewhere cannot answer the dialog: it comes to the front without
+taking keyboard focus (on X11 through `WM_HINTS` and `_NET_WM_USER_TIME`; on
+Wayland the compositor decides), ignores keys and clicks for one second after
+it gains focus, has no single-letter shortcuts, and approves only on a click
+or Ctrl+Enter (Esc denies). With `askpass-timeout` it counts down and denies.
+
 **Exit codes:**
 - `0` = approve → Dippy returns `allow`
 - `1` = deny → Dippy returns `deny`

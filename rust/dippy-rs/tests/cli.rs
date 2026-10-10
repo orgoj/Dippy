@@ -287,6 +287,35 @@ fn config_add_rule_validates_and_appends() {
 }
 
 #[test]
+fn askpass_name_runs_the_dialog_and_denies_without_a_display() {
+    let dir = sandbox("askpass");
+    let link = dir.join("dippy-askpass");
+    std::os::unix::fs::symlink(env!("CARGO_BIN_EXE_dippy-rs"), &link).unwrap();
+    let mut child = Command::new(&link)
+        .env("HOME", dir.join("home"))
+        .env_remove("DISPLAY")
+        .env_remove("WAYLAND_DISPLAY")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"{\"command\": \"rm -rf x\"}")
+        .unwrap();
+    let o = child.wait_with_output().unwrap();
+    assert_eq!(o.status.code(), Some(1));
+    let out = stdout(&o);
+    assert!(
+        out.starts_with("{\"decision\":\"deny\",\"note\":\"GUI error: "),
+        "{out}"
+    );
+}
+
+#[test]
 fn audit_takes_global_config_options() {
     let dir = sandbox("audit");
     std::fs::write(dir.join("config"), "set log audit.log\n").unwrap();

@@ -75,10 +75,12 @@ bump-version VERSION:
     cargo update --workspace --manifest-path rust/Cargo.toml
     echo "Version set to {{VERSION}}"
 
-# Install the Rust port as DEST/dippy (for the switch from Python; see docs/plans/rust-port-report.md)
+# Install the Rust port as DEST/dippy and the askpass dialog link DEST/dippy-askpass
+# (for the switch from Python; see docs/plans/rust-port-report.md)
 install-rs DEST="~/.local/bin":
     cargo build --release --manifest-path rust/Cargo.toml
     install -Dm755 rust/target/release/dippy-rs {{DEST}}/dippy
+    ln -sfn dippy {{DEST}}/dippy-askpass
 
 # Update vendored parable.py from GitHub
 update-parable:

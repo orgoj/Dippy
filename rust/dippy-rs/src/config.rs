@@ -1532,19 +1532,52 @@ pub fn user_config_path() -> PathBuf {
 }
 
 fn load_normal_config(cwd: &Path, config_path: Option<&str>) -> Result<Config, ConfigError> {
+    load_scopes(cwd, &user_config_path(), config_path, None)
+}
+
+/// The config `load_config` returns with user config `user`.
+pub fn load_config_from(cwd: &Path, user: &Path) -> Result<Config, ConfigError> {
+    load_scopes(cwd, user, None, None)
+}
+
+/// The config `load_config` would return (with user config `user`) if `rule`
+/// were appended to the user or project config file `target` (which may not
+/// exist yet).
+pub fn load_config_with_rule(
+    cwd: &Path,
+    user: &Path,
+    target: &Path,
+    rule: &str,
+) -> Result<Config, ConfigError> {
+    load_scopes(cwd, user, None, Some((target, rule)))
+}
+
+/// User, project and override scopes; `extra` appends a rule to one file.
+fn load_scopes(
+    cwd: &Path,
+    user: &Path,
+    config_path: Option<&str>,
+    extra: Option<(&Path, &str)>,
+) -> Result<Config, ConfigError> {
+    let load = |path: &Path, scope: &str| -> Result<Config, ConfigError> {
+        let mut c = if path.is_file() {
+            load_config_file(path)?
+        } else {
+            Config::default()
+        };
+        if let Some((_, rule)) = extra.filter(|(target, _)| *target == path) {
+            c = merge_configs(c, parse_config(rule, None)?);
+        }
+        Ok(tag_rules(c, &path.to_string_lossy(), scope))
+    };
+    let target = extra.map(|(target, _)| target);
     let mut config = Config::default();
-    let user = user_config_path();
-    if user.is_file() {
-        let c = tag_rules(load_config_file(&user)?, &user.to_string_lossy(), "user");
-        config = merge_configs(config, c);
+    if user.is_file() || target == Some(user) {
+        config = merge_configs(config, load(user, "user")?);
     }
-    if let Some(project) = find_project_config(cwd) {
-        let c = tag_rules(
-            load_config_file(&project)?,
-            &project.to_string_lossy(),
-            "project",
-        );
-        config = merge_configs(config, c);
+    let project = find_project_config(cwd).or(target.filter(|t| *t != user).map(Path::to_path_buf));
+    if let Some(project) = project {
+        config = merge_configs(config, load(&project, "project")?);
     }
     let env_override = std::env::var(ENV_CONFIG).ok().filter(|s| !s.is_empty());
     let override_path = config.clone_override(config_path, env_override.as_deref());
@@ -2626,6 +2659,37 @@ mod tests {
         let m = match_mcp("mcp__a", &merged).unwrap();
         assert_eq!(m.decision, "deny");
         assert_eq!(m.source.as_deref(), Some("/p"));
+    }
+
+    #[test]
+    fn candidate_rule_is_appended_to_its_scope() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-candidate-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let home = dir.join("home");
+        let repo = dir.join("repo");
+        std::fs::create_dir_all(home.join(".dippy")).unwrap();
+        std::fs::create_dir_all(repo.join("x")).unwrap();
+        let user = home.join(".dippy/config");
+        let project = repo.join(".dippy");
+        std::fs::write(&user, "allow zorp *\n").unwrap();
+        std::fs::write(&project, "deny zorp drop\n").unwrap();
+        let cwd = repo.join("x");
+        let decide = |target: &Path, rule: &str| {
+            let c = load_scopes(&cwd, &user, None, Some((target, rule))).unwrap();
+            decide(&c, "zorp drop")
+        };
+        // A user rule cannot override the project deny; a project rule can.
+        assert_eq!(decide(&user, "allow zorp drop").as_deref(), Some("deny"));
+        assert_eq!(
+            decide(&project, "allow zorp drop").as_deref(),
+            Some("allow")
+        );
+        // A project file that does not exist yet still takes the rule.
+        std::fs::remove_file(&project).unwrap();
+        let new = dir.join(".dippy");
+        assert_eq!(decide(&new, "ask zorp drop").as_deref(), Some("ask"));
+        assert!(!new.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     fn origin(rule: &Rule) -> (Option<&str>, Option<usize>) {

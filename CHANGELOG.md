@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.31] - 2026-10-10
+
+### Added
+
+- `dippy-askpass`: the Rust approval dialog, the same binary started under that name (`just install-rs` links it). It shows the whole request read-only and saves an `allow`/`ask`/`deny` rule of the chosen kind to the project or user config with a separate button. Each asking part (cause) can be selected and shows its current decision; a live check shows the decision the selected part and the whole request would get with the rule, and saving needs only the selected part to get the chosen action, so a compound request is resolved one rule per part. The window appears on top without taking keyboard focus (X11: `WM_HINTS` input=False until clicked, `_NET_WM_USER_TIME=0`, urgency), keys and clicks are ignored for 1 s after it gains focus, approval needs a click or Ctrl+Enter, and the askpass timeout counts down and denies.
+
 ## [0.4.30] - 2026-10-10
 
 ### Added

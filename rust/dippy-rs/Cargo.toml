@@ -1,6 +1,6 @@
 [package]
 name = "dippy-rs"
-version = "0.4.30"
+version = "0.4.31"
 edition = "2024"
 license = "MIT"
 description = "Rust port of Dippy approval decisions"
@@ -19,3 +19,8 @@ rustpython-ruff_python_ast = "=0.16.10"
 rustpython-ruff_text_size = "=0.16.10"
 clap = { version = "4.6.7", features = ["derive"] }
 toml = "1.1.4"
+eframe = { version = "=0.36.2", default-features = false, features = ["glow", "x11", "wayland", "default_fonts"] }
+raw-window-handle = "0.6"
+
+[target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
+x11rb = "0.13"
