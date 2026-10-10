@@ -305,3 +305,65 @@ fn hooks_install_and_uninstall_stay_in_the_sandbox() {
         "Error: Please specify an action (list, install, uninstall)\n"
     );
 }
+
+fn doctor(dir: &PathBuf, args: &[&str]) -> Output {
+    // An empty PATH directory: no `dippy` is found.
+    std::fs::create_dir_all(dir.join("bin")).unwrap();
+    Command::new(env!("CARGO_BIN_EXE_dippy-rs"))
+        .arg("doctor")
+        .args(args)
+        .env("HOME", dir.join("home"))
+        .env("PATH", dir.join("bin"))
+        .current_dir(dir)
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn doctor_reports_checks_as_json() {
+    let dir = sandbox("doctor-json");
+    let o = doctor(&dir, &["--json"]);
+    assert_eq!(o.status.code(), Some(2), "dippy is not on PATH");
+    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    assert_eq!(report["overall_status"], "critical");
+    assert_eq!(report["checks"][0]["name"], "Installation");
+    assert_eq!(report["checks"][0]["message"], "dippy not found on PATH");
+    assert_eq!(report["summary"]["critical"], 1);
+    assert_eq!(doctor(&dir, &["--quiet"]).stdout.len(), 0);
+}
+
+#[test]
+fn doctor_fix_installs_missing_global_hook() {
+    let dir = sandbox("doctor-fix");
+    std::fs::create_dir_all(dir.join("home/.claude")).unwrap();
+    let o = doctor(&dir, &["--fix"]);
+    let out = stdout(&o);
+    assert!(out.contains("Auto-fixing: Hook: Claude Code\n"), "{out}");
+    assert!(
+        out.contains("[+] Hook: Claude Code: Installed (global)\n"),
+        "{out}"
+    );
+    let text = std::fs::read_to_string(dir.join("home/.claude/settings.json")).unwrap();
+    assert!(text.contains("dippy --claude"), "{text}");
+}
+
+#[test]
+fn doctor_agent_with_only_a_project_config() {
+    let dir = sandbox("doctor-agent");
+    std::fs::create_dir_all(dir.join(".claude")).unwrap();
+    std::fs::write(dir.join(".claude/settings.json"), "{}").unwrap();
+    let o = doctor(&dir, &["--agent", "claude", "--verbose"]);
+    let out = stdout(&o);
+    assert!(
+        out.contains("[?] Claude Code: Issues: Claude Code not installed (no config found)\n"),
+        "{out}"
+    );
+    assert!(
+        out.contains(&format!(
+            "    Project config: {}/.claude/settings.json\n",
+            dir.display()
+        )),
+        "{out}"
+    );
+    assert_eq!(doctor(&dir, &["--agent", "moltbot"]).status.code(), Some(2));
+}

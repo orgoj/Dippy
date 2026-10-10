@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.28] - 2026-10-10
+
+### Added
+
+- `dippy-rs doctor [--agent AGENT] [--verbose] [--json] [--quiet] [--fix]` with Python's checks, text and JSON output and exit codes; `--fix` runs `hooks install`. Intentional divergences: `--agent moltbot` is gone, a legacy hook is detected as in `dippy-rs hooks` (Python matched any `/dippy` in the file), the pi-mono check shows no `pi_wrapper.py` bridge, Codex matchers are read from `matcher` (Python showed none), `--agent` with only a project config works instead of raising `UnboundLocalError`, and a hook config that is not a JSON object counts as missing instead of raising `AttributeError`. `rust/parity/doctor_compare.py` compares both implementations in a sandbox HOME.
+
 ## [0.4.27] - 2026-10-10
 
 ### Added

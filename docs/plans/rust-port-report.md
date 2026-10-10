@@ -93,14 +93,20 @@ differences). `note` is always null (no notifier). The pi extension calls
 `dippy --pi` and blocks on any reply without a known action, so the Python
 `dippy --pi` (Claude format) cannot fail open.
 
+Done (0.4.28): `doctor [--agent] [--verbose] [--json] [--quiet] [--fix]`
+with Python's checks, output and exit codes; `--fix` runs `hooks install`
+(`rust/parity/doctor_compare.py`: 28 scenarios, 129 steps, 0 differences).
+Intentional divergences: no `--agent moltbot`; legacy hooks detected as in
+`hooks`; no `pi_wrapper.py` bridge line; Codex matchers read from `matcher`;
+a non-object hook config or `--agent` with only a project config no longer
+raises a Python exception.
+
 Remaining before the switch, in order:
 
-1. `doctor` subcommand (`resolve_dippy_command` gives `dippy --pi` for pi;
-   moltbot dropped).
-2. The GUI askpass dialog in Rust, redesigned rather than ported (show the
+1. The GUI askpass dialog in Rust, redesigned rather than ported (show the
    whole command, edit it, approve and write a rule to the Dippy config).
-3. `run`/`run-on-server`/`recover` (unused today; ported together).
-4. `dashboard` (node and hub), last: new and not yet used.
+2. `run`/`run-on-server`/`recover` (unused today; ported together).
+3. `dashboard` (node and hub), last: new and not yet used.
 
 Nothing calls Python after the switch. Not ported: `dippy-statusline` (a generic
 Claude Code status line, unrelated to approvals), `idle-notifier-command` and
@@ -235,6 +241,7 @@ All tools live in `rust/parity/`:
 | `log_compare.py` | the same payloads with logging on in a separate HOME per run: audit log, `hook-approvals.log`, `audit` queries and rotation |
 | `config_compare.py` | `dippy config` scenarios in one sandbox per implementation: output of every step, resulting files and their modes |
 | `hooks_compare.py` | `dippy hooks` scenarios in a sandbox HOME and project per implementation: output of every step, the whole resulting tree (backups included) and modes |
+| `doctor_compare.py` | `dippy doctor` scenarios in a sandbox HOME, project and PATH (fake `dippy`) per implementation: output of every step and the resulting tree |
 
 The in-process oracle was checked against the real `dippy` executable on 100
 cases (0 differences). All runs share fixed paths under `/tmp/dippy-parity`

@@ -11,6 +11,7 @@ pub mod audit;
 pub mod bash;
 pub mod cli;
 pub mod config;
+pub mod doctor;
 pub mod dump;
 pub mod fnmatch;
 pub mod hook;

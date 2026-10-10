@@ -18,17 +18,17 @@ use crate::admin::py_float_repr;
 use crate::hook::py_json_str;
 use crate::paths::py_path_str;
 
-struct Agent {
-    id: &'static str,
-    name: &'static str,
+pub(crate) struct Agent {
+    pub(crate) id: &'static str,
+    pub(crate) name: &'static str,
     /// Relative to the home directory.
-    global: &'static str,
+    pub(crate) global: &'static str,
     /// Relative to the working directory.
-    project: &'static str,
+    pub(crate) project: &'static str,
 }
 
 /// `HOOK_COMMANDS` in its order, with the `AGENTS` display names.
-const AGENTS: [Agent; 6] = [
+pub(crate) const AGENTS: [Agent; 6] = [
     Agent {
         id: "claude",
         name: "Claude Code",
@@ -120,25 +120,25 @@ enum Action {
 }
 
 #[derive(clap::Args)]
-struct InstallArgs {
+pub(crate) struct InstallArgs {
     /// Agent to install hooks for; omit with --all to install for all agents
     #[arg(value_parser = AGENT_IDS)]
-    agent: Option<String>,
+    pub(crate) agent: Option<String>,
     /// Install to global config instead of project-local
     #[arg(long)]
-    global: bool,
+    pub(crate) global: bool,
     /// Replace existing/legacy hooks
     #[arg(long)]
-    force: bool,
+    pub(crate) force: bool,
     /// Show what would be done without making changes
     #[arg(long)]
-    dry_run: bool,
+    pub(crate) dry_run: bool,
     /// Skip config backup before install
     #[arg(long)]
-    no_backup: bool,
+    pub(crate) no_backup: bool,
     /// Install ALL supported hooks (PreToolUse, PostToolUse, Notification, Stop, etc.)
     #[arg(long)]
-    all: bool,
+    pub(crate) all: bool,
 }
 
 /// `handle_hooks_subcommand`; `cwd` is the global `--cwd`.
@@ -296,7 +296,7 @@ fn nested_has_dippy(entry: &Value) -> bool {
 }
 
 /// `_has_dippy_hook`.
-fn has_dippy_hook(config: &Map<String, Value>, agent: &str) -> bool {
+pub(crate) fn has_dippy_hook(config: &Map<String, Value>, agent: &str) -> bool {
     let found = |lists: Option<&Value>| {
         lists.and_then(Value::as_object).is_some_and(|lists| {
             lists
@@ -311,7 +311,7 @@ fn has_dippy_hook(config: &Map<String, Value>, agent: &str) -> bool {
 
 /// `_detect_legacy_hook_command`: the first Dippy command, in file order,
 /// that is not the bare `dippy` program.
-fn legacy_command(value: &Value) -> Option<String> {
+pub(crate) fn legacy_command(value: &Value) -> Option<String> {
     match value {
         Value::Object(map) => map.iter().find_map(|(key, v)| match v {
             Value::String(c)
@@ -536,7 +536,7 @@ fn merge_hook_entry(
 }
 
 /// Python truthiness of an optional JSON value.
-fn truthy(value: Option<&Value>) -> bool {
+pub(crate) fn truthy(value: Option<&Value>) -> bool {
     match value {
         None | Some(Value::Null) => false,
         Some(Value::Bool(b)) => *b,
@@ -861,7 +861,7 @@ fn codex_toml_path(global: bool, cwd: Option<&str>) -> PathBuf {
     }
 }
 
-enum LoadError {
+pub(crate) enum LoadError {
     Read(String),
     Json(String),
     NotObject,
@@ -881,7 +881,7 @@ fn structure(shown: &str, detail: &str) -> String {
     format!("Unexpected hook structure in {shown}: {detail}")
 }
 
-fn load(path: &Path) -> Result<Map<String, Value>, LoadError> {
+pub(crate) fn load(path: &Path) -> Result<Map<String, Value>, LoadError> {
     let text = std::fs::read_to_string(path).map_err(|e| LoadError::Read(e.to_string()))?;
     match serde_json::from_str(&text) {
         Ok(Value::Object(map)) => Ok(map),
@@ -987,6 +987,27 @@ fn newline_of(content: &str) -> &'static str {
     } else {
         "\n"
     }
+}
+
+/// `_codex_root_setting`: a quoted root value, ignoring tables such as
+/// profiles.
+pub(crate) fn codex_root_setting(path: &Path, key: &str) -> Option<String> {
+    let content = read_text(path).ok()?;
+    let pattern = Regex::new(&format!(
+        r#"^\s*{}\s*=\s*["']([^"']+)["']"#,
+        regex::escape(key)
+    ))
+    .expect("valid pattern");
+    for line in py_lines(&content) {
+        let line = line.trim_end_matches(LINE_BREAKS);
+        if line.trim_start().starts_with('[') {
+            break;
+        }
+        if let Some(m) = pattern.captures(line) {
+            return Some(m[1].to_string());
+        }
+    }
+    None
 }
 
 /// `_set_codex_root_setting`: set a root key before the first table.
@@ -1124,7 +1145,7 @@ fn ensure_codex_config(
 }
 
 /// `_codex_feature_flag_enabled`.
-fn codex_feature_flag_enabled(path: &Path) -> bool {
+pub(crate) fn codex_feature_flag_enabled(path: &Path) -> bool {
     let Ok(content) = read_text(path) else {
         return false;
     };
@@ -1147,7 +1168,7 @@ fn codex_feature_flag_enabled(path: &Path) -> bool {
 
 // ---------------------------------------------------------------- install
 
-fn install(a: &InstallArgs, cwd: Option<&str>) -> i32 {
+pub(crate) fn install(a: &InstallArgs, cwd: Option<&str>) -> i32 {
     match &a.agent {
         Some(id) => install_one(agent_info(id), a, cwd),
         None if !a.all => fail("agent is required unless --all is specified".into()),
@@ -1316,7 +1337,7 @@ fn print_diff(old: &Map<String, Value>, new: &Map<String, Value>, shown: &str, t
     }
 }
 
-fn py_str(value: &Value) -> String {
+pub(crate) fn py_str(value: &Value) -> String {
     value
         .as_str()
         .map_or_else(|| value.to_string(), str::to_string)
