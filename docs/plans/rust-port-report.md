@@ -73,11 +73,11 @@ Remaining before the switch:
    recipe).
 2. `config`, `hooks` and `doctor` subcommands.
 3. `dashboard` (node and hub).
-4. `run`/`run-on-server`/`recover` (unused today; ported together last).
+4. `run`/`run-on-server`/`recover` (unused today; ported together).
+5. The GUI askpass dialog in Rust, redesigned rather than ported (show the
+   whole command, edit it, approve and write a rule to the Dippy config).
 
-The GUI askpass dialog will be redesigned rather than ported (show the whole
-command, edit it, approve and write a rule to the Dippy config); whether the
-switch waits for it is open. Not ported: `dippy-statusline` (a generic
+Nothing calls Python after the switch. Not ported: `dippy-statusline` (a generic
 Claude Code status line, unrelated to approvals) and `idle-notifier-command`.
 
 From 0.4.23 on, safety fixes go to `dippy-rs` only; a Python difference is
