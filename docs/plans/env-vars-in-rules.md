@@ -116,3 +116,131 @@ Append a section `## Report` to this file (committed with the final
 change): what was implemented, the exact list of rule kinds supported,
 deviations from the specification with reasons, every verification command
 with its result and the commit hash it applies to, and open questions.
+
+## Report
+
+### Implemented
+
+Version 0.4.48 (`just bump-version 0.4.48`, dated `CHANGELOG.md` section).
+Commits on `rust-port`:
+
+- `9aae03e` feat: Python implementation and `tests/test_env_rule_patterns.py`.
+- `c1920f2` feat(rust): `dippy-rs` port, unit and CLI tests, rule-editor
+  prefill, parity cases.
+- `b3ef2c1` feat: bracket-expression check (both ports), `docs/config.md`
+  section "Environment Variables in Patterns", README fork-enhancements entry.
+
+Both parsers expand `${NAME}` at config load through one function per port
+(Python `expand_env`/`_with_env`/`_add_rule` in `src/dippy/core/config.py`,
+Rust `expand_env`/`with_env`/`push_rule` in `rust/dippy-rs/src/config.rs`).
+`Rule` gains `written` (pattern as written, `None` without a reference) and
+`inactive`. Matching uses the expanded `pattern`; every matcher skips inactive
+rules; every `Match` carries `rule_display(rule)` / `Rule::display()`, so the
+audit `rule` field, reasons, `DIPPY_RULE`/askpass message and askpass/dashboard
+causes show `${NAME}`. The askpass dialog and the dashboard rule editor prefill
+a literal `${` as `$${` (Python has no rule editor). `dippy config add-rule`
+stores the user's own text unchanged.
+
+Expansion order per rule: context flags, `[opts:]` block, message and `|`
+anchor are split off first; tilde expansion runs on the written pattern; then
+`${NAME}` is substituted. Values are written literally per kind: `*`, `?`, `[`
+become `[*]`, `[?]`, `[[]` in glob kinds; in `[opts:]` patterns the escaped
+value is additionally backslash-escaped for Bash decoding; option-rule words
+(exact comparison) take the value as is.
+
+### Rule kinds supported
+
+| Directives | Kind |
+|---|---|
+| `allow`, `ask`, `deny`, `delegate`, `after` | command glob |
+| `allow`/`ask`/`deny`/`delegate` `[opts: ...] PATTERN` | positional Bash words after the block |
+| `allow-opt`, `ask-opt`, `deny-opt` (prefix and every item) | exact words |
+| `allow-redirect`, `ask-redirect`, `deny-redirect` | path glob |
+| `allow-edit`, `ask-edit`, `deny-edit` | path glob |
+| `allow-read`, `ask-read`, `deny-read` | path glob |
+| `allow-mcp`, `ask-mcp`, `deny-mcp`, `after-mcp` | text glob |
+| `allow-web`, `ask-web`, `deny-web`, `after-web` | text glob |
+
+Not expanded: messages, `set` values, `include` paths, `alias`, `wrapper`,
+`server`, `python-*` arguments, `[flags]` brackets, the `[opts: ...]` block.
+
+### Warnings (identical in both ports)
+
+- `FILE: line N: ${NAME}: unset or empty (rule inactive)`
+- `FILE: line N: ${NAME}: value is not valid UTF-8 (rule inactive)`
+- `FILE: line N: ${NAME}: value contains a NUL or newline (rule inactive)`
+- `FILE: line N: ${NAME}: value contains whitespace (rule inactive)`
+- `FILE: line N: ${NAME}: value contains a '.' or '..' path component (rule inactive)`
+- `FILE: line N: ${NAME}: value starts with '~' (rule inactive)`
+- `FILE: line N: unterminated variable reference '${...' (skipped)`
+- `FILE: line N: invalid variable reference '${...}' (skipped)`
+- `FILE: line N: variable reference inside quotes '${NAME}' (skipped)`
+- `FILE: line N: variable reference inside a bracket expression '${NAME}' (skipped)`
+
+### Deviations from the specification (all narrower)
+
+1. **Invalid `${` skips the line with a warning** (`FILE: line N: ... (skipped)`),
+   the channel every other rule syntax error uses, instead of a fatal
+   `ConfigError`. A fatal error would be broader in Gemini and AGY hook modes,
+   which answer `allow` on a config error.
+2. **`~` at the start of a word or path from a value makes the rule inactive.**
+   Path classification happens again at match time and would tilde-expand it;
+   no glob escape keeps a leading `~` literal without turning the token into
+   a relative path.
+3. **`.`/`..` components are also unsafe in command and `[opts:]` patterns**,
+   not only in path patterns: command tokens are path-normalized at match time
+   too. A non-UTF-8 value is unsafe in every kind.
+4. **A reference inside a glob bracket expression (`[${NAME}]`) is a syntax
+   error**: inside a set, a value like `a-z` would be a range, not literal text.
+   The check over-approximates (an unclosed `[` before a reference also
+   errors).
+5. **`[opts:]` patterns**: a reference inside quotes or after a backslash is a
+   syntax error (the escaped value cannot be inserted there); the
+   `[opts: ...]` block itself is not expanded.
+6. **A value with glob metacharacters turns an implicit-prefix command rule
+   into an exact glob rule**: the escaped `[*]` counts as a glob character, so
+   `allow tool ${X}` with `X='a*'` matches `tool 'a*'` but not
+   `tool 'a*' more` (add ` *` to the pattern). Identical in both ports.
+7. Rust unit tests for the expansion were written after the Rust code (the
+   Python tests, written first, define the behaviour and were ported); the
+   bracket check was test-first in both ports.
+
+### Verification
+
+Code at `b3ef2c1` (the report commit changes only this file):
+
+| Command | Result |
+|---|---|
+| `just lint` | All checks passed |
+| `just fmt` | 278 files already formatted |
+| `just lock-check` | resolved, up to date |
+| `just check-style` | no findings |
+| `just test` (as root) | 12735 passed, 1 failed, 1 skipped: `tests/test_config.py::TestLoadConfig::test_unreadable_user_config` fails only because root can read a mode-000 file (fails on the base commit too) |
+| `pytest -n auto` as user `nobody` (empty `HOME`) | 12736 passed, 1 skipped |
+| `cargo test --manifest-path rust/Cargo.toml` | 411 + 9 + 21 passed, 0 failed |
+| `cargo clippy --manifest-path rust/Cargo.toml --all-targets -- -D warnings` | clean |
+| `cargo fmt --manifest-path rust/Cargo.toml --check` | clean |
+| `rust/parity/run` (release build) | 13422 cases, 13419 agree, 3 diverge (pre-existing Python allow -> Rust ask), 0 unsafe |
+| `rust/parity/config_compare.py` | 10 scenarios, 91 steps, 0 differ (new scenario: env-rule warnings) |
+| `rust/parity/hook_compare.py` | 1734 payloads, 1734 same decision, 0 unsafe; 383/383 hand-written identical (new: 140 env-rule payloads in Claude and AGY modes over 5 environments); 2 corpus reason-text diffs (parse-error wording, pre-existing) |
+| `rust/parity/pi_compare.py` | 166 payloads, 0 differ |
+| `rust/parity/run_compare.py` | 15 scenarios, 63 steps, 0 differ |
+| `rust/parity/log_compare.py` | 0 differ |
+| `rust/parity/dashboard_compare.py` | 136 steps, 0 differences |
+| `rust/parity/doctor_compare.py` | 28 scenarios, 129 steps, 0 differ |
+| `dippy --config-only RULES --cmd ...` and `dippy-rs` (empty `HOME`, `DIPPY_ASKPASS=/bin/false`) with the bundle example | allow only `.../agents/bot1/bin/tool x`; ask for `; rm -rf /`, `../../bin/rm -rf /`, `$(rm -rf /)`, `> /etc/passwd`, `bot10`, unset variables and `HCOM_INSTANCE_NAME='*'` (identical in both ports) |
+
+Hook-mode end-to-end tests (`test_claude_hook_end_to_end`,
+`test_agy_askpass_receives_rule_as_written`,
+`env_rule_patterns_in_claude_hook_mode`) run with an empty `HOME` and a fake
+askpass that records its input and exits 2.
+
+### Open questions
+
+- Should an invalid `${` be fatal (`ConfigError`) after all? That would need a
+  decision on the Gemini/AGY fail-open answer to config errors.
+- Python passes no `rule` to askpass (only the message, which contains
+  `[${NAME}... @ FILE]`); dippy-rs sends causes with the written pattern.
+  Pre-existing difference, unchanged.
+- `just test` cannot pass as root (`test_unreadable_user_config`); the cloud
+  sessions run as root.
