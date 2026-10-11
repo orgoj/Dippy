@@ -6,9 +6,9 @@
 //! `BaseHTTPRequestHandler` does with HTTP/1.0.
 
 use std::io::{self, BufRead, BufReader, Read, Write};
-use std::net::{SocketAddr, TcpStream, ToSocketAddrs};
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::net::{IpAddr, SocketAddr, TcpStream, ToSocketAddrs};
+use std::sync::{Arc, OnceLock, mpsc};
+use std::time::{Duration, Instant};
 
 /// Request line plus headers may not exceed this.
 const MAX_HEAD: usize = 64 * 1024;
@@ -382,19 +382,91 @@ impl Target {
     }
 }
 
-/// Client timeouts: connect, then every read and write.
+/// Client timeouts: each connect attempt, and `end`, by which the whole
+/// request (name resolution, connect, TLS, write and read) is over.
 #[derive(Debug, Clone, Copy)]
 pub struct Timeouts {
     pub connect: Duration,
-    pub io: Duration,
+    pub end: Instant,
 }
 
-/// How a client request failed. Only `Refused` and `ConnectTimeout` prove
-/// the server never received the request.
+impl Timeouts {
+    /// The whole request ends `total` from now.
+    pub fn within(connect: Duration, total: Duration) -> Timeouts {
+        Timeouts {
+            connect,
+            end: Instant::now() + total,
+        }
+    }
+}
+
+fn left(end: Instant) -> Duration {
+    end.saturating_duration_since(Instant::now())
+}
+
+fn deadline_passed() -> io::Error {
+    io::Error::new(io::ErrorKind::TimedOut, "request deadline passed")
+}
+
+/// A socket whose every read and write ends by `end`.
+struct Bounded {
+    tcp: TcpStream,
+    end: Instant,
+}
+
+impl Read for Bounded {
+    fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
+        let rest = left(self.end);
+        if rest.is_zero() {
+            return Err(deadline_passed());
+        }
+        self.tcp.set_read_timeout(Some(rest))?;
+        self.tcp.read(buf)
+    }
+}
+
+impl Write for Bounded {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        let rest = left(self.end);
+        if rest.is_zero() {
+            return Err(deadline_passed());
+        }
+        self.tcp.set_write_timeout(Some(rest))?;
+        self.tcp.write(buf)
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        self.tcp.flush()
+    }
+}
+
+/// Resolve `host` within `end`; an IP literal needs no lookup.
+fn resolve(host: &str, port: u16, end: Instant) -> Result<Vec<SocketAddr>, ClientError> {
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(vec![SocketAddr::new(ip, port)]);
+    }
+    // The lookup itself cannot be interrupted: it runs on its own thread,
+    // which is left behind when the deadline passes.
+    let (tx, rx) = mpsc::channel();
+    let name = host.to_string();
+    std::thread::spawn(move || {
+        let _ = tx.send((name.as_str(), port).to_socket_addrs().map(Vec::from_iter));
+    });
+    match rx.recv_timeout(left(end)) {
+        Ok(Ok(addrs)) => Ok(addrs),
+        Ok(Err(e)) => Err(ClientError::Connect(format!("cannot resolve {host}: {e}"))),
+        Err(_) => Err(ClientError::Expired),
+    }
+}
+
+/// How a client request failed. Only `Refused`, `ConnectTimeout` and
+/// `Expired` prove the server never received the request.
 #[derive(Debug, PartialEq)]
 pub enum ClientError {
     Refused(String),
     ConnectTimeout(String),
+    /// The deadline passed before anything was sent.
+    Expired,
     /// Name resolution, TLS or other failures before the request was sent.
     Connect(String),
     /// The request may have reached the server (write, read or parse error).
@@ -409,6 +481,7 @@ impl std::fmt::Display for ClientError {
             | ClientError::ConnectTimeout(m)
             | ClientError::Connect(m)
             | ClientError::Indeterminate(m) => f.write_str(m),
+            ClientError::Expired => f.write_str("request deadline passed"),
             ClientError::TooLarge => f.write_str("response too large"),
         }
     }
@@ -440,15 +513,21 @@ fn tls_config() -> Result<Arc<rustls::ClientConfig>, String> {
         .clone()
 }
 
-fn connect(target: &Target, timeouts: Timeouts) -> Result<Box<dyn Stream>, ClientError> {
-    let addrs: Vec<SocketAddr> = (target.host.as_str(), target.port)
-        .to_socket_addrs()
-        .map_err(|e| ClientError::Connect(format!("cannot resolve {}: {e}", target.host)))?
-        .collect();
+fn connect(
+    target: &Target,
+    connect: Duration,
+    end: Instant,
+) -> Result<Box<dyn Stream>, ClientError> {
+    let addrs = resolve(&target.host, target.port, end)?;
     let mut last = ClientError::Connect(format!("no address for {}", target.host));
     let mut tcp = None;
     for addr in addrs {
-        match TcpStream::connect_timeout(&addr, timeouts.connect) {
+        let rest = left(end);
+        if rest.is_zero() {
+            last = ClientError::Expired;
+            break;
+        }
+        match TcpStream::connect_timeout(&addr, connect.min(rest)) {
             Ok(s) => {
                 tcp = Some(s);
                 break;
@@ -456,17 +535,16 @@ fn connect(target: &Target, timeouts: Timeouts) -> Result<Box<dyn Stream>, Clien
             Err(e) if e.kind() == io::ErrorKind::ConnectionRefused => {
                 last = ClientError::Refused(e.to_string());
             }
+            Err(_) if left(end).is_zero() => last = ClientError::Expired,
             Err(e) if e.kind() == io::ErrorKind::TimedOut => {
                 last = ClientError::ConnectTimeout(e.to_string());
             }
             Err(e) => last = ClientError::Connect(e.to_string()),
         }
     }
-    let tcp = tcp.ok_or(last)?;
-    let set = |e: io::Error| ClientError::Connect(e.to_string());
-    tcp.set_read_timeout(Some(timeouts.io)).map_err(set)?;
-    tcp.set_write_timeout(Some(timeouts.io)).map_err(set)?;
+    let tcp: TcpStream = tcp.ok_or(last)?;
     let _ = tcp.set_nodelay(true);
+    let tcp = Bounded { tcp, end };
     if !target.tls {
         return Ok(Box::new(tcp));
     }
@@ -483,16 +561,46 @@ fn connect(target: &Target, timeouts: Timeouts) -> Result<Box<dyn Stream>, Clien
     Ok(Box::new(rustls::StreamOwned::new(conn, tcp)))
 }
 
+/// One CRLF-terminated line (without the CRLF) of at most `budget` bytes.
+fn crlf_line(reader: &mut impl BufRead, budget: &mut usize) -> Result<String, ClientError> {
+    let mut line = Vec::new();
+    reader
+        .by_ref()
+        .take(*budget as u64 + 1)
+        .read_until(b'\n', &mut line)
+        .map_err(|e| ClientError::Indeterminate(e.to_string()))?;
+    if line.len() > *budget || !line.ends_with(b"\r\n") {
+        return Err(ClientError::Indeterminate(
+            "malformed chunked response".into(),
+        ));
+    }
+    *budget -= line.len();
+    line.truncate(line.len() - 2);
+    Ok(String::from_utf8_lossy(&line).into_owned())
+}
+
 fn read_chunked(reader: &mut impl BufRead, max: usize) -> Result<Vec<u8>, ClientError> {
     let bad = |m: &str| ClientError::Indeterminate(m.to_string());
     let mut body = Vec::new();
     loop {
-        let mut budget = 1024;
-        let line = read_line_limited(reader, &mut budget).map_err(|e| bad(&e.to_string()))?;
+        let line = crlf_line(reader, &mut 1024)?;
         let size = usize::from_str_radix(line.split(';').next().unwrap_or("").trim(), 16)
             .map_err(|_| bad("malformed chunked response"))?;
         if size == 0 {
-            return Ok(body);
+            // Trailer fields up to the empty line; the connection must not
+            // end first.
+            let mut budget = MAX_HEAD;
+            loop {
+                let line = crlf_line(reader, &mut budget)?;
+                if line.is_empty() {
+                    return Ok(body);
+                }
+                match line.split_once(':') {
+                    Some((name, _))
+                        if !name.is_empty() && name.bytes().all(|b| b.is_ascii_graphic()) => {}
+                    _ => return Err(bad("malformed chunked response")),
+                }
+            }
         }
         if body.len() + size > max {
             return Err(ClientError::TooLarge);
@@ -502,10 +610,13 @@ fn read_chunked(reader: &mut impl BufRead, max: usize) -> Result<Vec<u8>, Client
         reader
             .read_exact(&mut body[start..])
             .map_err(|e| bad(&e.to_string()))?;
-        let mut crlf = String::new();
+        let mut crlf = [0u8; 2];
         reader
-            .read_line(&mut crlf)
+            .read_exact(&mut crlf)
             .map_err(|e| bad(&e.to_string()))?;
+        if &crlf != b"\r\n" {
+            return Err(bad("malformed chunked response"));
+        }
     }
 }
 
@@ -520,7 +631,8 @@ pub fn request(
     timeouts: Timeouts,
     max: usize,
 ) -> Result<Response, ClientError> {
-    let mut stream = connect(target, timeouts)?;
+    let end = timeouts.end;
+    let mut stream = connect(target, timeouts.connect, end)?;
     let mut head = format!(
         "{method} {}{path_and_query} HTTP/1.1\r\nHost: {}\r\nConnection: close\r\n\
          Accept-Encoding: identity\r\nUser-Agent: dippy/{}\r\n",
@@ -538,6 +650,9 @@ pub fn request(
     let mut data = head.into_bytes();
     data.extend_from_slice(body.unwrap_or_default());
     let lost = |e: io::Error| ClientError::Indeterminate(e.to_string());
+    if left(end).is_zero() {
+        return Err(ClientError::Expired);
+    }
     stream.write_all(&data).map_err(lost)?;
     stream.flush().map_err(lost)?;
     let mut reader = BufReader::new(stream);
@@ -652,10 +767,7 @@ mod tests {
             let _ = s.write_all(b"HTTP/1.1 200 OK\r\n\r\n");
         });
         let target = Target::parse(&format!("https://127.0.0.1:{port}")).unwrap();
-        let t = Timeouts {
-            connect: Duration::from_secs(2),
-            io: Duration::from_secs(2),
-        };
+        let t = Timeouts::within(Duration::from_secs(2), Duration::from_secs(2));
         let err = request(&target, "GET", "/", &[], None, t, 100).unwrap_err();
         assert!(
             matches!(&err, ClientError::Connect(m) if m.contains("TLS")),
@@ -667,6 +779,89 @@ mod tests {
         let target = Target::parse(&format!("http://127.0.0.1:{port}")).unwrap();
         let err = request(&target, "GET", "/", &[], None, t, 100).unwrap_err();
         assert!(matches!(err, ClientError::Refused(_)), "{err:?}");
+    }
+
+    /// A server on port 0 that answers one request with `reply`, then
+    /// sends each of `trickle` with a pause.
+    fn serve_once(reply: &'static [u8], trickle: &'static [u8]) -> Target {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut buf = [0u8; 4096];
+            let _ = s.read(&mut buf);
+            let _ = s.write_all(reply);
+            for byte in trickle {
+                std::thread::sleep(Duration::from_millis(200));
+                if s.write_all(&[*byte]).is_err() {
+                    return;
+                }
+            }
+        });
+        Target::parse(&format!("http://127.0.0.1:{port}")).unwrap()
+    }
+
+    fn second() -> Timeouts {
+        Timeouts::within(Duration::from_secs(1), Duration::from_secs(1))
+    }
+
+    #[test]
+    fn nothing_is_sent_after_the_deadline() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let target = Target::parse(&format!("http://127.0.0.1:{port}")).unwrap();
+        let t = Timeouts {
+            connect: Duration::from_secs(1),
+            end: Instant::now(),
+        };
+        std::thread::sleep(Duration::from_millis(5));
+        let err = request(&target, "POST", "/", &[], Some(b"x"), t, 100).unwrap_err();
+        assert!(matches!(err, ClientError::Expired), "{err:?}");
+        listener.set_nonblocking(true).unwrap();
+        if let Ok((mut s, _)) = listener.accept() {
+            s.set_nonblocking(false).unwrap();
+            s.set_read_timeout(Some(Duration::from_millis(100)))
+                .unwrap();
+            let mut buf = [0u8; 16];
+            assert!(!matches!(s.read(&mut buf), Ok(n) if n > 0));
+        }
+    }
+
+    #[test]
+    fn chunked_framing_is_strict() {
+        let ok = serve_once(
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\nX-T: 1\r\n\r\n",
+            b"",
+        );
+        let r = request(&ok, "GET", "/", &[], None, second(), 100).unwrap();
+        assert_eq!(r.body, b"{}");
+        for bad in [
+            &b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}XX\r\n0\r\n\r\n"[..],
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\n",
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\n{}\r\n0\n\r\n",
+            b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n2\r\n{}\r\n0\r\nnot a header\r\n\r\n",
+        ] {
+            let reply: &'static [u8] = bad;
+            let target = serve_once(reply, b"");
+            let err = request(&target, "GET", "/", &[], None, second(), 100).unwrap_err();
+            assert!(matches!(err, ClientError::Indeterminate(_)), "{err:?}");
+        }
+    }
+
+    #[test]
+    fn a_trickling_response_ends_at_the_total_timeout() {
+        let target = serve_once(
+            b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\n",
+            b"0123456789abcde",
+        );
+        let started = std::time::Instant::now();
+        let err = request(&target, "GET", "/", &[], None, second(), 100).unwrap_err();
+        assert!(matches!(err, ClientError::Indeterminate(_)), "{err:?}");
+        assert!(
+            started.elapsed() < Duration::from_millis(1500),
+            "{:?}",
+            started.elapsed()
+        );
     }
 
     #[test]

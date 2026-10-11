@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "dippy-rs"
-version = "0.4.41"
+version = "0.4.42"
 dependencies = [
  "chrono",
  "clap",

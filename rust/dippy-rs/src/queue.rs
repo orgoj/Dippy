@@ -26,6 +26,10 @@ pub const MAX_WAIT: Duration = Duration::from_secs(10);
 /// A deadline may be at most this far ahead at POST time.
 pub const MAX_AHEAD_MS: i64 = 3_600_000;
 pub const MAX_NOTE: usize = 1000;
+/// Keys of an item, in the order [`item_json`] writes them.
+pub const ITEM_KEYS: [&str; 8] = [
+    "id", "state", "request", "statuses", "created", "deadline", "decided", "note",
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum State {
@@ -551,12 +555,7 @@ mod tests {
             .keys()
             .map(String::as_str)
             .collect();
-        assert_eq!(
-            keys,
-            [
-                "id", "state", "request", "statuses", "created", "deadline", "decided", "note"
-            ]
-        );
+        assert_eq!(keys, ITEM_KEYS);
         assert_eq!(post(addr, "/api/approvals", &p), (200, item.clone()));
         let mut other = p.clone();
         other["command"] = json!("other");

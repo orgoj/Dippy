@@ -323,10 +323,11 @@ fn scope_path(scope: &Scope) -> PathBuf {
     }
 }
 
-/// `_read_admin_config`: this file only, no merging.
-fn read_config(path: &Path) -> Result<Config, String> {
+/// `_read_admin_config`: this file only, no merging; `user` for the user
+/// config.
+fn read_config(path: &Path, user: bool) -> Result<Config, String> {
     let parsed = match std::fs::read_to_string(path) {
-        Ok(text) => config::parse_config(&text, Some(&path.to_string_lossy())),
+        Ok(text) => config::parse_scoped_config(&text, Some(&path.to_string_lossy()), user),
         Err(e) if e.kind() == ErrorKind::NotFound => Ok(Config::default()),
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
@@ -395,8 +396,9 @@ pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
             key: Some(key),
             scope,
         } => {
-            let result = known_key(key)
-                .and_then(|k| read_config(&scope_path(scope)).map(|c| setting_value(&c, &k)));
+            let result = known_key(key).and_then(|k| {
+                read_config(&scope_path(scope), !scope.project).map(|c| setting_value(&c, &k))
+            });
             match result {
                 Ok(value) => {
                     println!("{value}");
@@ -438,7 +440,7 @@ fn run_server(args: &ServerArgs) -> i32 {
     };
     let (server, scope, add) = match action {
         ServerAction::List { scope } => {
-            return match read_config(&scope_path(scope)) {
+            return match read_config(&scope_path(scope), !scope.project) {
                 Ok(config) => {
                     for server in config.servers {
                         println!("{server}");
@@ -486,6 +488,21 @@ mod tests {
         ] {
             assert_eq!(py_float_repr(x), expected);
         }
+    }
+
+    #[test]
+    fn project_files_ignore_user_only_settings() {
+        let path =
+            std::env::temp_dir().join(format!("dippy-rs-admin-scope-{}", std::process::id()));
+        std::fs::write(&path, "set dashboard-url ftp://x\nset approval dashboard\n").unwrap();
+        let project = read_config(&path, false).unwrap();
+        assert_eq!(project.approval, "dashboard");
+        assert_eq!(
+            project.dashboard_url,
+            config::Config::default().dashboard_url
+        );
+        assert!(read_config(&path, true).is_err());
+        std::fs::remove_file(&path).unwrap();
     }
 
     #[test]

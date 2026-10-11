@@ -1001,14 +1001,27 @@ fn parse_message_rule(decision: &str, rest: &str) -> Result<Rule, String> {
 /// `parse_config`. Invalid lines are skipped (as in Python); invalid SSH
 /// profile settings are fatal.
 pub fn parse_config(text: &str, source: Option<&str>) -> Result<Config, ConfigError> {
-    parse_config_from(text, source, None)
+    parse_config_from(text, source, None, true)
+}
+
+/// [`parse_config`] of one scope's file; `user` false ignores user-only
+/// settings with a warning.
+pub fn parse_scoped_config(
+    text: &str,
+    source: Option<&str>,
+    user: bool,
+) -> Result<Config, ConfigError> {
+    parse_config_from(text, source, None, user)
 }
 
 /// `origins`: file and line of each line of `text` after include expansion.
+/// Outside the user config (`user` false) user-only settings are ignored
+/// with a warning before their values are checked.
 fn parse_config_from(
     text: &str,
     source: Option<&str>,
     origins: Option<&[(String, usize)]>,
+    user: bool,
 ) -> Result<Config, ConfigError> {
     let mut cfg = Config::default();
     let mut settings = Settings::default();
@@ -1031,6 +1044,16 @@ fn parse_config_from(
             .get(1)
             .map(|r| r.trim().to_string())
             .unwrap_or_default();
+        if !user && directive == "set" {
+            let key = rest.split_whitespace().next().unwrap_or("").to_lowercase();
+            if USER_ONLY_SETTINGS.contains(&key.replace('-', "_").as_str()) {
+                warn(format!(
+                    "{prefix}line {lineno}: '{}' is allowed only in the user config (ignored)",
+                    key.replace('_', "-")
+                ));
+                continue;
+            }
+        }
         let result: Result<(), String> = (|| {
             match directive.as_str() {
                 "allow" => cfg.rules.push(parse_rule("allow", &rest, false)?),
@@ -1581,7 +1604,7 @@ fn expand_includes(
     Ok(out)
 }
 
-fn load_config_file(path: &Path) -> Result<Config, ConfigError> {
+fn load_config_file(path: &Path, user: bool) -> Result<Config, ConfigError> {
     let text = std::fs::read_to_string(path).map_err(|e| {
         if e.kind() == std::io::ErrorKind::PermissionDenied {
             ConfigError(format!(
@@ -1601,6 +1624,7 @@ fn load_config_file(path: &Path) -> Result<Config, ConfigError> {
         &text.join("\n"),
         Some(&path.to_string_lossy()),
         Some(&origins),
+        user,
     )
 }
 
@@ -1672,7 +1696,7 @@ fn load_scopes(
 ) -> Result<Config, ConfigError> {
     let load = |path: &Path, scope: &str| -> Result<Config, ConfigError> {
         let mut c = if path.is_file() {
-            load_config_file(path)?
+            load_config_file(path, scope == "user")?
         } else {
             Config::default()
         };
@@ -1698,7 +1722,7 @@ fn load_scopes(
     if let Some(p) = override_path {
         let path = PathBuf::from(paths::expanduser(&p));
         if path.is_file() {
-            let c = without_user_only(load_config_file(&path)?, &path);
+            let c = without_user_only(load_config_file(&path, false)?, &path);
             let c = tag_rules(c, &path.to_string_lossy(), "env");
             config = merge_configs(config, c);
         } else if config_path.is_some_and(|c| !c.is_empty()) {
@@ -1746,7 +1770,7 @@ pub fn load_config(
                     path.display()
                 )));
             }
-            let c = without_user_only(load_config_file(&path)?, &path);
+            let c = without_user_only(load_config_file(&path, false)?, &path);
             tag_rules(c, &path.to_string_lossy(), "env")
         }
         None => load_normal_config(cwd, config_path)?,
@@ -1754,7 +1778,7 @@ pub fn load_config(
     if let Some(final_path) = config.final_path.clone() {
         if final_path.is_file() {
             let c = tag_rules(
-                without_user_only(load_config_file(&final_path)?, &final_path),
+                without_user_only(load_config_file(&final_path, false)?, &final_path),
                 &final_path.to_string_lossy(),
                 "final",
             );
@@ -2512,6 +2536,27 @@ mod tests {
         let c = load_config_from(&dir.join("proj"), &dir.join("none")).unwrap();
         take_warnings();
         assert_eq!(c.dashboard_url, DEFAULT_DASHBOARD_URL);
+        // Invalid values outside the user config are ignored too, in every
+        // scope; in the user config they stay config errors.
+        let bad = "set dashboard-url ftp://evil\nset dashboard-token-file\n";
+        std::fs::write(dir.join("proj/.dippy"), bad).unwrap();
+        let c = load_config_from(&dir.join("proj"), &user).unwrap();
+        assert_eq!(c.dashboard_url, "http://127.0.0.1:1111");
+        assert_eq!(take_warnings().len(), 2);
+        std::fs::write(dir.join("proj/.dippy"), "").unwrap();
+        std::fs::write(dir.join("other"), bad).unwrap();
+        let other = dir.join("other").to_string_lossy().into_owned();
+        let c = load_scopes(&dir.join("proj"), &user, Some(&other), None).unwrap();
+        assert_eq!(c.dashboard_url, "http://127.0.0.1:1111");
+        let c = load_config(&dir.join("proj"), None, Some(&other)).unwrap();
+        assert_eq!(c.dashboard_url, DEFAULT_DASHBOARD_URL);
+        let only = dir.join("only");
+        std::fs::write(&only, format!("set final {other}\n")).unwrap();
+        let c = load_config(&dir.join("proj"), None, Some(&only.to_string_lossy())).unwrap();
+        assert_eq!(c.dashboard_url, DEFAULT_DASHBOARD_URL);
+        take_warnings();
+        std::fs::write(&user, bad).unwrap();
+        assert!(load_config_from(&dir.join("proj"), &user).is_err());
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -2900,7 +2945,7 @@ mod tests {
         let inc = dir.join("inc");
         std::fs::write(&main, "allow a\ninclude inc\n\nallow c\n").unwrap();
         std::fs::write(&inc, "# x\nask-redirect /etc/*\n").unwrap();
-        let c = load_config_file(&main).unwrap();
+        let c = load_config_file(&main, true).unwrap();
         std::fs::remove_dir_all(&dir).unwrap();
         let (main, inc) = (main.to_string_lossy(), inc.to_string_lossy());
         assert_eq!(origin(&c.rules[0]), (Some(main.as_ref()), Some(1)));

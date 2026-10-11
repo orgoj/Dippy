@@ -545,10 +545,7 @@ pub fn fetch_node(
     if body.is_some() {
         headers.push(("Content-Type", "application/json"));
     }
-    let timeouts = http::Timeouts {
-        connect: NODE_TIMEOUT,
-        io: NODE_TIMEOUT,
-    };
+    let timeouts = http::Timeouts::within(NODE_TIMEOUT, NODE_TIMEOUT);
     let response = http::request(
         &target,
         method,

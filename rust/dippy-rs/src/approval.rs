@@ -304,19 +304,42 @@ pub fn outcome_message(outcome: &Outcome) -> String {
     }
 }
 
-/// The item state in a node response, if it is a well-formed item for `id`.
-fn decided(body: &[u8], id: &str) -> Option<Option<Outcome>> {
+/// The item state in a node response, if it is a well-formed item for `id`
+/// and exactly the `sent` request.
+fn decided(body: &[u8], id: &str, sent: &Value) -> Option<Option<Outcome>> {
     let v: Value = serde_json::from_slice(body).ok()?;
-    if v.get("id").and_then(Value::as_str) != Some(id) {
+    let o = v.as_object()?;
+    let causes = sent["causes"].as_array().map_or(0, Vec::len);
+    let pending = o.get("state").and_then(Value::as_str) == Some("pending");
+    let well_formed = o.len() == crate::queue::ITEM_KEYS.len()
+        && crate::queue::ITEM_KEYS.iter().all(|k| o.contains_key(*k))
+        && o["id"].as_str() == Some(id)
+        && &o["request"] == sent
+        && o["statuses"].as_array().is_some_and(|s| {
+            s.len() == causes
+                && s.iter()
+                    .all(|v| matches!(v.as_str(), Some("allow" | "ask" | "deny")))
+        })
+        && o["created"].is_i64()
+        && o["deadline"] == sent["deadline"]
+        && if pending {
+            o["decided"].is_null()
+        } else {
+            o["decided"].is_i64()
+        }
+        && (o["note"].is_null()
+            || o["note"]
+                .as_str()
+                .is_some_and(|n| n.chars().count() <= crate::queue::MAX_NOTE));
+    if !well_formed {
         return None;
     }
-    let note = v
-        .get("note")
-        .and_then(Value::as_str)
+    let note = o["note"]
+        .as_str()
         .filter(|n| !n.is_empty())
         .map(str::to_string);
     let id = id.to_string();
-    Some(match v.get("state").and_then(Value::as_str)? {
+    Some(match o["state"].as_str()? {
         "pending" => None,
         "allowed" => Some(Outcome::Allowed { id, note }),
         "denied" => Some(Outcome::Denied { id, note }),
@@ -380,14 +403,16 @@ pub fn wait_from(
         }
     };
     let deadline = now_ms() + remaining().as_millis() as i64;
-    let body = py_dumps(&ask.payload(&id, deadline));
+    let payload = ask.payload(&id, deadline);
+    let body = py_dumps(&payload);
     let headers = [
         ("X-Dippy-Token", token.as_str()),
         ("Content-Type", "application/json"),
     ];
-    let timeouts = |rest: Duration| Timeouts {
-        connect: CONNECT.min(rest),
-        io: rest,
+    // Every request ends with the budget, however late it starts.
+    let timeouts = Timeouts {
+        connect: CONNECT,
+        end,
     };
     info(&format!(
         "DASHBOARD: queueing approval {id} at {}",
@@ -399,7 +424,7 @@ pub fn wait_from(
         "/api/approvals",
         &headers,
         Some(body.as_bytes()),
-        timeouts(remaining()),
+        timeouts,
         MAX_RESPONSE,
     );
     let failed = |message: String| Outcome::Failed {
@@ -413,6 +438,9 @@ pub fn wait_from(
         Err(ClientError::ConnectTimeout(e)) => {
             return Outcome::Fallback(format!("dashboard connect timeout: {e}"));
         }
+        // The budget ended before the request left: a timeout, never a
+        // fallback past the budget.
+        Err(ClientError::Expired) => return Outcome::TimedOut { id: None },
         Err(ClientError::Connect(e)) => return failed(format!("dashboard unreachable: {e}")),
         Err(e) => info(&format!("DASHBOARD: request {id} indeterminate: {e}")),
         Ok(r) if matches!(r.status, 401 | 404) => {
@@ -421,7 +449,7 @@ pub fn wait_from(
                 r.status
             ));
         }
-        Ok(r) if matches!(r.status, 200 | 201) => match decided(&r.body, &id) {
+        Ok(r) if matches!(r.status, 200 | 201) => match decided(&r.body, &id, &payload) {
             Some(Some(outcome)) => return outcome,
             Some(None) => {}
             None => info(&format!("DASHBOARD: malformed response for {id}")),
@@ -460,10 +488,10 @@ pub fn wait_from(
             &path,
             &headers[..1],
             None,
-            timeouts(rest),
+            timeouts,
             MAX_RESPONSE,
         ) {
-            Ok(r) if r.status == 200 => match decided(&r.body, &id) {
+            Ok(r) if r.status == 200 => match decided(&r.body, &id, &payload) {
                 Some(Some(outcome)) => return outcome,
                 // A node that answers pending at once must not spin the loop.
                 Some(None) if sent.elapsed() >= Duration::from_millis(100) => continue,
@@ -824,6 +852,123 @@ mod tests {
         );
         assert!(started.elapsed() < Duration::from_millis(2600));
         assert_eq!(posts.load(Ordering::SeqCst), 1);
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    /// `(method, posted request or None, id)` to the status and body.
+    type FakeReply = fn(&str, Option<&Value>, &str) -> (u16, Value);
+
+    /// A fake node answering every request with `reply`.
+    fn fake_node(reply: FakeReply) -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        std::thread::spawn(move || {
+            for stream in listener.incoming() {
+                let mut reader = std::io::BufReader::new(stream.unwrap());
+                let mut line = String::new();
+                std::io::BufRead::read_line(&mut reader, &mut line).unwrap();
+                let (method, path) = line.split_once(' ').unwrap();
+                let path = path.split(' ').next().unwrap().to_string();
+                let mut length = 0;
+                loop {
+                    let mut header = String::new();
+                    std::io::BufRead::read_line(&mut reader, &mut header).unwrap();
+                    if header.trim().is_empty() {
+                        break;
+                    }
+                    if let Some(v) = header.strip_prefix("Content-Length: ") {
+                        length = v.trim().parse().unwrap();
+                    }
+                }
+                let mut body = vec![0; length];
+                reader.read_exact(&mut body).unwrap();
+                let posted: Option<Value> = serde_json::from_slice(&body).ok();
+                let id = match &posted {
+                    Some(p) => p["id"].as_str().unwrap().to_string(),
+                    None => path["/api/approvals/".len()..32 + "/api/approvals/".len()].into(),
+                };
+                let (status, reply) = reply(method, posted.as_ref(), &id);
+                let text = reply.to_string();
+                let mut stream = reader.into_inner();
+                let _ = std::io::Write::write_all(
+                    &mut stream,
+                    format!(
+                        "HTTP/1.1 {status} X\r\nContent-Length: {}\r\n\r\n{text}",
+                        text.len()
+                    )
+                    .as_bytes(),
+                );
+            }
+        });
+        addr
+    }
+
+    fn item(id: &str, state: &str, request: &Value) -> Value {
+        let decided = (state != "pending").then_some(2);
+        json!({"id": id, "state": state, "request": request, "statuses": [],
+            "created": 1, "deadline": request["deadline"], "decided": decided, "note": null})
+    }
+
+    #[test]
+    fn malformed_allowed_responses_deny() {
+        let dir = temp("malformed");
+        std::fs::write(dir.join("token"), "t\n").unwrap();
+        let cwd = dir.to_string_lossy().into_owned();
+        let replies: [FakeReply; 8] = [
+            // Complete items that break the representation.
+            |_, posted, id| {
+                let mut it = item(id, "allowed", posted.unwrap_or(&Value::Null));
+                it["statuses"] = json!(["bogus"]);
+                (201, it)
+            },
+            |_, posted, id| {
+                let mut it = item(id, "allowed", posted.unwrap_or(&Value::Null));
+                it["decided"] = Value::Null;
+                (201, it)
+            },
+            |_, posted, id| {
+                let mut it = item(id, "allowed", posted.unwrap_or(&Value::Null));
+                it["deadline"] = json!(7);
+                (201, it)
+            },
+            |_, posted, id| {
+                let mut it = item(id, "allowed", posted.unwrap_or(&Value::Null));
+                it["note"] = json!("x".repeat(1001));
+                (201, it)
+            },
+            // Bare id and state, to the POST.
+            |_, _, id| (201, json!({"id": id, "state": "allowed"})),
+            // A full item for a different request.
+            |_, posted, id| {
+                let mut other = posted.cloned().unwrap_or_default();
+                other["command"] = json!("other");
+                (201, item(id, "allowed", &other))
+            },
+            // Pending at POST, then a bare allowed item to the poll.
+            |method, posted, id| match (method, posted) {
+                ("POST", Some(p)) => (201, item(id, "pending", p)),
+                _ => (200, json!({"id": id, "state": "allowed", "note": 5})),
+            },
+            // A wrongly typed field.
+            |_, posted, id| {
+                let mut it = item(id, "allowed", posted.unwrap_or(&Value::Null));
+                it["created"] = json!("now");
+                (201, it)
+            },
+        ];
+        for (index, reply) in replies.into_iter().enumerate() {
+            let addr = fake_node(reply);
+            let config = config_for(&dir, &format!("http://{addr}"), 5);
+            let outcome = run(&config, &cwd);
+            assert!(
+                matches!(outcome, Outcome::TimedOut { id: Some(_) }),
+                "{index}: {outcome:?}"
+            );
+        }
+        // A well-formed item for the request allows.
+        let addr = fake_node(|_, posted, id| (201, item(id, "allowed", posted.unwrap())));
+        let config = config_for(&dir, &format!("http://{addr}"), 5);
+        assert!(matches!(run(&config, &cwd), Outcome::Allowed { .. }));
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

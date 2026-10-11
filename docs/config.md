@@ -1900,7 +1900,11 @@ A config error keeps today's behaviour (without a config there is no
 
 **Timing.** The whole wait (config load, connect, request, polling) counts
 from the start of the Dippy process and ends at `askpass-timeout - 3`
-seconds; the request's deadline is that moment. An `askpass-timeout` of 3 or
+seconds; the request's deadline is that moment. Every network step (name
+resolution, each connect attempt, TLS, writing and reading) ends by then,
+so a slow DNS, several unreachable addresses or a trickling answer cannot
+outlast the budget. A budget that ends before the request is sent is a
+timeout (deny), never a fallback. An `askpass-timeout` of 3 or
 less (also 0 or negative) means no queue wait: Dippy denies at once with the
 timeout message. On timeout the agent gets `Approval timed out after N
 seconds. The requested command was not executed.` followed by
@@ -1916,7 +1920,10 @@ queue). Any other outcome after the request was sent (reset, read timeout,
 twice; it polls the same id until the budget ends and then denies with the
 timeout message, also when the node restarted and lost the request. A
 request the node rejects (another 4xx) is denied at once. Only the state
-`allowed` allows.
+`allowed` allows, and only in an item that matches the `Approval` schema of
+`docs/dashboard-api.json` (with one status per cause, the request's
+deadline and `decided` set) for exactly the request Dippy sent; any other
+answer counts as malformed.
 
 **Audit.** The hook keeps its `ask` entry; the outcome adds one entry with
 `allow` or `deny`, the agent, the note (or `approval timed out`) and the

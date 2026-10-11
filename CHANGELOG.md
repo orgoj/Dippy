@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.42] - 2026-10-11
+
+### Fixed
+
+- dippy-rs: a dashboard approval allows only on an item that matches the documented representation (every field with its type, one `allow`/`ask`/`deny` status per cause, the request's deadline, `decided` set exactly when no longer pending, a note of at most 1000 characters) for exactly the request sent; anything else is malformed and ends in the timeout deny.
+- dippy-rs: the dashboard and hub HTTP client enforces one wall-clock deadline over name resolution, every connect attempt, TLS, writing and reading, so a slow DNS, several unreachable addresses or a trickling answer cannot outlast `askpass-timeout - 3`, and a budget that ends before the request is sent denies with the timeout message instead of falling back (an agent hook that times out first may run the command, as Gemini does).
+- dippy-rs: chunked HTTP responses require CRLF-terminated size lines, CRLF after every chunk and well-formed trailer fields up to the final empty line; other framing is malformed.
+- dippy-rs: `dashboard-url` and `dashboard-token-file` outside the user config are ignored with a warning even when their values are invalid (they were config errors in a project `.dippy`, `--config`, `--config-only` or `final` file, and in `dippy config get --project`).
+
 ## [0.4.41] - 2026-10-10
 
 ### Fixed
