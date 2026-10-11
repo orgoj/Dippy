@@ -4,7 +4,9 @@ import io
 import json
 import os
 import tempfile
+import threading
 from argparse import Namespace
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -12,7 +14,7 @@ import pytest
 from dippy import dippy as dippy_main
 from dippy import pi_wrapper
 from dippy.core.analyzer import Decision
-from dippy.core.config import Config, configure_logging, log_decision
+from dippy.core.config import Config, _rotate_logs, configure_logging, log_decision
 
 
 def test_log_decision_with_context_flags():
@@ -265,6 +267,54 @@ def test_cli_mode_audit_entry_names_the_command(tmp_path, monkeypatch, capsys):
     capsys.readouterr()
 
     assert entries == [("ask", "frob --x")]
+
+
+def test_rotation_names_the_log_after_its_last_write_day(tmp_path):
+    log = tmp_path / "audit.log"
+    config = Config(log=log)
+    log.write_text("today\n")
+    _rotate_logs(config)
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["audit.log"]
+
+    old = datetime.now() - timedelta(days=3)
+    os.utime(log, (old.timestamp(), old.timestamp()))
+    _rotate_logs(config)
+    rotated = tmp_path / f"audit-{old:%Y-%m-%d}.log"
+    assert sorted(p.name for p in tmp_path.glob("audit*")) == [rotated.name]
+    assert rotated.read_text() == "today\n"
+
+
+def test_concurrent_rotation_keeps_every_line(tmp_path):
+    log = tmp_path / "audit.log"
+    config = Config(log=log)
+    old = datetime.now() - timedelta(days=3)
+    rotated = tmp_path / f"audit-{old:%Y-%m-%d}.log"
+    for _ in range(20):
+        for path in tmp_path.iterdir():
+            path.unlink()
+        log.write_text("old\n")
+        os.utime(log, (old.timestamp(), old.timestamp()))
+        barrier = threading.Barrier(8)
+
+        def worker():
+            barrier.wait()
+            _rotate_logs(config)
+            with open(log, "a") as f:
+                f.write("new\n")
+
+        threads = [threading.Thread(target=worker) for _ in range(8)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join()
+        assert rotated.read_text() == "old\n"
+        assert log.read_text() == "new\n" * 8
+
+
+def test_rotation_ignores_filesystem_errors(tmp_path):
+    blocker = tmp_path / "file"
+    blocker.write_text("")
+    _rotate_logs(Config(log=blocker / "audit.log"))
 
 
 @pytest.mark.parametrize(

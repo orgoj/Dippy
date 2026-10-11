@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.47] - 2026-10-11
+
+### Fixed
+
+- Audit log rotation names the rotated file after the day of the log's last write and rotates only when that day is over. A new log was moved into yesterday's file by the second run of its first day, and after a quiet day an older log got yesterday's date. Concurrent runs serialize the rotation on `.audit-rotate.lock` next to the log, so a second rotation can no longer overwrite the rotated history, and filesystem errors skip the rotation instead of failing the config load (Python).
+
 ## [0.4.46] - 2026-10-11
 
 ### Fixed

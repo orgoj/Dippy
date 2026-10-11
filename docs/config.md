@@ -1816,7 +1816,7 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 
 **Log path:** The `~/.dippy/` directory may have write issues when running as a Claude Code hook. Using `~/.claude/dippy-audit.log` is more reliable.
 
-**Log rotation:** Dippy automatically rotates audit logs daily. The current log is renamed to `audit-YYYY-MM-DD.log` (yesterday's date) on the first run after midnight. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
+**Log rotation:** Dippy automatically rotates audit logs daily. On the first run of a day, a log last written on an earlier day is renamed to `audit-YYYY-MM-DD.log`, named after that day (local time); concurrent runs serialize on `.audit-rotate.lock` next to the log. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
 **Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. Apart from the daily log rotation that every Dippy run performs, it writes nothing, and it is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` (relative paths resolve against the current directory) match at or below a path component boundary. A negative `--limit` is rejected.
 

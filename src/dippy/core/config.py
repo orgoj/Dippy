@@ -1,12 +1,13 @@
 """Dippy configuration system v1."""
 
+import fcntl
 import fnmatch
 import logging
 import os
 import posixpath
 import re
 from dataclasses import dataclass, field, replace
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from dippy.core.bash import decode_literal_word
@@ -508,37 +509,52 @@ def _load_config_file(path: Path) -> Config:
 
 
 def _rotate_logs(config: Config) -> None:
-    """Rotate audit log daily and clean up old logs.
+    """Rotate the audit log once its last write is from an earlier day.
 
-    Only rotates once per day (first run after midnight).
-    Safe to call multiple times - checks if already rotated today.
+    The rotated file is named after that day. Best effort: concurrent runs
+    serialize on a lock file, and filesystem errors skip the rotation.
     """
     # Skip if logging disabled or rotation disabled
     if config.log is None or config.log_rotate_max_days <= 0:
         return
 
-    # Check if we already rotated today
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-    rotated_path = config.log.parent / f"audit-{yesterday}.log"
-
-    if rotated_path.exists():
-        return  # Already rotated today, nothing to do
-
-    # Rotate: rename current log to yesterday's date
-    if config.log.exists():
-        config.log.rename(rotated_path)
+    today = datetime.now().date()
+    written = _last_write_day(config.log)
+    if written is not None and written < today:
+        try:
+            with open(config.log.parent / ".audit-rotate.lock", "a") as lock:
+                fcntl.flock(lock, fcntl.LOCK_EX)
+                # Another run may have rotated it while we waited.
+                written = _last_write_day(config.log)
+                if written is not None and written < today:
+                    rotated_path = config.log.parent / f"audit-{written:%Y-%m-%d}.log"
+                    if not rotated_path.exists():
+                        config.log.rename(rotated_path)
+        except OSError:
+            pass
 
     # Clean up old logs
     cutoff = (datetime.now() - timedelta(days=config.log_rotate_max_days)).strftime(
         "%Y-%m-%d"
     )
-    for old_log in config.log.parent.glob("audit-*.log"):
-        # Extract date from filename: "audit-YYYY-MM-DD.log"
-        parts = old_log.stem.split("-")
-        if len(parts) >= 4:
-            date_str = "-".join(parts[1:4])  # Extract YYYY-MM-DD
-            if date_str < cutoff:
-                old_log.unlink()
+    try:
+        for old_log in config.log.parent.glob("audit-*.log"):
+            # Extract date from filename: "audit-YYYY-MM-DD.log"
+            parts = old_log.stem.split("-")
+            if len(parts) >= 4:
+                date_str = "-".join(parts[1:4])  # Extract YYYY-MM-DD
+                if date_str < cutoff:
+                    old_log.unlink(missing_ok=True)
+    except OSError:
+        pass
+
+
+def _last_write_day(log: Path) -> date | None:
+    """Local day of the log's last modification, or None if unreadable."""
+    try:
+        return datetime.fromtimestamp(log.stat().st_mtime).date()
+    except OSError:
+        return None
 
 
 def load_config(

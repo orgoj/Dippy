@@ -1791,9 +1791,9 @@ pub fn load_config(
     Ok(config)
 }
 
-/// `_rotate_logs`: on the first load of a day (local time) rename the audit
-/// log to `audit-<yesterday>.log` and delete rotations older than
-/// `log-rotate-max-days`. File errors are ignored (Python raises).
+/// `_rotate_logs`: rename an audit log last written before `today` (local
+/// time) to `audit-<that day>.log` and delete rotations older than
+/// `log-rotate-max-days`. File errors are ignored.
 fn rotate_logs_on(config: &Config, today: chrono::NaiveDate) {
     let Some(log) = &config.log else { return };
     if config.log_rotate_max_days <= 0 {
@@ -1803,13 +1803,27 @@ fn rotate_logs_on(config: &Config, today: chrono::NaiveDate) {
         .parent()
         .filter(|p| !p.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
-    let yesterday = today - chrono::Days::new(1);
-    let rotated = dir.join(format!("audit-{}.log", yesterday.format("%Y-%m-%d")));
-    if rotated.exists() {
-        return;
-    }
-    if log.exists() {
-        let _ = std::fs::rename(log, &rotated);
+    // Rotate once the last write is from an earlier day, named after that
+    // day. Concurrent runs serialize on a lock file and re-check under it.
+    let written = |log: &Path| {
+        std::fs::metadata(log)
+            .and_then(|m| m.modified())
+            .map(|t| chrono::DateTime::<chrono::Local>::from(t).date_naive())
+            .ok()
+            .filter(|day| *day < today)
+    };
+    if written(log).is_some()
+        && let Ok(lock) = std::fs::File::options()
+            .create(true)
+            .append(true)
+            .open(dir.join(".audit-rotate.lock"))
+        && lock.lock().is_ok()
+        && let Some(day) = written(log)
+    {
+        let rotated = dir.join(format!("audit-{}.log", day.format("%Y-%m-%d")));
+        if !rotated.exists() {
+            let _ = std::fs::rename(log, &rotated);
+        }
     }
     let cutoff = (today - chrono::Days::new(config.log_rotate_max_days as u64))
         .format("%Y-%m-%d")
@@ -2673,7 +2687,23 @@ mod tests {
             log.display()
         ));
         let today = chrono::NaiveDate::from_ymd_opt(2026, 10, 10).unwrap();
-        std::fs::write(&log, "a\n").unwrap();
+        let write_on = |text: &str, day: chrono::NaiveDate| {
+            std::fs::write(&log, text).unwrap();
+            let noon = day.and_hms_opt(12, 0, 0).unwrap();
+            let local = chrono::TimeZone::from_local_datetime(&chrono::Local, &noon).unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&log)
+                .unwrap()
+                .set_modified(local.into())
+                .unwrap();
+        };
+        // Written today: stays.
+        write_on("t\n", today);
+        rotate_logs_on(&config, today);
+        assert_eq!(std::fs::read_to_string(&log).unwrap(), "t\n");
+        // Last written on the 8th, after a quiet day: named after the 8th.
+        write_on("a\n", today - chrono::Days::new(2));
         for name in [
             "audit-2026-10-06.log",
             "audit-2026-10-07.log",
@@ -2690,17 +2720,18 @@ mod tests {
         assert_eq!(
             names,
             [
+                ".audit-rotate.lock",
                 "audit-2026-10-07.log",
-                "audit-2026-10-09.log",
+                "audit-2026-10-08.log",
                 "audit-x-y-z.log"
             ]
         );
-        // Already rotated today: the new log stays.
-        std::fs::write(&log, "b\n").unwrap();
+        // A new log written today stays.
+        write_on("b\n", today);
         rotate_logs_on(&config, today);
         assert_eq!(std::fs::read_to_string(&log).unwrap(), "b\n");
         assert_eq!(
-            std::fs::read_to_string(dir.join("audit-2026-10-09.log")).unwrap(),
+            std::fs::read_to_string(dir.join("audit-2026-10-08.log")).unwrap(),
             "a\n"
         );
         // Rotation disabled.
@@ -2710,6 +2741,57 @@ mod tests {
         ));
         rotate_logs_on(&off, today.succ_opt().unwrap());
         assert!(log.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn rotation_ignores_filesystem_errors() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-rotate-err-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("file"), "").unwrap();
+        let config = cfg(&format!("set log {}", dir.join("file/audit.log").display()));
+        rotate_logs_on(&config, chrono::Local::now().date_naive());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn concurrent_rotation_keeps_every_line() {
+        use std::io::Write;
+        let dir = std::env::temp_dir().join(format!("dippy-rs-rotate-race-{}", std::process::id()));
+        let log = dir.join("audit.log");
+        let config = cfg(&format!("set log {}", log.display()));
+        let today = chrono::Local::now().date_naive();
+        let old = chrono::Local::now() - chrono::Days::new(3);
+        let rotated = dir.join(format!("audit-{}.log", old.format("%Y-%m-%d")));
+        for _ in 0..500 {
+            let _ = std::fs::remove_dir_all(&dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            std::fs::write(&log, "old\n").unwrap();
+            std::fs::File::options()
+                .write(true)
+                .open(&log)
+                .unwrap()
+                .set_modified(old.into())
+                .unwrap();
+            let barrier = std::sync::Barrier::new(8);
+            std::thread::scope(|s| {
+                for _ in 0..8 {
+                    s.spawn(|| {
+                        barrier.wait();
+                        rotate_logs_on(&config, today);
+                        let mut f = std::fs::File::options()
+                            .create(true)
+                            .append(true)
+                            .open(&log)
+                            .unwrap();
+                        f.write_all(b"new\n").unwrap();
+                    });
+                }
+            });
+            assert_eq!(std::fs::read_to_string(&rotated).unwrap(), "old\n");
+            assert_eq!(std::fs::read_to_string(&log).unwrap(), "new\n".repeat(8));
+        }
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

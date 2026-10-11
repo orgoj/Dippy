@@ -127,7 +127,7 @@ fn cmd_and_stdin_write_the_audit_log() {
     std::fs::create_dir_all(dir.join("home/.dippy")).unwrap();
     std::fs::write(
         dir.join("home/.dippy/config"),
-        format!("set log {}\nset log-rotate-max-days 0\n", log.display()),
+        format!("set log {}\n", log.display()),
     )
     .unwrap();
     run(&dir, &["--cmd", "frobnicate x"], "");
