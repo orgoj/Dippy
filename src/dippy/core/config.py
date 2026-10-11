@@ -771,13 +771,15 @@ def _env_segments(pattern: str, kind: str) -> list[tuple[bool, str]]:
     """Split a pattern into literal text and `${NAME}` references.
 
     `$${` is a literal `${`. Raises ValueError on any other `${` that is not
-    a valid reference, and in Bash patterns on a reference inside quotes or
-    after a backslash.
+    a valid reference, on a reference inside a glob bracket expression, and
+    in Bash patterns on a reference inside quotes or after a backslash.
     """
     segments: list[tuple[bool, str]] = []
     literal: list[str] = []
     quote = ""
     escaped = False
+    # Inside `[...]`: None outside, else the set's characters seen so far.
+    bracket: str | None = None
     i = 0
     while i < len(pattern):
         if pattern.startswith("$${", i):
@@ -795,6 +797,11 @@ def _env_segments(pattern: str, kind: str) -> list[tuple[bool, str]]:
                 raise ValueError(
                     f"variable reference inside quotes {pattern[i : end + 1]!r}"
                 )
+            if bracket is not None:
+                raise ValueError(
+                    "variable reference inside a bracket expression "
+                    f"{pattern[i : end + 1]!r}"
+                )
             if literal:
                 segments.append((False, "".join(literal)))
                 literal = []
@@ -802,6 +809,14 @@ def _env_segments(pattern: str, kind: str) -> list[tuple[bool, str]]:
             i = end + 1
             continue
         char = pattern[i]
+        if kind != ENV_WORDS:
+            if bracket is None:
+                if char == "[":
+                    bracket = ""
+            elif char == "]" and bracket not in ("", "!"):
+                bracket = None
+            else:
+                bracket += char
         if kind == ENV_SHELL:
             if escaped:
                 escaped = False

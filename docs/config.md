@@ -520,6 +520,79 @@ allow [$HCOM_INSTANCE_NAME=bot1,remote-run,host1] systemctl status *
 An unset or empty variable produces no flag at all, so an `allow` rule guarded
 by it never matches (fail-closed).
 
+### Environment Variables in Patterns
+
+A rule pattern can reference an environment variable of the Dippy process as
+`${NAME}`, where `NAME` matches `[A-Za-z_][A-Za-z0-9_]*`. One shared config
+can then give each agent its own directory:
+
+```
+allow-edit ${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/**
+allow ${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/bin/* *
+```
+
+With `HCOM_DIR=/srv/hcom` and `HCOM_INSTANCE_NAME=bot1`, the first rule allows
+edits under `/srv/hcom/agents/bot1/` but not under `agents/bot10/`,
+`agents/bot1_evil/` or `agents/` itself.
+
+**Where.** `${NAME}` is expanded in the pattern of these directives:
+
+| Directives | Pattern kind |
+|------------|--------------|
+| `allow`, `ask`, `deny`, `delegate`, `after` | command glob |
+| `allow`/`ask`/`deny`/`delegate` with `[opts: ...]` | positional words after the block (outside quotes) |
+| `allow-opt`, `ask-opt`, `deny-opt` | command prefix and items |
+| `allow-redirect`, `ask-redirect`, `deny-redirect` | path glob |
+| `allow-edit`, `ask-edit`, `deny-edit` | path glob |
+| `allow-read`, `ask-read`, `deny-read` | path glob |
+| `allow-mcp`, `ask-mcp`, `deny-mcp`, `after-mcp` | MCP tool name glob |
+| `allow-web`, `ask-web`, `deny-web`, `after-web` | web query glob |
+
+It is not expanded in messages, `set` values, `include` paths, `alias` and
+`wrapper` arguments, `[flags]` brackets (use [Environment Flags](#environment-flags)
+there) or inside an `[opts: ...]` block.
+
+**Syntax.** `$NAME` without braces is literal text, as before. `$${` writes a
+literal `${` (for example `allow fictecho $${HOME}` matches the literal
+argument `${HOME}`). Any other `${` - unterminated, empty, an invalid name,
+inside a glob bracket expression such as `[${NAME}]`, or inside quotes of an
+`[opts: ...]` pattern - is a syntax error: the line is skipped with a warning
+naming the file and line.
+
+**When and from where.** Variables are read once, when the config is loaded,
+from the environment of the Dippy process: in hook modes that is the
+environment of the agent CLI that runs the hook; for `dippy --cmd` and
+`dippy run` it is the caller's environment.
+
+**Values are literal.** `*`, `?` and `[` in a value match only themselves, so
+`NAME='*'` never widens a rule. A value is never tilde-expanded; only a `~`
+written in the pattern keeps its meaning. A value may contain `/`.
+
+**Inactive rules.** The rule is inactive - it never matches, later rules and
+the default decision apply as if it were absent - when a variable is unset or
+empty, or when its value is unsafe:
+
+- it contains a NUL or newline, or is not valid UTF-8;
+- in command, `[opts:]` and option-rule patterns, it contains whitespace (it
+  would change word boundaries);
+- in command, `[opts:]` and path patterns, it has a `.` or `..` path
+  component, or it starts with `~` where it begins a word or path.
+
+An empty string is never substituted. Loading the config logs one warning per
+inactive rule, for example
+`~/.dippy/config: line 4: ${HCOM_DIR}: unset or empty (rule inactive)` (in hook
+modes in `~/.claude/hook-approvals.log`).
+
+**Display.** Matching uses the expanded pattern; the audit log `rule` field,
+reasons, askpass and dashboard causes show the pattern as written, with
+`${NAME}`. Rules that Dippy writes itself (the rule editors of `dippy-askpass`
+and dashboard approvals) prefill a literal `${` as `$${`.
+
+**Trust.** Expansion trusts the environment. Dippy guides non-adversarial
+agents and is not a security boundary: a process that sets the variable itself
+can change what the rule allows. Prefer variables set by the launcher of the
+agent (such as `HCOM_INSTANCE_NAME`) over values an agent session changes.
+
 ### Custom Wrappers
 
 Define your own wrapper commands with the `wrapper` directive:
@@ -699,7 +772,7 @@ When Dippy analyzes `ssh host "(rm /tmp/x)"`:
 
 **Escaping in messages:** Use `\"` for literal quotes, `\\` for literal backslash.
 
-**Tilde expansion:** `~` expands to home directory in both patterns and commands. Environment variables (`$HOME`) are not expanded.
+**Tilde expansion:** `~` expands to home directory in both patterns and commands. `$NAME` stays literal text; `${NAME}` in a rule pattern is replaced by an environment variable (see [Environment Variables in Patterns](#environment-variables-in-patterns)).
 
 **One rule per line.** No line continuation.
 

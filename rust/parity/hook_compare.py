@@ -170,6 +170,7 @@ allow-edit ${PARITY_DIR}/up/${PARITY_UNSAFE}/**
 allow ${PARITY_BAD
 allow [opts:--quiet] fictopt ${PARITY_GLOB}
 deny-opt fictpush ${PARITY_NAME}
+allow fictbr [${PARITY_NAME}] *
 """
 
 ENV_SETS = [
@@ -215,6 +216,7 @@ ENV_PAYLOADS = (
             "fictopt y",
             "fictpush x bot1",
             "fictpush x bot2",
+            "fictbr b x",
         )
     ]
 )

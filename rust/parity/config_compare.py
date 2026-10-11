@@ -170,7 +170,8 @@ SCENARIOS: list[tuple[str, dict[Path, tuple[str, int]], list[list[str]]]] = [
                 "allow-mcp ${A-B}\n"
                 "allow [opts:--quiet] fict '${PARITY_SPACE}'\n"
                 "allow-opt fict ${PARITY_SPACE}\n"
-                "deny fict $${LIT} ${PARITY_OK}\n",
+                "deny fict $${LIT} ${PARITY_OK}\n"
+                "allow fict [${PARITY_OK}]\n",
                 0o644,
             )
         },

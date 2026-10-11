@@ -537,3 +537,32 @@ def test_agy_askpass_receives_rule_as_written(tmp_path):
     assert _run_hook(tmp_path, payload, env, "--agy")["decision"] == "deny"
     sent = json.loads((tmp_path / "askpass.json").read_text())
     assert f"[${{{DIR_VAR}}}/agents/* @ {config}]" in sent["message"]
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "allow fictool [${N}]",
+        "allow fictool [!${N}]x",
+        "allow-edit /w/[${N}]/*",
+        "allow-mcp mcp__[a${N}]",
+        "allow-web [${N}",
+    ],
+)
+def test_reference_inside_bracket_expression_is_an_error(monkeypatch, caplog, line):
+    """A value inside `[...]` would be a set of characters, not literal text."""
+    monkeypatch.setenv("N", "a-z")
+    with caplog.at_level(logging.WARNING):
+        config = parse_config(line)
+    assert config.rules + config.edit_rules + config.mcp_rules + config.web_rules == []
+    assert "variable reference inside a bracket expression '${N}'" in caplog.text
+
+
+def test_reference_after_closed_bracket_is_expanded(monkeypatch, tmp_path):
+    monkeypatch.setenv(NAME_VAR, "a*")
+    config = parse_config(
+        f"allow fictool [xy]${{{NAME_VAR}}} *\nallow-opt fict [${{{NAME_VAR}}}]"
+    )
+    assert _decide(config, "fictool 'xa*' z", tmp_path) == "allow"
+    assert _decide(config, "fictool xab z", tmp_path) == "ask"
+    assert config.rules[1].items == ["[a*]"]

@@ -990,6 +990,8 @@ fn env_segments(pattern: &str, kind: EnvKind) -> Result<Vec<(bool, String)>, Str
     let mut literal = String::new();
     let mut quote: Option<char> = None;
     let mut escaped = false;
+    // Inside `[...]`: None outside, else the set's characters seen so far.
+    let mut bracket: Option<String> = None;
     let mut i = 0;
     while i < chars.len() {
         if starts(i, "$${") {
@@ -1018,6 +1020,12 @@ fn env_segments(pattern: &str, kind: EnvKind) -> Result<Vec<(bool, String)>, Str
                     py_repr(&reference)
                 ));
             }
+            if bracket.is_some() {
+                return Err(format!(
+                    "variable reference inside a bracket expression {}",
+                    py_repr(&reference)
+                ));
+            }
             if !literal.is_empty() {
                 segments.push((false, std::mem::take(&mut literal)));
             }
@@ -1026,6 +1034,17 @@ fn env_segments(pattern: &str, kind: EnvKind) -> Result<Vec<(bool, String)>, Str
             continue;
         }
         let c = chars[i];
+        if kind != EnvKind::Words {
+            match &mut bracket {
+                None => {
+                    if c == '[' {
+                        bracket = Some(String::new());
+                    }
+                }
+                Some(set) if c == ']' && !set.is_empty() && set != "!" => bracket = None,
+                Some(set) => set.push(c),
+            }
+        }
         if kind == EnvKind::Shell {
             if escaped {
                 escaped = false;
@@ -3525,6 +3544,33 @@ mod tests {
         assert_eq!(c.rules[0].message.as_deref(), Some("use ${N}"));
         assert_eq!(c.approval_wait_message, "w ${N}");
         assert!(c.rules[1].required_flags.as_ref().unwrap().contains("$N=x"));
+    }
+
+    #[test]
+    fn env_reference_inside_bracket_expression_is_an_error() {
+        for line in [
+            "allow fictool [${N}]",
+            "allow fictool [!${N}]x",
+            "allow-edit /w/[${N}]/*",
+            "allow-mcp mcp__[a${N}]",
+            "allow-web [${N}",
+        ] {
+            let (c, warnings) = env_cfg(&[("N", "a-z")], line);
+            assert!(c.rules.is_empty() && c.edit_rules.is_empty(), "{line}");
+            assert!(c.mcp_rules.is_empty() && c.web_rules.is_empty(), "{line}");
+            assert!(
+                warnings[0].contains("variable reference inside a bracket expression '${N}'"),
+                "{line}: {warnings:?}"
+            );
+        }
+        let (c, warnings) = env_cfg(
+            &[("N", "a*")],
+            "allow fictool [xy]${N} *\nallow-opt fict [${N}]",
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(decide(&c, "fictool xa* z").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictool xab z"), None);
+        assert_eq!(c.rules[1].items, Some(vec!["[a*]".to_string()]));
     }
 
     #[test]
