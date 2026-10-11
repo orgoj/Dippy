@@ -264,7 +264,8 @@ function prefill(request, index) {
     pattern = cause.target;
   }
   $("d-kind").value = kind;
-  $("d-pattern").value = pattern;
+  // A prefilled rule never introduces an environment reference.
+  $("d-pattern").value = pattern.split("${").join("$${");
   $("d-tags").value = cause ? tagsOf(cause.flags) : tagsOf(request.flags);
 }
 

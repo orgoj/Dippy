@@ -495,7 +495,6 @@ fn show(req: Request) -> Result<(Option<&'static str>, String), String> {
     let (kind, pattern) = req.prefill();
     let tags = req.prefill_tags();
     let kind = kind_of(kind);
-    let pattern = pattern.to_string();
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Dippy approval")

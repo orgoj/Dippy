@@ -139,12 +139,14 @@ impl Request {
     }
 
     /// Initial rule kind and pattern: the first cause, else the request.
-    pub fn prefill(&self) -> (&str, &str) {
-        match self.causes.first() {
-            Some(c) if KINDS.contains(&c.kind.as_str()) => (&c.kind, &c.target),
-            _ if !self.command.is_empty() => ("command", &self.command),
+    /// `${` is written as `$${`, so the rule matches the text literally.
+    pub fn prefill(&self) -> (&str, String) {
+        let (kind, pattern) = match self.causes.first() {
+            Some(c) if KINDS.contains(&c.kind.as_str()) => (c.kind.as_str(), c.target.as_str()),
+            _ if !self.command.is_empty() => ("command", self.command.as_str()),
             _ => ("command", self.file_path.as_deref().unwrap_or("")),
-        }
+        };
+        (kind, pattern.replace("${", "$${"))
     }
 
     /// Initial rule tags: the first cause's, else the request's.
@@ -388,7 +390,13 @@ mod tests {
             r.causes[1].rule.as_deref(),
             Some("ask-redirect /etc/* (/u/.dippy/config:7)")
         );
-        assert_eq!(r.prefill(), ("command", "zorp x"));
+        assert_eq!(r.prefill(), ("command", "zorp x".to_string()));
+        // A prefilled rule never introduces an environment reference.
+        let literal = req(r#"{"command": "zorp ${HOME} $${X}", "cwd": "/w"}"#);
+        assert_eq!(
+            literal.prefill(),
+            ("command", "zorp $${HOME} $$${X}".to_string())
+        );
         let env = |k: &str| match k {
             "DIPPY_COMMAND" => Some("rm x".to_string()),
             "DIPPY_CWD" => Some("/e".to_string()),
@@ -401,11 +409,11 @@ mod tests {
             ("rm x", Path::new("/e"))
         );
         assert_eq!(r.timeout, Some(Duration::from_secs(30)));
-        assert_eq!(r.prefill(), ("command", "rm x"));
+        assert_eq!(r.prefill(), ("command", "rm x".to_string()));
         let file = req(r#"{"file_path": "/w/a", "tool": "view_file"}"#);
         assert_eq!(
             (file.subject(), file.prefill()),
-            ("/w/a", ("command", "/w/a"))
+            ("/w/a", ("command", "/w/a".to_string()))
         );
     }
 

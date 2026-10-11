@@ -159,6 +159,24 @@ SCENARIOS: list[tuple[str, dict[Path, tuple[str, int]], list[list[str]]]] = [
         [["set", "--project", "askpass-timeout", "9"], ["get", "--project"]],
     ),
     (
+        "rule pattern warnings",
+        {
+            USER_FILE: (
+                "allow ${PARITY_UNSET}fict *\n"
+                "allow-edit ${PARITY_DOTS}/x/**\n"
+                "allow ${PARITY_SPACE} *\n"
+                "allow-edit ${PARITY_TILDE}/**\n"
+                "allow ${\n"
+                "allow-mcp ${A-B}\n"
+                "allow [opts:--quiet] fict '${PARITY_SPACE}'\n"
+                "allow-opt fict ${PARITY_SPACE}\n"
+                "deny fict $${LIT} ${PARITY_OK}\n",
+                0o644,
+            )
+        },
+        [["get", "askpass-timeout"]],
+    ),
+    (
         "usage errors",
         {},
         [["config"], ["server"], ["set", "askpass"], ["get", "--bogus"]],
@@ -172,6 +190,10 @@ def run(binary: str, args: list[str]) -> tuple[int, str, str]:
         "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
         "LANG": "C.UTF-8",
         "DIPPY_TEST_NO_LOG": "1",
+        "PARITY_DOTS": "a/../b",
+        "PARITY_SPACE": "a b",
+        "PARITY_TILDE": "~/x",
+        "PARITY_OK": "ok",
     }
     argv = [binary, *args] if args == ["config"] else [binary, "config", *args]
     proc = subprocess.run(

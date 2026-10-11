@@ -76,7 +76,7 @@ fn main_write_allowed(root: &str) -> Option<&'static [&'static str]> {
 // Python string helpers (code-point based, like Python `str`).
 
 /// `str.isspace()` / `re` `\s` for `str` patterns.
-fn py_isspace(c: char) -> bool {
+pub(crate) fn py_isspace(c: char) -> bool {
     c.is_whitespace() || ('\u{1c}'..='\u{1f}').contains(&c)
 }
 

@@ -111,6 +111,10 @@ pub struct Rule {
     pub negated_flags: Option<Flags>,
     /// Permitted optional switches/value globs; None keeps legacy matching.
     pub options: Option<Vec<(String, Option<String>)>>,
+    /// Pattern as written, with `${NAME}`; None when it has no reference.
+    pub written: Option<String>,
+    /// A referenced variable is unset, empty or unsafe: the rule never matches.
+    pub inactive: bool,
 }
 
 impl Rule {
@@ -120,6 +124,11 @@ impl Rule {
             pattern: pattern.into(),
             ..Self::default()
         }
+    }
+
+    /// `rule_display`: the pattern as written, for messages, logs and dialogs.
+    pub fn display(&self) -> &str {
+        self.written.as_deref().unwrap_or(&self.pattern)
     }
 }
 
@@ -273,7 +282,7 @@ impl Match {
     fn from_rule(rule: &Rule) -> Self {
         Self {
             decision: rule.decision.clone(),
-            pattern: rule.pattern.clone(),
+            pattern: rule.display().to_string(),
             message: rule.message.clone(),
             source: rule.source.clone(),
             scope: rule.scope.clone(),
@@ -930,6 +939,254 @@ fn expand_pattern_tildes(pattern: &str) -> String {
         .join(" ")
 }
 
+// === Environment variables in rule patterns ===
+
+static ENV_NAME_RE: LazyLock<Regex> =
+    LazyLock::new(|| Regex::new(r"^[A-Za-z_][A-Za-z0-9_]*$").unwrap());
+
+/// How a rule kind matches, which decides how a value is made literal and
+/// which values are unsafe.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum EnvKind {
+    /// Glob over normalized command words.
+    Command,
+    /// `[opts:]` pattern: Bash words decoded before globbing.
+    Shell,
+    /// Option rule prefix and items: exact words.
+    Words,
+    /// Redirect, edit and read path globs.
+    Path,
+    /// MCP tool names and web queries.
+    Text,
+}
+
+/// The Dippy process's environment (a fixed map in unit tests).
+#[cfg(not(test))]
+fn env_value(name: &str) -> Option<std::ffi::OsString> {
+    std::env::var_os(name)
+}
+
+#[cfg(test)]
+thread_local! {
+    static TEST_ENV: std::cell::RefCell<BTreeMap<String, String>> =
+        const { std::cell::RefCell::new(BTreeMap::new()) };
+}
+
+#[cfg(test)]
+fn env_value(name: &str) -> Option<std::ffi::OsString> {
+    TEST_ENV.with(|e| e.borrow().get(name).map(Into::into))
+}
+
+/// `_env_segments`: literal text and `${NAME}` references (`true`, name).
+fn env_segments(pattern: &str, kind: EnvKind) -> Result<Vec<(bool, String)>, String> {
+    let chars: Vec<char> = pattern.chars().collect();
+    let starts = |i: usize, s: &str| {
+        s.chars()
+            .enumerate()
+            .all(|(k, c)| chars.get(i + k) == Some(&c))
+    };
+    let text = |range: &[char]| range.iter().collect::<String>();
+    let mut segments = Vec::new();
+    let mut literal = String::new();
+    let mut quote: Option<char> = None;
+    let mut escaped = false;
+    let mut i = 0;
+    while i < chars.len() {
+        if starts(i, "$${") {
+            literal.push_str("${");
+            i += 3;
+            continue;
+        }
+        if starts(i, "${") {
+            let Some(end) = (i + 2..chars.len()).find(|&k| chars[k] == '}') else {
+                return Err(format!(
+                    "unterminated variable reference {}",
+                    py_repr(&text(&chars[i..]))
+                ));
+            };
+            let name = text(&chars[i + 2..end]);
+            let reference = text(&chars[i..=end]);
+            if !ENV_NAME_RE.is_match(&name) {
+                return Err(format!(
+                    "invalid variable reference {}",
+                    py_repr(&reference)
+                ));
+            }
+            if quote.is_some() || escaped {
+                return Err(format!(
+                    "variable reference inside quotes {}",
+                    py_repr(&reference)
+                ));
+            }
+            if !literal.is_empty() {
+                segments.push((false, std::mem::take(&mut literal)));
+            }
+            segments.push((true, name));
+            i = end + 1;
+            continue;
+        }
+        let c = chars[i];
+        if kind == EnvKind::Shell {
+            if escaped {
+                escaped = false;
+            } else if quote == Some('\'') {
+                if c == '\'' {
+                    quote = None;
+                }
+            } else if c == '\\' {
+                escaped = true;
+            } else if let Some(q) = quote {
+                if c == q {
+                    quote = None;
+                }
+            } else if c == '\'' || c == '"' {
+                quote = Some(c);
+            }
+        }
+        literal.push(c);
+        i += 1;
+    }
+    if !literal.is_empty() {
+        segments.push((false, literal));
+    }
+    Ok(segments)
+}
+
+/// `_unsafe_env_value`: why a value cannot be used in a pattern of this kind.
+fn unsafe_env_value(value: &str, kind: EnvKind, at_start: bool) -> Option<&'static str> {
+    use EnvKind::*;
+    if value.contains(['\0', '\n']) {
+        return Some("value contains a NUL or newline");
+    }
+    if matches!(kind, Command | Shell | Words) && value.chars().any(crate::sql::py_isspace) {
+        return Some("value contains whitespace");
+    }
+    if matches!(kind, Command | Shell | Path) {
+        if value.split('/').any(|part| part == "." || part == "..") {
+            return Some("value contains a '.' or '..' path component");
+        }
+        if at_start && value.starts_with('~') {
+            return Some("value starts with '~'");
+        }
+    }
+    None
+}
+
+/// `_literal_env_value`: the value written so that the kind's pattern
+/// matches only itself.
+fn literal_env_value(value: &str, kind: EnvKind) -> String {
+    if kind == EnvKind::Words {
+        return value.to_string();
+    }
+    let mut out = String::new();
+    for c in value.chars() {
+        if matches!(c, '*' | '?' | '[') {
+            out.push('[');
+            out.push(c);
+            out.push(']');
+        } else {
+            out.push(c);
+        }
+    }
+    if kind == EnvKind::Shell {
+        out = out
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() {
+                    c.to_string()
+                } else {
+                    format!("\\{c}")
+                }
+            })
+            .collect();
+    }
+    out
+}
+
+/// `expand_env`: `(pattern, None)`, or `(pattern as written, warning)` when
+/// a variable is unset, empty or unsafe and the rule must stay inactive.
+pub fn expand_env(
+    pattern: &str,
+    kind: EnvKind,
+    lookup: &dyn Fn(&str) -> Option<std::ffi::OsString>,
+) -> Result<(String, Option<String>), String> {
+    let mut output = String::new();
+    for (is_name, text) in env_segments(pattern, kind)? {
+        if !is_name {
+            output.push_str(&text);
+            continue;
+        }
+        let inactive = |problem: &str| {
+            Ok((
+                pattern.to_string(),
+                Some(format!("${{{text}}}: {problem} (rule inactive)")),
+            ))
+        };
+        let value = match lookup(&text) {
+            Some(value) if !value.is_empty() => value,
+            _ => return inactive("unset or empty"),
+        };
+        let Ok(value) = value.into_string() else {
+            return inactive("value is not valid UTF-8");
+        };
+        let at_start = if kind == EnvKind::Path {
+            output.is_empty()
+        } else {
+            output.chars().last().is_none_or(crate::sql::py_isspace)
+        };
+        if let Some(problem) = unsafe_env_value(&value, kind, at_start) {
+            return inactive(problem);
+        }
+        output.push_str(&literal_env_value(&value, kind));
+    }
+    Ok((output, None))
+}
+
+/// `_with_env`: expand the rule's pattern (and option items).
+fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Rule, Option<String>), String> {
+    let mut texts = vec![rule.pattern.clone()];
+    texts.extend(rule.items.iter().flatten().cloned());
+    if !texts.iter().any(|t| t.contains("${")) {
+        return Ok((rule, None));
+    }
+    let mut expanded = Vec::new();
+    for (i, text) in texts.iter().enumerate() {
+        let k = if i == 0 { kind } else { EnvKind::Words };
+        let (value, warning) = expand_env(text, k, &env_value)?;
+        if let Some(warning) = warning {
+            // Report syntax errors in the remaining texts before giving up.
+            for rest in &texts[i + 1..] {
+                env_segments(rest, EnvKind::Words)?;
+            }
+            if kind == EnvKind::Shell {
+                pattern_words(&expand_env(&rule.pattern, kind, &|_| Some("x".into()))?.0)?;
+            }
+            rule.written = Some(rule.pattern.clone());
+            rule.inactive = true;
+            return Ok((rule, Some(warning)));
+        }
+        expanded.push(value);
+    }
+    if kind == EnvKind::Shell {
+        pattern_words(&expanded[0])?;
+    }
+    rule.written = Some(std::mem::replace(&mut rule.pattern, expanded[0].clone()));
+    if rule.items.is_some() {
+        rule.items = Some(expanded[1..].to_vec());
+    }
+    Ok((rule, None))
+}
+
+/// `_add_rule`: append a parsed rule after expanding its environment variables.
+fn push_rule(list: &mut Vec<Rule>, rule: Rule, kind: EnvKind, place: &str) -> Result<(), String> {
+    let (rule, warning) = with_env(rule, kind)?;
+    list.push(rule);
+    if let Some(warning) = warning {
+        warn(format!("{place}: {warning}"));
+    }
+    Ok(())
+}
+
 /// Shared parsing of allow/ask/deny/delegate rule lines.
 fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, String> {
     if rest.is_empty() {
@@ -946,7 +1203,7 @@ fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, St
         (pattern_part, None)
     };
     let (pattern, exact) = strip_exact_anchor(&pattern);
-    if options.is_some() {
+    if options.is_some() && !pattern.contains("${") {
         pattern_words(&pattern)?;
     }
     Ok(Rule {
@@ -1054,12 +1311,22 @@ fn parse_config_from(
                 continue;
             }
         }
+        let place = format!("{prefix}line {lineno}");
+        let command_kind = |rule: &Rule| {
+            if rule.options.is_some() {
+                EnvKind::Shell
+            } else {
+                EnvKind::Command
+            }
+        };
         let result: Result<(), String> = (|| {
             match directive.as_str() {
-                "allow" => cfg.rules.push(parse_rule("allow", &rest, false)?),
-                "ask" => cfg.rules.push(parse_rule("ask", &rest, true)?),
-                "deny" => cfg.rules.push(parse_rule("deny", &rest, true)?),
-                "delegate" => cfg.rules.push(parse_rule("delegate", &rest, false)?),
+                "allow" | "ask" | "deny" | "delegate" => {
+                    let with_message = matches!(directive.as_str(), "ask" | "deny");
+                    let rule = parse_rule(&directive, &rest, with_message)?;
+                    let kind = command_kind(&rule);
+                    push_rule(&mut cfg.rules, rule, kind, &place)?;
+                }
                 "allow-redirect" | "ask-redirect" | "deny-redirect" => {
                     if rest.is_empty() {
                         return Err("requires a pattern".into());
@@ -1075,7 +1342,7 @@ fn parse_config_from(
                     rule.message = message;
                     rule.required_flags = flags;
                     rule.negated_flags = neg;
-                    cfg.redirect_rules.push(rule);
+                    push_rule(&mut cfg.redirect_rules, rule, EnvKind::Path, &place)?;
                 }
                 "after" => {
                     if rest.is_empty() {
@@ -1084,28 +1351,34 @@ fn parse_config_from(
                     let (pattern, message) = extract_message(&rest)?;
                     let mut rule = Rule::new("after", pattern);
                     rule.message = message;
-                    cfg.after_rules.push(rule);
+                    push_rule(&mut cfg.after_rules, rule, EnvKind::Command, &place)?;
                 }
-                "ask-mcp" => cfg.mcp_rules.push(parse_message_rule("ask", &rest)?),
-                "deny-mcp" => cfg.mcp_rules.push(parse_message_rule("deny", &rest)?),
-                "after-mcp" => cfg
-                    .after_mcp_rules
-                    .push(parse_message_rule("after", &rest)?),
-                "after-web" => cfg
-                    .after_web_rules
-                    .push(parse_message_rule("after", &rest)?),
+                "ask-mcp" | "deny-mcp" => {
+                    let rule = parse_message_rule(&directive[..directive.len() - 4], &rest)?;
+                    push_rule(&mut cfg.mcp_rules, rule, EnvKind::Text, &place)?;
+                }
+                "after-mcp" => {
+                    let rule = parse_message_rule("after", &rest)?;
+                    push_rule(&mut cfg.after_mcp_rules, rule, EnvKind::Text, &place)?;
+                }
+                "after-web" => {
+                    let rule = parse_message_rule("after", &rest)?;
+                    push_rule(&mut cfg.after_web_rules, rule, EnvKind::Text, &place)?;
+                }
                 "allow-mcp" => {
                     if rest.is_empty() {
                         return Err("requires a pattern".into());
                     }
-                    cfg.mcp_rules.push(Rule::new("allow", rest.clone()));
+                    let rule = Rule::new("allow", rest.clone());
+                    push_rule(&mut cfg.mcp_rules, rule, EnvKind::Text, &place)?;
                 }
                 "allow-opt" | "ask-opt" | "deny-opt" => {
                     if rest.is_empty() {
                         return Err("requires a prefix and items".into());
                     }
                     let decision = directive.split('-').next().unwrap_or("ask");
-                    cfg.rules.push(parse_option_rule(decision, &rest)?);
+                    let rule = parse_option_rule(decision, &rest)?;
+                    push_rule(&mut cfg.rules, rule, EnvKind::Words, &place)?;
                 }
                 "alias" => {
                     let p = py_split(&rest);
@@ -1201,11 +1474,12 @@ fn parse_config_from(
                         return Err("requires a pattern".into());
                     }
                     let rule = parse_flagged_rule(&directive, &rest, true)?;
-                    if directive.ends_with("-edit") {
-                        cfg.edit_rules.push(rule);
+                    let list = if directive.ends_with("-edit") {
+                        &mut cfg.edit_rules
                     } else {
-                        cfg.read_rules.push(rule);
-                    }
+                        &mut cfg.read_rules
+                    };
+                    push_rule(list, rule, EnvKind::Path, &place)?;
                 }
                 "allow-web" | "ask-web" | "deny-web" => {
                     // Bare `allow-web` approves every query.
@@ -1217,8 +1491,8 @@ fn parse_config_from(
                     } else {
                         rest.clone()
                     };
-                    cfg.web_rules
-                        .push(parse_flagged_rule(&directive, &rest, false)?);
+                    let rule = parse_flagged_rule(&directive, &rest, false)?;
+                    push_rule(&mut cfg.web_rules, rule, EnvKind::Text, &place)?;
                 }
                 "set" => apply_setting(&mut settings, &rest, &base)?,
                 "server" => {
@@ -2230,6 +2504,9 @@ fn match_words(
     let mut raw_deny_set = false;
     let pattern_base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     for rule in &config.rules {
+        if rule.inactive {
+            continue;
+        }
         if !check_rule_context_flags(rule, active) {
             continue;
         }
@@ -2350,6 +2627,9 @@ pub fn match_redirect(
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.redirect_rules {
+        if rule.inactive {
+            continue;
+        }
         if !check_rule_context_flags(rule, active) {
             continue;
         }
@@ -2386,6 +2666,9 @@ pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<Stri
     let base_cwd = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.after_rules {
+        if rule.inactive {
+            continue;
+        }
         let pattern = normalize_pattern(&rule.pattern, base_cwd);
         let mut matched = fnmatchcase(&normalized_cmd, &pattern);
         if !matched
@@ -2406,7 +2689,9 @@ fn match_value(rules: &[Rule], value: &str, active: &Flags) -> Option<Match> {
     rules
         .iter()
         .rev()
-        .find(|r| check_rule_context_flags(r, active) && fnmatchcase(value, &r.pattern))
+        .find(|r| {
+            !r.inactive && check_rule_context_flags(r, active) && fnmatchcase(value, &r.pattern)
+        })
         .map(Match::from_rule)
 }
 
@@ -2415,7 +2700,7 @@ fn match_after_value(rules: &[Rule], value: &str) -> Option<String> {
     rules
         .iter()
         .rev()
-        .find(|r| fnmatchcase(value, &r.pattern))
+        .find(|r| !r.inactive && fnmatchcase(value, &r.pattern))
         .map(|r| r.message.clone().unwrap_or_default())
 }
 
@@ -2450,7 +2735,8 @@ fn match_path(
         .iter()
         .rev()
         .find(|r| {
-            check_rule_context_flags(r, active)
+            !r.inactive
+                && check_rule_context_flags(r, active)
                 && glob_match(
                     &normalized_path,
                     &normalize_redirect_pattern(&r.pattern, base),
@@ -3033,5 +3319,224 @@ mod tests {
         assert_eq!(origin(&c.rules[0]), (Some(main.as_ref()), Some(1)));
         assert_eq!(origin(&c.redirect_rules[0]), (Some(inc.as_ref()), Some(2)));
         assert_eq!(origin(&c.rules[1]), (Some(main.as_ref()), Some(4)));
+    }
+
+    // === Environment variables in rule patterns ===
+
+    fn env_cfg(vars: &[(&str, &str)], text: &str) -> (Config, Vec<String>) {
+        TEST_ENV.with(|e| {
+            *e.borrow_mut() = vars
+                .iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect()
+        });
+        take_warnings();
+        let config = parse_config(text, Some("/cfg/rules")).unwrap();
+        TEST_ENV.with(|e| e.borrow_mut().clear());
+        (config, take_warnings())
+    }
+
+    fn edit(config: &Config, path: &str) -> Option<String> {
+        match_edit(path, config, Path::new("/w"), &Flags::new()).map(|m| m.decision)
+    }
+
+    #[test]
+    fn env_expands_in_every_rule_kind() {
+        let vars = [("N", "fict"), ("D", "/w/d")];
+        let (c, warnings) = env_cfg(
+            &vars,
+            "allow ${N}tool run *\nask-opt ${N} --x\nallow-redirect ${D}/out/**\n\
+             allow-edit ${D}/src/**\ndeny-read ${D}/secret/*\nallow-mcp mcp__${N}__*\n\
+             allow-web docs ${N} *\nafter ${N}tool push * \"pushed\"\n\
+             after-mcp mcp__${N}__get \"seen\"\nafter-web ${N} * \"web\"\n\
+             allow [opts:--quiet] ${N}x ${N}",
+        );
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(decide(&c, "ficttool run x").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "other run x"), None);
+        assert_eq!(decide(&c, "fict push --x").as_deref(), Some("ask"));
+        assert_eq!(decide(&c, "fictx fict").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictx --quiet fict").as_deref(), Some("allow"));
+        let flags = Flags::new();
+        let cwd = Path::new("/w");
+        let m = match_redirect("/w/d/out/a", &c, cwd, &flags, false).unwrap();
+        assert_eq!(m.decision, "allow");
+        assert_eq!(m.pattern, "${D}/out/**");
+        assert_eq!(edit(&c, "/w/d/src/a.rs").as_deref(), Some("allow"));
+        assert_eq!(edit(&c, "/w/d/a.rs"), None);
+        let m = match_read("/w/d/secret/k", &c, cwd, &flags).unwrap();
+        assert_eq!(
+            (m.decision.as_str(), m.pattern.as_str()),
+            ("deny", "${D}/secret/*")
+        );
+        let m = match_mcp("mcp__fict__a", &c).unwrap();
+        assert_eq!(m.pattern, "mcp__${N}__*");
+        assert_eq!(match_mcp("mcp__other__a", &c), None);
+        assert!(match_web("docs fict api", &c, &flags).is_some());
+        assert_eq!(match_web("docs other api", &c, &flags), None);
+        assert_eq!(
+            match_after(&words("ficttool push x"), &c, cwd).as_deref(),
+            Some("pushed")
+        );
+        assert_eq!(
+            match_after_mcp("mcp__fict__get", &c).as_deref(),
+            Some("seen")
+        );
+        assert_eq!(match_after_web("fict q", &c).as_deref(), Some("web"));
+    }
+
+    #[test]
+    fn env_unset_or_empty_makes_rule_inactive() {
+        for vars in [&[][..], &[("N", "")][..]] {
+            let (c, warnings) = env_cfg(vars, "deny fictool *\nallow ${N}fictool *\nask other *");
+            let inactive: Vec<bool> = c.rules.iter().map(|r| r.inactive).collect();
+            assert_eq!(inactive, [false, true, false]);
+            assert_eq!(
+                warnings,
+                ["/cfg/rules: line 2: ${N}: unset or empty (rule inactive)"]
+            );
+            assert_eq!(decide(&c, "fictool x").as_deref(), Some("deny"));
+            assert_eq!(decide(&c, "other x").as_deref(), Some("ask"));
+            assert_eq!(c.rules[1].display(), "${N}fictool *");
+        }
+        let (c, _) = env_cfg(&[], "allow ${N}*\nallow-edit ${D}/**");
+        assert_eq!(decide(&c, "fictool x"), None);
+        assert_eq!(edit(&c, "/w/a"), None);
+    }
+
+    #[test]
+    fn env_values_are_literal() {
+        for value in ["*", "?", "[a-z]", "**"] {
+            let (c, _) = env_cfg(&[("N", value)], "allow fictool ${N}");
+            assert_eq!(decide(&c, "fictool x"), None, "{value}");
+        }
+        let (c, _) = env_cfg(
+            &[("N", "*")],
+            "allow fictool ${N} *\nallow-edit /w/${N}/**\nallow-mcp ${N}",
+        );
+        assert_eq!(decide(&c, "fictool * x").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictool y x"), None);
+        assert_eq!(edit(&c, "/w/*/a").as_deref(), Some("allow"));
+        assert_eq!(edit(&c, "/w/b/a"), None);
+        assert_eq!(match_mcp("mcp__a", &c), None);
+        let (c, _) = env_cfg(&[("N", "a*b")], "allow [opts:--quiet] fictool ${N}");
+        assert_eq!(decide(&c, "fictool a*b").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictool axxb"), None);
+    }
+
+    #[test]
+    fn env_lookalike_agent_directories() {
+        let vars = [("HCOM_DIR", "/w/hcom"), ("HCOM_INSTANCE_NAME", "bot1")];
+        let (c, _) = env_cfg(
+            &vars,
+            "allow-edit ${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/**\n\
+             allow ${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/bin/* *",
+        );
+        assert_eq!(edit(&c, "/w/hcom/agents/bot1/x").as_deref(), Some("allow"));
+        for path in ["bot1_evil/x", "bot10/x", "x", "bot1"] {
+            assert_eq!(edit(&c, &format!("/w/hcom/agents/{path}")), None, "{path}");
+        }
+        assert_eq!(
+            decide(&c, "/w/hcom/agents/bot1/bin/tool x").as_deref(),
+            Some("allow")
+        );
+        assert_eq!(decide(&c, "/w/hcom/agents/bot10/bin/tool x"), None);
+    }
+
+    #[test]
+    fn env_unsafe_values_make_rule_inactive() {
+        let dots = "value contains a '.' or '..' path component";
+        for (value, reason) in [
+            ("../x", dots),
+            (".", dots),
+            ("a/./b", dots),
+            ("a\nb", "value contains a NUL or newline"),
+        ] {
+            let (c, warnings) = env_cfg(&[("N", value)], "allow-edit /w/agents/${N}/**");
+            assert!(c.edit_rules[0].inactive);
+            assert_eq!(edit(&c, "/w/agents/x/y"), None);
+            assert_eq!(
+                warnings,
+                [format!(
+                    "/cfg/rules: line 1: ${{N}}: {reason} (rule inactive)"
+                )]
+            );
+        }
+        for value in ["a b", "a\tb", "a\u{1c}b"] {
+            let (c, warnings) = env_cfg(&[("N", value)], "allow ${N}\nallow-opt fictool ${N}");
+            assert!(c.rules.iter().all(|r| r.inactive));
+            assert_eq!(warnings.len(), 2);
+            assert!(warnings[0].ends_with("${N}: value contains whitespace (rule inactive)"));
+        }
+        let (c, _) = env_cfg(&[("N", "a b")], "allow-edit /w/${N}/*");
+        assert_eq!(edit(&c, "/w/a b/x").as_deref(), Some("allow"));
+        let (c, warnings) = env_cfg(&[("D", "~")], "allow-edit ${D}/**\nallow ${D}/bin/x *");
+        assert!(c.edit_rules[0].inactive && c.rules[0].inactive);
+        assert!(warnings[0].ends_with("${D}: value starts with '~' (rule inactive)"));
+        let (c, _) = env_cfg(&[("N", "a~b")], "allow-edit /w/${N}/*");
+        assert_eq!(edit(&c, "/w/a~b/x").as_deref(), Some("allow"));
+        let (c, _) = env_cfg(&[("N", "..")], "allow /w/a/${N}/bin/* *");
+        assert!(c.rules[0].inactive);
+    }
+
+    #[test]
+    fn env_reference_syntax() {
+        let (c, warnings) = env_cfg(
+            &[("N", "fictool")],
+            "allow fictecho $${N}\nallow-edit /w/$N/*",
+        );
+        assert!(warnings.is_empty());
+        assert_eq!(c.rules[0].pattern, "fictecho ${N}");
+        assert!(!c.rules[0].inactive);
+        assert_eq!(c.edit_rules[0].pattern, "/w/$N/*");
+        assert_eq!(c.edit_rules[0].written, None);
+        for (pattern, error) in [
+            ("fictool ${", "unterminated variable reference '${'"),
+            ("fictool ${NAME", "unterminated variable reference '${NAME'"),
+            ("fictool ${}", "invalid variable reference '${}'"),
+            ("fictool ${1A}", "invalid variable reference '${1A}'"),
+            ("fictool ${A-B}", "invalid variable reference '${A-B}'"),
+            ("fictool ${A B}", "invalid variable reference '${A B}'"),
+        ] {
+            let (c, warnings) = env_cfg(&[], &format!("allow {pattern}"));
+            assert!(c.rules.is_empty());
+            assert_eq!(warnings, [format!("/cfg/rules: line 1: {error} (skipped)")]);
+        }
+        for line in [
+            "allow-edit /x/${}",
+            "deny-read /x/${",
+            "ask-redirect /x/${1}",
+            "allow-mcp mcp__${A.B}",
+            "allow-web ${-}",
+            "after fictool ${",
+            "allow-opt fictool ${",
+        ] {
+            let (_, warnings) = env_cfg(&[], line);
+            assert_eq!(warnings.len(), 1, "{line}");
+            assert!(warnings[0].contains("variable reference"), "{line}");
+        }
+        let (c, warnings) = env_cfg(&[("N", "x")], "allow [opts:--quiet] fictool '${N}'");
+        assert!(c.rules.is_empty());
+        assert!(warnings[0].contains("variable reference inside quotes"));
+        let (c, _) = env_cfg(
+            &[("N", "fictool")],
+            "deny other * \"use ${N}\"\nallow [$N=x] other2 *\nset approval-wait-message \"w ${N}\"",
+        );
+        assert_eq!(c.rules[0].message.as_deref(), Some("use ${N}"));
+        assert_eq!(c.approval_wait_message, "w ${N}");
+        assert!(c.rules[1].required_flags.as_ref().unwrap().contains("$N=x"));
+    }
+
+    #[test]
+    fn env_last_match_wins() {
+        let (c, _) = env_cfg(
+            &[("N", "bot1")],
+            "deny-edit /w/agents/**\nallow-edit /w/agents/${N}/**\ndeny-edit /w/agents/*/secret/**",
+        );
+        assert_eq!(edit(&c, "/w/agents/bot1/a").as_deref(), Some("allow"));
+        assert_eq!(edit(&c, "/w/agents/bot2/a").as_deref(), Some("deny"));
+        assert_eq!(edit(&c, "/w/agents/bot1/secret/k").as_deref(), Some("deny"));
+        let (c, _) = env_cfg(&[], "allow-edit /w/**\ndeny-edit /w/${N}/**");
+        assert_eq!(edit(&c, "/w/a/b").as_deref(), Some("allow"));
     }
 }

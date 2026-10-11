@@ -156,6 +156,69 @@ TOOL_PAYLOADS = [
     },
 ]
 
+# `${NAME}` rule patterns, run with ENV_CONFIG under each of ENV_SETS.
+ENV_CONFIG = """\
+allow-edit ${PARITY_DIR}/agents/${PARITY_NAME}/**
+deny-edit ${PARITY_DIR}/agents/${PARITY_NAME}/keep "keep it"
+ask ${PARITY_NAME}-tool *
+allow fictool ${PARITY_GLOB} *
+allow-read ${PARITY_DIR}/$${LIT}/*
+allow-mcp mcp__${PARITY_NAME}__*
+allow-web docs ${PARITY_NAME} *
+allow-redirect ${PARITY_DIR}/out/*
+allow-edit ${PARITY_DIR}/up/${PARITY_UNSAFE}/**
+allow ${PARITY_BAD
+allow [opts:--quiet] fictopt ${PARITY_GLOB}
+deny-opt fictpush ${PARITY_NAME}
+"""
+
+ENV_SETS = [
+    {},
+    {
+        "PARITY_DIR": str(WORK),
+        "PARITY_NAME": "bot1",
+        "PARITY_GLOB": "*",
+        "PARITY_UNSAFE": "..",
+    },
+    {"PARITY_DIR": str(WORK), "PARITY_NAME": "a b", "PARITY_GLOB": "x y"},
+    {"PARITY_DIR": "~", "PARITY_NAME": "*", "PARITY_UNSAFE": "a/./b"},
+    {"PARITY_DIR": f"{WORK}/a[b]", "PARITY_NAME": "", "PARITY_UNSAFE": "ok"},
+]
+
+ENV_PAYLOADS = (
+    [
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/agents/{name}/x"}}
+        for name in ("bot1", "bot10", "bot1_evil", "*", "a b")
+    ]
+    + [
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/agents/x"}},
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/agents/bot1/keep"}},
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/up/../x"}},
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/up/ok/x"}},
+        {"tool_name": "Write", "tool_input": {"file_path": f"{WORK}/a[b]/agents/x/y"}},
+        {"tool_name": "Read", "tool_input": {"file_path": f"{WORK}/${{LIT}}/a"}},
+        {"tool_name": "Read", "tool_input": {"file_path": f"{WORK}/x/a"}},
+        {"tool_name": "mcp__bot1__get"},
+        {"tool_name": "mcp__other__get"},
+        {"tool_name": "WebSearch", "tool_input": {"query": "docs bot1 api"}},
+        {"tool_name": "WebSearch", "tool_input": {"query": "docs other api"}},
+    ]
+    + [
+        {"tool_name": "Bash", "tool_input": {"command": command}}
+        for command in (
+            "bot1-tool run",
+            "other-tool run",
+            "fictool '*' x",
+            "fictool y x",
+            f"fictool y > {WORK}/out/a",
+            "fictopt --quiet '*'",
+            "fictopt y",
+            "fictpush x bot1",
+            "fictpush x bot2",
+        )
+    ]
+)
+
 # Gemini and Codex use Claude-shaped payloads with their own tool and event names.
 GEMINI_EXTRA = [
     {"hook_event_name": "AfterAgent"},
@@ -328,7 +391,7 @@ def job(
         "config": config,
         "askpass": askpass,
         "env": env or {},
-        "hand": config == TOOL_CONFIG,
+        "hand": config in (TOOL_CONFIG, ENV_CONFIG),
     }
 
 
@@ -389,6 +452,14 @@ def build_jobs(cases: list[dict], sample_size: int) -> list[dict]:
     jobs.append(job("agy", bare))
     for policy in (work, "relative", f"{work}/missing"):
         jobs.append(job("agy", AGY_PAYLOADS[2], env={"DIPPY_POLICY_CWD": policy}))
+    # `${NAME}` rule patterns with each variable set.
+    for env in ENV_SETS:
+        for p in ENV_PAYLOADS:
+            payload = {"hook_event_name": "PreToolUse", "tool_input": {}, **p}
+            jobs.append(job("claude", dict(payload, cwd=work), ENV_CONFIG, env=env))
+        for command in ("bot1-tool run", "fictool y x"):
+            payload = tool_call("run_command", {"CommandLine": command, "Cwd": work})
+            jobs.append(job("agy", payload, ENV_CONFIG, askpass=ASKPASS_DENY, env=env))
     # No mode flag: detected from the payload.
     auto = [
         ("agy", AGY_PAYLOADS[0]),
@@ -420,6 +491,7 @@ def main() -> int:
     ]
     prepare_root(cases)
     config_path_for(TOOL_CONFIG).write_text(TOOL_CONFIG, encoding="utf-8")
+    config_path_for(ENV_CONFIG).write_text(ENV_CONFIG, encoding="utf-8")
     for path, code in ((ASKPASS_ALLOW, 0), (ASKPASS_DENY, 1)):
         path.write_text(f"#!/bin/sh\ncat >/dev/null\nexit {code}\n", encoding="utf-8")
         path.chmod(0o755)

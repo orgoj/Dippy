@@ -511,3 +511,115 @@ fn doctor_agent_with_only_a_project_config() {
     );
     assert_eq!(doctor(&dir, &["--agent", "moltbot"]).status.code(), Some(2));
 }
+
+/// `run` with extra environment variables (and nothing else set by Dippy).
+fn run_env(dir: &PathBuf, args: &[&str], stdin: &str, env: &[(&str, String)]) -> Output {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_dippy-rs"));
+    command
+        .args(args)
+        .env_clear()
+        .env("HOME", dir.join("home"))
+        .env("PATH", std::env::var_os("PATH").unwrap_or_default())
+        .current_dir(dir)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let mut child = command.spawn().unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(stdin.as_bytes())
+        .unwrap();
+    child.wait_with_output().unwrap()
+}
+
+#[test]
+fn env_rule_patterns_in_claude_hook_mode() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = sandbox("env-rules");
+    let log = dir.join("audit.log");
+    let askpass_input = dir.join("askpass.json");
+    let askpass = dir.join("fake-askpass");
+    std::fs::write(
+        &askpass,
+        format!("#!/bin/sh\ncat > {}\nexit 2\n", askpass_input.display()),
+    )
+    .unwrap();
+    std::fs::set_permissions(&askpass, std::fs::Permissions::from_mode(0o755)).unwrap();
+    std::fs::write(
+        dir.join("config"),
+        format!(
+            "set log {}\nallow-edit ${{HCOM_DIR}}/agents/${{HCOM_INSTANCE_NAME}}/**\n\
+             ask ${{HCOM_INSTANCE_NAME}}-tool *\n",
+            log.display()
+        ),
+    )
+    .unwrap();
+    let base = [
+        (
+            "DIPPY_CONFIG_ONLY",
+            dir.join("config").display().to_string(),
+        ),
+        ("DIPPY_ASKPASS", askpass.display().to_string()),
+    ];
+    let mut set = base.to_vec();
+    set.push(("HCOM_DIR", dir.display().to_string()));
+    set.push(("HCOM_INSTANCE_NAME", "bot1".to_string()));
+    let write = |path: &str| {
+        format!(
+            r#"{{"hook_event_name": "PreToolUse", "tool_name": "Write", "cwd": "{}",
+            "tool_input": {{"file_path": "{}/agents/{path}", "content": "x"}}}}"#,
+            dir.display(),
+            dir.display()
+        )
+    };
+    let decision = |o: &Output| -> String {
+        let v: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap_or_default();
+        v["hookSpecificOutput"]["permissionDecision"]
+            .as_str()
+            .unwrap_or("")
+            .to_string()
+    };
+    let o = run_env(&dir, &["--claude"], &write("bot1/x"), &set);
+    assert_eq!(decision(&o), "allow", "{o:?}");
+    let o = run_env(&dir, &["--claude"], &write("bot10/x"), &set);
+    assert_ne!(decision(&o), "allow", "{o:?}");
+    let o = run_env(&dir, &["--claude"], &write("bot1/x"), &base);
+    assert_ne!(decision(&o), "allow", "{o:?}");
+    let hook_log = std::fs::read_to_string(dir.join("home/.claude/hook-approvals.log")).unwrap();
+    assert!(
+        hook_log.contains("config: line 2: ${HCOM_DIR}: unset or empty (rule inactive)"),
+        "{hook_log}"
+    );
+    let bash = r#"{"hook_event_name": "PreToolUse", "tool_name": "Bash",
+        "tool_input": {"command": "bot1-tool run"}}"#;
+    let o = run_env(&dir, &["--claude"], bash, &set);
+    assert_ne!(decision(&o), "allow", "{o:?}");
+    let rules: Vec<String> = std::fs::read_to_string(&log)
+        .unwrap()
+        .lines()
+        .filter_map(|l| {
+            let v: serde_json::Value = serde_json::from_str(l).unwrap();
+            v["rule"].as_str().map(str::to_string)
+        })
+        .collect();
+    assert!(
+        rules.contains(&"${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/**".to_string()),
+        "{rules:?}"
+    );
+    assert!(rules.iter().all(|r| !r.contains("bot1")), "{rules:?}");
+    let agy = format!(
+        r#"{{"toolCall": {{"name": "run_command", "args": {{"CommandLine": "bot1-tool run",
+        "Cwd": "{}"}}}}, "workspacePaths": ["{}"]}}"#,
+        dir.display(),
+        dir.display()
+    );
+    let o = run_env(&dir, &["--agy"], &agy, &set);
+    assert!(stdout(&o).contains("\"deny\""), "{o:?}");
+    let sent = std::fs::read_to_string(&askpass_input).unwrap();
+    assert!(sent.contains("${HCOM_INSTANCE_NAME}-tool *"), "{sent}");
+}
