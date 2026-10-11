@@ -783,7 +783,15 @@ When Dippy analyzes `ssh host "(rm /tmp/x)"`:
 
 **One rule per line.** No line continuation.
 
-**Forgiving parsing.** Invalid lines (unknown directives, malformed rules) are logged and skipped. Valid rules in the same file still take effect. Check `~/.claude/hook-approvals.log` for warnings.
+**Faulty rule lines are skipped.** Invalid rule lines (unknown directives, malformed rules, a rule whose `${NAME}` is unset or unsafe) are logged and have no effect, as if they were not in the file; valid rules in the same file still take effect. Check `~/.claude/hook-approvals.log` for warnings, or run `dippy doctor`, which lists every such line.
+
+**An invalid `set` line is fatal (dippy-rs).** An unknown setting or a missing or invalid value, in any config file including included ones, makes the whole config fail to load. Every hook mode (Claude, Gemini, Cursor, Codex, AGY, pi) then denies every tool call, and `dippy --cmd` answers `deny`, with a reason meant for the agent:
+
+```
+Dippy config error: /home/me/.dippy/config: line 7: 'default' must be 'allow', 'ask' or 'pass', got 'alow'. Dippy blocks every tool call until the configuration is fixed: stop work and ask the user to fix it.
+```
+
+`dippy doctor` reports the same error as critical. A user-only setting (`dashboard-url`, `dashboard-token-file`) in a project config is not an error: it is ignored with a warning.
 
 ## Messages
 
@@ -1978,8 +1986,8 @@ What is queued:
 | pi (`dippy --pi`) | `{action: ask}` replies | |
 | `dippy run`, `run-on-server` | every `ask`, replacing the askpass call; the `STATUS: Approval required` line stays | |
 
-A config error keeps today's behaviour (without a config there is no
-`approval` setting).
+A config error denies every request with a reason telling the agent to
+stop (without a config there is no `approval` setting).
 
 **Timing.** The whole wait (config load, connect, request, polling) counts
 from the start of the Dippy process and ends at `askpass-timeout - 3`

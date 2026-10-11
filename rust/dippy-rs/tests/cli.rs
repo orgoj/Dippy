@@ -745,3 +745,44 @@ fn doctor_checks_the_project_config_found_above_cwd() {
         "{check}"
     );
 }
+
+#[test]
+fn invalid_setting_stops_the_agent_in_every_mode() {
+    let dir = sandbox("bad-set");
+    std::fs::write(dir.join("config"), "allow fict *\nset default bogus\n").unwrap();
+    let config = dir.join("config").display().to_string();
+    let error = format!(
+        "Dippy config error: {config}: line 2: 'default' must be 'allow', 'ask' or 'pass', \
+         got 'bogus'. Dippy blocks every tool call until the configuration is fixed: stop work \
+         and ask the user to fix it."
+    );
+    let env = [
+        ("DIPPY_CONFIG_ONLY", config.clone()),
+        ("DIPPY_ASKPASS", "/bin/true".to_string()),
+    ];
+    let bash = r#"{"hook_event_name": "PreToolUse", "tool_name": "Bash",
+        "tool_input": {"command": "fict x"}}"#;
+    let gemini = r#"{"hook_event_name": "BeforeTool", "tool_name": "run_shell_command",
+        "tool_input": {"command": "fict x"}}"#;
+    let agy = r#"{"toolCall": {"name": "run_command", "args": {"CommandLine": "fict x"}}}"#;
+    let pi = r#"{"type": "bash", "command": "fict x", "cwd": "/"}"#;
+    for (flag, payload, decision) in [
+        ("--claude", bash, "permissionDecision\": \"deny"),
+        ("--gemini", gemini, "\"decision\": \"deny\""),
+        ("--cursor", r#"{"command": "fict x"}"#, "deny"),
+        ("--agy", agy, "\"decision\": \"deny\""),
+        ("--pi", pi, "\"action\": \"deny\""),
+    ] {
+        let o = run_env(&dir, &[flag], payload, &env);
+        let out = stdout(&o);
+        assert!(out.contains(decision), "{flag}: {out}");
+        assert!(out.contains(&error), "{flag}: {out}");
+    }
+    // Codex: exit 2 blocks the tool, the reason goes to stderr.
+    let o = run_env(&dir, &["--codex"], bash, &env);
+    assert_eq!(o.status.code(), Some(2), "{o:?}");
+    assert!(String::from_utf8_lossy(&o.stderr).contains(&error), "{o:?}");
+    // CLI mode names the same error.
+    let o = run_env(&dir, &["--cmd", "fict x"], "", &env);
+    assert!(stdout(&o).contains(&error), "{o:?}");
+}

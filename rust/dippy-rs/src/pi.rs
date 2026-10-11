@@ -40,7 +40,11 @@ pub fn run(stdin: &str) -> (String, i32) {
     }
     let config = match loaded {
         Ok(c) => c,
-        Err(e) => return (failure(&format!("Config error: {e}")), 0),
+        Err(e) => {
+            let reason = config::stop_message(&e);
+            let reply = json!({"action": "deny", "reason": reason, "error": true});
+            return (py_dumps(&reply), 0);
+        }
     };
     let agent = input.get("agent").and_then(Value::as_str).unwrap_or("pi");
     let logs = Logs::none(agent);

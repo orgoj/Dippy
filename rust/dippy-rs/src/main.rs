@@ -200,15 +200,16 @@ fn cli_mode(args: &Cli) -> i32 {
     let config = match loaded {
         Ok(c) => c,
         Err(e) => {
+            let reason = config::stop_message(&e);
             if args.json {
                 println!(
-                    "{{\"decision\": \"ask\", \"reason\": {}}}",
-                    py_json_str(&format!("config error: {e}"))
+                    "{{\"decision\": \"deny\", \"reason\": {}}}",
+                    py_json_str(&reason)
                 );
             } else {
-                println!("ask: config error: {e}");
+                println!("deny: {reason}");
             }
-            return EXIT_ASK;
+            return EXIT_DENY;
         }
     };
     // The notifier (an external program) is out of scope and never run.

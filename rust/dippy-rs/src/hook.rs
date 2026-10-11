@@ -7,8 +7,9 @@
 //! bypass modes, `Stop`/`Notification` events and invalid JSON are handled,
 //! and decisions go to the audit log and `hook-approvals.log`. Not ported:
 //! notifier programs (never run) and the stderr copy of warnings.
-//! Divergences from Python: a config error fails closed in Gemini and AGY
-//! modes (Python allows), Codex output Python prints as `null` is left
+//! Divergences from Python: a config error denies every tool call in every
+//! mode with a message telling the agent to stop (Python asks, or allows in
+//! Gemini and AGY modes), Codex output Python prints as `null` is left
 //! empty, and an allowed Codex MCP, web or file tool is not followed by
 //! Python's spurious `pass` audit entry.
 
@@ -717,7 +718,8 @@ fn handle(logs: &Logs, input: &Value) -> Reply {
         Ok(c) => c,
         Err(e) => {
             logs.error(&format!("Config error: {e}"));
-            return base.ask(&format!("config error: {e}"), Subject::default());
+            // Fail closed in every mode, with a reason that stops the agent.
+            return base.deny(&config::stop_message(&e), Subject::default());
         }
     };
     if mode == Mode::Agy {

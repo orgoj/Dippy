@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.50] - 2026-10-11
+
+### Changed
+
+- dippy-rs: every invalid `set` line (unknown setting, missing or invalid value, also in an included file) is a config error naming the file and line; before, only `approval*`, `dashboard-*` and `run-on-server-ssh-*` were, and the rest was skipped with a warning. A user-only setting in a project config is still ignored with a warning.
+- dippy-rs: a config error denies every tool call in every hook mode (Claude, Gemini, Cursor, Codex, AGY, pi) and in `dippy --cmd`, with the reason "Dippy config error: FILE: line N: .... Dippy blocks every tool call until the configuration is fixed: stop work and ask the user to fix it."; before, hooks answered `ask` (Codex then fell back to its own approval) and `--cmd` printed `ask`.
+
 ## [0.4.49] - 2026-10-11
 
 ### Fixed

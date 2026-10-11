@@ -279,3 +279,27 @@ Verification (this commit): `cargo test` 414 + 9 + 24 passed; clippy
 12736 passed; `just lint`/`fmt`/`lock-check` clean; `rust/parity/run` 0 unsafe;
 `hook_compare.py` 0 unsafe, 383/383 hand-written identical; `config_compare`,
 `log_compare`, `pi_compare`, `run_compare`, `dashboard_compare` 0 differ.
+
+### Follow-up 0.4.50 (dippy-rs only)
+
+Requested: an invalid `set` must be fatal with a clear error so the agent
+understands the config is broken and stops working.
+
+- Every invalid `set` line (unknown setting, missing or invalid value, also in
+  an included file) is a `ConfigError` naming the file and line. Before, only
+  `approval*`, `dashboard-*` and `run-on-server-ssh-*` were fatal. A user-only
+  setting in a project config stays an ignored line with a warning.
+- A config error denies every tool call in every hook mode (Claude, Gemini,
+  Cursor, Codex exit 2, AGY, pi) and in `--cmd`, with
+  `Dippy config error: FILE: line N: .... Dippy blocks every tool call until the
+  configuration is fixed: stop work and ask the user to fix it.`; `dippy run`
+  prints the same. Before, hooks answered `ask` (Codex fell back to its own
+  approval).
+- Parity: corpus 11 new Python ask/allow -> Rust deny cases, all configs with
+  an invalid `set` (0 unsafe); `config_compare`, `pi_compare`, `run_compare`
+  record the new wording as intended divergences (0 differ).
+
+Verification: `cargo test` 416 + 9 + 25 passed; clippy and `cargo fmt --check`
+clean; Python suite as `nobody` 12736 passed; `just lint`/`fmt`/`lock-check`
+clean; `hook_compare` 0 unsafe, 383/383 hand-written identical; `doctor`,
+`log`, `dashboard` compare 0 differ.

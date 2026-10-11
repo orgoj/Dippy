@@ -465,7 +465,14 @@ def main() -> int:
             if "Traceback" in py[2]:
                 differ += 1
                 print(f"  [{name}] {label}: Python crashed\n{py[2]}")
-            if py != rs:
+            # Intended: dippy-rs words a config error as a request to stop.
+            stop = py[2].replace("config error: ", "Dippy config error: ", 1).rstrip(
+                "\n"
+            ) + (
+                ". Dippy blocks every tool call until the configuration is fixed: "
+                "stop work and ask the user to fix it.\n"
+            )
+            if py != rs and (py[0], py[1], stop) != rs:
                 differ += 1
                 print(f"  [{name}] {label}\n     py: {py}\n     rs: {rs}")
         if py_tree != rs_tree:

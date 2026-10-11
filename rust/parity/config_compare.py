@@ -224,14 +224,30 @@ def play(binary: str, seed: dict[Path, tuple[str, int]], steps: list[list[str]])
     return outputs, files()
 
 
+def skipped_setting_only(py, rs) -> bool:
+    """Intended: dippy-rs treats an invalid `set` as an error, so it does not
+    first print Python's `(skipped)` warning; exit code, stdout and the final
+    refusal are the same."""
+    if py[:2] != rs[:2] or not py[2].endswith(rs[2]):
+        return False
+    extra = py[2][: len(py[2]) - len(rs[2])].splitlines()
+    return bool(extra) and all(
+        line.startswith("WARNING:root:") and line.endswith("(skipped)")
+        for line in extra
+    )
+
+
 def main() -> int:
-    differ = total = 0
+    differ = total = intended = 0
     for name, seed, steps in SCENARIOS:
         py_out, py_files = play(PY, seed, steps)
         rs_out, rs_files = play(RS, seed, steps)
         for step, py, rs in zip(steps, py_out, rs_out):
             total += 1
             usage = py[0] == 2 and rs[0] == 2
+            if skipped_setting_only(py, rs):
+                intended += 1
+                continue
             if py[:2] != rs[:2] or (not usage and py[2] != rs[2]):
                 differ += 1
                 print(
@@ -240,7 +256,10 @@ def main() -> int:
         if py_files != rs_files:
             differ += 1
             print(f"  [{name}] files\n     py: {py_files}\n     rs: {rs_files}")
-    print(f"config: {len(SCENARIOS)} scenarios, {total} steps, {differ} differ")
+    print(
+        f"config: {len(SCENARIOS)} scenarios, {total} steps, {differ} differ, "
+        f"{intended} intended divergences"
+    )
     return 1 if differ else 0
 
 

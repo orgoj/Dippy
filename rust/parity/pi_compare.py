@@ -152,7 +152,9 @@ def main() -> int:
         total += 1
         py = run(PY, payload, env_extra)
         rs = run([RS, "--pi"], payload, env_extra)
-        if py != rs:
+        # Intended: dippy-rs denies with a message telling the agent to stop.
+        stop = "Dippy blocks every tool call until the configuration is fixed"
+        if py != rs and not ('"action": "deny"' in rs[1] and stop in rs[1]):
             differ += 1
             print(f"DIFF [config error]\n  py: {py}\n  rs: {rs}")
     print(

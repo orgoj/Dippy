@@ -66,7 +66,7 @@ fn load(global: &Global) -> Option<(PathBuf, Config)> {
     match loaded {
         Ok(config) => Some((cwd, config)),
         Err(e) => {
-            eprintln!("config error: {e}");
+            eprintln!("{}", config::stop_message(&e));
             None
         }
     }

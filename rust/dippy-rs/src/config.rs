@@ -729,13 +729,12 @@ fn py_float(value: &str) -> Option<f64> {
     cleaned.parse::<f64>().ok()
 }
 
-/// Settings whose invalid values are config errors (an approval route must
-/// never be guessed).
-fn is_approval_setting(rest: &str) -> bool {
-    let key = rest.split_whitespace().next().unwrap_or("");
-    matches!(
-        key,
-        "approval" | "approval-timeout-message" | "dashboard-url" | "dashboard-token-file"
+/// The reply to an agent when the config cannot be loaded: every tool call
+/// is refused with this message until the config is fixed.
+pub fn stop_message(error: &ConfigError) -> String {
+    format!(
+        "Dippy config error: {error}. Dippy blocks every tool call until the configuration \
+         is fixed: stop work and ask the user to fix it."
     )
 }
 
@@ -769,7 +768,8 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
             Some(v @ ("allow" | "ask" | "pass")) => settings.default = Some(v.to_string()),
             other => {
                 return Err(format!(
-                    "'default' must be 'allow', 'ask' or 'pass', got '{other:?}'"
+                    "'default' must be 'allow', 'ask' or 'pass', got '{}'",
+                    other.unwrap_or("")
                 ));
             }
         },
@@ -1552,10 +1552,13 @@ fn parse_config_from(
         })();
         if let Err(e) = result {
             let setting = rest.to_lowercase().replace('_', "-");
+            // An invalid setting is a config error: a value Dippy would have
+            // to guess (an approval route, an SSH profile, a log path, the
+            // default decision) must stop the agent, not silently fall back.
             if directive == "set" && setting.starts_with("run-on-server-ssh-") {
                 return Err(ConfigError(format!("{place}: invalid SSH profile: {e}")));
             }
-            if directive == "set" && is_approval_setting(&setting) {
+            if directive == "set" {
                 return Err(ConfigError(format!("{place}: {e}")));
             }
             warn(format!("{place}: {e} (skipped)"));
@@ -3195,7 +3198,7 @@ mod tests {
     #[test]
     fn ssh_profile_error_is_fatal() {
         assert!(parse_config("set run-on-server-ssh-config", None).is_err());
-        assert!(parse_config("set unknown-thing 1", None).is_ok());
+        assert!(parse_config("set unknown-thing 1", None).is_err());
     }
 
     #[test]
@@ -3698,6 +3701,73 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn every_invalid_set_line_is_a_config_error() {
+        for (line, error) in [
+            ("set", "'set' requires a setting name"),
+            ("set nope 1", "unknown setting 'nope'"),
+            (
+                "set default bogus",
+                "'default' must be 'allow', 'ask' or 'pass', got 'bogus'",
+            ),
+            (
+                "set default",
+                "'default' must be 'allow', 'ask' or 'pass', got ''",
+            ),
+            (
+                "set askpass-timeout abc",
+                "'askpass-timeout' must be an integer, got 'abc'",
+            ),
+            ("set log", "'log' requires a path"),
+            (
+                "set log-hook-approvals maybe",
+                "'log-hook-approvals' must be 'on' or 'off', got 'maybe'",
+            ),
+            (
+                "set run-on-server-timeout -1",
+                "'run-on-server-timeout' must be positive",
+            ),
+            (
+                "set approval bogus",
+                "'approval' must be 'ask' or 'dashboard', got 'bogus'",
+            ),
+        ] {
+            take_warnings();
+            let result = parse_config(&format!("allow fict *\n{line}\n"), Some("/cfg/rules"));
+            assert_eq!(
+                result,
+                Err(ConfigError(format!("/cfg/rules: line 2: {error}"))),
+                "{line}"
+            );
+        }
+        // A broken setting in an included file names that file and line.
+        let dir = std::env::temp_dir().join(format!("dippy-set-include-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("main"), "include part\n").unwrap();
+        std::fs::write(dir.join("part"), "\nset default bogus\n").unwrap();
+        let err = load_config_file(&dir.join("main"), true).unwrap_err();
+        let part = dir.join("part").canonicalize().unwrap();
+        assert_eq!(
+            err.0,
+            format!(
+                "{}: line 2: 'default' must be 'allow', 'ask' or 'pass', got 'bogus'",
+                part.display()
+            )
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn config_error_tells_the_agent_to_stop() {
+        let message = stop_message(&ConfigError("/c: line 2: unknown setting 'x'".into()));
+        assert_eq!(
+            message,
+            "Dippy config error: /c: line 2: unknown setting 'x'. Dippy blocks every tool call \
+             until the configuration is fixed: stop work and ask the user to fix it."
+        );
     }
 
     #[test]
