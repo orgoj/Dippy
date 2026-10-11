@@ -6,6 +6,6 @@ Auto-approves safe commands while prompting for anything destructive.
 
 from __future__ import annotations
 
-__version__ = "0.4.47"
+__version__ = "0.4.48"
 
 __all__ = ["__version__"]

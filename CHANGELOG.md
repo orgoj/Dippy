@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.48] - 2026-10-11
+
+### Added
+
+- Rule patterns can reference environment variables of the Dippy process as `${NAME}` (Python and dippy-rs). Values match literally; an unset, empty or unsafe value makes the rule inactive with a warning; `$${` writes a literal `${`; displayed and audited rules keep `${NAME}`.
+
 ## [0.4.47] - 2026-10-11
 
 ### Fixed

@@ -95,6 +95,10 @@ class Rule:
     )
     options: dict[str, str | None] | None = None
     """Permitted optional switches/value globs; None keeps legacy matching."""
+    written: str | None = None
+    """Pattern as written, with `${NAME}`; None when it has no reference."""
+    inactive: bool = False
+    """A referenced variable is unset, empty or unsafe: the rule never matches."""
 
 
 @dataclass(frozen=True)
@@ -750,6 +754,185 @@ def _parse_option_rule(decision: str, rest: str) -> Rule:
     return Rule(decision, prefix, message=message, items=items)
 
 
+# === Environment variables in rule patterns ===
+
+_ENV_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+
+# How a rule kind matches, which decides how a value is made literal and
+# which values are unsafe.
+ENV_COMMAND = "command"  # glob over normalized command words
+ENV_SHELL = "shell"  # [opts:] pattern: Bash words decoded before globbing
+ENV_WORDS = "words"  # option rule prefix and items: exact words
+ENV_PATH = "path"  # redirect, edit and read path globs
+ENV_TEXT = "text"  # MCP tool names and web queries
+
+
+def _env_segments(pattern: str, kind: str) -> list[tuple[bool, str]]:
+    """Split a pattern into literal text and `${NAME}` references.
+
+    `$${` is a literal `${`. Raises ValueError on any other `${` that is not
+    a valid reference, and in Bash patterns on a reference inside quotes or
+    after a backslash.
+    """
+    segments: list[tuple[bool, str]] = []
+    literal: list[str] = []
+    quote = ""
+    escaped = False
+    i = 0
+    while i < len(pattern):
+        if pattern.startswith("$${", i):
+            literal.append("${")
+            i += 3
+            continue
+        if pattern.startswith("${", i):
+            end = pattern.find("}", i + 2)
+            if end == -1:
+                raise ValueError(f"unterminated variable reference {pattern[i:]!r}")
+            name = pattern[i + 2 : end]
+            if not _ENV_NAME_RE.fullmatch(name):
+                raise ValueError(f"invalid variable reference {pattern[i : end + 1]!r}")
+            if quote or escaped:
+                raise ValueError(
+                    f"variable reference inside quotes {pattern[i : end + 1]!r}"
+                )
+            if literal:
+                segments.append((False, "".join(literal)))
+                literal = []
+            segments.append((True, name))
+            i = end + 1
+            continue
+        char = pattern[i]
+        if kind == ENV_SHELL:
+            if escaped:
+                escaped = False
+            elif quote == "'":
+                if char == "'":
+                    quote = ""
+            elif char == "\\":
+                escaped = True
+            elif quote:
+                if char == quote:
+                    quote = ""
+            elif char in "'\"":
+                quote = char
+        literal.append(char)
+        i += 1
+    if literal:
+        segments.append((False, "".join(literal)))
+    return segments
+
+
+def _unsafe_env_value(value: str, kind: str, at_start: bool) -> str | None:
+    """Why a variable's value cannot be used in a pattern of this kind."""
+    if any("\udc80" <= char <= "\udcff" for char in value):
+        return "value is not valid UTF-8"
+    if "\0" in value or "\n" in value:
+        return "value contains a NUL or newline"
+    if kind in (ENV_COMMAND, ENV_SHELL, ENV_WORDS) and any(
+        char.isspace() for char in value
+    ):
+        return "value contains whitespace"
+    if kind in (ENV_COMMAND, ENV_SHELL, ENV_PATH):
+        if any(part in (".", "..") for part in value.split("/")):
+            return "value contains a '.' or '..' path component"
+        if at_start and value.startswith("~"):
+            return "value starts with '~'"
+    return None
+
+
+def _literal_env_value(value: str, kind: str) -> str:
+    """Write a value so that the rule kind's pattern matches only itself."""
+    if kind == ENV_WORDS:
+        return value
+    value = "".join(f"[{char}]" if char in "*?[" else char for char in value)
+    if kind == ENV_SHELL:
+        value = "".join(
+            char if char.isascii() and char.isalnum() else f"\\{char}" for char in value
+        )
+    return value
+
+
+def expand_env(
+    pattern: str, kind: str, lookup=os.environ.get
+) -> tuple[str, str | None]:
+    """Expand `${NAME}` references in a rule pattern.
+
+    Returns (pattern, None), or (pattern as written, warning) when a variable
+    is unset, empty or unsafe and the rule must stay inactive. Raises
+    ValueError on invalid reference syntax.
+    """
+    output: list[str] = []
+    for is_name, text in _env_segments(pattern, kind):
+        if not is_name:
+            output.append(text)
+            continue
+        value = lookup(text)
+        if not value:
+            return pattern, f"${{{text}}}: unset or empty (rule inactive)"
+        before = "".join(output)
+        if kind == ENV_PATH:
+            at_start = not before
+        else:
+            at_start = not before or before[-1].isspace()
+        problem = _unsafe_env_value(value, kind, at_start)
+        if problem:
+            return pattern, f"${{{text}}}: {problem} (rule inactive)"
+        output.append(_literal_env_value(value, kind))
+    return "".join(output), None
+
+
+def _with_env(rule: Rule, kind: str) -> tuple[Rule, str | None]:
+    """Expand the rule's pattern (and option items) from the environment."""
+    texts = [rule.pattern, *(rule.items or [])]
+    if not any("${" in text for text in texts):
+        return rule, None
+    expanded: list[str] = []
+    for i, text in enumerate(texts):
+        value, warning = expand_env(text, ENV_WORDS if i else kind)
+        if warning:
+            # Report syntax errors in the remaining texts before giving up.
+            for rest in texts[i + 1 :]:
+                _env_segments(rest, ENV_WORDS)
+            if kind == ENV_SHELL:
+                pattern_words(expand_env(rule.pattern, kind, lambda _: "x")[0])
+            return replace(rule, written=rule.pattern, inactive=True), warning
+        expanded.append(value)
+    if kind == ENV_SHELL:
+        pattern_words(expanded[0])
+    return (
+        replace(
+            rule,
+            pattern=expanded[0],
+            items=expanded[1:] if rule.items is not None else None,
+            written=rule.pattern,
+        ),
+        None,
+    )
+
+
+def _add_rule(target: list[Rule], rule: Rule, kind: str, where: str) -> None:
+    """Append a parsed rule after expanding its environment variables."""
+    rule, warning = _with_env(rule, kind)
+    target.append(rule)
+    if warning:
+        logging.warning(f"{where}: {warning}")
+
+
+def rule_display(rule: Rule) -> str:
+    """The rule's pattern as written, for messages, logs and dialogs."""
+    return rule.written if rule.written is not None else rule.pattern
+
+
+def _rule_match(rule: Rule) -> Match:
+    return Match(
+        decision=rule.decision,
+        pattern=rule_display(rule),
+        message=rule.message,
+        source=rule.source,
+        scope=rule.scope,
+    )
+
+
 def parse_config(text: str, source: str | None = None) -> Config:
     """Parse config text into Config object. Logs and skips invalid lines."""
 
@@ -780,6 +963,8 @@ def parse_config(text: str, source: str | None = None) -> Config:
         directive = parts[0].lower()
         rest = parts[1].strip() if len(parts) > 1 else ""
 
+        where = f"{prefix}line {lineno}"
+
         try:
             if directive == "allow":
                 if not rest:
@@ -789,9 +974,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern_part, exact = _strip_exact_anchor(pattern_part)
-                if options is not None:
+                if options is not None and "${" not in pattern_part:
                     pattern_words(pattern_part)
-                rules.append(
+                _add_rule(
+                    rules,
                     Rule(
                         "allow",
                         pattern_part
@@ -801,7 +987,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         required_flags=flags,
                         negated_flags=neg_flags,
                         options=options,
-                    )
+                    ),
+                    ENV_SHELL if options is not None else ENV_COMMAND,
+                    where,
                 )
 
             elif directive == "ask":
@@ -813,9 +1001,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
                 pattern, exact = _strip_exact_anchor(pattern)
-                if options is not None:
+                if options is not None and "${" not in pattern:
                     pattern_words(pattern)
-                rules.append(
+                _add_rule(
+                    rules,
                     Rule(
                         "ask",
                         pattern
@@ -826,7 +1015,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         required_flags=flags,
                         negated_flags=neg_flags,
                         options=options,
-                    )
+                    ),
+                    ENV_SHELL if options is not None else ENV_COMMAND,
+                    where,
                 )
 
             elif directive == "deny":
@@ -838,9 +1029,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     raise ValueError("requires a pattern after flags")
                 pattern, message = _extract_message(pattern_part)
                 pattern, exact = _strip_exact_anchor(pattern)
-                if options is not None:
+                if options is not None and "${" not in pattern:
                     pattern_words(pattern)
-                rules.append(
+                _add_rule(
+                    rules,
                     Rule(
                         "deny",
                         pattern
@@ -851,7 +1043,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         required_flags=flags,
                         negated_flags=neg_flags,
                         options=options,
-                    )
+                    ),
+                    ENV_SHELL if options is not None else ENV_COMMAND,
+                    where,
                 )
 
             elif directive == "delegate":
@@ -862,9 +1056,10 @@ def parse_config(text: str, source: str | None = None) -> Config:
                 if not pattern_part:
                     raise ValueError("requires a pattern after flags")
                 pattern_part, exact = _strip_exact_anchor(pattern_part)
-                if options is not None:
+                if options is not None and "${" not in pattern_part:
                     pattern_words(pattern_part)
-                rules.append(
+                _add_rule(
+                    rules,
                     Rule(
                         "delegate",
                         pattern_part
@@ -874,7 +1069,9 @@ def parse_config(text: str, source: str | None = None) -> Config:
                         required_flags=flags,
                         negated_flags=neg_flags,
                         options=options,
-                    )
+                    ),
+                    ENV_SHELL if options is not None else ENV_COMMAND,
+                    where,
                 )
 
             elif directive in ("allow-redirect", "ask-redirect", "deny-redirect"):
@@ -887,59 +1084,76 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     else (pattern_part, None)
                 )
                 decision = directive.split("-")[0]
-                redirect_rules.append(
+                _add_rule(
+                    redirect_rules,
                     Rule(
                         decision,
                         _expand_pattern_tildes(pattern),
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
-                    )
+                    ),
+                    ENV_PATH,
+                    where,
                 )
 
             elif directive == "after":
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
-                after_rules.append(Rule("after", pattern, message=message))
+                _add_rule(
+                    after_rules,
+                    Rule("after", pattern, message=message),
+                    ENV_COMMAND,
+                    where,
+                )
 
             elif directive == "allow-opt":
                 if not rest:
                     raise ValueError("requires a prefix and items")
-                rules.append(_parse_option_rule("allow", rest))
+                _add_rule(rules, _parse_option_rule("allow", rest), ENV_WORDS, where)
 
             elif directive == "ask-opt":
                 if not rest:
                     raise ValueError("requires a prefix and items")
-                rules.append(_parse_option_rule("ask", rest))
+                _add_rule(rules, _parse_option_rule("ask", rest), ENV_WORDS, where)
 
             elif directive == "deny-opt":
                 if not rest:
                     raise ValueError("requires a prefix and items")
-                rules.append(_parse_option_rule("deny", rest))
+                _add_rule(rules, _parse_option_rule("deny", rest), ENV_WORDS, where)
 
             elif directive == "allow-mcp":
                 if not rest:
                     raise ValueError("requires a pattern")
-                mcp_rules.append(Rule("allow", rest))
+                _add_rule(mcp_rules, Rule("allow", rest), ENV_TEXT, where)
 
             elif directive == "ask-mcp":
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
-                mcp_rules.append(Rule("ask", pattern, message=message))
+                _add_rule(
+                    mcp_rules, Rule("ask", pattern, message=message), ENV_TEXT, where
+                )
 
             elif directive == "deny-mcp":
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
-                mcp_rules.append(Rule("deny", pattern, message=message))
+                _add_rule(
+                    mcp_rules, Rule("deny", pattern, message=message), ENV_TEXT, where
+                )
 
             elif directive == "after-mcp":
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
-                after_mcp_rules.append(Rule("after", pattern, message=message))
+                _add_rule(
+                    after_mcp_rules,
+                    Rule("after", pattern, message=message),
+                    ENV_TEXT,
+                    where,
+                )
 
             elif directive == "alias":
                 parts = rest.split()
@@ -1036,14 +1250,17 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     else (pattern_part, None)
                 )
                 decision = directive.split("-")[0]
-                edit_rules.append(
+                _add_rule(
+                    edit_rules,
                     Rule(
                         decision,
                         _expand_pattern_tildes(pattern),
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
-                    )
+                    ),
+                    ENV_PATH,
+                    where,
                 )
 
             elif directive in ("allow-read", "ask-read", "deny-read"):
@@ -1056,14 +1273,17 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     else (pattern_part, None)
                 )
                 decision = directive.split("-")[0]
-                read_rules.append(
+                _add_rule(
+                    read_rules,
                     Rule(
                         decision,
                         _expand_pattern_tildes(pattern),
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
-                    )
+                    ),
+                    ENV_PATH,
+                    where,
                 )
 
             elif directive in ("allow-web", "ask-web", "deny-web"):
@@ -1079,21 +1299,29 @@ def parse_config(text: str, source: str | None = None) -> Config:
                     else (pattern_part, None)
                 )
                 decision = directive.split("-")[0]
-                web_rules.append(
+                _add_rule(
+                    web_rules,
                     Rule(
                         decision,
                         pattern,
                         message=message,
                         required_flags=flags,
                         negated_flags=neg_flags,
-                    )
+                    ),
+                    ENV_TEXT,
+                    where,
                 )
 
             elif directive == "after-web":
                 if not rest:
                     raise ValueError("requires a pattern")
                 pattern, message = _extract_message(rest)
-                after_web_rules.append(Rule("after", pattern, message=message))
+                _add_rule(
+                    after_web_rules,
+                    Rule("after", pattern, message=message),
+                    ENV_TEXT,
+                    where,
+                )
 
             elif directive == "set":
                 _apply_setting(
@@ -1750,6 +1978,8 @@ def _match_words(
     raw_deny_set = False  # Track whether a raw-form deny has matched
 
     for rule in config.rules:
+        if rule.inactive:
+            continue
         # Check context flags first - rule only applies if all required flags are present
         if not _check_rule_context_flags(rule, active_flags):
             continue
@@ -1769,9 +1999,7 @@ def _match_words(
                 )
             )
             if raw_matched or stripped_matched:
-                result = Match(
-                    rule.decision, rule.pattern, rule.message, rule.source, rule.scope
-                )
+                result = _rule_match(rule)
                 if raw_matched:
                     raw_deny_set = rule.decision == "deny"
             continue
@@ -1779,13 +2007,7 @@ def _match_words(
         # Option rules use different matching logic
         if rule.items is not None:
             if _match_option_rule(rule, words):
-                result = Match(
-                    decision=rule.decision,
-                    pattern=rule.pattern,
-                    message=rule.message,
-                    source=rule.source,
-                    scope=rule.scope,
-                )
+                result = _rule_match(rule)
                 raw_deny_set = rule.decision == "deny"
                 continue
             # Try env-stripped words for option rules too
@@ -1795,13 +2017,7 @@ def _match_words(
                 and not raw_deny_set
                 and _match_option_rule(rule, stripped_words)
             ):
-                result = Match(
-                    decision=rule.decision,
-                    pattern=rule.pattern,
-                    message=rule.message,
-                    source=rule.source,
-                    scope=rule.scope,
-                )
+                result = _rule_match(rule)
                 continue
             continue  # option rules don't use fnmatch
 
@@ -1847,22 +2063,10 @@ def _match_words(
                         stripped_matched = fnmatch.fnmatch(normalized_stripped, base)
 
         if raw_matched:
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
             raw_deny_set = rule.decision == "deny"
         elif stripped_matched and may_strip and not raw_deny_set:
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
@@ -1940,6 +2144,8 @@ def _match_redirect(
         normalized_target = _normalize_path(target, cwd)
     result: Match | None = None
     for rule in config.redirect_rules:
+        if rule.inactive:
+            continue
         if not _check_rule_context_flags(rule, context_flags):
             continue
         # Patterns are always normalized as host paths (user's intent)
@@ -1947,13 +2153,7 @@ def _match_redirect(
             rule.pattern, config.path_rule_cwd or cwd
         )
         if _glob_match(normalized_target, normalized_pattern):
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
@@ -2066,6 +2266,8 @@ def match_after(words: list[str], config: Config, cwd: Path) -> str | None:
     normalized_cmd = _normalize_words(resolved_words, cwd)
     result: str | None = None
     for rule in config.after_rules:
+        if rule.inactive:
+            continue
         normalized_pattern = _normalize_pattern(
             rule.pattern, config.path_rule_cwd or cwd
         )
@@ -2096,14 +2298,10 @@ def match_mcp(tool_name: str, config: Config) -> Match | None:
     """
     result: Match | None = None
     for rule in config.mcp_rules:
+        if rule.inactive:
+            continue
         if fnmatch.fnmatch(tool_name, rule.pattern):
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
@@ -2122,6 +2320,8 @@ def match_after_mcp(tool_name: str, config: Config) -> str | None:
     """
     result: str | None = None
     for rule in config.after_mcp_rules:
+        if rule.inactive:
+            continue
         if fnmatch.fnmatch(tool_name, rule.pattern):
             result = rule.message if rule.message is not None else ""
     return result
@@ -2145,16 +2345,12 @@ def match_web(
     """
     result: Match | None = None
     for rule in config.web_rules:
+        if rule.inactive:
+            continue
         if not _check_rule_context_flags(rule, context_flags):
             continue
         if fnmatch.fnmatch(query, rule.pattern):
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
@@ -2173,6 +2369,8 @@ def match_after_web(query: str, config: Config) -> str | None:
     """
     result: str | None = None
     for rule in config.after_web_rules:
+        if rule.inactive:
+            continue
         if fnmatch.fnmatch(query, rule.pattern):
             result = rule.message if rule.message is not None else ""
     return result
@@ -2200,19 +2398,15 @@ def match_edit(
     normalized_path = _normalize_path(file_path, cwd)
     result: Match | None = None
     for rule in config.edit_rules:
+        if rule.inactive:
+            continue
         if not _check_rule_context_flags(rule, context_flags):
             continue
         normalized_pattern = _normalize_redirect_pattern(
             rule.pattern, config.path_rule_cwd or cwd
         )
         if _glob_match(normalized_path, normalized_pattern):
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
@@ -2238,19 +2432,15 @@ def match_read(
     normalized_path = _normalize_path(file_path, cwd)
     result: Match | None = None
     for rule in config.read_rules:
+        if rule.inactive:
+            continue
         if not _check_rule_context_flags(rule, context_flags):
             continue
         normalized_pattern = _normalize_redirect_pattern(
             rule.pattern, config.path_rule_cwd or cwd
         )
         if _glob_match(normalized_path, normalized_pattern):
-            result = Match(
-                decision=rule.decision,
-                pattern=rule.pattern,
-                message=rule.message,
-                source=rule.source,
-                scope=rule.scope,
-            )
+            result = _rule_match(rule)
     return result
 
 
