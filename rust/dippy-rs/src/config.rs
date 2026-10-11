@@ -113,8 +113,6 @@ pub struct Rule {
     pub options: Option<Vec<(String, Option<String>)>>,
     /// Pattern as written, with `${NAME}`; None when it has no reference.
     pub written: Option<String>,
-    /// A referenced variable is unset, empty or unsafe: the rule never matches.
-    pub inactive: bool,
 }
 
 impl Rule {
@@ -960,9 +958,29 @@ pub enum EnvKind {
     Text,
 }
 
+thread_local! {
+    static PLACEHOLDER_ENV: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// Run `f` with every `${NAME}` set to a safe placeholder: config parsing
+/// then checks only the syntax of a rule, whatever the environment holds.
+pub fn with_placeholder_env<T>(f: impl FnOnce() -> T) -> T {
+    let before = PLACEHOLDER_ENV.with(|p| p.replace(true));
+    let result = f();
+    PLACEHOLDER_ENV.with(|p| p.set(before));
+    result
+}
+
 /// The Dippy process's environment (a fixed map in unit tests).
-#[cfg(not(test))]
 fn env_value(name: &str) -> Option<std::ffi::OsString> {
+    if PLACEHOLDER_ENV.with(std::cell::Cell::get) {
+        return Some("x".into());
+    }
+    process_env(name)
+}
+
+#[cfg(not(test))]
+fn process_env(name: &str) -> Option<std::ffi::OsString> {
     std::env::var_os(name)
 }
 
@@ -973,7 +991,7 @@ thread_local! {
 }
 
 #[cfg(test)]
-fn env_value(name: &str) -> Option<std::ffi::OsString> {
+fn process_env(name: &str) -> Option<std::ffi::OsString> {
     TEST_ENV.with(|e| e.borrow().get(name).map(Into::into))
 }
 
@@ -1161,12 +1179,14 @@ pub fn expand_env(
     Ok((output, None))
 }
 
-/// `_with_env`: expand the rule's pattern (and option items).
-fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Rule, Option<String>), String> {
+/// Expand the rule's pattern (and option items). A rule whose variable is
+/// unset, empty or unsafe is dropped (`None`) with the warning to report:
+/// the line then has no effect at all.
+fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Option<Rule>, Option<String>), String> {
     let mut texts = vec![rule.pattern.clone()];
     texts.extend(rule.items.iter().flatten().cloned());
     if !texts.iter().any(|t| t.contains("${")) {
-        return Ok((rule, None));
+        return Ok((Some(rule), None));
     }
     let mut expanded = Vec::new();
     for (i, text) in texts.iter().enumerate() {
@@ -1180,9 +1200,7 @@ fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Rule, Option<String>), Str
             if kind == EnvKind::Shell {
                 pattern_words(&expand_env(&rule.pattern, kind, &|_| Some("x".into()))?.0)?;
             }
-            rule.written = Some(rule.pattern.clone());
-            rule.inactive = true;
-            return Ok((rule, Some(warning)));
+            return Ok((None, Some(warning)));
         }
         expanded.push(value);
     }
@@ -1193,13 +1211,13 @@ fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Rule, Option<String>), Str
     if rule.items.is_some() {
         rule.items = Some(expanded[1..].to_vec());
     }
-    Ok((rule, None))
+    Ok((Some(rule), None))
 }
 
 /// `_add_rule`: append a parsed rule after expanding its environment variables.
 fn push_rule(list: &mut Vec<Rule>, rule: Rule, kind: EnvKind, place: &str) -> Result<(), String> {
     let (rule, warning) = with_env(rule, kind)?;
-    list.push(rule);
+    list.extend(rule);
     if let Some(warning) = warning {
         warn(format!("{place}: {warning}"));
     }
@@ -1310,6 +1328,12 @@ fn parse_config_from(
     };
     for (idx, raw_line) in text.lines().enumerate() {
         let lineno = idx + 1;
+        // Warnings name the file and line the text was written on, also
+        // inside included files.
+        let place = match origins.and_then(|o| o.get(idx)) {
+            Some((file, line)) => format!("{file}: line {line}"),
+            None => format!("{prefix}line {lineno}"),
+        };
         let line = raw_line.trim();
         if line.is_empty() || line.starts_with('#') {
             continue;
@@ -1324,13 +1348,12 @@ fn parse_config_from(
             let key = rest.split_whitespace().next().unwrap_or("").to_lowercase();
             if USER_ONLY_SETTINGS.contains(&key.replace('-', "_").as_str()) {
                 warn(format!(
-                    "{prefix}line {lineno}: '{}' is allowed only in the user config (ignored)",
+                    "{place}: '{}' is allowed only in the user config (ignored)",
                     key.replace('_', "-")
                 ));
                 continue;
             }
         }
-        let place = format!("{prefix}line {lineno}");
         let command_kind = |rule: &Rule| {
             if rule.options.is_some() {
                 EnvKind::Shell
@@ -1407,10 +1430,7 @@ fn parse_config_from(
                     let source = expand_pattern_tildes(&p[0]);
                     match cfg.aliases.iter_mut().find(|(s, _)| *s == source) {
                         Some(entry) => {
-                            warn(format!(
-                                "{prefix}line {lineno}: alias '{}' redefined, overwriting",
-                                p[0]
-                            ));
+                            warn(format!("{place}: alias '{}' redefined, overwriting", p[0]));
                             entry.1 = p[1].clone()
                         }
                         None => cfg.aliases.push((source, p[1].clone())),
@@ -1426,9 +1446,7 @@ fn parse_config_from(
                         return Err(format!("wrapper name cannot start with '-': {name}"));
                     }
                     if cfg.wrappers.contains_key(&name) {
-                        warn(format!(
-                            "{prefix}line {lineno}: duplicate wrapper definition: {name}"
-                        ));
+                        warn(format!("{place}: duplicate wrapper definition: {name}"));
                     }
                     let mut info = WrapperInfo {
                         name: name.clone(),
@@ -1535,14 +1553,12 @@ fn parse_config_from(
         if let Err(e) = result {
             let setting = rest.to_lowercase().replace('_', "-");
             if directive == "set" && setting.starts_with("run-on-server-ssh-") {
-                return Err(ConfigError(format!(
-                    "{prefix}line {lineno}: invalid SSH profile: {e}"
-                )));
+                return Err(ConfigError(format!("{place}: invalid SSH profile: {e}")));
             }
             if directive == "set" && is_approval_setting(&setting) {
-                return Err(ConfigError(format!("{prefix}line {lineno}: {e}")));
+                return Err(ConfigError(format!("{place}: {e}")));
             }
-            warn(format!("{prefix}line {lineno}: {e} (skipped)"));
+            warn(format!("{place}: {e} (skipped)"));
         }
         // A line adds at most one rule, at the end of its list.
         let (file, line) = match origins.and_then(|o| o.get(idx)) {
@@ -2523,9 +2539,6 @@ fn match_words(
     let mut raw_deny_set = false;
     let pattern_base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     for rule in &config.rules {
-        if rule.inactive {
-            continue;
-        }
         if !check_rule_context_flags(rule, active) {
             continue;
         }
@@ -2646,9 +2659,6 @@ pub fn match_redirect(
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.redirect_rules {
-        if rule.inactive {
-            continue;
-        }
         if !check_rule_context_flags(rule, active) {
             continue;
         }
@@ -2685,9 +2695,6 @@ pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<Stri
     let base_cwd = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.after_rules {
-        if rule.inactive {
-            continue;
-        }
         let pattern = normalize_pattern(&rule.pattern, base_cwd);
         let mut matched = fnmatchcase(&normalized_cmd, &pattern);
         if !matched
@@ -2708,9 +2715,7 @@ fn match_value(rules: &[Rule], value: &str, active: &Flags) -> Option<Match> {
     rules
         .iter()
         .rev()
-        .find(|r| {
-            !r.inactive && check_rule_context_flags(r, active) && fnmatchcase(value, &r.pattern)
-        })
+        .find(|r| check_rule_context_flags(r, active) && fnmatchcase(value, &r.pattern))
         .map(Match::from_rule)
 }
 
@@ -2719,7 +2724,7 @@ fn match_after_value(rules: &[Rule], value: &str) -> Option<String> {
     rules
         .iter()
         .rev()
-        .find(|r| !r.inactive && fnmatchcase(value, &r.pattern))
+        .find(|r| fnmatchcase(value, &r.pattern))
         .map(|r| r.message.clone().unwrap_or_default())
 }
 
@@ -2754,8 +2759,7 @@ fn match_path(
         .iter()
         .rev()
         .find(|r| {
-            !r.inactive
-                && check_rule_context_flags(r, active)
+            check_rule_context_flags(r, active)
                 && glob_match(
                     &normalized_path,
                     &normalize_redirect_pattern(&r.pattern, base),
@@ -3408,15 +3412,15 @@ mod tests {
     fn env_unset_or_empty_makes_rule_inactive() {
         for vars in [&[][..], &[("N", "")][..]] {
             let (c, warnings) = env_cfg(vars, "deny fictool *\nallow ${N}fictool *\nask other *");
-            let inactive: Vec<bool> = c.rules.iter().map(|r| r.inactive).collect();
-            assert_eq!(inactive, [false, true, false]);
+            // The faulty line is dropped: nothing of it reaches the config.
+            let patterns: Vec<&str> = c.rules.iter().map(|r| r.pattern.as_str()).collect();
+            assert_eq!(patterns, ["fictool *", "other *"]);
             assert_eq!(
                 warnings,
                 ["/cfg/rules: line 2: ${N}: unset or empty (rule inactive)"]
             );
             assert_eq!(decide(&c, "fictool x").as_deref(), Some("deny"));
             assert_eq!(decide(&c, "other x").as_deref(), Some("ask"));
-            assert_eq!(c.rules[1].display(), "${N}fictool *");
         }
         let (c, _) = env_cfg(&[], "allow ${N}*\nallow-edit ${D}/**");
         assert_eq!(decide(&c, "fictool x"), None);
@@ -3472,7 +3476,7 @@ mod tests {
             ("a\nb", "value contains a NUL or newline"),
         ] {
             let (c, warnings) = env_cfg(&[("N", value)], "allow-edit /w/agents/${N}/**");
-            assert!(c.edit_rules[0].inactive);
+            assert!(c.edit_rules.is_empty());
             assert_eq!(edit(&c, "/w/agents/x/y"), None);
             assert_eq!(
                 warnings,
@@ -3483,19 +3487,19 @@ mod tests {
         }
         for value in ["a b", "a\tb", "a\u{1c}b"] {
             let (c, warnings) = env_cfg(&[("N", value)], "allow ${N}\nallow-opt fictool ${N}");
-            assert!(c.rules.iter().all(|r| r.inactive));
+            assert!(c.rules.is_empty());
             assert_eq!(warnings.len(), 2);
             assert!(warnings[0].ends_with("${N}: value contains whitespace (rule inactive)"));
         }
         let (c, _) = env_cfg(&[("N", "a b")], "allow-edit /w/${N}/*");
         assert_eq!(edit(&c, "/w/a b/x").as_deref(), Some("allow"));
         let (c, warnings) = env_cfg(&[("D", "~")], "allow-edit ${D}/**\nallow ${D}/bin/x *");
-        assert!(c.edit_rules[0].inactive && c.rules[0].inactive);
+        assert!(c.edit_rules.is_empty() && c.rules.is_empty());
         assert!(warnings[0].ends_with("${D}: value starts with '~' (rule inactive)"));
         let (c, _) = env_cfg(&[("N", "a~b")], "allow-edit /w/${N}/*");
         assert_eq!(edit(&c, "/w/a~b/x").as_deref(), Some("allow"));
         let (c, _) = env_cfg(&[("N", "..")], "allow /w/a/${N}/bin/* *");
-        assert!(c.rules[0].inactive);
+        assert!(c.rules.is_empty());
     }
 
     #[test]
@@ -3506,7 +3510,7 @@ mod tests {
         );
         assert!(warnings.is_empty());
         assert_eq!(c.rules[0].pattern, "fictecho ${N}");
-        assert!(!c.rules[0].inactive);
+        assert_eq!(c.rules[0].written.as_deref(), Some("fictecho $${N}"));
         assert_eq!(c.edit_rules[0].pattern, "/w/$N/*");
         assert_eq!(c.edit_rules[0].written, None);
         for (pattern, error) in [
@@ -3571,6 +3575,129 @@ mod tests {
         assert_eq!(decide(&c, "fictool xa* z").as_deref(), Some("allow"));
         assert_eq!(decide(&c, "fictool xab z"), None);
         assert_eq!(c.rules[1].items, Some(vec!["[a*]".to_string()]));
+    }
+
+    #[test]
+    fn faulty_lines_in_included_files_name_their_own_file_and_line() {
+        let dir = std::env::temp_dir().join(format!("dippy-env-include-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let main = dir.join("main");
+        std::fs::write(&main, "# top\ninclude part\nallow ${MISSING_MAIN} *\n").unwrap();
+        std::fs::write(
+            dir.join("part"),
+            "\n\nallow-edit ${MISSING_PART}/**\nallow ${\n",
+        )
+        .unwrap();
+        take_warnings();
+        let config = load_config_file(&main, true).unwrap();
+        let warnings = take_warnings();
+        let part = dir.join("part").canonicalize().unwrap();
+        assert_eq!(
+            warnings,
+            [
+                format!(
+                    "{}: line 3: ${{MISSING_PART}}: unset or empty (rule inactive)",
+                    part.display()
+                ),
+                format!(
+                    "{}: line 4: unterminated variable reference '${{' (skipped)",
+                    part.display()
+                ),
+                format!(
+                    "{}: line 3: ${{MISSING_MAIN}}: unset or empty (rule inactive)",
+                    main.display()
+                ),
+            ]
+        );
+        assert!(config.rules.is_empty() && config.edit_rules.is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn placeholder_env_validates_syntax_only() {
+        let (c, warnings) = with_placeholder_env(|| env_cfg(&[], "allow fict ${UNSET_X} *"));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        assert_eq!(c.rules.len(), 1);
+        let (c, _) = env_cfg(&[], "allow fict ${UNSET_X} *");
+        assert!(c.rules.is_empty());
+    }
+
+    #[test]
+    fn faulty_line_anywhere_is_as_if_absent() {
+        let base = [
+            "deny-edit /w/agents/**",
+            "allow-edit /w/agents/${N}/**",
+            "allow fict *",
+            "deny fict rm *",
+            "allow-opt fictpush --x",
+            "allow-mcp mcp__a__*",
+            "allow-web docs *",
+            "allow-redirect /w/out/*",
+            "after fict \"done\"",
+            "set default ask",
+        ];
+        let faulty = [
+            "allow ${UNSET_Q} *",
+            "allow-edit ${UNSET_Q}/**",
+            "deny ${UNSET_Q}",
+            "allow fict ${SPACE}",
+            "allow-edit /w/${DOTS}/**",
+            "allow-edit ${TILDE}/**",
+            "allow ${TILDE}/bin *",
+            "allow-opt fictpush ${SPACE}",
+            "allow [opts:--q] fict ${SPACE}",
+            "allow [opts:--q] fict '${N}'",
+            "allow fict [${N}]",
+            "allow ${",
+            "allow fict ${1x}",
+            "allow-mcp ${}",
+            "allow-web ${A-B}",
+            "after fict ${UNSET_Q}",
+            "allow-redirect ${UNSET_Q}/*",
+            "unknown-directive x",
+        ];
+        let vars = [
+            ("N", "bot1"),
+            ("SPACE", "a b"),
+            ("DOTS", ".."),
+            ("TILDE", "~"),
+        ];
+        let lists = |c: &mut Config| -> Vec<Vec<Rule>> {
+            rule_lists(c)
+                .into_iter()
+                .map(|l| {
+                    l.iter()
+                        .cloned()
+                        .map(|mut r| {
+                            r.line = None;
+                            r.file = None;
+                            r
+                        })
+                        .collect()
+                })
+                .collect()
+        };
+        let (mut expected, warnings) = env_cfg(&vars, &base.join("\n"));
+        assert!(warnings.is_empty(), "{warnings:?}");
+        let expected = (lists(&mut expected), expected.default.clone());
+        for bad in faulty {
+            for at in 0..=base.len() {
+                let mut lines = base.to_vec();
+                lines.insert(at, bad);
+                let (mut c, warnings) = env_cfg(&vars, &lines.join("\n"));
+                assert_eq!(warnings.len(), 1, "{bad}: {warnings:?}");
+                assert!(
+                    warnings[0].starts_with(&format!("/cfg/rules: line {}: ", at + 1)),
+                    "{bad}: {warnings:?}"
+                );
+                assert_eq!(
+                    (lists(&mut c), c.default.clone()),
+                    expected,
+                    "{bad} at {at}"
+                );
+            }
+        }
     }
 
     #[test]

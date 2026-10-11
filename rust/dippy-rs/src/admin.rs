@@ -212,8 +212,10 @@ pub fn edit_config(path: &Path, edit: Edit) -> std::io::Result<()> {
 const RULE_KINDS: [&str; 6] = ["", "-redirect", "-read", "-edit", "-web", "-mcp"];
 
 /// One `allow`/`ask`/`deny` rule line (optionally `-redirect`, `-read`,
-/// `-edit`, `-web`, `-mcp`) that the config parser accepts.
-pub fn validate_rule(line: &str) -> Result<(), String> {
+/// `-edit`, `-web`, `-mcp`) that the config parser accepts. `${NAME}`
+/// references are checked for syntax only; the result holds the warnings
+/// the current environment gives the rule (an unset or unsafe variable).
+pub fn validate_rule(line: &str) -> Result<Vec<String>, String> {
     if line.contains(['\n', '\r', '\0']) {
         return Err("a rule must be one line".into());
     }
@@ -224,7 +226,9 @@ pub fn validate_rule(line: &str) -> Result<(), String> {
     if !is_rule {
         return Err(format!("not a rule: {line}"));
     }
-    let parsed = config::parse_config(line, None).map_err(|e| e.to_string())?;
+    config::take_warnings();
+    let parsed = config::with_placeholder_env(|| config::parse_config(line, None))
+        .map_err(|e| e.to_string())?;
     let warnings = config::take_warnings();
     let count = parsed.rules.len()
         + parsed.redirect_rules.len()
@@ -238,7 +242,8 @@ pub fn validate_rule(line: &str) -> Result<(), String> {
             .next()
             .unwrap_or_else(|| format!("invalid rule: {line}")));
     }
-    Ok(())
+    let _ = config::parse_config(line, None);
+    Ok(config::take_warnings())
 }
 
 /// The project config Dippy loads for `cwd`; without one, `.dippy` in the
@@ -365,8 +370,9 @@ pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
     match action {
         Action::Server(server) => run_server(server),
         Action::AddRule { rule, scope } => {
-            if let Err(e) = validate_rule(rule) {
-                return fail(e);
+            match validate_rule(rule) {
+                Ok(warnings) => warnings.iter().for_each(|w| eprintln!("WARNING:root:{w}")),
+                Err(e) => return fail(e),
             }
             let path = if scope.project {
                 let process_cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
@@ -526,7 +532,7 @@ mod tests {
             "allow-web *docs*",
             "deny-mcp mcp__x__drop",
         ] {
-            assert_eq!(validate_rule(ok), Ok(()), "{ok}");
+            assert_eq!(validate_rule(ok), Ok(vec![]), "{ok}");
         }
         for bad in [
             "",

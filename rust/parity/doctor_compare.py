@@ -355,8 +355,25 @@ def play(binary: str, seed: Seed, steps: list[list[str]]):
     return outputs, tree()
 
 
+# Intended divergences: dippy-rs reports faulty config lines as a warning of
+# the Configuration check (Python says "valid" and prints them to stderr) and
+# lists config errors without --verbose. Same exit code required; the text
+# must appear in the dippy-rs output, or only Python's stderr may differ.
+INTENDED = {
+    "config warnings": "faulty config line(s) ignored",
+    "config errors": "\n    Global config: ",
+    "project config error": "\n    Project config: ",
+}
+
+
+def is_intended(name: str, py, rs) -> bool:
+    if name not in INTENDED or py[0] != rs[0]:
+        return False
+    return INTENDED[name] in rs[1] or (py[1] == rs[1] and rs[2] == "")
+
+
 def main() -> int:
-    differ = total = 0
+    differ = total = intended = 0
     for name, seed, steps in SCENARIOS:
         py_out, py_tree = play(PY, seed, steps)
         rs_out, rs_tree = play(RS, seed, steps)
@@ -366,7 +383,11 @@ def main() -> int:
                 differ += 1
                 print(f"  [{name}] {' '.join(step)}: Python crashed\n{py[2]}")
             usage = py[0] == 2 and rs[0] == 2 and "usage:" in py[2]
-            if py[:2] != rs[:2] or (not usage and py[2] != rs[2]):
+            same = py[:2] == rs[:2] and (usage or py[2] == rs[2])
+            if not same and is_intended(name, py, rs):
+                intended += 1
+                continue
+            if not same:
                 differ += 1
                 print(f"  [{name}] {' '.join(step)}\n     py: {py}\n     rs: {rs}")
         if py_tree != rs_tree:
@@ -375,7 +396,10 @@ def main() -> int:
             rs_only = [e for e in rs_tree if e not in py_tree]
             print(f"  [{name}] files\n     py: {py_only}\n     rs: {rs_only}")
     reset()
-    print(f"doctor: {len(SCENARIOS)} scenarios, {total} steps, {differ} differ")
+    print(
+        f"doctor: {len(SCENARIOS)} scenarios, {total} steps, {differ} differ, "
+        f"{intended} intended divergences"
+    )
     return 1 if differ else 0
 
 

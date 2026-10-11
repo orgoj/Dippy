@@ -290,7 +290,7 @@ pub fn check(
     let line = rule_line(action, kind, tags, pattern);
     let first = pattern.split_whitespace().next().unwrap_or("");
     let broad = first == "*" || (kind == "command" && first.contains(['*', '?', '[']));
-    let outcome = crate::admin::validate_rule(&line).and_then(|()| {
+    let outcome = crate::admin::validate_rule(&line).and_then(|_| {
         let config = config::load_config_with_rule(&req.cwd, files.user, files.target, &line);
         config::take_warnings();
         config

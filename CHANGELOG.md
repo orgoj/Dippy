@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.49] - 2026-10-11
+
+### Fixed
+
+- dippy-rs: a config line that fails (a syntax error, or a rule whose `${NAME}` is unset, empty or unsafe) has no effect at all: the rule is left out of the config instead of being kept as an inactive rule.
+- dippy-rs: `dippy doctor` reports every faulty config line once, with the file and line it was written on (also inside included files and for a project `.dippy` above the working directory), as a warning shown without `--verbose`; before, the Configuration check said "valid" and the lines only went to stderr.
+- dippy-rs: config warnings name the included file and its line instead of the line number in the including file.
+- dippy-rs: `dippy config add-rule` and the rule editors check `${NAME}` references for syntax only, so a rule for a variable unset in the current shell is still written (with a warning).
+
 ## [0.4.48] - 2026-10-11
 
 ### Added

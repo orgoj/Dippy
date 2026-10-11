@@ -244,3 +244,38 @@ askpass that records its input and exits 2.
   Pre-existing difference, unchanged.
 - `just test` cannot pass as root (`test_unreadable_user_config`); the cloud
   sessions run as root.
+
+### Follow-up 0.4.49 (dippy-rs only)
+
+Requested afterwards: a faulty `.dippy` line must have no effect at all, and
+`dippy doctor` must report it. Python is out of scope.
+
+- A line whose `${NAME}` is unset, empty or unsafe is no longer kept as an
+  inactive rule; it is left out of the config (`Rule::inactive` removed).
+  `faulty_line_anywhere_is_as_if_absent` inserts 18 faulty lines at every
+  position of a complete config and requires the result to equal the config
+  without them.
+- Every parse warning names the file and line the text was written on, also
+  inside included files (was: line number in the including file).
+- `dippy doctor`: the Configuration check collects every loader warning once
+  and reports "N faulty config line(s) ignored" as a warning, listing the
+  lines without `--verbose` (config errors too); nothing goes to stderr. It now
+  loads the stack a hook loads for the working directory even without a
+  `~/.dippy/config` or a `.dippy` directly in cwd (project `.dippy` above cwd,
+  `$DIPPY_CONFIG`, includes, final config).
+- `dippy config add-rule` and the rule editors check `${NAME}` syntax with a
+  placeholder environment; a rule for a variable unset in the current shell is
+  written, with the warning on stderr.
+- `rust/parity/doctor_compare.py` records these as intended divergences:
+  28 scenarios, 129 steps, 0 differ, 7 intended divergences.
+
+Unchanged on purpose: invalid `set approval*` and `set run-on-server-ssh-*`
+values stay fatal config errors (hooks then ask or deny); ignoring them would
+fall back to the user's SSH configuration, which the SSH profile settings
+exist to prevent.
+
+Verification (this commit): `cargo test` 414 + 9 + 24 passed; clippy
+`-D warnings` and `cargo fmt --check` clean; Python suite as `nobody`
+12736 passed; `just lint`/`fmt`/`lock-check` clean; `rust/parity/run` 0 unsafe;
+`hook_compare.py` 0 unsafe, 383/383 hand-written identical; `config_compare`,
+`log_compare`, `pi_compare`, `run_compare`, `dashboard_compare` 0 differ.

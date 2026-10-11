@@ -623,3 +623,125 @@ fn env_rule_patterns_in_claude_hook_mode() {
     let sent = std::fs::read_to_string(&askpass_input).unwrap();
     assert!(sent.contains("${HCOM_INSTANCE_NAME}-tool *"), "{sent}");
 }
+
+#[test]
+fn doctor_reports_every_faulty_config_line_once() {
+    let dir = sandbox("doctor-faulty");
+    std::fs::create_dir_all(dir.join("home/.dippy")).unwrap();
+    std::fs::write(
+        dir.join("home/.dippy/config"),
+        "allow fict *\nallow ${DOCTOR_UNSET_A} *\ninclude part\nbogus directive\n",
+    )
+    .unwrap();
+    std::fs::write(dir.join("home/.dippy/part"), "\nallow ${\n").unwrap();
+    std::fs::write(dir.join(".dippy"), "ask fict ${DOCTOR_UNSET_B}\n").unwrap();
+    let home = dir.join("home/.dippy").canonicalize().unwrap();
+    let project = dir.canonicalize().unwrap().join(".dippy");
+    let expected = [
+        format!(
+            "{}: line 2: ${{DOCTOR_UNSET_A}}: unset or empty (rule inactive)",
+            home.join("config").display()
+        ),
+        format!(
+            "{}: line 2: unterminated variable reference '${{' (skipped)",
+            home.join("part").display()
+        ),
+        format!(
+            "{}: line 4: unknown directive 'bogus' (skipped)",
+            home.join("config").display()
+        ),
+        format!(
+            "{}: line 1: ${{DOCTOR_UNSET_B}}: unset or empty (rule inactive)",
+            project.display()
+        ),
+    ];
+
+    let o = doctor(&dir, &["--json"]);
+    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let check = report["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "Configuration")
+        .unwrap()
+        .clone();
+    assert_eq!(check["status"], "warning", "{check}");
+    assert_eq!(
+        check["message"], "4 faulty config line(s) ignored",
+        "{check}"
+    );
+    let details = check["details"].as_str().unwrap();
+    for line in &expected {
+        assert_eq!(
+            details.matches(line.as_str()).count(),
+            1,
+            "{line}\n{details}"
+        );
+    }
+    assert!(
+        o.stderr.is_empty(),
+        "{}",
+        String::from_utf8_lossy(&o.stderr)
+    );
+
+    // Plain output lists the lines without --verbose.
+    let o = doctor(&dir, &[]);
+    let out = stdout(&o);
+    for line in &expected {
+        assert!(out.contains(line.as_str()), "{line}\n{out}");
+    }
+}
+
+#[test]
+fn config_add_rule_checks_env_syntax_not_values() {
+    let dir = sandbox("add-rule-env");
+    let rule = "allow-edit ${ADD_RULE_UNSET}/agents/**";
+    let (code, _, err) = config(&dir, &["add-rule", rule]);
+    assert_eq!(code, 0, "{err}");
+    assert!(
+        err.contains("${ADD_RULE_UNSET}: unset or empty (rule inactive)"),
+        "{err}"
+    );
+    let text = std::fs::read_to_string(dir.join("home/.dippy/config")).unwrap();
+    assert!(text.ends_with(&format!("\n{rule}\n")), "{text}");
+    let (code, _, err) = config(&dir, &["add-rule", "allow fict ${"]);
+    assert_eq!(
+        (code, err.as_str()),
+        (
+            1,
+            "line 1: unterminated variable reference '${' (skipped)\n"
+        )
+    );
+    let (code, _, _) = config(&dir, &["add-rule", "allow fict [${X}]"]);
+    assert_eq!(code, 1);
+}
+
+#[test]
+fn doctor_checks_the_project_config_found_above_cwd() {
+    let dir = sandbox("doctor-walk-up");
+    std::fs::write(dir.join(".dippy"), "allow ${DOCTOR_UNSET_C} *\n").unwrap();
+    std::fs::create_dir_all(dir.join("sub")).unwrap();
+    let o = Command::new(env!("CARGO_BIN_EXE_dippy-rs"))
+        .args(["--cwd", "sub", "doctor", "--json"])
+        .env("HOME", dir.join("home"))
+        .env("PATH", dir.join("bin"))
+        .current_dir(&dir)
+        .output()
+        .unwrap();
+    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    let check = report["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "Configuration")
+        .unwrap()
+        .clone();
+    assert_eq!(check["status"], "warning", "{check}");
+    assert!(
+        check["details"]
+            .as_str()
+            .unwrap()
+            .contains("${DOCTOR_UNSET_C}: unset or empty (rule inactive)"),
+        "{check}"
+    );
+}

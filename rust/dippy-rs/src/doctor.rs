@@ -96,6 +96,8 @@ struct Check {
     details: Option<String>,
     fix_command: Option<String>,
     matchers: Vec<(String, Vec<Value>)>,
+    /// Show the details without `--verbose` (faulty config lines).
+    show_details: bool,
 }
 
 impl Check {
@@ -107,7 +109,13 @@ impl Check {
             details,
             fix_command: None,
             matchers: Vec::new(),
+            show_details: false,
         }
+    }
+
+    fn always_details(mut self) -> Self {
+        self.show_details = true;
+        self
     }
 
     fn fix(mut self, command: &str) -> Self {
@@ -138,7 +146,11 @@ impl Check {
 
     fn display(&self, verbose: bool) {
         println!("[{}] {}: {}", self.status.symbol(), self.name, self.message);
-        if let Some(details) = self.details.as_ref().filter(|_| verbose) {
+        if let Some(details) = self
+            .details
+            .as_ref()
+            .filter(|_| verbose || self.show_details)
+        {
             for line in details.split('\n') {
                 println!("    {line}");
             }
@@ -533,12 +545,24 @@ fn extract_matchers(config: &Map<String, Value>, agent: &str) -> Vec<(String, Ve
         .collect()
 }
 
-/// `check_config_validation`.
+/// `check_config_validation`. Every warning of the config loader (a line
+/// that was skipped, a rule left out because of its environment variable,
+/// a missing include or final config) is reported once, with its file and
+/// line, and turns the check into a warning.
 fn check_config_validation(cwd: &Path) -> Check {
     const NAME: &str = "Configuration";
     let mut errors = Vec::new();
     let mut warnings = Vec::new();
+    let mut problems: Vec<String> = Vec::new();
     let mut found = Vec::new();
+    let collect = |problems: &mut Vec<String>| {
+        for warning in config::take_warnings() {
+            if !problems.contains(&warning) {
+                problems.push(warning);
+            }
+        }
+    };
+    config::take_warnings();
     let global = config::user_config_path();
     if global.exists() {
         found.push("global");
@@ -546,21 +570,32 @@ fn check_config_validation(cwd: &Path) -> Check {
         if let Err(e) = config::load_config(cwd, Some(&shown), None) {
             errors.push(format!("Global config: {shown}: {e}"));
         }
-        config::print_warnings();
+        collect(&mut problems);
     } else {
         warnings.push("Global config not found (~/.dippy/config)".to_string());
     }
-    let project = cwd.join(".dippy");
-    if project.exists() {
+    // The stack a hook loads for `cwd`: the project config found above it,
+    // `$DIPPY_CONFIG`/`$DIPPY_CONFIG_ONLY`, includes and the final config.
+    let project = config::find_project_config(cwd);
+    if project.is_some() {
         found.push("project");
-        if let Err(e) = config::load_config(cwd, None, None) {
-            errors.push(format!("Project config: {}: {e}", py_path_str(&project)));
-        }
-        config::print_warnings();
     }
+    if let Err(e) = config::load_config(cwd, None, None) {
+        let shown = project.as_deref().map_or_else(|| "-".into(), py_path_str);
+        errors.push(format!("Project config: {shown}: {e}"));
+    }
+    collect(&mut problems);
     if !errors.is_empty() {
         let message = format!("{} error(s) found", errors.len());
-        return Check::new(NAME, Status::Critical, &message, Some(errors.join("\n")));
+        errors.extend(problems);
+        return Check::new(NAME, Status::Critical, &message, Some(errors.join("\n")))
+            .always_details();
+    }
+    if !problems.is_empty() {
+        let message = format!("{} faulty config line(s) ignored", problems.len());
+        problems.extend(warnings);
+        return Check::new(NAME, Status::Warning, &message, Some(problems.join("\n")))
+            .always_details();
     }
     if !warnings.is_empty() {
         let mut details = warnings.join("\n");

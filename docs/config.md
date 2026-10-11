@@ -568,9 +568,10 @@ environment of the agent CLI that runs the hook; for `dippy --cmd` and
 `NAME='*'` never widens a rule. A value is never tilde-expanded; only a `~`
 written in the pattern keeps its meaning. A value may contain `/`.
 
-**Inactive rules.** The rule is inactive - it never matches, later rules and
-the default decision apply as if it were absent - when a variable is unset or
-empty, or when its value is unsafe:
+**Faulty lines have no effect.** A line with a variable that is unset or
+empty, or whose value is unsafe, is left out of the config exactly as if it
+were not in the file: later rules and the default decision apply as before.
+A value is unsafe when:
 
 - it contains a NUL or newline, or is not valid UTF-8;
 - in command, `[opts:]` and option-rule patterns, it contains whitespace (it
@@ -578,10 +579,16 @@ empty, or when its value is unsafe:
 - in command, `[opts:]` and path patterns, it has a `.` or `..` path
   component, or it starts with `~` where it begins a word or path.
 
-An empty string is never substituted. Loading the config logs one warning per
-inactive rule, for example
+An empty string is never substituted. Leaving out a `deny` rule this way
+removes its protection too, so check the warnings: loading the config logs one
+warning per faulty line with the file and line it was written on (also inside
+included files), for example
 `~/.dippy/config: line 4: ${HCOM_DIR}: unset or empty (rule inactive)` (in hook
-modes in `~/.claude/hook-approvals.log`).
+modes in `~/.claude/hook-approvals.log`). `dippy doctor` (dippy-rs) loads the
+user config and the stack a hook loads for the working directory and lists
+every faulty line once under "Configuration", without `--verbose`.
+`dippy config add-rule` checks only the syntax of `${NAME}`, so a rule for a
+variable that is unset in the current shell is written, with a warning.
 
 **Display.** Matching uses the expanded pattern; the audit log `rule` field,
 reasons, askpass and dashboard causes show the pattern as written, with
