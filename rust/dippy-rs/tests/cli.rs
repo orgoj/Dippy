@@ -666,10 +666,7 @@ fn doctor_reports_every_faulty_config_line_once() {
         .unwrap()
         .clone();
     assert_eq!(check["status"], "warning", "{check}");
-    assert_eq!(
-        check["message"], "4 faulty config line(s) ignored",
-        "{check}"
-    );
+    assert_eq!(check["message"], "4 faulty config line(s)", "{check}");
     let details = check["details"].as_str().unwrap();
     for line in &expected {
         assert_eq!(

@@ -1144,8 +1144,8 @@ fn literal_env_value(value: &str, kind: EnvKind) -> String {
     out
 }
 
-/// `expand_env`: `(pattern, None)`, or `(pattern as written, warning)` when
-/// a variable is unset, empty or unsafe and the rule must stay inactive.
+/// `expand_env`: `(pattern, None)`, or `(pattern as written, problem)` when
+/// a variable is unset, empty or unsafe.
 pub fn expand_env(
     pattern: &str,
     kind: EnvKind,
@@ -1157,12 +1157,8 @@ pub fn expand_env(
             output.push_str(&text);
             continue;
         }
-        let inactive = |problem: &str| {
-            Ok((
-                pattern.to_string(),
-                Some(format!("${{{text}}}: {problem} (rule inactive)")),
-            ))
-        };
+        let inactive =
+            |problem: &str| Ok((pattern.to_string(), Some(format!("${{{text}}}: {problem}"))));
         let value = match lookup(&text) {
             Some(value) if !value.is_empty() => value,
             _ => return inactive("unset or empty"),
@@ -1183,9 +1179,25 @@ pub fn expand_env(
     Ok((output, None))
 }
 
+/// The pattern with every `${NAME}` matching any value; option-rule words
+/// (exact) become a command glob.
+fn wildcard_env(pattern: &str, kind: EnvKind) -> Result<String, String> {
+    let any = if kind == EnvKind::Path { "**" } else { "*" };
+    Ok(env_segments(pattern, kind)?
+        .into_iter()
+        .map(|(is_name, text)| match (is_name, kind) {
+            (true, _) => any.to_string(),
+            (false, EnvKind::Words) => literal_env_value(&text, EnvKind::Command),
+            (false, _) => text,
+        })
+        .collect())
+}
+
 /// Expand the rule's pattern (and option items). A rule whose variable is
 /// unset, empty or unsafe is dropped (`None`) with the warning to report:
-/// the line then has no effect at all.
+/// the line then has no effect at all. A `deny` rule instead becomes an
+/// `ask` rule in which the reference matches any value, so a missing
+/// variable never removes a protection.
 fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Option<Rule>, Option<String>), String> {
     let mut texts = vec![rule.pattern.clone()];
     texts.extend(rule.items.iter().flatten().cloned());
@@ -1204,7 +1216,20 @@ fn with_env(mut rule: Rule, kind: EnvKind) -> Result<(Option<Rule>, Option<Strin
             if kind == EnvKind::Shell {
                 pattern_words(&expand_env(&rule.pattern, kind, &|_| Some("x".into()))?.0)?;
             }
-            return Ok((None, Some(warning)));
+            if rule.decision != "deny" {
+                return Ok((None, Some(format!("{warning} (rule inactive)"))));
+            }
+            let pattern = if rule.items.take().is_some() {
+                format!("{} *", wildcard_env(&rule.pattern, EnvKind::Words)?)
+            } else {
+                wildcard_env(&rule.pattern, kind)?
+            };
+            rule.written = Some(std::mem::replace(&mut rule.pattern, pattern));
+            rule.decision = "ask".into();
+            return Ok((
+                Some(rule),
+                Some(format!("{warning} (deny rule asks for any value)")),
+            ));
         }
         expanded.push(value);
     }
@@ -3510,6 +3535,52 @@ mod tests {
     }
 
     #[test]
+    fn env_deny_with_unusable_value_asks_for_any_value() {
+        let flags = Flags::new();
+        let cwd = Path::new("/w");
+        for vars in [&[][..], &[("P", "")][..], &[("P", "a\nb")][..]] {
+            let (c, warnings) = env_cfg(
+                vars,
+                "allow-edit /w/**\ndeny-edit /w/${P}/**\nallow fict *\ndeny fict ${P} *\n\
+                 allow-mcp *\ndeny-mcp mcp__${P}__*\nallow-web *\ndeny-web ${P} *\n\
+                 allow-redirect /w/**\ndeny-redirect /w/${P}/*\nallow-read /w/**\n\
+                 deny-read ${P}/**\ndeny-opt fictpush ${P}\n\
+                 allow [opts:--q] fictq *\ndeny [opts:--q] fictq ${P}",
+            );
+            assert_eq!(warnings.len(), 8, "{vars:?}: {warnings:?}");
+            for warning in &warnings {
+                assert!(
+                    warning.ends_with("(deny rule asks for any value)"),
+                    "{warning}"
+                );
+            }
+            let m = match_edit("/w/secret/x", &c, cwd, &flags).unwrap();
+            assert_eq!(
+                (m.decision.as_str(), m.pattern.as_str()),
+                ("ask", "/w/${P}/**")
+            );
+            assert_eq!(decide(&c, "fict run x").as_deref(), Some("ask"));
+            assert_eq!(decide(&c, "fict").as_deref(), Some("allow"));
+            assert_eq!(match_mcp("mcp__s__t", &c).unwrap().decision, "ask");
+            assert_eq!(match_mcp("other", &c).unwrap().decision, "allow");
+            assert_eq!(match_web("q x", &c, &flags).unwrap().decision, "ask");
+            let m = match_redirect("/w/s/f", &c, cwd, &flags, false).unwrap();
+            assert_eq!(m.decision, "ask");
+            assert_eq!(
+                match_read("/w/a/b", &c, cwd, &flags).unwrap().decision,
+                "ask"
+            );
+            assert_eq!(decide(&c, "fictpush --x").as_deref(), Some("ask"));
+            assert_eq!(decide(&c, "fictq v").as_deref(), Some("ask"));
+            assert_eq!(decide(&c, "fictq --q v").as_deref(), Some("ask"));
+        }
+        // Other decisions are still left out.
+        let (c, warnings) = env_cfg(&[], "allow fict ${P}\nask fict ${P}");
+        assert!(c.rules.is_empty());
+        assert!(warnings.iter().all(|w| w.ends_with("(rule inactive)")));
+    }
+
+    #[test]
     fn env_slash_only_value_makes_rule_inactive() {
         // `/w/agents///**` would collapse to `/w/agents/**`.
         for value in ["/", "//"] {
@@ -3675,7 +3746,6 @@ mod tests {
         let faulty = [
             "allow ${UNSET_Q} *",
             "allow-edit ${UNSET_Q}/**",
-            "deny ${UNSET_Q}",
             "allow fict ${SPACE}",
             "allow-edit /w/${DOTS}/**",
             "allow-edit ${TILDE}/**",
@@ -3812,6 +3882,8 @@ mod tests {
         assert_eq!(edit(&c, "/w/agents/bot2/a").as_deref(), Some("deny"));
         assert_eq!(edit(&c, "/w/agents/bot1/secret/k").as_deref(), Some("deny"));
         let (c, _) = env_cfg(&[], "allow-edit /w/**\ndeny-edit /w/${N}/**");
+        assert_eq!(edit(&c, "/w/a/b").as_deref(), Some("ask"));
+        let (c, _) = env_cfg(&[], "deny-edit /w/${N}/**\nallow-edit /w/**");
         assert_eq!(edit(&c, "/w/a/b").as_deref(), Some("allow"));
     }
 }

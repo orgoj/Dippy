@@ -592,7 +592,7 @@ fn check_config_validation(cwd: &Path) -> Check {
             .always_details();
     }
     if !problems.is_empty() {
-        let message = format!("{} faulty config line(s) ignored", problems.len());
+        let message = format!("{} faulty config line(s)", problems.len());
         problems.extend(warnings);
         return Check::new(NAME, Status::Warning, &message, Some(problems.join("\n")))
             .always_details();

@@ -360,7 +360,7 @@ def play(binary: str, seed: Seed, steps: list[list[str]]):
 # lists config errors without --verbose. Same exit code required; the text
 # must appear in the dippy-rs output, or only Python's stderr may differ.
 INTENDED = {
-    "config warnings": "faulty config line(s) ignored",
+    "config warnings": "faulty config line(s)",
     "config errors": "\n    Global config: ",
     "project config error": "\n    Project config: ",
 }

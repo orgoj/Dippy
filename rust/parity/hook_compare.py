@@ -221,6 +221,20 @@ ENV_PAYLOADS = (
     ]
 )
 
+
+def deny_rule_asks(env: dict, payload: dict) -> bool:
+    """Intended divergence: dippy-rs turns a deny rule whose ${NAME} is unset,
+    empty or unsafe into an ask rule (Python leaves it out)."""
+    name = env.get("PARITY_NAME", "")
+    tool_input = payload["tool_input"]
+    if tool_input.get("command", "").startswith("fictpush "):
+        return not name or any(c.isspace() for c in name)
+    if tool_input.get("file_path", "").endswith("/agents/bot1/keep"):
+        work_dir = env.get("PARITY_DIR", "")
+        return not name or not work_dir or work_dir.startswith("~")
+    return False
+
+
 # Gemini and Codex use Claude-shaped payloads with their own tool and event names.
 GEMINI_EXTRA = [
     {"hook_event_name": "AfterAgent"},
@@ -458,7 +472,9 @@ def build_jobs(cases: list[dict], sample_size: int) -> list[dict]:
     for env in ENV_SETS:
         for p in ENV_PAYLOADS:
             payload = {"hook_event_name": "PreToolUse", "tool_input": {}, **p}
-            jobs.append(job("claude", dict(payload, cwd=work), ENV_CONFIG, env=env))
+            j = job("claude", dict(payload, cwd=work), ENV_CONFIG, env=env)
+            j["intended"] = deny_rule_asks(env, payload)
+            jobs.append(j)
         for command in ("bot1-tool run", "fictool y x"):
             payload = tool_call("run_command", {"CommandLine": command, "Cwd": work})
             jobs.append(job("agy", payload, ENV_CONFIG, askpass=ASKPASS_DENY, env=env))
@@ -508,6 +524,7 @@ def main() -> int:
     per_mode = collections.defaultdict(lambda: [0, 0, 0])
     unsafe = []
     diffs = []
+    intended = 0
     for j, (py, rs) in zip(jobs, results):
         label = j["fmt"] if j["flags"] else f"{j['fmt']} (auto)"
         stats = per_mode[label]
@@ -518,7 +535,10 @@ def main() -> int:
         if decision(j["fmt"], rs) == "allow" and decision(j["fmt"], py) != "allow":
             unsafe.append(j)
         if py != rs:
-            diffs.append((j, py, rs, same))
+            if j.get("intended"):
+                intended += 1
+            else:
+                diffs.append((j, py, rs, same))
     total = len(jobs)
     exact = sum(s[1] for s in per_mode.values())
     same_decision = sum(s[2] for s in per_mode.values())
@@ -529,7 +549,10 @@ def main() -> int:
         print(f"  {label}: {n} payloads, {ident} identical, {same} same decision")
     hand = sum(1 for j in jobs if j["hand"])
     hand_diffs = sum(1 for j, *_ in diffs if j["hand"])
-    print(f"hand-written payloads: {hand_diffs} of {hand} not identical")
+    print(
+        f"hand-written payloads: {hand_diffs} of {hand} not identical, "
+        f"{intended} intended divergences"
+    )
     # Decision differences first, then hand-written, then corpus output.
     diffs.sort(key=lambda d: (d[3], not d[0]["hand"]))
     for j, py, rs, same in diffs[:25]:

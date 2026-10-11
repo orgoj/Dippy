@@ -581,9 +581,15 @@ A value is unsafe when:
 - in command, `[opts:]` and path patterns, it is only `/` (dippy-rs; it would
   drop a path component: `agents/${NAME}/**` would cover all of `agents/`).
 
-An empty string is never substituted. Leaving out a `deny` rule this way
-removes its protection too, so check the warnings: loading the config logs one
-warning per faulty line with the file and line it was written on (also inside
+**A faulty `deny` rule asks** (dippy-rs). Instead of being left out, a `deny`
+rule of any kind becomes an `ask` rule in which each reference matches any
+value: `*` in command, `[opts:]`, MCP and web patterns, `**` in path patterns
+(`deny-edit /w/${NAME}/**` asks for every path under `/w/`), and
+`deny-opt PREFIX ITEMS` asks for `PREFIX *`. A missing variable therefore never
+removes a protection; its warning ends with `(deny rule asks for any value)`.
+
+An empty string is never substituted. Check the warnings: loading the config
+logs one warning per faulty line with the file and line it was written on (also inside
 included files), for example
 `~/.dippy/config: line 4: ${HCOM_DIR}: unset or empty (rule inactive)` (in hook
 modes in `~/.claude/hook-approvals.log`). `dippy doctor` (dippy-rs) loads the

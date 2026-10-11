@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.52] - 2026-10-11
+
+### Changed
+
+- dippy-rs: a `deny` rule (any kind) whose `${NAME}` is unset, empty or unsafe becomes an `ask` rule in which the reference matches any value (`*`, `**` in path rules; `deny-opt PREFIX ...` asks for `PREFIX *`), instead of being left out; a missing variable no longer removes a protection. The warning ends with "(deny rule asks for any value)". `dippy doctor` reports "N faulty config line(s)".
+
 ## [0.4.51] - 2026-10-11
 
 ### Fixed
