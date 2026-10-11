@@ -592,6 +592,12 @@ def test_ui_supports_hub_mode(server):
     assert "/n/" in script
 
 
+def test_page_shows_all_decisions_by_default():
+    page = (dashboard._STATIC_DIR / "index.html").read_text()
+    assert '<option value="" selected>all decisions</option>' in page
+    assert page.count(" selected>") == 1
+
+
 def test_api_contract_matches_routes():
     contract = json.loads(
         (

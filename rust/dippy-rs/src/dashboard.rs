@@ -805,6 +805,13 @@ pub(crate) mod tests {
 
     pub const TOKEN: &str = "secret-token";
 
+    #[test]
+    fn page_shows_all_decisions_by_default() {
+        let page = STATIC[0].1;
+        assert!(page.contains(r#"<option value="" selected>all decisions</option>"#));
+        assert_eq!(page.matches(" selected>").count(), 1);
+    }
+
     pub fn temp(name: &str) -> PathBuf {
         let dir =
             std::env::temp_dir().join(format!("dippy-rs-dashboard-{name}-{}", std::process::id()));
