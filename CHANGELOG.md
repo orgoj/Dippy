@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.51] - 2026-10-11
+
+### Fixed
+
+- dippy-rs: a `${NAME}` value made only of `/` makes the rule inactive in command and path patterns; it used to drop a path component, so `allow-edit /h/agents/${NAME}/**` with `NAME=/` allowed all of `/h/agents/`.
+
 ## [0.4.50] - 2026-10-11
 
 ### Changed

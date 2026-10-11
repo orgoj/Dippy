@@ -1102,6 +1102,10 @@ fn unsafe_env_value(value: &str, kind: EnvKind, at_start: bool) -> Option<&'stat
         if value.split('/').any(|part| part == "." || part == "..") {
             return Some("value contains a '.' or '..' path component");
         }
+        // Between two `/` it would drop a path component: `a/${N}/**` -> `a/**`.
+        if value.chars().all(|c| c == '/') {
+            return Some("value is only '/'");
+        }
         if at_start && value.starts_with('~') {
             return Some("value starts with '~'");
         }
@@ -3503,6 +3507,34 @@ mod tests {
         assert_eq!(edit(&c, "/w/a~b/x").as_deref(), Some("allow"));
         let (c, _) = env_cfg(&[("N", "..")], "allow /w/a/${N}/bin/* *");
         assert!(c.rules.is_empty());
+    }
+
+    #[test]
+    fn env_slash_only_value_makes_rule_inactive() {
+        // `/w/agents///**` would collapse to `/w/agents/**`.
+        for value in ["/", "//"] {
+            let (c, warnings) = env_cfg(
+                &[("N", value)],
+                "allow-edit /w/agents/${N}/**\nallow /w/agents/${N}/bin/* *\n\
+                 allow [opts:--quiet] /w/agents/${N}/bin/x",
+            );
+            assert!(c.edit_rules.is_empty() && c.rules.is_empty(), "{value}");
+            assert_eq!(edit(&c, "/w/agents/bot2/x"), None);
+            assert_eq!(warnings.len(), 3);
+            for warning in &warnings {
+                assert!(
+                    warning.ends_with("${N}: value is only '/' (rule inactive)"),
+                    "{warning}"
+                );
+            }
+        }
+        let (c, warnings) = env_cfg(&[("N", "bot1/")], "allow-edit /w/agents/${N}/**");
+        assert!(warnings.is_empty());
+        assert_eq!(edit(&c, "/w/agents/bot1/x").as_deref(), Some("allow"));
+        assert_eq!(edit(&c, "/w/agents/bot2/x"), None);
+        let (c, warnings) = env_cfg(&[("N", "/")], "allow-mcp a${N}b");
+        assert!(warnings.is_empty());
+        assert_eq!(c.mcp_rules.len(), 1);
     }
 
     #[test]

@@ -3,6 +3,8 @@
 The Python code in `src/dippy` is the specification. Port behaviour, not
 style: same branches, same order of checks, same edge cases. When Python and
 this guide disagree, Python wins - except for the safety rule below.
+Python is frozen on this branch: new features and fixes go into `dippy-rs`
+only and are recorded as intended divergences.
 
 ## Safety rule
 

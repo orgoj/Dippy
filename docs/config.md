@@ -577,7 +577,9 @@ A value is unsafe when:
 - in command, `[opts:]` and option-rule patterns, it contains whitespace (it
   would change word boundaries);
 - in command, `[opts:]` and path patterns, it has a `.` or `..` path
-  component, or it starts with `~` where it begins a word or path.
+  component, or it starts with `~` where it begins a word or path;
+- in command, `[opts:]` and path patterns, it is only `/` (dippy-rs; it would
+  drop a path component: `agents/${NAME}/**` would cover all of `agents/`).
 
 An empty string is never substituted. Leaving out a `deny` rule this way
 removes its protection too, so check the warnings: loading the config logs one
