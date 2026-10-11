@@ -1122,6 +1122,7 @@ pub fn execute(
     };
     logs.decision(Entry {
         decision: decision.action.as_str(),
+        cmd: Some(&decision.reason),
         message: Some(&decision.reason),
         command: Some(command),
         cwd: Some(cwd),
@@ -1155,6 +1156,7 @@ pub fn execute(
             });
             logs.decision(Entry {
                 decision: if approval.allowed { "allow" } else { "deny" },
+                cmd: Some(&decision.reason),
                 message: Some(approval.note.as_deref().unwrap_or(&decision.reason)),
                 command: Some(command),
                 cwd: Some(cwd),

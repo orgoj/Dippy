@@ -514,6 +514,7 @@ impl<'a> Hook<'a> {
         let (allowed, text) = approval::verdict(&outcome, reason, config)?;
         self.audit(Entry {
             decision: if allowed { "allow" } else { "deny" },
+            cmd: Some(reason),
             message: Some(&approval::outcome_message(&outcome)),
             command: s.command,
             cwd: Some(&cwd),
@@ -873,8 +874,10 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
     if !post && matches!(permission_mode, "bypassPermissions" | "dontAsk") {
         hook.log
             .info(&format!("Bypass mode ({permission_mode}): {command}"));
+        let summary = analyzer::analyze(command, config, cwd, None, false).reason;
         hook.audit(Entry {
             decision: "allow",
+            cmd: Some(&summary),
             message: Some(permission_mode),
             command: Some(command),
             cwd: Some(cwd),
@@ -1821,7 +1824,7 @@ mod tests {
                 json!({"decision": "pass", "message": "no matching rule", "cwd": "/w", "tool": "Write", "file_path": "/w/src/a", "agent": "pi"}),
                 json!({"decision": "pass", "message": "no file path for Read", "tool": "Read", "agent": "pi"}),
                 json!({"decision": "ask", "rule": "/w/private/*", "message": "multi-file (2 paths): [/w/private/*]", "cwd": "/w", "tool": "read_many_files", "file_path": "/w/a", "agent": "pi"}),
-                json!({"decision": "allow", "message": "dontAsk", "cwd": "/w", "agent": "pi"}),
+                json!({"decision": "allow", "cmd": "rm x", "message": "dontAsk", "cwd": "/w", "agent": "pi"}),
                 json!({"decision": "pass", "message": "unsupported tool: UnknownTool", "tool": "UnknownTool", "agent": "pi"}),
             ]
         );

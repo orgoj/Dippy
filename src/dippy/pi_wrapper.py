@@ -162,6 +162,7 @@ def main():
         if req_type == "bash":
             log_decision(
                 decision.action,
+                cmd=decision.reason,
                 command=input_data.get("command", ""),
                 cwd=cwd,
                 message=decision.reason,

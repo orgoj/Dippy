@@ -520,6 +520,7 @@ def execute(command: str, config: Config, cwd: Path, server: str | None = None) 
     action = "ask" if decision.action == "pass" else decision.action
     log_decision(
         action,
+        cmd=decision.reason,
         message=decision.reason,
         command=command,
         cwd=cwd,
@@ -542,6 +543,7 @@ def execute(command: str, config: Config, cwd: Path, server: str | None = None) 
         approval = approve_with_askpass(config, command, decision, server, cwd)
         log_decision(
             "allow" if approval.allowed else "deny",
+            cmd=decision.reason,
             message=approval.note or decision.reason,
             command=command,
             cwd=cwd,

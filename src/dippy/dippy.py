@@ -1309,6 +1309,7 @@ def cli_mode(args: argparse.Namespace) -> int:
     # Log decision to audit log if configured
     log_decision(
         result.action,
+        cmd=result.reason,
         message=result.reason,
         command=command,
         cwd=cwd,
@@ -2377,6 +2378,7 @@ def main():
                 logging.info(f"Bypass mode ({permission_mode}): {command}")
                 log_decision(
                     "allow",
+                    cmd=analyze(command, config, cwd).reason,
                     message=permission_mode,
                     command=command,
                     cwd=cwd,

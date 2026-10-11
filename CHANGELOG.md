@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.43] - 2026-10-11
+
+### Fixed
+
+- Every audit entry for a shell command names it in `cmd` (the analyzer's summary), so the dashboard log and `dippy audit` show what was allowed, asked or denied without `set log-full`: the outcome of a dashboard approval (dippy-rs, all callers), `dippy run`/`run-on-server` decisions and askpass outcomes, pi bash decisions, and hook `bypassPermissions`/`dontAsk` allows.
+
 ## [0.4.42] - 2026-10-11
 
 ### Fixed

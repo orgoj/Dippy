@@ -295,6 +295,29 @@ def test_execution_subcommand_rejects_empty_stdin(tmp_path, monkeypatch, capsys)
     assert "command is required" in capsys.readouterr().err
 
 
+def test_execute_audit_entries_name_the_request(tmp_path, monkeypatch):
+    entries = []
+    monkeypatch.setattr(
+        "dippy.execution.log_decision",
+        lambda decision, **kwargs: entries.append({"decision": decision, **kwargs}),
+    )
+    monkeypatch.setattr(
+        "dippy.execution.analyze",
+        lambda *args, **kwargs: Decision("ask", "frob --x"),
+    )
+    monkeypatch.setattr(
+        "dippy.execution.approve_with_askpass",
+        lambda *args, **kwargs: Approval(False, "not now"),
+    )
+
+    assert execute("frob --x /y", Config(), tmp_path) == 1
+
+    assert [(e["decision"], e["cmd"]) for e in entries] == [
+        ("ask", "frob --x"),
+        ("deny", "frob --x"),
+    ]
+
+
 def test_execute_rule_deny_explains_that_command_was_not_executed(
     tmp_path, monkeypatch, capsys
 ):

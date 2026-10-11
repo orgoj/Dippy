@@ -1,11 +1,18 @@
 """Tests for logging enhancements - context flags in audit log."""
 
+import io
 import json
 import os
 import tempfile
+from argparse import Namespace
 from pathlib import Path
 
-from dippy.core.config import configure_logging, log_decision
+import pytest
+
+from dippy import dippy as dippy_main
+from dippy import pi_wrapper
+from dippy.core.analyzer import Decision
+from dippy.core.config import Config, configure_logging, log_decision
 
 
 def test_log_decision_with_context_flags():
@@ -201,3 +208,82 @@ def test_context_flags_propagated_in_subshell():
     assert result.context_flags is not None
     assert "@subshell" in result.context_flags
     assert "@compound" in result.context_flags
+
+
+def test_bypass_mode_audit_entry_names_the_command_like_the_normal_path(
+    tmp_path, monkeypatch, capsys
+):
+    entries = []
+    monkeypatch.setattr(dippy_main, "MODE", "claude")
+    monkeypatch.setattr(dippy_main, "_detect_mode_from_flags", lambda: "claude")
+    monkeypatch.setattr("sys.argv", ["dippy", "--claude"])
+    monkeypatch.setattr(dippy_main, "load_config", lambda cwd: Config())
+    monkeypatch.setattr(
+        dippy_main,
+        "log_decision",
+        lambda decision, cmd=None, **kwargs: entries.append((decision, cmd)),
+    )
+    for mode in ["default", "bypassPermissions", "dontAsk"]:
+        request = {
+            "hook_event_name": "PreToolUse",
+            "tool_name": "Bash",
+            "tool_input": {"command": "frobnicate --hard /x"},
+            "cwd": str(tmp_path),
+            "permission_mode": mode,
+        }
+        monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+        dippy_main.main()
+    capsys.readouterr()
+
+    normal_cmd = entries[0][1]
+    assert normal_cmd
+    assert entries[1:] == [("allow", normal_cmd), ("allow", normal_cmd)]
+
+
+def test_cli_mode_audit_entry_names_the_command(tmp_path, monkeypatch, capsys):
+    entries = []
+    monkeypatch.setattr(dippy_main, "load_config", lambda cwd, **kwargs: Config())
+    monkeypatch.setattr(
+        dippy_main,
+        "log_decision",
+        lambda decision, cmd=None, **kwargs: entries.append((decision, cmd)),
+    )
+    monkeypatch.setattr(
+        dippy_main, "analyze", lambda *args, **kwargs: Decision("ask", "frob --x")
+    )
+    args = Namespace(
+        cmd="frob --x /y",
+        stdin=False,
+        cwd=str(tmp_path),
+        config=None,
+        config_only=None,
+        remote=False,
+        json_output=True,
+    )
+
+    dippy_main.cli_mode(args)
+    capsys.readouterr()
+
+    assert entries == [("ask", "frob --x")]
+
+
+def test_pi_bash_audit_entry_names_the_request(tmp_path, monkeypatch, capsys):
+    entries = []
+    monkeypatch.setattr(pi_wrapper, "load_config", lambda cwd: Config())
+    monkeypatch.setattr(pi_wrapper, "configure_logging", lambda config: None)
+    monkeypatch.setattr(
+        pi_wrapper,
+        "log_decision",
+        lambda decision, **kwargs: entries.append({"decision": decision, **kwargs}),
+    )
+    monkeypatch.setattr(
+        pi_wrapper, "analyze", lambda *args, **kwargs: Decision("ask", "frob --x")
+    )
+    request = {"type": "bash", "command": "frob --x /y", "cwd": str(tmp_path)}
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(request)))
+
+    with pytest.raises(SystemExit):
+        pi_wrapper.main()
+
+    assert json.loads(capsys.readouterr().out)["action"] == "ask"
+    assert [(e["decision"], e["cmd"]) for e in entries] == [("ask", "frob --x")]

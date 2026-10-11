@@ -1927,7 +1927,8 @@ answer counts as malformed.
 
 **Audit.** The hook keeps its `ask` entry; the outcome adds one entry with
 `allow` or `deny`, the agent, the note (or `approval timed out`) and the
-`approval` id. `hook-approvals.log` follows `log-hook-approvals`.
+`approval` id, and repeats the `ask` entry's `cmd` summary for a shell
+command. `hook-approvals.log` follows `log-hook-approvals`.
 
 **Agent hook timeouts.** Each agent cancels a hook that runs longer than its
 own timeout, so the agent's hook timeout must be greater than

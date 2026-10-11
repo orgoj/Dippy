@@ -80,6 +80,7 @@ fn respond(config: &Config, input: &Value, cwd: &Path, logs: &Logs) -> Value {
     match req_type.as_str() {
         "bash" => logs.decision(Entry {
             decision: &action,
+            cmd: Some(&reason),
             message: Some(&reason),
             command: Some(text("command")),
             cwd: Some(cwd),
@@ -172,6 +173,7 @@ fn dashboard(
     let (allowed, text) = approval::verdict(&outcome, reason, config)?;
     logs.decision(Entry {
         decision: if allowed { "allow" } else { "deny" },
+        cmd: tool.is_none().then_some(reason),
         message: Some(&approval::outcome_message(&outcome)),
         command: ask.file_path.is_none().then_some(ask.command),
         cwd: Some(cwd),
@@ -381,8 +383,8 @@ allow-read /w/notes/*
         assert_eq!(
             entries,
             vec![
-                json!({"decision": "allow", "message": "frob *", "command": "frob x", "cwd": "/w", "agent": "hermes"}),
-                json!({"decision": "ask", "message": "Empty command", "command": "", "cwd": "/w", "agent": "hermes"}),
+                json!({"decision": "allow", "cmd": "frob *", "message": "frob *", "command": "frob x", "cwd": "/w", "agent": "hermes"}),
+                json!({"decision": "ask", "cmd": "Empty command", "message": "Empty command", "command": "", "cwd": "/w", "agent": "hermes"}),
                 json!({"decision": "allow", "message": "edit /w/src/a: /w/src/**", "cwd": "/w", "tool": "Edit", "file_path": "/w/src/a", "agent": "hermes"}),
                 json!({"decision": "ask", "message": "Empty path for read", "cwd": "/w", "tool": "Read", "file_path": "", "agent": "hermes"}),
             ]

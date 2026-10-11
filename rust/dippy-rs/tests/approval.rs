@@ -208,6 +208,33 @@ fn claude_ask_waits_for_the_dashboard() {
 }
 
 #[test]
+fn outcome_entry_names_the_request_like_its_ask_entry() {
+    let sb = Sandbox::new("outcome-cmd");
+    let (server, addr) = node(&sb);
+    sb.config(&format!(
+        "set approval dashboard\nset dashboard-url http://{addr}\nask-mcp mcp__zorp__*\n"
+    ));
+    let mcp = json!({"tool_name": "mcp__zorp__get", "tool_input": {}}).to_string();
+    let proj = sb.proj().canonicalize().unwrap();
+    let pi = json!({"type": "bash", "command": "zorp x", "cwd": proj}).to_string();
+    let cases: [(&[&str], String); 4] = [
+        (&["--claude"], bash("zorp --fictional")),
+        (&["--claude"], mcp),
+        (&["--pi"], pi),
+        (&["run", "zorp --fictional"], String::new()),
+    ];
+    for (args, stdin) in cases {
+        sb.reset();
+        decide_soon(&server, false, Some("no"));
+        sb.run(args, &stdin);
+        let entries = sb.audit();
+        assert_eq!(entries.len(), 2, "{args:?} {entries:?}");
+        assert!(entries[0]["cmd"].is_string(), "{args:?} {entries:?}");
+        assert_eq!(entries[1]["cmd"], entries[0]["cmd"], "{args:?}");
+    }
+}
+
+#[test]
 fn claude_falls_back_to_its_own_prompt_when_no_node_listens() {
     let sb = Sandbox::new("claude-fallback");
     let closed = TcpListener::bind("127.0.0.1:0")
