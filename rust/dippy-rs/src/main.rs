@@ -6,6 +6,7 @@ use dippy_rs::analyzer::{self, Action};
 use dippy_rs::cli::{self, HandlerContext};
 use dippy_rs::config::{self, Config};
 use dippy_rs::hook::{self, py_json_str};
+use dippy_rs::logging::{Entry, Logs};
 use dippy_rs::{dump, paths};
 use serde_json::{Value, json};
 
@@ -213,6 +214,18 @@ fn cli_mode(args: &Cli) -> i32 {
     // The notifier (an external program) is out of scope and never run.
     let result = analyzer::analyze(&command, &config, &cwd, None, args.remote);
     let action = result.action.as_str();
+    let logs = Logs::none(args.agent.as_deref().unwrap_or("cli"));
+    logs.configure(&config);
+    logs.decision(Entry {
+        decision: action,
+        cmd: Some(&result.reason),
+        message: Some(&result.reason),
+        command: Some(&command),
+        cwd: Some(&cwd),
+        context_flags: result.context_flags.as_ref(),
+        suggestion: result.suggestion.as_deref(),
+        ..Entry::default()
+    });
     if args.json {
         println!(
             "{{\"decision\": {}, \"reason\": {}}}",

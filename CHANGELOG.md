@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.45] - 2026-10-11
+
+### Fixed
+
+- `dippy --cmd`/`--stdin` writes its audit entry when `set log` is configured (Python never enabled logging there; dippy-rs did not log at all); the agent is `cli` unless `--agent` names one (Python used `claude`).
+
 ## [0.4.44] - 2026-10-11
 
 ### Fixed

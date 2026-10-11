@@ -267,6 +267,32 @@ def test_cli_mode_audit_entry_names_the_command(tmp_path, monkeypatch, capsys):
     assert entries == [("ask", "frob --x")]
 
 
+@pytest.mark.parametrize(
+    ("extra", "agent"), [([], "cli"), (["--agent", "wrapper"], "wrapper")]
+)
+def test_cli_mode_writes_the_audit_log(extra, agent, tmp_path, monkeypatch, capsys):
+    config = Config()
+    configured = []
+    entries = []
+    monkeypatch.setattr(dippy_main, "load_config", lambda cwd, **kwargs: config)
+    monkeypatch.setattr(dippy_main, "configure_logging", configured.append)
+    monkeypatch.setattr(
+        dippy_main,
+        "log_decision",
+        lambda decision, agent=None, **kwargs: entries.append((decision, agent)),
+    )
+    monkeypatch.setattr(dippy_main, "MODE", "claude")
+    argv = ["dippy", "--cmd", "frobnicate --x", "--cwd", str(tmp_path), *extra]
+    monkeypatch.setattr("sys.argv", argv)
+
+    with pytest.raises(SystemExit):
+        dippy_main.main()
+    capsys.readouterr()
+
+    assert configured == [config]
+    assert [a for _, a in entries] == [agent]
+
+
 def test_pi_bash_audit_entry_names_the_request(tmp_path, monkeypatch, capsys):
     entries = []
     monkeypatch.setattr(pi_wrapper, "load_config", lambda cwd: Config())

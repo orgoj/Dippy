@@ -1295,6 +1295,7 @@ def cli_mode(args: argparse.Namespace) -> int:
         else:
             print(f"ask: config error: {e}")
         return EXIT_ASK
+    configure_logging(config)
 
     # Run notifier if configured
     note = (
@@ -1640,8 +1641,7 @@ def main():
 
     # CLI mode: --cmd or --stdin (backward compatibility)
     if args.cmd or args.stdin:
-        if args.agent:
-            MODE = args.agent
+        MODE = args.agent or "cli"
         sys.exit(cli_mode(args))
 
     # Detect mode strictly from flags/env or default to claude

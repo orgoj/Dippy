@@ -121,6 +121,42 @@ fn cmd_and_stdin_classify() {
 }
 
 #[test]
+fn cmd_and_stdin_write_the_audit_log() {
+    let dir = sandbox("cmd-audit");
+    let log = dir.join("audit.log");
+    std::fs::create_dir_all(dir.join("home/.dippy")).unwrap();
+    std::fs::write(
+        dir.join("home/.dippy/config"),
+        format!("set log {}\nset log-rotate-max-days 0\n", log.display()),
+    )
+    .unwrap();
+    run(&dir, &["--cmd", "frobnicate x"], "");
+    run(&dir, &["--stdin", "--agent", "wrapper"], "frobnicate --y");
+    let entries: Vec<serde_json::Value> = std::fs::read_to_string(&log)
+        .unwrap()
+        .lines()
+        .map(|l| serde_json::from_str(l).unwrap())
+        .collect();
+    let summary: Vec<_> = entries
+        .iter()
+        .map(|e| {
+            (
+                e["decision"].as_str(),
+                e["agent"].as_str(),
+                e["cmd"].is_string(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (Some("ask"), Some("cli"), true),
+            (Some("ask"), Some("wrapper"), true)
+        ]
+    );
+}
+
+#[test]
 fn hook_mode_without_cmd_reads_payload() {
     let dir = sandbox("hook");
     let payload = r#"{"tool_name": "Bash", "tool_input": {"command": "ls"}}"#;

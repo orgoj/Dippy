@@ -303,6 +303,9 @@ dippy --cmd 'review-tool inspect' --config-only ~/.dippy/reviewer.conf
 | `--remote` | Skip local path checks (for containers/SSH) |
 | `--version` | Show Dippy version |
 
+With `set log`, every `--cmd`/`--stdin` check writes an audit entry; its
+agent is `cli` unless `--agent` names one.
+
 ### Exit Codes
 
 | Code | Decision | Meaning |

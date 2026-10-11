@@ -370,7 +370,7 @@ echo 'ls -la' | dippy --stdin       # read command from stdin
 - `--json` — output as JSON
 - `--config PATH` — custom config file
 - `--config-only PATH` — load only this config, skipping user and project config
-- `--agent NAME` — force agent name in audit log
+- `--agent NAME` — force agent name in audit log (default `cli`)
 - `--remote` — skip local path checks
 - `--version` — show version
 
