@@ -554,7 +554,7 @@ fn verify_query_ast(sql: &str, dialect: Option<&str>) -> Option<bool> {
         return Some(false);
     }
     let d = grammar::Dialect::parse(parser_dialect)?;
-    grammar::verify_query(sql, d).then_some(true)
+    grammar::verify_query(sql, d)
 }
 
 // ---------------------------------------------------------------------------
@@ -720,9 +720,13 @@ pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
 /// * COPY exports with options other than FORMAT/HEADER/DELIMITER/QUOTE/
 ///   ESCAPE/NULL.
 ///
-/// Where Python returns `False` (an unknown function or `NEXT VALUE FOR`
-/// inside a parsed query), Rust usually returns `None`: both ask, only the
-/// handler description differs.
+/// Where Python returns `False` for an unknown function in a parsed query,
+/// Rust also returns `false` when the query parses with that call accepted
+/// as `name(expr, ...)`. A function SQLGlot knows but this grammar does not
+/// verify for the dialect counts as unknown, so a few queries Python calls
+/// unverifiable or read-only get `false`. For `NEXT VALUE FOR`, qualified
+/// calls and other unparsed syntax Rust returns `None`. All of these ask;
+/// only the handler description differs.
 mod grammar {
     use std::collections::HashSet;
 
@@ -1633,6 +1637,10 @@ mod grammar {
         depth: usize,
         /// DuckDB `VALUES` may form the outermost query (set operands only).
         root_values: bool,
+        /// Accept calls of unknown functions (SQLGlot `Anonymous`).
+        allow_unknown: bool,
+        /// An unknown function call was accepted.
+        saw_unknown: bool,
     }
 
     const MAX_DEPTH: usize = 48;
@@ -1645,6 +1653,8 @@ mod grammar {
                 d,
                 depth: 0,
                 root_values: false,
+                allow_unknown: false,
+                saw_unknown: false,
             }
         }
 
@@ -2316,13 +2326,34 @@ mod grammar {
             self.kw("END")
         }
 
+        /// `name(expr, ...)` of a function SQLGlot does not know.
+        fn unknown_call(&mut self) -> Option<()> {
+            self.pos += 1;
+            self.op("(")?;
+            if !self.is_op(")") {
+                loop {
+                    self.expr()?;
+                    if !self.eat_op(",") {
+                        break;
+                    }
+                }
+            }
+            self.op(")")?;
+            self.saw_unknown = true;
+            Some(())
+        }
+
         fn function_call(&mut self, name: &str) -> Option<()> {
             if name == "DATE_TRUNC" {
                 return self.date_trunc();
             }
             let mask = function_mask(name, self.d);
             if mask == 0 {
-                return None;
+                return if self.allow_unknown && !is_reserved(name) {
+                    self.unknown_call()
+                } else {
+                    None
+                };
             }
             self.pos += 1;
             self.op("(")?;
@@ -2721,16 +2752,25 @@ mod grammar {
         f(&mut parser).is_some() && parser.done()
     }
 
-    /// Stand-in for `_verify_query_ast` after the lexical checks: the whole
-    /// statement is one verified read-only query.
-    pub fn verify_query(sql: &str, d: Dialect) -> bool {
-        if tokenize(sql, d).is_some_and(|t| t == [Tok::Word("SELECT".into())]) {
-            return true;
+    /// Stand-in for `_verify_query_ast` after the lexical checks: `true` when
+    /// the whole statement is one verified read-only query, `false` when it
+    /// parses only with an unknown function call (Python: an `Anonymous`
+    /// node), `None` otherwise.
+    pub fn verify_query(sql: &str, d: Dialect) -> Option<bool> {
+        let toks = tokenize(sql, d)?;
+        if toks == [Tok::Word("SELECT".into())] {
+            return Some(true);
         }
-        parse_all(sql, d, |p| {
+        let parse = |allow_unknown: bool| {
+            let mut p = Parser::new(&toks, d);
             p.root_values = true;
-            p.query()
-        })
+            p.allow_unknown = allow_unknown;
+            (p.query().is_some() && p.done()).then_some(p.saw_unknown)
+        };
+        if parse(false).is_some() {
+            return Some(true);
+        }
+        parse(true).filter(|&unknown| unknown).map(|_| false)
     }
 
     /// Stand-in for the temp-table `sqlglot.parse_one` check.
@@ -3104,8 +3144,14 @@ mod tests {
             ),
             Some(false)
         );
-        // Python: False (unknown function); Rust: not verified.
-        assert_ne!(ro_d("SELECT writefile('x', 'data')", "sqlite"), Some(true));
+        // Python: False (unknown function in a parsed query).
+        assert_eq!(ro_d("SELECT writefile('x', 'data')", "sqlite"), Some(false));
+        assert_eq!(
+            ro_d("SELECT CAST(fictional_effect() AS INTEGER)", "athena"),
+            Some(false)
+        );
+        assert_eq!(ro("SELECT fictional(a, b + 1) FROM t"), Some(false));
+        assert_eq!(ro("SELECT fictional(a FROM t"), None);
         assert_eq!(ro_d("SELECT 'DROP INTO OUTFILE'", "mysql"), Some(true));
         assert_eq!(
             ro_d("SELECT * FROM t INTO OUTFILE path", "mysql"),

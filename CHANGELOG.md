@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.44] - 2026-10-11
+
+### Fixed
+
+- dippy-rs: a SQL query that parses only with an unknown function call is reported as a write, like Python (`aws athena start-query-execution (write)` instead of a plain ask); the decision stays ask.
+
 ## [0.4.43] - 2026-10-11
 
 ### Fixed
