@@ -633,8 +633,9 @@ fn process_cwd() -> PathBuf {
 
 /// Run the hook for one stdin payload. `explicit` is the agent from flags or
 /// environment; without it the agent is detected from the payload.
-pub fn run_hook(explicit: Option<&str>, stdin: &str) -> HookOutput {
-    let reply = hook_reply(explicit, stdin);
+/// `fallback` is the audit log of a call that never applied a config.
+pub fn run_hook(explicit: Option<&str>, stdin: &str, fallback: PathBuf) -> HookOutput {
+    let reply = hook_reply(explicit, stdin, fallback);
     let (stdout, stderr, exit_code) = match reply {
         Reply::Json(v) => (Some(py_dumps(&v)), None, 0),
         Reply::Silent => (None, None, 0),
@@ -647,11 +648,11 @@ pub fn run_hook(explicit: Option<&str>, stdin: &str) -> HookOutput {
     }
 }
 
-fn hook_reply(explicit: Option<&str>, stdin: &str) -> Reply {
+fn hook_reply(explicit: Option<&str>, stdin: &str, fallback: PathBuf) -> Reply {
     let parsed = serde_json::from_str::<Value>(stdin);
     let input = parsed.as_ref().ok().filter(|v| v.is_object());
     let agent = explicit.unwrap_or_else(|| input.map_or("claude", mode_from_input));
-    let logs = Logs::hook(agent, Some(config::default_log_path()));
+    let logs = Logs::hook(agent, Some(fallback));
     let mode = mode_of(agent);
     audited(&logs, mode, input, || match input {
         Some(input) => handle(&logs, input),
@@ -1458,10 +1459,20 @@ mod tests {
 
     #[test]
     fn invalid_json_passes() {
-        let out = run_hook(Some("claude"), "not json");
+        let dir = temp_dir("invalid");
+        let log = dir.join("audit.log");
+        let out = run_hook(Some("claude"), "not json", log.clone());
         assert_eq!(out.stdout.as_deref(), Some("{}"));
-        let out = run_hook(Some("gemini"), "not json");
+        let out = run_hook(Some("gemini"), "not json", log.clone());
         assert!(out.stdout.unwrap().contains("\"decision\": \"ask\""));
+        assert_eq!(
+            entries_of(&log),
+            [
+                json!({"decision": "pass", "message": "invalid json input", "agent": "claude"}),
+                json!({"decision": "ask", "message": "invalid json input", "agent": "gemini"}),
+            ]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

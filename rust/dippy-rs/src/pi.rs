@@ -7,7 +7,7 @@
 //! Python: invalid JSON reports serde's message, and a non-object payload
 //! reports a fixed message instead of a Python exception text.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde_json::{Value, json};
 
@@ -22,15 +22,16 @@ const DEFAULT_DENY_FORMAT: &str = "⚠️ DENIED by security policy.\n\nCommand:
 /// Built-in template for `pi` and `claude`.
 const AGENT_DENY_FORMAT: &str = "⚠️ COMMAND DENIED by security policy.\n\nOriginal: {command}\n\nINSTRUCTION: {reason}\n\nYou MUST follow the instruction above. Do NOT try alternative commands.";
 
-/// Stdout line and exit code for one stdin payload.
-pub fn run(stdin: &str) -> (String, i32) {
+/// Stdout line and exit code for one stdin payload. `fallback` is the audit
+/// log of a call that never applied a config.
+pub fn run(stdin: &str, fallback: PathBuf) -> (String, i32) {
     let parsed = serde_json::from_str::<Value>(stdin).ok();
     let agent = parsed
         .as_ref()
         .and_then(|v| v.get("agent"))
         .and_then(Value::as_str)
         .unwrap_or("pi");
-    let logs = Logs::hook(agent, Some(config::default_log_path()));
+    let logs = Logs::hook(agent, Some(fallback));
     logged(&logs, parsed.as_ref(), || answer(stdin, &logs))
 }
 
@@ -480,6 +481,10 @@ allow-read /w/notes/*
 
     #[test]
     fn invalid_input_fails_closed() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-pi-invalid-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let log = dir.join("audit.log");
+        let run = |stdin: &str| super::run(stdin, log.clone());
         let (out, code) = run("{nope");
         assert_eq!(code, 1);
         assert!(
@@ -495,5 +500,7 @@ allow-read /w/notes/*
                 1
             )
         );
+        assert_eq!(std::fs::read_to_string(&log).unwrap().lines().count(), 2);
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

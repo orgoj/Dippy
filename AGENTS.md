@@ -37,6 +37,9 @@ just fmt     # ruff format --check
 - Merge scalar settings by membership in `configured_settings`, never by
   comparing their value to the default. Test that a higher-priority scope can
   explicitly restore the default value.
+- Rust tests pass an explicit temporary audit-log path; never call a hook
+  entry point that falls back to `config::default_log_path()`. Verify with
+  `cargo test` under an empty temporary `HOME`: nothing may appear in it.
 - Use `monkeypatch.setattr` for module globals; bare assignment leaks state
   between tests.
 - Never modify the user's live Dippy configuration during repository work.

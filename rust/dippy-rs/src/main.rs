@@ -332,11 +332,11 @@ fn hook_mode(matches: &ArgMatches) -> i32 {
         .collect();
     let mode = hook::mode_from_flags(&flags, |name| std::env::var(name).ok());
     if mode == Some("pi") {
-        let (stdout, code) = dippy_rs::pi::run(&input);
+        let (stdout, code) = dippy_rs::pi::run(&input, config::default_log_path());
         println!("{stdout}");
         return code;
     }
-    let out = hook::run_hook(mode, &input);
+    let out = hook::run_hook(mode, &input, config::default_log_path());
     if let Some(stdout) = out.stdout {
         println!("{stdout}");
     }
