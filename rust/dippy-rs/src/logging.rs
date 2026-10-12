@@ -1,9 +1,10 @@
-//! Port of hook-side logging: `setup_logging` (the per-agent
-//! `hook-approvals.log`) and `configure_logging`/`log_decision` in
-//! `dippy.core.config` (the JSON-lines audit log from `set log`).
+//! Port of `configure_logging`/`log_decision` in `dippy.core.config` (the
+//! JSON-lines audit log from `set log`). Divergence from Python: no
+//! per-agent `hook-approvals.log`; every hook call writes at least one audit
+//! entry instead (see [`Logs::close`]).
 
-use std::cell::RefCell;
-use std::fs::{File, OpenOptions};
+use std::cell::{Cell, RefCell};
+use std::fs::OpenOptions;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
@@ -11,21 +12,6 @@ use serde_json::{Map, Value, json};
 
 use crate::config::{Config, Flags};
 use crate::hook::py_dumps;
-
-/// `_get_log_file`: `hook-approvals.log` in the agent's home directory.
-pub fn approvals_path(home: &Path, agent: &str) -> PathBuf {
-    let dir = match agent {
-        "gemini" | "agy" => ".gemini",
-        "cursor" => ".cursor",
-        "pi" => ".pi",
-        "moltbot" => ".moltbot",
-        "codex" => ".codex",
-        "windsurf" => ".windsurf",
-        "pearai" => ".pearai",
-        _ => ".claude",
-    };
-    home.join(dir).join("hook-approvals.log")
-}
 
 /// One audit log entry; the arguments of Python's `log_decision`.
 #[derive(Clone, Copy, Default)]
@@ -39,6 +25,8 @@ pub struct Entry<'a> {
     pub cwd: Option<&'a Path>,
     pub tool: Option<&'a str>,
     pub file_path: Option<&'a str>,
+    /// Hook event of a closing entry ([`Logs::close`]).
+    pub event: Option<&'a str>,
     pub context_flags: Option<&'a Flags>,
     /// Logged only with `set log-full`.
     pub suggestion: Option<&'a str>,
@@ -52,33 +40,42 @@ struct Audit {
     policy_cwd: Option<PathBuf>,
 }
 
-/// Both logs of one hook run. Every write failure is silent; a failed audit
+/// `DIPPY_TEST_NO_LOG` disables the audit log.
+fn test_no_log() -> bool {
+    std::env::var_os("DIPPY_TEST_NO_LOG").is_some_and(|v| !v.is_empty())
+}
+
+/// The audit log of one run. Every write failure is silent; a failed audit
 /// write disables the audit log for the rest of the run.
 pub struct Logs {
     agent: String,
-    approvals: RefCell<Option<File>>,
     audit: RefCell<Option<Audit>>,
+    /// Audit log of a hook call that never configured one (`close`).
+    fallback: Option<PathBuf>,
+    configured: Cell<bool>,
+    /// An entry was logged since the last `close`.
+    written: Cell<bool>,
+    /// Failures for the closing entry's `message`.
+    notes: RefCell<Vec<String>>,
 }
 
 impl Logs {
-    /// No log files (before the agent is known, and in tests).
+    /// No log until `configure`.
     pub fn none(agent: &str) -> Self {
         Logs {
             agent: agent.to_string(),
-            approvals: RefCell::new(None),
             audit: RefCell::new(None),
+            fallback: None,
+            configured: Cell::new(false),
+            written: Cell::new(false),
+            notes: RefCell::new(Vec::new()),
         }
     }
 
-    /// `setup_logging`: open (and create) the agent's `hook-approvals.log`.
-    pub fn setup(agent: &str) -> Self {
-        let file = std::env::var_os("HOME").and_then(|home| {
-            let path = approvals_path(Path::new(&home), agent);
-            std::fs::create_dir_all(path.parent()?).ok()?;
-            OpenOptions::new().create(true).append(true).open(path).ok()
-        });
+    /// A hook call: `close` logs to `fallback` when no config was applied.
+    pub fn hook(agent: &str, fallback: Option<PathBuf>) -> Self {
         Logs {
-            approvals: RefCell::new(file),
+            fallback,
             ..Logs::none(agent)
         }
     }
@@ -87,24 +84,12 @@ impl Logs {
         &self.agent
     }
 
-    /// Tests: approvals log at an explicit path.
-    #[cfg(test)]
-    pub(crate) fn with_approvals(agent: &str, path: &Path) -> Self {
-        let file = OpenOptions::new().create(true).append(true).open(path).ok();
-        Logs {
-            approvals: RefCell::new(file),
-            ..Logs::none(agent)
-        }
-    }
-
-    /// `configure_logging`: `DIPPY_TEST_NO_LOG` disables only the audit log
-    /// and is checked first, as in Python.
+    /// `configure_logging`: `DIPPY_TEST_NO_LOG` disables the audit log and
+    /// is checked first, as in Python.
     pub fn configure(&self, config: &Config) {
-        if std::env::var_os("DIPPY_TEST_NO_LOG").is_some_and(|v| !v.is_empty()) {
+        self.configured.set(true);
+        if test_no_log() {
             return;
-        }
-        if !config.log_hook_approvals {
-            *self.approvals.borrow_mut() = None;
         }
         let Some(path) = &config.log else { return };
         if let Some(parent) = path.parent().filter(|p| !p.as_os_str().is_empty())
@@ -119,27 +104,43 @@ impl Logs {
         });
     }
 
-    fn line(&self, level: &str, message: &str) {
-        if let Some(file) = self.approvals.borrow_mut().as_mut() {
-            let ts = chrono::Local::now().format("%Y-%m-%d %H:%M:%S");
-            let _ = writeln!(file, "{ts} [{level}] {message}");
+    /// Record a failure for the closing entry.
+    pub fn note(&self, message: &str) {
+        self.notes.borrow_mut().push(message.to_string());
+    }
+
+    /// End of a hook call: log `e` (with the notes as `message`) unless an
+    /// entry was logged and nothing failed since. Without a config the entry
+    /// goes to the fallback log.
+    pub fn close(&self, e: Entry) {
+        let notes = std::mem::take(&mut *self.notes.borrow_mut());
+        if self.written.replace(false) && notes.is_empty() {
+            return;
         }
-    }
-
-    pub fn info(&self, message: &str) {
-        self.line("INFO", message);
-    }
-
-    pub fn warning(&self, message: &str) {
-        self.line("WARNING", message);
-    }
-
-    pub fn error(&self, message: &str) {
-        self.line("ERROR", message);
+        if !self.configured.get()
+            && !test_no_log()
+            && let Some(path) = &self.fallback
+            && path
+                .parent()
+                .is_none_or(|p| std::fs::create_dir_all(p).is_ok())
+        {
+            *self.audit.borrow_mut() = Some(Audit {
+                path: path.clone(),
+                full: false,
+                policy_cwd: None,
+            });
+        }
+        let message = notes.join("; ");
+        self.decision(Entry {
+            message: (!message.is_empty()).then_some(message.as_str()),
+            ..e
+        });
+        self.written.set(false);
     }
 
     /// `log_decision`: append one JSON line in Python's key order.
     pub fn decision(&self, e: Entry) {
+        self.written.set(true);
         let mut audit = self.audit.borrow_mut();
         let Some(a) = audit.as_ref() else { return };
         let mut entry = Map::new();
@@ -159,6 +160,7 @@ impl Logs {
         put("policy_cwd", policy_cwd.as_deref());
         put("tool", e.tool);
         put("file_path", e.file_path);
+        put("event", e.event);
         if let Some(flags) = e.context_flags.filter(|f| !f.is_empty()) {
             entry.insert("context_flags".into(), json!(flags));
         }
@@ -216,23 +218,6 @@ mod tests {
     }
 
     #[test]
-    fn approvals_path_per_agent() {
-        let home = Path::new("/h");
-        assert_eq!(
-            approvals_path(home, "agy"),
-            Path::new("/h/.gemini/hook-approvals.log")
-        );
-        assert_eq!(
-            approvals_path(home, "pi"),
-            Path::new("/h/.pi/hook-approvals.log")
-        );
-        assert_eq!(
-            approvals_path(home, "claude"),
-            Path::new("/h/.claude/hook-approvals.log")
-        );
-    }
-
-    #[test]
     fn decision_entry_fields_and_order() {
         let dir = temp_dir("audit");
         let log = dir.join("sub").join("audit.log");
@@ -276,24 +261,6 @@ mod tests {
                  \"agent\": \"pi\", \"suggestion\": \"ls *\", \"ts\": "
             ),
             "{last}"
-        );
-        std::fs::remove_dir_all(&dir).unwrap();
-    }
-
-    #[test]
-    fn hook_approvals_off_stops_lines() {
-        let dir = temp_dir("approvals");
-        let path = dir.join("h.log");
-        let logs = Logs::with_approvals("claude", &path);
-        logs.info("Auto-detected mode: claude");
-        let config = crate::config::parse_config("set log-hook-approvals off", None).unwrap();
-        logs.configure(&config);
-        logs.info("APPROVED: x");
-        let text = std::fs::read_to_string(&path).unwrap();
-        assert_eq!(text.lines().count(), 1);
-        assert!(
-            text.ends_with(" [INFO] Auto-detected mode: claude\n"),
-            "{text}"
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

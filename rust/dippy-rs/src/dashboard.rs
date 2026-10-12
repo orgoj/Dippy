@@ -21,7 +21,8 @@ use crate::hook::py_dumps;
 use crate::http::{self, Request};
 use crate::{audit, config, paths, queue};
 
-pub const DECISIONS: [&str; 4] = ["allow", "ask", "deny", "pass"];
+/// Audit log decisions; `error` is a hook panic.
+pub const DECISIONS: [&str; 5] = ["allow", "ask", "deny", "pass", "error"];
 pub const DEFAULT_LIMIT: i64 = 200;
 pub const MAX_LIMIT: i64 = 1000;
 pub const MAX_NODE_RESPONSE: usize = 8 * 1024 * 1024;
@@ -910,6 +911,7 @@ pub(crate) mod tests {
         assert_eq!(cmds(&get("?decision=ask&decision=deny").2), ["curl", "rm"]);
         assert_eq!(cmds(&get("?not_allow=1").2), ["curl", "rm"]);
         assert_eq!(cmds(&get("?agent=codex").2), ["rm"]);
+        assert!(cmds(&get("?decision=error").2).is_empty());
         assert_eq!(cmds(&get("?cwd=/w").2), ["ls", "curl"]);
         assert_eq!(cmds(&get("?grep=cur").2), ["curl"]);
         assert_eq!(cmds(&get("?limit=1").2), ["rm"]);

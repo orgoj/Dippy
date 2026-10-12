@@ -3,10 +3,13 @@
 
 1. Every hook_compare.py job runs in its own empty HOME whose
    ``~/.dippy/config`` turns logging on (``DIPPY_TEST_NO_LOG`` unset). The
-   audit log lines (``ts`` masked, its format checked), the
-   ``hook-approvals.log`` lines (time masked) and the set of files written
-   must be identical. Hand-written payloads also run with
-   ``log-hook-approvals off`` and without ``log-full``.
+   audit log lines (``ts`` masked, its format checked) and the set of files
+   written must be identical. Hand-written payloads also run with
+   ``log-hook-approvals off`` and without ``log-full``. Intended
+   divergences: dippy-rs writes no ``hook-approvals.log`` (Python's is
+   ignored) and closes every call with at least one audit entry (an extra
+   last entry, possibly in the fallback ``~/.dippy/audit.log``, is dropped
+   after checking that every dippy-rs run logged one).
 2. ``audit`` queries over a fixture log with rotations: exit code and stdout
    identical (stderr too for Dippy's own messages; argparse usage text is
    not compared).
@@ -39,7 +42,7 @@ TS = re.compile(r'"ts": "(\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{6})?\+00:00)"')
 LINE_TIME = re.compile(r"^\d{4}-\d\d-\d\d \d\d:\d\d:\d\d (?=\[)")
 
 FULL = "set log ~/logs/audit.log\nset log-full\n"
-# Also exercises every config warning that reaches hook-approvals.log.
+# Also exercises every config warning (Python logs them to hook-approvals.log).
 QUIET = """\
 set log ~/audit.log
 set log-hook-approvals off
@@ -69,6 +72,24 @@ def drop_codex_phantom_pass(lines: list[str]) -> tuple[list[str], int]:
             continue
         out.append(line)
     return out, dropped
+
+
+def drop_rust_closing_entry(py: dict, rs: dict) -> int:
+    """dippy-rs divergence: no hook-approvals.log, and a closing audit entry
+    for a call Python logs nothing for (or after an askpass failure). Drop
+    Python's hook-approvals.log and a dippy-rs last line that Python lacks;
+    return 1 when one was dropped."""
+    for name in [n for n in py["files"] if n.endswith("hook-approvals.log")]:
+        del py["files"][name]
+    for name, lines in list(rs["files"].items()):
+        base = py["files"].get(name)
+        if lines and lines[:-1] == (base or []) and lines != base:
+            if base is None and len(lines) == 1:
+                del rs["files"][name]
+            else:
+                rs["files"][name] = lines[:-1]
+            return 1
+    return 0
 
 
 def run_logged(binary: str, job: dict, home: Path, settings: str) -> dict:
@@ -142,14 +163,20 @@ def compare_hooks(jobs: list[dict]) -> int:
             if name.endswith("audit.log"):
                 py["files"][name], dropped = drop_codex_phantom_pass(lines)
                 phantom += dropped
+    unlogged = [r for r, (_, rs) in zip(runs, results) if not any(rs["files"].values())]
+    closing = sum(drop_rust_closing_entry(py, rs) for py, rs in results)
     diffs = [(r, py, rs) for r, (py, rs) in zip(runs, results) if py != rs]
     bad = sum(len(py["bad"]) + len(rs["bad"]) for py, rs in results)
     lines = sum(len(v) for py, _ in results for v in py["files"].values())
     print(
         f"hook logs: {len(runs)} runs, {lines} Python log lines, "
         f"{len(diffs)} differ, {bad} malformed timestamps; "
-        f"{phantom} Codex phantom `pass` entries dropped (Python bug)"
+        f"{phantom} Codex phantom `pass` entries dropped (Python bug); "
+        f"{closing} dippy-rs closing entries dropped, "
+        f"{len(unlogged)} dippy-rs runs without an entry"
     )
+    for j, settings, _ in unlogged[:15]:
+        print(f"  no entry: {j['fmt']} {j['flags']} {json.dumps(j['payload'])[:120]}")
     for (j, settings, _), py, rs in diffs[:15]:
         print(f"  {j['fmt']} {j['flags']} {'full' if settings is FULL else 'quiet'}")
         print("     ", json.dumps(j["payload"])[:140])
@@ -157,7 +184,7 @@ def compare_hooks(jobs: list[dict]) -> int:
             a, b = py["files"].get(name), rs["files"].get(name)
             if a != b:
                 print(f"     {name}\n       py: {a}\n       rs: {b}")
-    return len(diffs) + bad
+    return len(diffs) + bad + len(unlogged)
 
 
 def entry(day: str, **fields) -> str:

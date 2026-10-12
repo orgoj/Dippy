@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.55] - 2026-10-12
+
+### Changed
+
+- dippy-rs: hook modes no longer write `hook-approvals.log` (`~/.claude/`, `~/.codex/`, `~/.gemini/`, ...); `set log-hook-approvals` is still accepted and has no effect. Config warnings are reported by `dippy doctor`.
+- dippy-rs: every hook call writes at least one audit log entry. Calls without a decision (PostToolUse, Stop, SubagentStop, AfterAgent, Notification) log `pass` with an `event` field; askpass failures and an unavailable dashboard are logged in `message`; a config error, invalid JSON input or an AGY workspace error is logged to `~/.dippy/audit.log` (the `set log` path is unknown then); an internal panic logs decision `error` and denies. `dippy audit --decision` and the dashboard filter accept `error`.
+
 ## [0.4.54] - 2026-10-12
 
 ### Fixed

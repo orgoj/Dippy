@@ -590,11 +590,8 @@ fn env_rule_patterns_in_claude_hook_mode() {
     assert_ne!(decision(&o), "allow", "{o:?}");
     let o = run_env(&dir, &["--claude"], &write("bot1/x"), &base);
     assert_ne!(decision(&o), "allow", "{o:?}");
-    let hook_log = std::fs::read_to_string(dir.join("home/.claude/hook-approvals.log")).unwrap();
-    assert!(
-        hook_log.contains("config: line 2: ${HCOM_DIR}: unset or empty (rule inactive)"),
-        "{hook_log}"
-    );
+    // Config warnings are reported by `dippy doctor` only.
+    assert!(!dir.join("home/.claude/hook-approvals.log").exists());
     let bash = r#"{"hook_event_name": "PreToolUse", "tool_name": "Bash",
         "tool_input": {"command": "bot1-tool run"}}"#;
     let o = run_env(&dir, &["--claude"], bash, &set);

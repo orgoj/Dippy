@@ -30,7 +30,7 @@ td.cwd { max-width: 16em; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; }
 td.time { white-space: nowrap; color: var(--muted); }
 .d-allow { color: var(--allow); } .d-ask { color: var(--ask); font-weight: 600; }
-.d-deny { color: var(--deny); font-weight: 600; } .d-pass { color: var(--pass); }
+.d-deny, .d-error { color: var(--deny); font-weight: 600; } .d-pass { color: var(--pass); }
 h2 { font-size: 15px; margin: 18px 0 4px; color: var(--muted); font-weight: 500; }
 h3 { font-size: 12px; letter-spacing: .06em; margin: 12px 0 4px; color: var(--muted); }
 nav { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }

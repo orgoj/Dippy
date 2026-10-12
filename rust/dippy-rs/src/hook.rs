@@ -5,13 +5,14 @@
 //! payloads, `ask` resolved through the askpass program). Bash
 //! classification, MCP, web and file-tool rules, `after` rules, permission
 //! bypass modes, `Stop`/`Notification` events and invalid JSON are handled,
-//! and decisions go to the audit log and `hook-approvals.log`. Not ported:
-//! notifier programs (never run) and the stderr copy of warnings.
+//! and decisions go to the audit log. Not ported: notifier programs (never
+//! run), `hook-approvals.log` and the stderr copy of warnings.
 //! Divergences from Python: a config error denies every tool call in every
 //! mode with a message telling the agent to stop (Python asks, or allows in
 //! Gemini and AGY modes), Codex output Python prints as `null` is left
-//! empty, and an allowed Codex MCP, web or file tool is not followed by
-//! Python's spurious `pass` audit entry.
+//! empty, an allowed Codex MCP, web or file tool is not followed by
+//! Python's spurious `pass` audit entry, and every call logs at least one
+//! audit entry (`audited`).
 
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -334,7 +335,6 @@ impl<'a> Hook<'a> {
     }
 
     fn approve(self, reason: &str, s: Subject) -> Reply {
-        self.log.info(&format!("APPROVED: {reason}"));
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             Mode::Agy => {
@@ -376,7 +376,6 @@ impl<'a> Hook<'a> {
     }
 
     fn ask(self, reason: &str, s: Subject) -> Reply {
-        self.log.info(&format!("ASK: {reason}"));
         if let Some(reply) = self.dashboard(reason, &s) {
             return reply;
         }
@@ -401,7 +400,6 @@ impl<'a> Hook<'a> {
     }
 
     fn deny(self, reason: &str, _s: Subject) -> Reply {
-        self.log.info(&format!("DENY: {reason}"));
         let msg = format!("🐤 {reason}");
         Reply::Json(match self.mode {
             Mode::Agy => json!({"decision": "deny", "reason": msg}),
@@ -414,7 +412,6 @@ impl<'a> Hook<'a> {
 
     /// No rule matched: defer to the agent (AGY: apply `set default`).
     fn pass(self, reason: &str, s: Subject) -> Reply {
-        self.log.info(&format!("PASS: {reason}"));
         match self.mode {
             Mode::Agy => match self.config.map(|c| c.default.as_str()) {
                 Some("allow") => self.approve(reason, s),
@@ -505,9 +502,9 @@ impl<'a> Hook<'a> {
             remote: false,
             causes: s.causes,
         };
-        let outcome = approval::wait(config, &ask, &|line| self.log.info(line), &|| {});
+        let outcome = approval::wait(config, &ask, &|_| {}, &|| {});
         if let Outcome::Fallback(why) = &outcome {
-            self.log.warning(&format!(
+            self.log.note(&format!(
                 "Dashboard approval unavailable, using the native flow: {why}"
             ));
             return None;
@@ -577,7 +574,7 @@ impl<'a> Hook<'a> {
             Ok(child) => child,
             Err(e) => {
                 let path = program.display();
-                self.log.warning(&match e.kind() {
+                self.log.note(&match e.kind() {
                     std::io::ErrorKind::NotFound => format!("Askpass program not found: {path}"),
                     std::io::ErrorKind::PermissionDenied => {
                         format!("Askpass program not executable: {path}")
@@ -602,7 +599,7 @@ impl<'a> Hook<'a> {
                 Ok(None) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    self.log.warning(&format!(
+                    self.log.note(&format!(
                         "Askpass timeout after {}s",
                         config.askpass_timeout
                     ));
@@ -611,7 +608,7 @@ impl<'a> Hook<'a> {
                 Err(e) => {
                     let _ = child.kill();
                     let _ = child.wait();
-                    self.log.warning(&format!("Askpass error: {e}"));
+                    self.log.note(&format!("Askpass error: {e}"));
                     return false;
                 }
             }
@@ -651,41 +648,120 @@ pub fn run_hook(explicit: Option<&str>, stdin: &str) -> HookOutput {
 }
 
 fn hook_reply(explicit: Option<&str>, stdin: &str) -> Reply {
-    // Python adds the log file only once the agent is known.
-    let no_log = Logs::none("claude");
-    let fallback = Hook {
-        mode: mode_of(explicit.unwrap_or("claude")),
+    let parsed = serde_json::from_str::<Value>(stdin);
+    let input = parsed.as_ref().ok().filter(|v| v.is_object());
+    let agent = explicit.unwrap_or_else(|| input.map_or("claude", mode_from_input));
+    let fallback = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".dippy/audit.log"));
+    let logs = Logs::hook(agent, fallback);
+    let mode = mode_of(agent);
+    audited(&logs, mode, input, || match input {
+        Some(input) => handle(&logs, input),
+        None => {
+            let reason = if parsed.is_ok() {
+                "error: hook input is not a JSON object"
+            } else {
+                "invalid json input"
+            };
+            logs.note(reason);
+            match mode {
+                Mode::Gemini => base_hook(mode, &logs).ask(reason, Subject::default()),
+                _ => Reply::Json(json!({})),
+            }
+        }
+    })
+}
+
+/// A hook without config.
+fn base_hook(mode: Mode, log: &Logs) -> Hook<'_> {
+    Hook {
+        mode,
         config: None,
         askpass: None,
-        log: &no_log,
+        log,
         cwd: None,
-    };
-    let error = |reason: &str| match fallback.mode {
-        Mode::Gemini => fallback.ask(reason, Subject::default()),
-        _ => Reply::Json(json!({})),
-    };
-    let Ok(input) = serde_json::from_str::<Value>(stdin) else {
-        return error("invalid json input");
-    };
-    if !input.is_object() {
-        return error("error: hook input is not a JSON object");
     }
-    let logs = Logs::setup(explicit.unwrap_or_else(|| mode_from_input(&input)));
-    if explicit.is_none() {
-        logs.info(&format!("Auto-detected mode: {}", logs.agent()));
+}
+
+/// Events whose reply decides nothing.
+const NO_DECISION_EVENTS: [&str; 5] = [
+    "PostToolUse",
+    "Stop",
+    "SubagentStop",
+    "AfterAgent",
+    "Notification",
+];
+
+/// Run one hook call; whatever happens, it logs at least one audit entry
+/// (`Logs::close`). A panic logs decision `error` and denies.
+fn audited(logs: &Logs, mode: Mode, input: Option<&Value>, call: impl FnOnce() -> Reply) -> Reply {
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call));
+    let event = input.map(hook_event);
+    let (reply, decision) = match result {
+        Ok(reply) => {
+            let decision = if event
+                .as_deref()
+                .is_some_and(|e| NO_DECISION_EVENTS.contains(&e))
+            {
+                "pass"
+            } else {
+                reply_decision(&reply)
+            };
+            (reply, decision)
+        }
+        Err(payload) => {
+            let text = payload
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_default();
+            logs.note(&format!("panic: {text}"));
+            let reason = format!("dippy-rs internal error: {text}");
+            (
+                base_hook(mode, logs).deny(&reason, Subject::default()),
+                "error",
+            )
+        }
+    };
+    let tool = input.and_then(|i| {
+        get_str(i, "tool_name").or_else(|| i.get("toolCall").and_then(|c| get_str(c, "name")))
+    });
+    logs.close(Entry {
+        decision,
+        tool,
+        event: event.as_deref(),
+        ..Entry::default()
+    });
+    reply
+}
+
+/// The decision a reply carries in any agent's format; none is `pass`.
+fn reply_decision(reply: &Reply) -> &'static str {
+    let Reply::Json(v) = reply else {
+        return if matches!(reply, Reply::Block(_)) {
+            "deny"
+        } else {
+            "pass"
+        };
+    };
+    let found = [
+        "/hookSpecificOutput/permissionDecision",
+        "/hookSpecificOutput/decision/behavior",
+        "/decision",
+        "/permission",
+    ]
+    .iter()
+    .find_map(|p| v.pointer(p).and_then(Value::as_str));
+    match found {
+        Some("allow" | "approve") => "allow",
+        Some("deny") => "deny",
+        Some("ask") => "ask",
+        _ => "pass",
     }
-    handle(&logs, &input)
 }
 
 fn handle(logs: &Logs, input: &Value) -> Reply {
     let mode = mode_of(logs.agent());
-    let base = Hook {
-        mode,
-        config: None,
-        askpass: None,
-        log: logs,
-        cwd: None,
-    };
+    let base = base_hook(mode, logs);
     let tool_input = input.get("tool_input").unwrap_or(NULL);
     let tool_args = input
         .get("toolCall")
@@ -693,16 +769,9 @@ fn handle(logs: &Logs, input: &Value) -> Reply {
         .unwrap_or(NULL);
     let (cwd, policy_cwd) = if mode == Mode::Agy {
         match agy_cwd(input, tool_args) {
-            Ok((cwd, policy)) => {
-                logs.info(&format!(
-                    "AGY policy cwd: {}; operation cwd: {}",
-                    policy.display(),
-                    cwd.display()
-                ));
-                (cwd, policy)
-            }
+            Ok(cwds) => cwds,
             Err(reason) => {
-                logs.error(reason);
+                logs.note(reason);
                 return base.deny(reason, Subject::default());
             }
         }
@@ -711,13 +780,12 @@ fn handle(logs: &Logs, input: &Value) -> Reply {
         (cwd.clone(), cwd)
     };
     let loaded = config::load_config(&policy_cwd, None, None);
-    for warning in config::take_warnings() {
-        logs.warning(&warning);
-    }
+    // Config warnings are reported by `dippy doctor`.
+    config::take_warnings();
     let mut config = match loaded {
         Ok(c) => c,
         Err(e) => {
-            logs.error(&format!("Config error: {e}"));
+            logs.note(&format!("Config error: {e}"));
             // Fail closed in every mode, with a reason that stops the agent.
             return base.deny(&config::stop_message(&e), Subject::default());
         }
@@ -831,32 +899,31 @@ fn hook_cwd(input: &Value, tool_input: &Value, tool_args: &Value) -> PathBuf {
     process_cwd()
 }
 
+/// The hook event, named or inferred from the payload; Gemini's
+/// `BeforeTool`/`AfterTool` become `PreToolUse`/`PostToolUse`.
+fn hook_event(input: &Value) -> String {
+    let has = |k: &str| input.get(k).is_some();
+    let event = get_str(input, "hook_event_name").or_else(|| get_str(input, "hookEventName"));
+    match event {
+        Some("BeforeTool") => "PreToolUse",
+        Some("AfterTool") => "PostToolUse",
+        Some(e) => e,
+        None if has("terminationReason") || has("fullyIdle") => "Stop",
+        None if has("toolResponse") || (has("toolCall") && has("error")) => "PostToolUse",
+        None => "PreToolUse",
+    }
+    .to_string()
+}
+
 fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
     let has = |k: &str| input.get(k).is_some();
-    let hook_event = get_str(input, "hook_event_name")
-        .or_else(|| get_str(input, "hookEventName"))
-        .map(str::to_string)
-        .unwrap_or_else(|| {
-            if has("terminationReason") || has("fullyIdle") {
-                "Stop".into()
-            } else if has("toolResponse") || (has("toolCall") && has("error")) {
-                "PostToolUse".into()
-            } else {
-                "PreToolUse".into()
-            }
-        });
+    let hook_event = hook_event(input);
     if hook_event == "Notification" {
         return Reply::Json(json!({}));
     }
     if matches!(hook_event.as_str(), "Stop" | "SubagentStop" | "AfterAgent") {
-        hook.log.info(&format!("Stop hook: {hook_event}"));
         return Reply::Json(hook.stop());
     }
-    let hook_event = match hook_event.as_str() {
-        "BeforeTool" => "PreToolUse".to_string(),
-        "AfterTool" => "PostToolUse".to_string(),
-        _ => hook_event,
-    };
     let post = hook_event == "PostToolUse";
     let permission_mode = input
         .get("permission_mode")
@@ -874,8 +941,6 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         Err(reply) => return reply,
     };
     if !post && matches!(permission_mode, "bypassPermissions" | "dontAsk") {
-        hook.log
-            .info(&format!("Bypass mode ({permission_mode}): {command}"));
         let summary = analyzer::analyze(command, config, cwd, None, false).reason;
         hook.audit(Entry {
             decision: "allow",
@@ -892,14 +957,12 @@ fn dispatch(hook: Hook, config: &Config, input: &Value, cwd: &Path) -> Reply {
         return hook.approve(permission_mode, s);
     }
     if post {
-        hook.log.info(&format!("PostToolUse: {command}"));
         let words = tokenize(command, false);
         return match config::match_after(&words, config, cwd).filter(|m| !m.is_empty()) {
             Some(m) => hook.post(&m),
             None => Reply::Silent,
         };
     }
-    hook.log.info(&format!("Checking: {command}"));
     let result = analyzer::analyze(command, config, cwd, None, false);
     hook.audit(Entry {
         decision: result.action.as_str(),
@@ -967,13 +1030,11 @@ fn tool_call<'v>(
             name.to_string()
         };
         if post {
-            hook.log.info(&format!("PostToolUse MCP: {mcp_name}"));
             return Err(after_reply(
                 hook,
                 config::match_after_mcp(&mcp_name, config),
             ));
         }
-        hook.log.info(&format!("Checking MCP: {mcp_name}"));
         let found = config::match_mcp(&mcp_name, config);
         // `-mcp` rules take no context flags.
         let causes = [cause("mcp", &mcp_name, found.as_ref(), Flags::new())];
@@ -1004,10 +1065,8 @@ fn tool_call<'v>(
     if TOOL_CALL_WEB_NAMES.contains(&name) {
         let value = first_str(args, &["query", "Url", "url", "q"]).unwrap_or("");
         if post {
-            hook.log.info(&format!("PostToolUse {name}: {value}"));
             return Err(after_reply(hook, config::match_after_web(value, config)));
         }
-        hook.log.info(&format!("Checking {name}: {value}"));
         let active = config::env_context_flags(config);
         let found = config::match_web(value, config, &active);
         let causes = [cause("web", value, found.as_ref(), active)];
@@ -1056,8 +1115,6 @@ fn tool_call<'v>(
         return Err(match (file_path, post) {
             (_, true) => Reply::Json(json!({})),
             (Some(path), false) => {
-                hook.log
-                    .info(&format!("Checking file op: {name} -> {path}"));
                 check_file_tool(hook, config, name, path, cwd).unwrap_or_else(|| {
                     hook.audit(Entry {
                         decision: "pass",
@@ -1129,17 +1186,13 @@ fn tool_input_payload<'v>(
         let command = (!is_mcp).then_some(value);
         if post {
             let message = if is_mcp {
-                hook.log.info(&format!("PostToolUse MCP: {tool_name}"));
                 config::match_after_mcp(value, config)
             } else {
-                hook.log.info(&format!("PostToolUse {tool_name}: {value}"));
                 config::match_after_web(value, config)
             };
             return Err(after_reply(hook, message));
         }
         if bypass {
-            hook.log
-                .info(&format!("Bypass mode ({permission_mode}): {tool_name}"));
             hook.audit(Entry {
                 decision: "allow",
                 message: Some(permission_mode),
@@ -1154,10 +1207,8 @@ fn tool_input_payload<'v>(
             return Err(hook.approve(permission_mode, s));
         }
         let found = if is_mcp {
-            hook.log.info(&format!("Checking MCP: {tool_name}"));
             config::match_mcp(value, config)
         } else {
-            hook.log.info(&format!("Checking {tool_name}: {value}"));
             config::match_web(value, config, &config::env_context_flags(config))
         };
         let s = Subject {
@@ -1200,8 +1251,6 @@ fn tool_input_payload<'v>(
             permission_mode,
             "bypassPermissions" | "dontAsk" | "acceptEdits"
         ) {
-            hook.log
-                .info(&format!("Bypass mode ({permission_mode}): {tool_name}"));
             hook.audit(Entry {
                 decision: "allow",
                 message: Some(permission_mode),
@@ -1212,8 +1261,6 @@ fn tool_input_payload<'v>(
             });
             return Err(hook.approve(permission_mode, Subject::default()));
         }
-        hook.log
-            .info(&format!("Checking file op: {tool_name} -> {file_path}"));
         return Err(
             check_file_tool(hook, config, tool_name, file_path, cwd).unwrap_or_else(|| {
                 let entry = Entry {
@@ -1758,15 +1805,28 @@ mod tests {
         dir
     }
 
-    /// Audit entries (without `ts`) and approvals lines (without the time)
-    /// written for each payload.
-    fn logged(mode: Mode, askpass: Option<&Path>, payloads: &[Value]) -> (Vec<Value>, Vec<String>) {
+    /// Audit entries of a log file, without `ts`.
+    fn entries_of(path: &Path) -> Vec<Value> {
+        std::fs::read_to_string(path)
+            .unwrap_or_default()
+            .lines()
+            .map(|l| {
+                let mut v: Value = serde_json::from_str(l).unwrap();
+                v.as_object_mut().unwrap().remove("ts");
+                v
+            })
+            .collect()
+    }
+
+    /// Audit entries (without `ts`) written for the payloads, one hook call
+    /// each.
+    fn logged(mode: Mode, askpass: Option<&Path>, payloads: &[Value]) -> Vec<Value> {
         let dir = temp_dir(&format!("{mode:?}"));
         let audit = dir.join("audit.log");
         let mut c =
             config::parse_config(&format!("{RULES}set log {}\n", audit.display()), None).unwrap();
         c = config::tag_rules(c, "/w/.dippy", "project");
-        let logs = Logs::with_approvals("pi", &dir.join("approvals.log"));
+        let logs = Logs::hook("pi", Some(dir.join("fallback.log")));
         logs.configure(&c);
         for payload in payloads {
             let hook = Hook {
@@ -1776,29 +1836,123 @@ mod tests {
                 log: &logs,
                 cwd: None,
             };
-            dispatch(hook, &c, payload, Path::new("/w"));
+            audited(&logs, mode, Some(payload), || {
+                dispatch(hook, &c, payload, Path::new("/w"))
+            });
         }
-        let entries = std::fs::read_to_string(&audit)
-            .unwrap_or_default()
-            .lines()
-            .map(|l| {
-                let mut v: Value = serde_json::from_str(l).unwrap();
-                v.as_object_mut().unwrap().remove("ts");
-                v
-            })
-            .collect();
-        let lines = std::fs::read_to_string(dir.join("approvals.log"))
-            .unwrap()
-            .lines()
-            .map(|l| l[20..].to_string())
-            .collect();
+        let entries = entries_of(&audit);
+        assert!(!dir.join("fallback.log").exists());
         std::fs::remove_dir_all(&dir).unwrap();
-        (entries, lines)
+        entries
+    }
+
+    #[test]
+    fn calls_without_a_decision_log_pass_with_the_event() {
+        let entries = logged(
+            Mode::Codex,
+            None,
+            &[
+                json!({"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": {"command": "frob x"}}),
+                json!({"hook_event_name": "Stop"}),
+                json!({"hook_event_name": "SubagentStop"}),
+                json!({"hook_event_name": "Notification"}),
+                json!({"hook_event_name": "PostToolUse", "tool_name": "mcp__fake__get"}),
+            ],
+        );
+        assert_eq!(
+            entries,
+            [
+                json!({"decision": "pass", "tool": "Bash", "event": "PostToolUse", "agent": "pi"}),
+                json!({"decision": "pass", "event": "Stop", "agent": "pi"}),
+                json!({"decision": "pass", "event": "SubagentStop", "agent": "pi"}),
+                json!({"decision": "pass", "event": "Notification", "agent": "pi"}),
+                json!({"decision": "pass", "tool": "mcp__fake__get", "event": "PostToolUse", "agent": "pi"}),
+            ]
+        );
+        let gemini = logged(
+            Mode::Gemini,
+            None,
+            &[json!({"hook_event_name": "AfterAgent"})],
+        );
+        assert_eq!(
+            gemini,
+            [json!({"decision": "pass", "event": "AfterAgent", "agent": "pi"})]
+        );
+        let cursor = logged(
+            Mode::Cursor,
+            None,
+            &[json!({"tool_name": "Write", "tool_input": {"file_path": "/w/out/a"}})],
+        );
+        assert_eq!(
+            cursor,
+            [json!({"decision": "pass", "tool": "Write", "event": "PreToolUse", "agent": "pi"})]
+        );
+    }
+
+    #[test]
+    fn unconfigured_call_logs_to_the_fallback() {
+        let dir = temp_dir("fallback");
+        let fallback = dir.join("dippy").join("audit.log");
+        let logs = Logs::hook("codex", Some(fallback.clone()));
+        let input = json!({"tool_name": "Bash", "tool_input": {"command": "ls"}});
+        let reply = audited(&logs, Mode::Codex, Some(&input), || {
+            logs.note("Config error: bad line");
+            Reply::Block("🐤 stop".into())
+        });
+        assert_eq!(reply, Reply::Block("🐤 stop".into()));
+        assert_eq!(
+            entries_of(&fallback),
+            [
+                json!({"decision": "deny", "message": "Config error: bad line", "tool": "Bash", "event": "PreToolUse", "agent": "codex"})
+            ]
+        );
+        // Invalid JSON: no input, Gemini asks.
+        let logs = Logs::hook("gemini", Some(fallback.clone()));
+        let reply = audited(&logs, Mode::Gemini, None, || {
+            Reply::Json(json!({"decision": "ask", "reason": "x"}))
+        });
+        assert!(matches!(reply, Reply::Json(_)));
+        assert_eq!(
+            entries_of(&fallback)[1],
+            json!({"decision": "ask", "agent": "gemini"})
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn configured_without_log_writes_nothing() {
+        let dir = temp_dir("nolog");
+        let fallback = dir.join("audit.log");
+        let logs = Logs::hook("claude", Some(fallback.clone()));
+        logs.configure(&config());
+        audited(&logs, Mode::Claude, Some(&json!({})), || {
+            Reply::Json(json!({}))
+        });
+        assert!(!fallback.exists());
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn panic_logs_error_and_denies() {
+        let dir = temp_dir("panic");
+        let fallback = dir.join("audit.log");
+        let logs = Logs::hook("claude", Some(fallback.clone()));
+        let reply = audited(&logs, Mode::Claude, Some(&bash("ls")), || panic!("boom"));
+        let out = render(reply).unwrap();
+        assert!(out.contains("\"permissionDecision\": \"deny\""), "{out}");
+        assert!(out.contains("boom"), "{out}");
+        assert_eq!(
+            entries_of(&fallback),
+            [
+                json!({"decision": "error", "message": "panic: boom", "tool": "Bash", "event": "PreToolUse", "agent": "claude"})
+            ]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn audit_entries_match_python_call_sites() {
-        let (entries, lines) = logged(
+        let entries = logged(
             Mode::Claude,
             None,
             &[
@@ -1828,31 +1982,14 @@ mod tests {
                 json!({"decision": "ask", "rule": "/w/private/*", "message": "multi-file (2 paths): [/w/private/*]", "cwd": "/w", "tool": "read_many_files", "file_path": "/w/a", "agent": "pi"}),
                 json!({"decision": "allow", "cmd": "rm x", "message": "dontAsk", "cwd": "/w", "agent": "pi"}),
                 json!({"decision": "pass", "message": "unsupported tool: UnknownTool", "tool": "UnknownTool", "agent": "pi"}),
-            ]
-        );
-        assert_eq!(
-            lines,
-            [
-                "[INFO] Checking: frob x",
-                "[INFO] APPROVED: frob (frob)",
-                "[INFO] Checking MCP: mcp__fake__get",
-                "[INFO] APPROVED: [mcp__fake__* @ /w/.dippy]",
-                "[INFO] Checking MCP: mcp__other__x",
-                "[INFO] Checking WebSearch: cats",
-                "[INFO] Checking file op: Write -> /w/out/a.txt",
-                "[INFO] APPROVED: [/w/out/** @ /w/.dippy]",
-                "[INFO] Checking file op: Write -> /w/src/a",
-                "[INFO] ASK: [/w/private/*]",
-                "[INFO] Bypass mode (dontAsk): rm x",
-                "[INFO] APPROVED: dontAsk",
-                "[INFO] Stop hook: Stop",
+                json!({"decision": "pass", "event": "Stop", "agent": "pi"}),
             ]
         );
     }
 
     #[test]
     fn agy_logs_askpass_and_pass_chain() {
-        let (entries, lines) = logged(
+        let entries = logged(
             Mode::Agy,
             Some(Path::new("/nonexistent/askpass")),
             &[
@@ -1861,36 +1998,24 @@ mod tests {
                 json!({"toolCall": {"name": "search_web", "args": {"query": "cats"}}}),
             ],
         );
+        assert_eq!(entries.len(), 5, "{entries:?}");
         assert_eq!(entries[0]["decision"], "ask");
+        let not_found = "Askpass program not found: /nonexistent/askpass";
         assert_eq!(
             entries[1],
-            json!({"decision": "ask", "message": "no file path for view_file", "tool": "view_file", "agent": "pi"})
+            json!({"decision": "deny", "message": not_found, "tool": "run_command", "event": "PreToolUse", "agent": "pi"})
         );
         assert_eq!(
             entries[2],
+            json!({"decision": "ask", "message": "no file path for view_file", "tool": "view_file", "agent": "pi"})
+        );
+        assert_eq!(
+            entries[3],
             json!({"decision": "pass", "message": "no matching rule", "tool": "search_web", "agent": "pi"})
         );
-        let reason = entries[0]["cmd"].as_str().unwrap();
         assert_eq!(
-            lines[..4],
-            [
-                "[INFO] Checking: rm x".to_string(),
-                format!("[INFO] ASK: {reason}"),
-                "[WARNING] Askpass program not found: /nonexistent/askpass".to_string(),
-                format!("[INFO] DENY: approval denied or unavailable: {reason}"),
-            ]
-        );
-        assert_eq!(
-            lines[4..],
-            [
-                "[INFO] ASK: no file path provided",
-                "[INFO] DENY: approval denied or unavailable: no file path provided",
-                "[INFO] Checking search_web: cats",
-                "[INFO] PASS: no matching rule",
-                "[INFO] ASK: no matching rule",
-                "[WARNING] Askpass program not found: /nonexistent/askpass",
-                "[INFO] DENY: approval denied or unavailable: no matching rule",
-            ]
+            entries[4],
+            json!({"decision": "deny", "message": not_found, "tool": "search_web", "event": "PreToolUse", "agent": "pi"})
         );
     }
 

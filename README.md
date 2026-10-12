@@ -34,7 +34,7 @@
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Notifier (Sidekick)** — `set notifier-command "CMD"` for external notifications (mail check). Supports long-polling via `--idle` in stop hooks. Use `set notifier-include "tool1, tool2"` to limit when it triggers.
 - **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input
-- **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log
+- **Hook approvals log control** — `set log-hook-approvals off` to disable hook-approvals.log (Python only; dippy-rs writes no hook-approvals.log and ignores the setting)
 - **Hybrid mode** — `set default pass` to let Claude decide unmatched commands
 - **Audit log** — `cwd`, `agent`, and `suggestion` fields for better context
 - **Audit log queries** — auto-approved read-only `dippy audit` filters the log and its rotations by date, decision, agent, cwd, tool or text and counts entries with `--group-by`
@@ -392,7 +392,7 @@ Dippy adapts its output format and behavior based on the agent:
 | OpenAI Codex | `--codex` | `DIPPY_CODEX=1` | ✅ |
 | PearAI | `--pearai` | `DIPPY_PEARAI=1` | partial |
 
-Each agent mode maintains its own approval log (e.g., `~/.claude/hook-approvals.log`).
+Python Dippy keeps an approval log per agent mode (e.g., `~/.claude/hook-approvals.log`). dippy-rs writes none; every hook call writes at least one entry to the audit log instead.
 
 ---
 
@@ -489,9 +489,8 @@ dippy hooks install claude --global
 
 ### Check logs
 
-- Claude Code: `~/.claude/hook-approvals.log`
-- Gemini CLI: `~/.gemini/hook-approvals.log`
-- Dippy audit: `~/.dippy/audit.log`
+- Dippy audit: `~/.dippy/audit.log` (`dippy audit`); config warnings: `dippy doctor`
+- Python Dippy only: `~/.claude/hook-approvals.log`, `~/.gemini/hook-approvals.log`
 
 ### Common Issues
 

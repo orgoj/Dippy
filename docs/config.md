@@ -592,7 +592,8 @@ An empty string is never substituted. Check the warnings: loading the config
 logs one warning per faulty line with the file and line it was written on (also inside
 included files), for example
 `~/.dippy/config: line 4: ${HCOM_DIR}: unset or empty (rule inactive)` (in hook
-modes in `~/.claude/hook-approvals.log`). `dippy doctor` (dippy-rs) loads the
+modes Python logs it to `~/.claude/hook-approvals.log`; dippy-rs logs it
+nowhere). `dippy doctor` (dippy-rs) loads the
 user config and the stack a hook loads for the working directory and lists
 every faulty line once under "Configuration", without `--verbose`.
 `dippy config add-rule` checks only the syntax of `${NAME}`, so a rule for a
@@ -791,7 +792,7 @@ When Dippy analyzes `ssh host "(rm /tmp/x)"`:
 
 **One rule per line.** No line continuation.
 
-**Faulty rule lines are skipped.** Invalid rule lines (unknown directives, malformed rules, a rule whose `${NAME}` is unset or unsafe) are logged and have no effect, as if they were not in the file; valid rules in the same file still take effect. Check `~/.claude/hook-approvals.log` for warnings, or run `dippy doctor`, which lists every such line.
+**Faulty rule lines are skipped.** Invalid rule lines (unknown directives, malformed rules, a rule whose `${NAME}` is unset or unsafe) are logged and have no effect, as if they were not in the file; valid rules in the same file still take effect. Run `dippy doctor`, which lists every such line (Python also logs them to `~/.claude/hook-approvals.log`).
 
 **An invalid `set` line is fatal (dippy-rs).** An unknown setting or a missing or invalid value, in any config file including included ones, makes the whole config fail to load. Every hook mode (Claude, Gemini, Cursor, Codex, AGY, pi) then denies every tool call, and `dippy --cmd` answers `deny`, with a reason meant for the agent:
 
@@ -1263,7 +1264,7 @@ set default allow        # Auto-approve everything without explicit rule
 # Logging
 set log ~/.dippy/audit.log  # enable logging to path
 set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
-set log-hook-approvals off  # disable hook-approvals.log
+set log-hook-approvals off  # disable hook-approvals.log (Python only; no effect in dippy-rs)
 
 # Instruction appended while direct execution waits for approval
 set approval-wait-message "Stop work and wait for the user."
@@ -1906,9 +1907,16 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 
 **Hook caching:** Claude Code caches hooks at session start. Changes to dippy code or config require restarting the session to take effect.
 
-**Two logging systems:** Dippy has two separate logs:
+**Two logging systems:** Python Dippy has two separate logs:
 - `~/.claude/hook-approvals.log` - written by Python's `logging` module (can be disabled with `set log-hook-approvals off`)
 - Audit log (configurable path) - written by `log_decision()`, requires `set log <path>`
+
+dippy-rs writes only the audit log, and every hook call writes at least one
+entry: a call without a decision (PostToolUse, Stop, SubagentStop, AfterAgent,
+Notification) logs `pass` with an `event` field; askpass failures and an
+unavailable dashboard go into `message`; a config error, invalid JSON input or
+an AGY workspace error is logged to `~/.dippy/audit.log` (the `set log` path
+is unknown then); an internal panic logs decision `error` and denies.
 
 **Log path:** The `~/.dippy/` directory may have write issues when running as a Claude Code hook. Using `~/.claude/dippy-audit.log` is more reliable.
 
@@ -1935,7 +1943,7 @@ dippy dashboard --port 9000
 dippy dashboard --hub ~/.dippy/dashboard-nodes.json --port 8766
 ```
 
-**Debugging config rules:** Check `~/.claude/hook-approvals.log` to see which rules matched. Entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
+**Debugging config rules:** Check the audit log (`dippy audit`; Python also `~/.claude/hook-approvals.log`) to see which rules matched. Python's hook-approvals.log entries show the pattern in parentheses when a config rule matches: `APPROVED: rm (rm /tmp/test-*)` vs just `APPROVED: rm` for built-in approval.
 
 File, MCP and web rules name their origin in the decision reason - `[.dippy* @ /home/u/proj/.dippy]` - which tells you whether a user rule or a project rule won. The named file is the one that was loaded, so a rule reached through `include` is reported under the file that includes it.
 
@@ -2027,7 +2035,8 @@ answer counts as malformed.
 **Audit.** The hook keeps its `ask` entry; the outcome adds one entry with
 `allow` or `deny`, the agent, the note (or `approval timed out`) and the
 `approval` id, and repeats the `ask` entry's `cmd` summary for a shell
-command. `hook-approvals.log` follows `log-hook-approvals`.
+command. An unavailable dashboard is noted in a closing audit entry's
+`message`.
 
 **Agent hook timeouts.** Each agent cancels a hook that runs longer than its
 own timeout, so the agent's hook timeout must be greater than

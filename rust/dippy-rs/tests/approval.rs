@@ -251,9 +251,13 @@ fn claude_falls_back_to_its_own_prompt_when_no_node_listens() {
     let o = sb.run(&["--claude"], &bash("zorp --fictional"));
     assert_eq!(stdout(&o), stdout(&native));
     assert_eq!(o.status.code(), native.status.code());
-    assert_eq!(sb.audit(), native_audit);
-    let log = std::fs::read_to_string(sb.home().join(".claude/hook-approvals.log")).unwrap();
-    assert!(log.contains("Dashboard approval unavailable, using the native flow"));
+    let audit = sb.audit();
+    assert_eq!(audit[..1], native_audit[..]);
+    assert_eq!(audit.len(), 2, "{audit:?}");
+    assert_eq!(audit[1]["decision"], "ask");
+    let message = audit[1]["message"].as_str().unwrap();
+    assert!(message.starts_with("Dashboard approval unavailable, using the native flow"));
+    assert!(!sb.home().join(".claude/hook-approvals.log").exists());
 }
 
 #[test]
@@ -397,19 +401,11 @@ fn observe(sb: &Sandbox, args: &[&str], stdin: &str) -> Vec<String> {
     }
     let o = sb.run(&argv, stdin);
     let read = |p: PathBuf| std::fs::read_to_string(p).unwrap_or_default();
-    let mask = |s: String| {
-        s.lines()
-            .map(|l| l.get(20..).unwrap_or(l).to_string())
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
     vec![
         format!("{:?}", o.status.code()),
         stdout(&o),
         stderr(&o),
         format!("{:?}", sb.audit()),
-        mask(read(sb.home().join(".claude/hook-approvals.log"))),
-        mask(read(sb.home().join(".gemini/hook-approvals.log"))),
         read(sb.dir.join("askpass.stdin")),
         read(sb.dir.join("askpass.env")),
     ]
@@ -429,7 +425,7 @@ fn approval_ask_is_identical_to_no_setting_in_every_mode() {
         assert!(!without[1].is_empty() || !without[2].is_empty(), "{args:?}");
         if matches!(args[0], "--agy" | "run" | "run-on-server") {
             assert!(
-                !without[6].is_empty(),
+                !without[4].is_empty(),
                 "askpass did not run: {args:?} {without:?}"
             );
         }

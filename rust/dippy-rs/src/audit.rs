@@ -26,7 +26,7 @@ pub struct Query {
     #[arg(long, value_name = "YYYY-MM-DD")]
     pub until: Option<String>,
     /// Keep only this decision (repeatable)
-    #[arg(long = "decision", value_name = "DECISION", value_parser = ["allow", "ask", "deny", "pass"])]
+    #[arg(long = "decision", value_name = "DECISION", value_parser = crate::dashboard::DECISIONS)]
     pub decisions: Vec<String>,
     /// Drop allow decisions
     #[arg(long)]
@@ -360,6 +360,10 @@ mod tests {
         assert_eq!(q.limit, Some(3));
         assert_eq!(q.cwd.as_deref(), Some("."));
         assert!(parse_args(&["--decision", "maybe"]).is_err());
+        assert_eq!(
+            parse_args(&["--decision", "error"]).unwrap().decisions,
+            ["error"]
+        );
         assert!(parse_args(&["--bogus"]).is_err());
     }
 }

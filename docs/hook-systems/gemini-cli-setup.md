@@ -99,7 +99,7 @@ See [Configuration Documentation](../config.md) for more details.
 
 ## Troubleshooting
 
-- **Logs**: Check `~/.gemini/hook-approvals.log` for Dippy's internal logs when running in Gemini mode.
+- **Logs**: Check the audit log (`dippy audit --agent gemini`); Python Dippy also writes `~/.gemini/hook-approvals.log`.
 - **Diagnostics**: Run `dippy doctor --agent gemini` to check your configuration.
 - **Manual Check**: You can test how Dippy sees a command with `dippy --cmd "your command" --gemini`.
 

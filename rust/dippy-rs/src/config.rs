@@ -213,6 +213,8 @@ pub struct Config {
     pub log_full: bool,
     /// Days to keep rotated audit logs (0 disables rotation).
     pub log_rotate_max_days: i64,
+    /// `set log-hook-approvals`: accepted, no effect (dippy-rs writes no
+    /// `hook-approvals.log`).
     pub log_hook_approvals: bool,
 }
 
