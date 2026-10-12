@@ -24,12 +24,62 @@ const AGENT_DENY_FORMAT: &str = "⚠️ COMMAND DENIED by security policy.\n\nOr
 
 /// Stdout line and exit code for one stdin payload.
 pub fn run(stdin: &str) -> (String, i32) {
+    let parsed = serde_json::from_str::<Value>(stdin).ok();
+    let agent = parsed
+        .as_ref()
+        .and_then(|v| v.get("agent"))
+        .and_then(Value::as_str)
+        .unwrap_or("pi");
+    let logs = Logs::hook(agent, Some(config::default_log_path()));
+    logged(&logs, parsed.as_ref(), || answer(stdin, &logs))
+}
+
+/// Run one call; whatever happens, it logs at least one audit entry
+/// (`Logs::close`, decision from the reply's `action`). A panic logs
+/// decision `error` and denies.
+fn logged(
+    logs: &Logs,
+    input: Option<&Value>,
+    call: impl FnOnce() -> (String, i32),
+) -> (String, i32) {
+    let (out, code, decision) = match logs.catch(call) {
+        Ok((out, code)) => {
+            let reply: Value = serde_json::from_str(&out).unwrap_or_default();
+            let decision = match reply.get("action").and_then(Value::as_str) {
+                Some("allow") => "allow",
+                Some("deny") => "deny",
+                _ => "ask",
+            };
+            (out, code, decision)
+        }
+        Err(text) => {
+            let reason = format!("dippy-rs internal error: {text}");
+            let reply = json!({"action": "deny", "reason": reason, "error": true});
+            (py_dumps(&reply), 0, "error")
+        }
+    };
+    let event = input.and_then(|i| i.get("type")).and_then(Value::as_str);
+    logs.close(Entry {
+        decision,
+        event,
+        ..Entry::default()
+    });
+    (out, code)
+}
+
+fn answer(stdin: &str, logs: &Logs) -> (String, i32) {
     let input: Value = match serde_json::from_str(stdin) {
         Ok(v) => v,
-        Err(e) => return (failure(&format!("Invalid JSON input: {e}")), 1),
+        Err(e) => {
+            let reason = format!("Invalid JSON input: {e}");
+            logs.note(&reason);
+            return (failure(&reason), 1);
+        }
     };
     if !input.is_object() {
-        return (failure("Dippy error: hook input is not a JSON object"), 1);
+        let reason = "Dippy error: hook input is not a JSON object";
+        logs.note(reason);
+        return (failure(reason), 1);
     }
     let cwd = paths::resolve(Path::new(
         input.get("cwd").and_then(Value::as_str).unwrap_or("."),
@@ -41,15 +91,14 @@ pub fn run(stdin: &str) -> (String, i32) {
     let config = match loaded {
         Ok(c) => c,
         Err(e) => {
+            logs.note(&format!("Config error: {e}"));
             let reason = config::stop_message(&e);
             let reply = json!({"action": "deny", "reason": reason, "error": true});
             return (py_dumps(&reply), 0);
         }
     };
-    let agent = input.get("agent").and_then(Value::as_str).unwrap_or("pi");
-    let logs = Logs::none(agent);
     logs.configure(&config);
-    (py_dumps(&respond(&config, &input, &cwd, &logs)), 0)
+    (py_dumps(&respond(&config, &input, &cwd, logs)), 0)
 }
 
 fn failure(reason: &str) -> String {
@@ -234,6 +283,39 @@ fn format_deny_reason(reason: &str, command: Option<&str>, config: &Config, agen
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn failures_and_panics_log_to_the_fallback() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-pi-log-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let log = dir.join("audit.log");
+        let logs = Logs::hook("pi", Some(log.clone()));
+        let (out, code) = logged(&logs, None, || answer("[1]", &logs));
+        assert_eq!(code, 1);
+        assert!(out.contains("\"error\": true"), "{out}");
+        let input = json!({"type": "bash", "agent": "hermes"});
+        let logs = Logs::hook("hermes", Some(log.clone()));
+        let (out, code) = logged(&logs, Some(&input), || panic!("boom"));
+        assert_eq!(code, 0);
+        assert!(out.starts_with("{\"action\": \"deny\""), "{out}");
+        let entries: Vec<Value> = std::fs::read_to_string(&log)
+            .unwrap()
+            .lines()
+            .map(|l| {
+                let mut v: Value = serde_json::from_str(l).unwrap();
+                v.as_object_mut().unwrap().remove("ts");
+                v
+            })
+            .collect();
+        assert_eq!(
+            entries,
+            [
+                json!({"decision": "ask", "message": "Dippy error: hook input is not a JSON object", "agent": "pi"}),
+                json!({"decision": "error", "message": "panic: boom", "event": "bash", "agent": "hermes"}),
+            ]
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
 
     const RULES: &str = "\
 allow frob *

@@ -349,7 +349,7 @@ dippy doctor --verbose              # Show detailed diagnostics
 - ✓ Legacy hook detection with full path
 - ✓ pi_wrapper check for pi-mono/moltbot
 - ✓ Configuration validation (syntax errors)
-- ✓ Log health (writable directories, file size warnings)
+- ✓ Log health: the audit log (`set log`, default `~/.dippy/audit.log`) — writable directory, size warning (Python also checks the agents' `hook-approvals.log` directories)
 
 **Exit codes:** `0` (OK), `1` (warnings), `2` (critical issues)
 
@@ -489,7 +489,7 @@ dippy hooks install claude --global
 
 ### Check logs
 
-- Dippy audit: `~/.dippy/audit.log` (`dippy audit`); config warnings: `dippy doctor`
+- Dippy audit: `set log` path, default `~/.dippy/audit.log` (`dippy audit`); config warnings: `dippy doctor`
 - Python Dippy only: `~/.claude/hook-approvals.log`, `~/.gemini/hook-approvals.log`
 
 ### Common Issues

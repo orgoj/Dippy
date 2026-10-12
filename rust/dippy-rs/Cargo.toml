@@ -1,6 +1,6 @@
 [package]
 name = "dippy-rs"
-version = "0.4.55"
+version = "0.4.56"
 edition = "2024"
 license = "MIT"
 description = "Rust port of Dippy approval decisions"

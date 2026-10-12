@@ -305,13 +305,23 @@ def compare_audit() -> int:
         if py != rs:
             failures += 1
             print(f"  audit {args}\n     py: {py}\n     rs: {rs}")
+    # Intended: without `set log` Python reports an error, dippy-rs reads the
+    # default ~/.dippy/audit.log.
     missing = LOGS / "audit" / "nolog"
     missing.write_text("set log-full\n")
-    for args in ([],):
-        py, rs = run_audit(hc.PY, missing, args), run_audit(hc.RS, missing, args)
-        if py != rs:
-            failures += 1
-            print(f"  audit without log\n     py: {py}\n     rs: {rs}")
+    default = ROOT / "home" / ".dippy" / "audit.log"
+    default.parent.mkdir(parents=True, exist_ok=True)
+    line = entry(today.isoformat(), decision="ask", cmd="default log")
+    default.write_text(line + "\n")
+    py, rs = run_audit(hc.PY, missing, []), run_audit(hc.RS, missing, [])
+    default.unlink()
+    expected = (
+        (1, "", "audit log is not configured (set log PATH)"),
+        (0, line + "\n", ""),
+    )
+    if (py, rs) != expected:
+        failures += 1
+        print(f"  audit without log\n     py: {py}\n     rs: {rs}")
     print(f"audit: {len(queries) + 1} queries, {failures} differ")
     return failures
 

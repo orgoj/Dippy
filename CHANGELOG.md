@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.56] - 2026-10-12
+
+### Changed
+
+- dippy-rs: without `set log` the audit log is `~/.dippy/audit.log`, so every hook call, pi call, `--cmd`/`--stdin` check and `dippy run` is logged; `dippy audit`, `dippy dashboard` and the daily rotation use the same default instead of reporting "audit log is not configured".
+- dippy-rs: every pi extension call (`--pi`) writes at least one audit entry like the hook modes: `idle` and unknown request types, invalid JSON, a config error (to `~/.dippy/audit.log`) and an internal panic (decision `error`, reply deny).
+- dippy-rs: `dippy doctor` checks only the audit log Dippy actually writes (the `set log` path or the default): its directory, writability and size. It no longer checks the `hook-approvals.log` directories of Claude Code, Gemini CLI and Codex.
+
 ## [0.4.55] - 2026-10-12
 
 ### Changed

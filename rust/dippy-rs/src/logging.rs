@@ -104,6 +104,20 @@ impl Logs {
         });
     }
 
+    /// Run one call; a panic is noted for the closing entry and returned as
+    /// its text.
+    pub fn catch<T>(&self, call: impl FnOnce() -> T) -> Result<T, String> {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(call)).map_err(|payload| {
+            let text = payload
+                .downcast_ref::<&str>()
+                .map(|s| s.to_string())
+                .or_else(|| payload.downcast_ref::<String>().cloned())
+                .unwrap_or_default();
+            self.note(&format!("panic: {text}"));
+            text
+        })
+    }
+
     /// Record a failure for the closing entry.
     pub fn note(&self, message: &str) {
         self.notes.borrow_mut().push(message.to_string());

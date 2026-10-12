@@ -9,7 +9,8 @@ and the fake terminals run what is typed into a pane with local Bash and
 append it to a log that `capture-pane`/`pane read` return. Every step
 compares exit code, stdout and stderr; random markers (32 hex digits) and
 audit timestamps are normalized. After the scenario the sandbox tree (run
-state, locks, audit log, pane logs) must be identical.
+state, locks, audit log, pane logs) must be identical, except that without
+`set log` dippy-rs writes `~/.dippy/audit.log` (intended).
 
 Python divergences fixed in dippy-rs (tracebacks, `b'...'` stderr of failed
 tmux commands, a corrupt state file's JSON error wording) are covered by
@@ -475,6 +476,9 @@ def main() -> int:
             if py != rs and (py[0], py[1], stop) != rs:
                 differ += 1
                 print(f"  [{name}] {label}\n     py: {py}\n     rs: {rs}")
+        # Intended: without `set log` dippy-rs logs to ~/.dippy/audit.log.
+        if not any(e[0].startswith("home/.dippy") for e in py_tree):
+            rs_tree = [e for e in rs_tree if not e[0].startswith("home/.dippy")]
         if py_tree != rs_tree:
             differ += 1
             py_only = [e for e in py_tree if e not in rs_tree]

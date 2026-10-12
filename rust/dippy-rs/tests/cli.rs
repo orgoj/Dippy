@@ -157,6 +157,59 @@ fn cmd_and_stdin_write_the_audit_log() {
 }
 
 #[test]
+fn every_call_logs_to_the_default_audit_log_without_set_log() {
+    let dir = sandbox("default-log");
+    let bash = r#"{"tool_name": "Bash", "tool_input": {"command": "ls"}}"#;
+    run(&dir, &["--claude"], bash);
+    run(&dir, &["--codex"], r#"{"hook_event_name": "Stop"}"#);
+    run(&dir, &["--claude"], "not json");
+    let idle = format!(r#"{{"type": "idle", "cwd": "{}"}}"#, dir.display());
+    run(&dir, &["--pi"], &idle);
+    run(&dir, &["--pi"], "not json");
+    run(&dir, &["--cmd", "frobnicate x"], "");
+    let entries: Vec<serde_json::Value> =
+        std::fs::read_to_string(dir.join("home/.dippy/audit.log"))
+            .unwrap()
+            .lines()
+            .map(|l| serde_json::from_str(l).unwrap())
+            .collect();
+    let summary: Vec<_> = entries
+        .iter()
+        .map(|e| {
+            (
+                e["decision"].as_str().unwrap(),
+                e["agent"].as_str().unwrap(),
+                e["event"].as_str(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            ("allow", "claude", None),
+            ("pass", "codex", Some("Stop")),
+            ("pass", "claude", None),
+            ("allow", "pi", Some("idle")),
+            ("ask", "pi", None),
+            ("ask", "cli", None),
+        ],
+        "{entries:?}"
+    );
+    assert_eq!(entries[2]["message"], "invalid json input");
+    assert!(
+        entries[4]["message"]
+            .as_str()
+            .unwrap()
+            .starts_with("Invalid JSON input: "),
+        "{entries:?}"
+    );
+    // `audit` reads the same default log.
+    let o = run(&dir, &["audit", "--group-by", "agent"], "");
+    assert_eq!(o.status.code(), Some(0), "{o:?}");
+    assert_eq!(stdout(&o), "2\tclaude\n2\tpi\n1\tcli\n1\tcodex\n");
+}
+
+#[test]
 fn hook_mode_without_cmd_reads_payload() {
     let dir = sandbox("hook");
     let payload = r#"{"tool_name": "Bash", "tool_input": {"command": "ls"}}"#;
@@ -474,6 +527,68 @@ fn doctor_reports_checks_as_json() {
     assert_eq!(report["checks"][0]["message"], "dippy not found on PATH");
     assert_eq!(report["summary"]["critical"], 1);
     assert_eq!(doctor(&dir, &["--quiet"]).stdout.len(), 0);
+}
+
+/// The `Logs` check of `dippy doctor --json --verbose`.
+fn logs_check(dir: &PathBuf) -> serde_json::Value {
+    let o = doctor(dir, &["--json", "--verbose"]);
+    let report: serde_json::Value = serde_json::from_slice(&o.stdout).unwrap();
+    report["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["name"] == "Logs")
+        .unwrap()
+        .clone()
+}
+
+#[test]
+fn doctor_checks_only_the_audit_log() {
+    let dir = sandbox("doctor-logs");
+    let home = dir.join("home");
+    // Agent directories without a Dippy log are not checked.
+    std::fs::create_dir_all(home.join(".claude")).unwrap();
+    std::fs::write(home.join(".gemini"), "a file").unwrap();
+    let check = logs_check(&dir);
+    assert_eq!(check["status"], "ok", "{check}");
+    assert_eq!(check["message"], "Audit log not created yet");
+    let default = home.join(".dippy/audit.log");
+    assert_eq!(
+        check["details"],
+        format!("Audit log: {}", default.display())
+    );
+
+    std::fs::create_dir_all(home.join(".dippy")).unwrap();
+    std::fs::write(&default, vec![b'x'; 11 * 1024 * 1024]).unwrap();
+    let check = logs_check(&dir);
+    assert_eq!(check["status"], "warning", "{check}");
+    assert_eq!(
+        check["details"],
+        format!(
+            "Audit log: {}: log file is 11.0MB (consider rotation)",
+            default.display()
+        )
+    );
+
+    let custom = dir.join("logs/custom.log");
+    std::fs::write(
+        home.join(".dippy/config"),
+        format!("set log {}\n", custom.display()),
+    )
+    .unwrap();
+    std::fs::create_dir_all(dir.join("logs")).unwrap();
+    std::fs::write(&custom, "{}\n").unwrap();
+    let check = logs_check(&dir);
+    assert_eq!(check["status"], "ok", "{check}");
+    assert_eq!(check["message"], "Audit log is writable");
+    assert_eq!(
+        check["details"],
+        format!("Audit log: {} (0.00MB)", custom.display())
+    );
+    let text = String::from_utf8(doctor(&dir, &["--verbose"]).stdout).unwrap();
+    assert!(text.contains("Logs: Audit log is writable"), "{text}");
+    assert!(!text.contains("Log directories"), "{text}");
+    assert!(!text.contains("hook-approvals"), "{text}");
 }
 
 #[test]

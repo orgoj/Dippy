@@ -208,7 +208,7 @@ pub struct Config {
     pub run_on_server_ssh_config: Option<PathBuf>,
     /// `none` is kept as the string "none".
     pub run_on_server_ssh_auth_sock: Option<String>,
-    /// Audit log (`set log`).
+    /// Audit log (`set log`); `load_config` fills in [`default_log_path`].
     pub log: Option<PathBuf>,
     pub log_full: bool,
     /// Days to keep rotated audit logs (0 disables rotation).
@@ -2130,8 +2130,15 @@ pub fn load_config(
             warn(format!("Final config not found: {}", final_path.display()));
         }
     }
+    config.log.get_or_insert_with(default_log_path);
     rotate_logs_on(&config, chrono::Local::now().date_naive());
     Ok(config)
+}
+
+/// The audit log without `set log`, and of a hook call whose config cannot
+/// be loaded. Python logs nothing without `set log`.
+pub fn default_log_path() -> PathBuf {
+    paths::home().join(".dippy").join("audit.log")
 }
 
 /// `_rotate_logs`: rename an audit log last written before `today` (local

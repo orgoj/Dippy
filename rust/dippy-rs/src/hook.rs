@@ -651,8 +651,7 @@ fn hook_reply(explicit: Option<&str>, stdin: &str) -> Reply {
     let parsed = serde_json::from_str::<Value>(stdin);
     let input = parsed.as_ref().ok().filter(|v| v.is_object());
     let agent = explicit.unwrap_or_else(|| input.map_or("claude", mode_from_input));
-    let fallback = std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".dippy/audit.log"));
-    let logs = Logs::hook(agent, fallback);
+    let logs = Logs::hook(agent, Some(config::default_log_path()));
     let mode = mode_of(agent);
     audited(&logs, mode, input, || match input {
         Some(input) => handle(&logs, input),
@@ -694,7 +693,7 @@ const NO_DECISION_EVENTS: [&str; 5] = [
 /// Run one hook call; whatever happens, it logs at least one audit entry
 /// (`Logs::close`). A panic logs decision `error` and denies.
 fn audited(logs: &Logs, mode: Mode, input: Option<&Value>, call: impl FnOnce() -> Reply) -> Reply {
-    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(call));
+    let result = logs.catch(call);
     let event = input.map(hook_event);
     let (reply, decision) = match result {
         Ok(reply) => {
@@ -708,13 +707,7 @@ fn audited(logs: &Logs, mode: Mode, input: Option<&Value>, call: impl FnOnce() -
             };
             (reply, decision)
         }
-        Err(payload) => {
-            let text = payload
-                .downcast_ref::<&str>()
-                .map(|s| s.to_string())
-                .or_else(|| payload.downcast_ref::<String>().cloned())
-                .unwrap_or_default();
-            logs.note(&format!("panic: {text}"));
+        Err(text) => {
             let reason = format!("dippy-rs internal error: {text}");
             (
                 base_hook(mode, logs).deny(&reason, Subject::default()),

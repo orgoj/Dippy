@@ -196,6 +196,8 @@ def normalize(text: str, impl: Impl, ports: dict[int, str]) -> str:
     for port, label in ports.items():
         text = text.replace(f":{port}", f":<{label}>")
     text = UNREACHABLE.sub('"node unreachable: <error>"', text)
+    # Intended: dippy-rs also accepts decision `error` (a hook panic).
+    text = text.replace("allow, ask, deny, pass, error", "allow, ask, deny, pass")
     # Parser error wording differs (json vs serde); the path prefix is kept.
     return REGISTRY_JSON.sub(
         lambda m: m.group(0)

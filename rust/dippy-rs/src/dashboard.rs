@@ -756,10 +756,7 @@ pub fn run(args: &DashboardArgs, global: &crate::run::Global) -> i32 {
                     return 1;
                 }
             };
-            let Some(log) = config.log else {
-                eprintln!("audit log is not configured (set log PATH)");
-                return 1;
-            };
+            let log = config.log.unwrap_or_else(config::default_log_path);
             (Some(log), None)
         }
     };

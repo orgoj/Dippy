@@ -26,7 +26,12 @@ dippy audit --not-allow --policy-cwd ~/wiki --group-by tool --group-by file_path
 The `agent` field records the CLI (`claude`, `codex`, `agy`, `pi`), not the
 agent's name: identify one agent by its `policy_cwd` (the project whose policy
 applied) or else its `cwd`. Web and file-tool entries carry `tool` instead of
-`cmd`. Decision `pass` means Dippy did not decide and the agent CLI prompted.
+`cmd`. Decision `pass` means Dippy did not decide and the agent CLI prompted,
+except a `pass` with `event` PostToolUse, Stop, SubagentStop, AfterAgent or
+Notification: dippy-rs logs every call, and those calls need no approval.
+dippy-rs also closes a call with an entry carrying `event` and `message` when
+askpass or the dashboard failed or the config could not be loaded; decision
+`error` is a Dippy crash (the call was denied).
 
 Prefer the narrowest rule that covers the workflow. Keep destructive commands,
 arbitrary code execution, remote execution, secret-bearing reads, and external

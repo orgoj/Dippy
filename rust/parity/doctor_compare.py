@@ -12,13 +12,16 @@ Intentional divergences are covered by Rust tests, not here: `--agent
 moltbot`, legacy detection of an unrelated `/dippy` path, Codex matchers
 and the pi-mono bridge line (both only with --verbose), a hook config that
 is valid JSON but not an object, and `--agent` with only a project config
-(both Python exceptions).
+(both Python exceptions). The Logs check differs by design (dippy-rs checks
+only its audit log): a step whose output is identical without that check
+counts as an intended divergence.
 
 Usage: doctor_compare.py
 """
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
@@ -366,8 +369,32 @@ INTENDED = {
 }
 
 
+LOGS_BLOCK = re.compile(r"^\[.\] Logs: .*\n(?:    .*\n)*\n", re.M)
+SUMMARY = re.compile(r"^Summary: .*\n", re.M)
+
+
+def without_logs(stdout: str) -> str:
+    """The output without the Logs check and the totals that count it."""
+    start = re.search(r"^\{", stdout, re.M)
+    if start:
+        # --fix prints its progress before the report.
+        report = json.loads(stdout[start.start() :])
+        report["checks"] = [c for c in report["checks"] if c["name"] != "Logs"]
+        report.pop("summary", None)
+        report.pop("overall_status", None)
+        return stdout[: start.start()] + json.dumps(report)
+    return SUMMARY.sub("", LOGS_BLOCK.sub("", stdout))
+
+
 def is_intended(name: str, py, rs) -> bool:
-    if name not in INTENDED or py[0] != rs[0]:
+    if py[0] != rs[0]:
+        return False
+    # dippy-rs checks only its audit log (`set log`, else ~/.dippy/audit.log);
+    # Python checks the agents' hook-approvals.log directories and
+    # ~/.dippy/audit.log. Covered by `doctor_checks_only_the_audit_log`.
+    if py[2] == rs[2] and without_logs(py[1]) == without_logs(rs[1]):
+        return True
+    if name not in INTENDED:
         return False
     return INTENDED[name] in rs[1] or (py[1] == rs[1] and rs[2] == "")
 

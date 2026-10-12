@@ -1262,7 +1262,7 @@ set default pass         # Don't intercept - let Claude's permission system deci
 set default allow        # Auto-approve everything without explicit rule
 
 # Logging
-set log ~/.dippy/audit.log  # enable logging to path
+set log ~/.dippy/audit.log  # log path (Python: enables logging; dippy-rs default)
 set log-rotate-max-days 30  # keep rotated logs for N days (0 = disable)
 set log-hook-approvals off  # disable hook-approvals.log (Python only; no effect in dippy-rs)
 
@@ -1653,9 +1653,11 @@ exit(0 if result else 1)
 
 ## Logging
 
-**Default: no logging.**
+**Default:** Python Dippy logs nothing without `set log <path>`; dippy-rs
+always logs, to `set log <path>` or else `~/.dippy/audit.log` (also the file
+`dippy audit` and `dippy dashboard` read).
 
-When enabled with `set log <path>`, logs are structured (JSON) with minimal info:
+Logs are structured (JSON) with minimal info:
 
 ```json
 {"ts": "2024-01-15T10:23:45Z", "decision": "allow", "cmd": "git", "rule": "allow git stash *"}
@@ -1911,14 +1913,18 @@ To enable idle prompt notifications, add `Notification` to your hook matcher in 
 - `~/.claude/hook-approvals.log` - written by Python's `logging` module (can be disabled with `set log-hook-approvals off`)
 - Audit log (configurable path) - written by `log_decision()`, requires `set log <path>`
 
-dippy-rs writes only the audit log, and every hook call writes at least one
-entry: a call without a decision (PostToolUse, Stop, SubagentStop, AfterAgent,
-Notification) logs `pass` with an `event` field; askpass failures and an
+dippy-rs writes only the audit log (`set log`, default `~/.dippy/audit.log`),
+and every hook and pi extension call writes at least one entry: a call without
+a decision (PostToolUse, Stop, SubagentStop, AfterAgent, Notification) logs
+`pass` with an `event` field (pi: the request `type`); askpass failures and an
 unavailable dashboard go into `message`; a config error, invalid JSON input or
 an AGY workspace error is logged to `~/.dippy/audit.log` (the `set log` path
 is unknown then); an internal panic logs decision `error` and denies.
 
-**Log path:** The `~/.dippy/` directory may have write issues when running as a Claude Code hook. Using `~/.claude/dippy-audit.log` is more reliable.
+**Checking the log:** `dippy doctor` (dippy-rs) checks the audit log a hook
+in the current directory writes: the `set log` path or the default, its
+directory's writability and a size over 10 MB. It does not check the agents'
+`hook-approvals.log` directories.
 
 **Log rotation:** Dippy automatically rotates audit logs daily. On the first run of a day, a log last written on an earlier day is renamed to `audit-YYYY-MM-DD.log`, named after that day (local time); concurrent runs serialize on `.audit-rotate.lock` next to the log. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 

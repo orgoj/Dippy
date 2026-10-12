@@ -263,11 +263,8 @@ fn run_audit(global: &Cli, query: &dippy_rs::audit::Query) -> i32 {
             return 1;
         }
     };
-    let Some(log) = &config.log else {
-        eprintln!("audit log is not configured (set log PATH)");
-        return 1;
-    };
-    match dippy_rs::audit::query(log, query, &process_cwd) {
+    let log = config.log.unwrap_or_else(config::default_log_path);
+    match dippy_rs::audit::query(&log, query, &process_cwd) {
         Ok(lines) => {
             for line in lines {
                 println!("{line}");

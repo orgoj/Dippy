@@ -229,7 +229,7 @@ fn all_checks(args: &DoctorArgs, home: &Path, cwd: &Path) -> Vec<Check> {
     let mut checks = vec![check_installation()];
     checks.extend(check_hook_status(home, cwd, args.verbose));
     checks.push(check_config_validation(cwd));
-    checks.push(check_log_health(home, args.verbose));
+    checks.push(check_log_health(&audit_log_path(cwd)));
     if let Some(agent) = &args.agent {
         checks.push(check_agent_specific(agent, home, cwd, args.verbose));
     }
@@ -609,69 +609,66 @@ fn check_config_validation(cwd: &Path) -> Check {
     Check::new(NAME, Status::Ok, &message, None)
 }
 
-/// `check_log_health`.
-fn check_log_health(home: &Path, verbose: bool) -> Check {
+/// The audit log a hook in `cwd` writes: `set log`, else the default.
+fn audit_log_path(cwd: &Path) -> PathBuf {
+    let log = config::load_config(cwd, None, None)
+        .ok()
+        .and_then(|c| c.log);
+    // Config warnings and errors are reported by the Configuration check.
+    config::take_warnings();
+    log.unwrap_or_else(config::default_log_path)
+}
+
+/// `check_log_health`, for the one log dippy-rs writes (Python also checks
+/// the agents' `hook-approvals.log` directories).
+fn check_log_health(log: &Path) -> Check {
     const NAME: &str = "Logs";
-    let logs = [
-        (".claude/hook-approvals.log", "Claude Code"),
-        (".gemini/hook-approvals.log", "Gemini CLI"),
-        (".codex/hook-approvals.log", "OpenAI Codex CLI"),
-        (".dippy/audit.log", "Dippy audit"),
-    ];
+    let shown = py_path_str(log);
     let mut issues = Vec::new();
-    let mut writable = Vec::new();
-    let mut sizes = Vec::new();
-    for (rel, name) in logs {
-        let log = home.join(rel);
-        let dir = log.parent().unwrap_or(home);
-        if dir.exists() {
-            let probe = dir.join(".dippy_write_test");
-            let written = std::fs::OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open(&probe)
-                .and_then(|_| std::fs::remove_file(&probe));
-            let shown = py_path_str(dir);
-            match written {
-                Ok(()) => writable.push(name),
-                Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
-                    issues.push(format!("{name}: log directory not writable ({shown})"));
-                }
-                Err(_) => issues.push(format!("{name}: cannot write to log directory ({shown})")),
+    let dir = log.parent().unwrap_or(Path::new("/"));
+    if dir.exists() {
+        let probe = dir.join(".dippy_write_test");
+        let written = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&probe)
+            .and_then(|_| std::fs::remove_file(&probe));
+        let dir = py_path_str(dir);
+        match written {
+            Ok(()) => {}
+            Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+                issues.push(format!("Audit log: {dir}: log directory not writable"));
             }
+            Err(_) => issues.push(format!("Audit log: {dir}: cannot write to log directory")),
         }
-        if let Ok(meta) = log.metadata() {
-            let size_mb = meta.len() as f64 / (1024.0 * 1024.0);
-            if size_mb > 10.0 {
-                issues.push(format!(
-                    "{name}: log file is {size_mb:.1}MB (consider rotation)"
-                ));
-                sizes.push(format!("{name}: {size_mb:.1}MB"));
-            } else if verbose {
-                sizes.push(format!("{name}: {size_mb:.2}MB"));
-            }
-        }
+    }
+    let size_mb = log
+        .metadata()
+        .ok()
+        .map(|meta| meta.len() as f64 / (1024.0 * 1024.0));
+    if let Some(size_mb) = size_mb.filter(|s| *s > 10.0) {
+        issues.push(format!(
+            "Audit log: {shown}: log file is {size_mb:.1}MB (consider rotation)"
+        ));
     }
     if !issues.is_empty() {
         let message = format!("{} issue(s) detected", issues.len());
         return Check::new(NAME, Status::Warning, &message, Some(issues.join("\n")));
     }
-    if writable.is_empty() {
-        return Check::new(
+    match size_mb {
+        Some(size_mb) => Check::new(
             NAME,
             Status::Ok,
-            "Log files not created yet",
-            Some("This is normal for new installations".into()),
-        );
+            "Audit log is writable",
+            Some(format!("Audit log: {shown} ({size_mb:.2}MB)")),
+        ),
+        None => Check::new(
+            NAME,
+            Status::Ok,
+            "Audit log not created yet",
+            Some(format!("Audit log: {shown}")),
+        ),
     }
-    let details = verbose.then(|| {
-        let mut d = format!("Writable: {}", writable.join(", "));
-        if !sizes.is_empty() {
-            d.push_str(&format!("\nSizes: {}", sizes.join(", ")));
-        }
-        d
-    });
-    Check::new(NAME, Status::Ok, "Log directories are writable", details)
 }
 
 /// Gemini's `approvalMode`, top level first, then under
