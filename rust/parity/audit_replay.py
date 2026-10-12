@@ -101,7 +101,7 @@ RUST_ONLY_ALLOWS = (
         re.compile(r"sqlite3 \(read-only introspection\)"),
     ),
     (
-        re.compile(r"duckdb \((write query|unknown query)\)"),
+        re.compile(r"duckdb \((write query|unknown query|unverified export batch)\)"),
         re.compile(r"duckdb \(.* with safe extensions\)"),
     ),
 )
