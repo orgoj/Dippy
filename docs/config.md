@@ -583,7 +583,10 @@ A value is unsafe when:
 
 **A faulty `deny` rule asks** (dippy-rs). Instead of being left out, a `deny`
 rule of any kind becomes an `ask` rule in which each reference matches any
-value: `*` in command, `[opts:]`, MCP and web patterns, `**` in path patterns
+value: `**+` (one or more arguments) for a whole command word, `**` inside a
+command word (also prefixed to a word without `/`, which a value with `/`
+turns into a cwd-resolved path: `--out=${P}` asks as `**--out=**`), `*`
+in `[opts:]`, MCP and web patterns, `**` in path patterns
 (`deny-edit /w/${NAME}/**` asks for every path under `/w/`), and
 `deny-opt PREFIX ITEMS` asks for `PREFIX *`. A missing variable therefore never
 removes a protection; its warning ends with `(deny rule asks for any value)`.
@@ -808,12 +811,12 @@ When an `ask`, `deny`, or their `-redirect` variants match, an optional message 
 
 ```
 ask git push --force * "Use --force-with-lease instead"
-deny rm -rf /* "Too dangerous - be more specific about what to delete"
-ask *prod* "Production commands require manual review"
+deny rm -rf * /* * "Too dangerous - be more specific about what to delete"
+ask * *prod* * "Production commands require manual review"
 deny-redirect .env* "Never write secrets to env files"
 ```
 
-If no message is provided, a default is generated from the pattern (e.g., `"deny: rm -rf /*"`).
+If no message is provided, a default is generated from the pattern (e.g., `"deny: rm -rf * /* *"`).
 
 Only `ask` and `deny` support messages - approval messages don't reliably reach the AI across all platforms.
 
@@ -823,18 +826,50 @@ Dippy uses two pattern styles depending on context:
 
 ### Command Patterns
 
-For `allow`, `ask`, `deny` rules, patterns match the full command string:
+For `allow`, `ask`, `deny`, `delegate` and `after` rules, a pattern is split at
+whitespace into words, and the command is matched argument by argument
+(dippy-rs; Python Dippy matches the joined command string):
 
-- `*` matches any characters (including spaces and none)
-- `?` matches exactly one character
-- `[abc]` matches any of a, b, or c
-- `[a-z]` matches any character in range
-- `[!abc]` or `[^abc]` matches any character NOT in set
+- a standalone `*` or `**` word matches any number of arguments, including none
+- `*+` matches one or more arguments
+- any other word matches exactly one argument, with these globs inside it:
+  - `*` matches any characters except `/`
+  - `**` matches any characters, including `/`
+  - `?` matches one character except `/`
+  - `[abc]`, `[a-z]` match one character from the set; `[!abc]` or `[^abc]`
+    one character outside it, never `/`
+- a word ending in `+` after a glob, such as `tmp/*+`, matches one or more
+  arguments that each match the glob; a `+` without a glob before it
+  (`g++`) is literal
 
-**Trailing `*` matches bare commands.** The pattern `python *` matches both `python foo` AND bare `python`. To match only commands with arguments, use `?*`:
+A glob inside a word never reaches into the next argument, so a rule cannot be
+widened by appending arguments:
+
 ```
-allow python ?*   # matches 'python foo', NOT bare 'python'
+allow rm tmp/*         # rm tmp/a; NOT rm tmp/a /etc/passwd, NOT rm tmp/a/b
+allow rm -f tmp/**     # rm -f tmp/a/b; NOT rm -f tmp/a /home/u
+allow rm -f tmp/**+    # rm -f tmp/a tmp/b/c - each path checked
+allow ./tools/* *      # any script directly in ./tools/, with any arguments
+allow ./tools/*        # the script alone, without arguments
+```
+
+A word of the pattern cannot contain a space; match a quoted argument with
+spaces by a glob such as `?` (`-c :write-table-to?-`), or use an
+[`[opts:]` block](#option-aware-command-patterns).
+
+**Standalone `*` matches no arguments too.** The pattern `python *` matches both `python foo` AND bare `python`. To match only commands with arguments, use `*+`:
+```
+allow python *+   # matches 'python foo' and 'python a b', NOT bare 'python'
 allow python *    # matches both 'python foo' AND bare 'python'
+allow python ?*   # exactly one argument without '/': 'python foo', NOT 'python a b'
+```
+
+**Standalone stars around a word find it anywhere.** A deny for an option at
+any position needs a standalone `*` on both sides:
+
+```
+deny git * *--ext-diff* *    # git --ext-diff, git diff --ext-diff, git diff --ext-diff=x a
+deny git *--ext-diff*        # only git --ext-diff (one argument)
 ```
 
 **Patterns without globs match as a prefix.** `allow git status` also matches
@@ -855,12 +890,22 @@ allow cca-tmux-cli list|       # only the bare subcommand
 **A pattern token containing `/` is resolved against cwd - globs included.**
 This is what makes `allow node bin/*` expand to `allow node /cwd/bin/*`, but it
 also means a leading `*/` never matches an arbitrary absolute path: `*/tool`
-becomes `/cwd/*/tool`. Without a `/` the token is left alone, and `*` then
-crosses path separators normally:
+becomes `/cwd/*/tool`. Without a `/` the token is left alone, but only `**`
+crosses path separators:
 
 ```
-deny *my-tool *     # matches /opt/x/my-tool arg
-deny */my-tool *    # does NOT match it - reads as /cwd/*/my-tool
+deny **my-tool *    # matches /opt/x/my-tool arg and ./my-tool arg
+deny *my-tool *     # does NOT match them - `*` stops at `/`
+deny */my-tool *    # does NOT match them - reads as /cwd/*/my-tool
+```
+
+A command argument containing `/` is resolved the same way, an option too:
+`--output=/tmp/x` is matched as `/cwd/--output=/tmp/x`. A pattern word for such
+an option starts with `**`, since `*` stops at `/`:
+
+```
+deny sort * **--output=** *   # matches sort --output=/tmp/x f
+deny sort * *--output=* *     # does NOT match it
 ```
 
 A rule that silently never matches is the dangerous half of this: check a new
@@ -875,10 +920,10 @@ allow /**/hcom list *   # matches ./target/debug/hcom, /home/u/.cargo/bin/hcom
 allow hcom list *       # matches the PATH binary - a separate rule
 ```
 
-**`*` and `**` skip whole tokens, including subcommands.** Because `*` matches
-spaces, a glob in the middle of a pattern is a bypass surface: a rule meant to
-allow one read-only subcommand also allows a destructive one that happens to be
-followed by the right words.
+**A standalone `*` or `**` skips whole arguments, including subcommands.** In
+the middle of a pattern it is a bypass surface: a rule meant to allow one
+read-only subcommand also allows a destructive one that happens to be followed
+by the right words.
 
 ```
 allow hcom * agent show *    # also allows: hcom kill boom agent show x
@@ -1021,7 +1066,7 @@ follows them is script input, not a flag.
 allow just *
 allow uv run *
 allow python3 *
-allow ~/bin/*
+allow ~/bin/* *
 
 # Trust specific git operations
 allow git stash pop
@@ -1029,10 +1074,10 @@ allow git stash apply
 allow git checkout -- *
 
 # Prompt for review
-ask *prod* "Production commands require manual review"
+ask * *prod* * "Production commands require manual review"
 
 # Hard blocks (no user override)
-deny rm -rf /* "Too dangerous"
+deny rm -rf * /* * "Too dangerous"
 deny git push --force * "Use --force-with-lease instead"
 ```
 
@@ -1059,9 +1104,9 @@ allow docker *
 ask docker rm *
 ask docker rmi *
 
-# Allow rm but never rm -rf /
+# Allow rm but never rm -rf of / or a top-level directory
 allow rm *
-deny rm -rf /*
+deny rm -rf * /* *
 ```
 
 ## Redirect Rules
@@ -1189,11 +1234,12 @@ deny-opt duckdb COPY    # does NOT match: duckdb -readonly db.db "COPY (SELECT 1
 ```
 
 The query is a single token once the parser strips the quotes, and an item is
-compared against whole tokens. To reach inside it, use a normal rule with `**`
-and a glob; character classes are how you get case-insensitivity:
+compared against whole tokens. To reach inside it, use a normal rule with
+standalone `*` around a `**` glob (a query may contain `/`); character classes
+are how you get case-insensitivity:
 
 ```
-ask duckdb ** *[Cc][Oo][Pp][Yy]*
+ask duckdb * **[Cc][Oo][Pp][Yy]** *
 ```
 
 **Mixing with normal rules:**
@@ -1662,7 +1708,7 @@ Logs are structured (JSON) with minimal info:
 ```json
 {"ts": "2024-01-15T10:23:45Z", "decision": "allow", "cmd": "git", "rule": "allow git stash *"}
 {"ts": "2024-01-15T10:23:52Z", "decision": "ask", "cmd": "git", "rule": "ask git push --force *", "message": "Use --force-with-lease"}
-{"ts": "2024-01-15T10:24:01Z", "decision": "deny", "cmd": "rm", "rule": "deny rm -rf /*", "message": "Too dangerous"}
+{"ts": "2024-01-15T10:24:01Z", "decision": "deny", "cmd": "rm", "rule": "deny rm -rf * /* *", "message": "Too dangerous"}
 {"ts": "2024-01-15T10:24:15Z", "decision": "ask", "cmd": "rm"}
 ```
 
@@ -1678,7 +1724,7 @@ With `set log-full`, a `command` field is added containing the full command stri
 allow just *
 allow uv run *
 allow python3 *
-allow ~/bin/*
+allow ~/bin/* *
 
 allow-redirect /tmp/*
 allow-redirect .cache/*
@@ -1689,7 +1735,7 @@ deny-redirect .env* "Never write secrets"
 ```
 # .dippy (project)
 
-allow ./tools/*
+allow ./tools/* *
 allow git stash *
 allow git checkout -- *
 deny git push --force * "Use --force-with-lease"

@@ -29,6 +29,38 @@ BIN = HERE.parent / "target" / "release" / "dippy-rs"
 REPORT = HERE / "report.md"
 
 
+# Intended divergences (cmd, config excerpt, dippy-rs decision): in dippy-rs a
+# `*` inside a legacy pattern word matches within one argument and never `/`;
+# only a standalone `*` or `**` spans arguments, any number including none.
+INTENDED = [
+    ("hcomx agent show x", "allow hcomx * agent show *", "allow"),
+    ("ls prod", "ask *prod*", "allow"),
+    ("mytool deploy prod", "allow mytool *\nask *prod*", "allow"),
+    ("mytool -rf ./build", "deny mytool -rf /*", "allow"),
+    ("mytool sub/a.txt", "allow mytool *.txt", "ask"),
+    ("mytool sub/x/a.txt", "allow mytool sub/*.txt", "ask"),
+    ("mytool a x b", "allow mytool a*b", "ask"),
+    ("frob abc def", "allow frob ?*", "ask"),
+    ("./tools/sub/x.sh", "allow ./tools/*", "ask"),
+    ("node-x bin/sub/script.js", "allow node-x bin/*", "ask"),
+    ("rm /tmp/test-1 /etc/passwd", "allow rm /tmp/test-*", "ask"),
+    ("./my-tool arg", "deny *my-tool *", "ask"),
+    ("/opt/x/my-tool arg", "deny *my-tool *", "ask"),
+    (
+        "run-on-server ferda7 'lnav -n -c \";SELECT col\" -c \":write-table-to -\" /log/file.log'",
+        ":write-table-to -*",
+        "deny",
+    ),
+]
+
+
+def intended(case: dict, got: str) -> bool:
+    return any(
+        case["cmd"] == cmd and excerpt in case["config"] and got == decision
+        for cmd, excerpt, decision in INTENDED
+    )
+
+
 def first_word(cmd: str) -> str:
     words = cmd.strip().split()
     i = 0
@@ -74,13 +106,16 @@ def main() -> int:
 
     total = len(cases)
     agree = sum(1 for c, a in zip(cases, actual) if c["expected"] == a)
+    expected = sum(1 for c, a in zip(cases, actual) if c["expected"] != a and intended(c, a))
     unsafe = [
-        (c, a) for c, a in zip(cases, actual) if a == "allow" and c["expected"] != "allow"
+        (c, a)
+        for c, a in zip(cases, actual)
+        if a == "allow" and c["expected"] != "allow" and not intended(c, a)
     ]
     by_direction = collections.Counter()
     by_word = collections.defaultdict(list)
     for case, got in zip(cases, actual):
-        if case["expected"] != got:
+        if case["expected"] != got and not intended(case, got):
             by_direction[f"python {case['expected']} -> rust {got}"] += 1
             by_word[first_word(case["cmd"])].append((case, got))
     by_source = collections.defaultdict(lambda: [0, 0])
@@ -96,7 +131,7 @@ def main() -> int:
         "",
         f"- Cases: {total}",
         f"- Agreement: {agree} ({100 * agree / total:.2f}%)",
-        f"- Divergences: {total - agree}",
+        f"- Divergences: {total - agree} ({expected} intended, not listed below)",
         f"- Identical reason text (informational): {same_reason}",
         f"- **Unsafe divergences (Rust allow, Python not allow): {len(unsafe)}**",
         "",
@@ -124,7 +159,7 @@ def main() -> int:
     REPORT.write_text("\n".join(lines) + "\n")
     print(
         f"{total} cases, {agree} agree ({100 * agree / total:.2f}%), "
-        f"{total - agree} diverge, {len(unsafe)} unsafe"
+        f"{total - agree} diverge ({expected} intended), {len(unsafe)} unsafe"
     )
     for key, n in by_direction.most_common():
         print(f"  {key}: {n}")

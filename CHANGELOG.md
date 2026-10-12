@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2026-10-12
+
+### Changed
+
+- dippy-rs: legacy command patterns (`allow`, `ask`, `deny`, `delegate`, `after` without `[opts:]`) match argument by argument instead of as one joined string. A glob inside a pattern word matches exactly one argument; there `*`, `?` and `[!...]` never match `/`, and only `**` does. A standalone `*` or `**` matches any number of arguments, including none, at any position; `*+` matches at least one. A word ending in `+` after a glob (`tmp/*+`, `tmp/**+`) matches one or more arguments, each checked against the glob. Python Dippy keeps the old matching (recorded as intended divergences in `rust/parity/run` and `hook_compare.py`).
+- dippy-rs: a faulty `${NAME}` in a `deny` command rule now asks with `**+` (one or more arguments) where it is a whole word and `**` inside a word (plus a leading `**` when the word has no `/`: `--out=${P}` asks as `**--out=**`), instead of `*`.
+
+### Fixed
+
+- dippy-rs: a glob crossed argument boundaries, so `allow rm tmp/*` allowed `rm tmp/a /etc/passwd` and `allow rm -rf tmp/**` allowed `rm -rf tmp/a /home/u`.
+
+### Migration
+
+Existing rules may match less. Check every rule with a glob inside a word:
+- `allow tool/*` no longer covers arguments: write `allow tool/* *`.
+- `allow rm tmp/*` covers one path: write `tmp/*+` (or `tmp/**+` for subdirectories) for several.
+- `ask *prod*` and `deny git *--ext-diff*` match a single argument only: write `ask * *prod* *` and `deny git * *--ext-diff* *`.
+- `deny rm -rf /*` denies only `/` and top-level directories: use `/**` for every absolute path.
+- `allow curl -s http://10.*` no longer covers a URL path: write `http://10.**`.
+- `allow python ?*` means exactly one argument without `/`: write `python *+` for one or more.
+
 ## [0.4.60] - 2026-10-12
 
 ### Changed

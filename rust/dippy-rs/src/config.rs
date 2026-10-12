@@ -13,7 +13,7 @@ use std::sync::LazyLock;
 use regex::Regex;
 
 use crate::bash::decode_literal_word;
-use crate::fnmatch::fnmatchcase;
+use crate::fnmatch::{fnmatchcase, wordmatch};
 use crate::parser::tokenize;
 use crate::paths;
 
@@ -1182,18 +1182,39 @@ pub fn expand_env(
 }
 
 /// The pattern with every `${NAME}` matching any value; option-rule words
-/// (exact) become a command glob.
+/// (exact) become a command glob. Only `**` crosses `/` in path and command
+/// words. In a command a word that is only a reference becomes `**+` (one or
+/// more arguments, never none); a word without a literal `/` starts with `**`,
+/// because a value bringing the first `/` makes the argument a cwd-resolved path.
 fn wildcard_env(pattern: &str, kind: EnvKind) -> Result<String, String> {
-    let any = if kind == EnvKind::Path { "**" } else { "*" };
-    Ok(env_segments(pattern, kind)?
+    let any = match kind {
+        EnvKind::Path => "**",
+        EnvKind::Command | EnvKind::Words => "\0",
+        EnvKind::Shell | EnvKind::Text => "*",
+    };
+    let joined: String = env_segments(pattern, kind)?
         .into_iter()
         .map(|(is_name, text)| match (is_name, kind) {
             (true, _) => any.to_string(),
             (false, EnvKind::Words) => literal_env_value(&text, EnvKind::Command),
             (false, _) => text,
         })
-        .collect())
+        .collect();
+    Ok(WORD_RE
+        .replace_all(&joined, |c: &regex::Captures| {
+            let word = &c[0];
+            if word == "\0" {
+                "**+".to_string()
+            } else if word.contains('\0') && !word.contains('/') {
+                format!("**{}", word.replace('\0', "**"))
+            } else {
+                word.replace('\0', "**")
+            }
+        })
+        .into_owned())
 }
+
+static WORD_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"\S+").unwrap());
 
 /// Expand the rule's pattern (and option items). A rule whose variable is
 /// unset, empty or unsafe is dropped (`None`) with the warning to report:
@@ -2303,20 +2324,72 @@ fn normalize_token(token: &str, cwd: &Path) -> String {
     expand_token(token, cwd, false)
 }
 
-fn normalize_words(words: &[String], cwd: &Path) -> String {
-    words
-        .iter()
-        .map(|w| normalize_token(w, cwd))
-        .collect::<Vec<_>>()
-        .join(" ")
+fn normalize_words(words: &[String], cwd: &Path) -> Vec<String> {
+    words.iter().map(|w| normalize_token(w, cwd)).collect()
 }
 
-fn normalize_pattern(pattern: &str, cwd: &Path) -> String {
-    py_split(pattern)
+/// One token of a legacy command pattern.
+enum PatternToken {
+    /// A standalone `*` or `**`: any number of arguments (`*+`: at least one).
+    Any { at_least_one: bool },
+    /// `GLOB+`: one or more arguments, each matching the glob.
+    Repeat(String),
+    /// Exactly one argument matching the glob.
+    One(String),
+}
+
+/// Tokens of a legacy command pattern, normalized against `base` unless the
+/// match is remote. Without `exact` a pattern free of globs matches as a prefix.
+fn command_pattern(pattern: &str, base: Option<&Path>, exact: bool) -> Vec<PatternToken> {
+    let mut tokens: Vec<PatternToken> = py_split(pattern)
         .iter()
-        .map(|t| normalize_token(t, cwd))
-        .collect::<Vec<_>>()
-        .join(" ")
+        .map(|token| {
+            let (glob, repeat) = match token.strip_suffix('+') {
+                Some(glob) if has_glob_chars(glob) => (glob, true),
+                _ => (token.as_str(), false),
+            };
+            if glob.chars().all(|c| c == '*') {
+                return PatternToken::Any {
+                    at_least_one: repeat,
+                };
+            }
+            let glob = base.map_or_else(|| glob.to_string(), |b| normalize_token(glob, b));
+            if repeat {
+                PatternToken::Repeat(glob)
+            } else {
+                PatternToken::One(glob)
+            }
+        })
+        .collect();
+    let literal = tokens
+        .iter()
+        .all(|t| matches!(t, PatternToken::One(g) if !has_glob_chars(g)));
+    if !exact && literal {
+        tokens.push(PatternToken::Any {
+            at_least_one: false,
+        });
+    }
+    tokens
+}
+
+/// Whether the command words match the pattern tokens, argument by argument.
+fn match_pattern(words: &[String], pattern: &[PatternToken]) -> bool {
+    // reach[i]: the tokens so far match words[..i].
+    let mut reach = vec![false; words.len() + 1];
+    reach[0] = true;
+    for token in pattern {
+        let mut next = vec![false; words.len() + 1];
+        for i in 0..=words.len() {
+            let extends = i > 0 && (reach[i - 1] || next[i - 1]);
+            next[i] = match token {
+                PatternToken::Any { at_least_one } => extends || (reach[i] && !at_least_one),
+                PatternToken::Repeat(glob) => extends && wordmatch(&words[i - 1], glob),
+                PatternToken::One(glob) => i > 0 && reach[i - 1] && wordmatch(&words[i - 1], glob),
+            };
+        }
+        reach = next;
+    }
+    reach[words.len()]
 }
 
 fn normalize_path(path: &str, cwd: &Path) -> String {
@@ -2538,7 +2611,7 @@ fn match_words(
         words.to_vec()
     };
     let normalized_cmd = if remote {
-        resolved.join(" ")
+        resolved
     } else {
         normalize_words(&resolved, cwd)
     };
@@ -2569,7 +2642,7 @@ fn match_words(
     let (stripped_words, normalized_stripped) = if i > 0 {
         let s = words[i..].to_vec();
         let n = if remote {
-            s.join(" ")
+            s.clone()
         } else {
             normalize_words(&s, cwd)
         };
@@ -2617,41 +2690,12 @@ fn match_words(
             }
             continue;
         }
-        let normalized_pattern = if remote {
-            rule.pattern.clone()
-        } else {
-            normalize_pattern(&rule.pattern, pattern_base)
-        };
-        let mut raw_matched = false;
-        let mut stripped_matched = false;
-        let stripped = normalized_stripped.as_deref().filter(|s| !s.is_empty());
-        if !rule.exact && !has_glob_chars(&normalized_pattern) {
-            let prefix_pattern = format!("{normalized_pattern} *");
-            if fnmatchcase(&normalized_cmd, &prefix_pattern) || normalized_cmd == normalized_pattern
-            {
-                raw_matched = true;
-            }
-            if !raw_matched && let Some(ns) = stripped {
-                stripped_matched = fnmatchcase(ns, &prefix_pattern) || ns == normalized_pattern;
-            }
-        } else {
-            raw_matched = fnmatchcase(&normalized_cmd, &normalized_pattern);
-            if !raw_matched
-                && let Some(base) = normalized_pattern.strip_suffix(" *")
-                && !fnmatchcase("", base)
-            {
-                raw_matched = fnmatchcase(&normalized_cmd, base);
-            }
-            if !raw_matched && let Some(ns) = stripped {
-                stripped_matched = fnmatchcase(ns, &normalized_pattern);
-                if !stripped_matched
-                    && let Some(base) = normalized_pattern.strip_suffix(" *")
-                    && !fnmatchcase("", base)
-                {
-                    stripped_matched = fnmatchcase(ns, base);
-                }
-            }
-        }
+        let pattern = command_pattern(&rule.pattern, (!remote).then_some(pattern_base), rule.exact);
+        let raw_matched = match_pattern(&normalized_cmd, &pattern);
+        let stripped_matched = !raw_matched
+            && normalized_stripped
+                .as_deref()
+                .is_some_and(|ns| !ns.is_empty() && match_pattern(ns, &pattern));
         if raw_matched {
             result = Some(Match::from_rule(rule));
             raw_deny_set = rule.decision == "deny";
@@ -2736,15 +2780,10 @@ pub fn match_after(words: &[String], config: &Config, cwd: &Path) -> Option<Stri
     let base_cwd = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.after_rules {
-        let pattern = normalize_pattern(&rule.pattern, base_cwd);
-        let mut matched = fnmatchcase(&normalized_cmd, &pattern);
-        if !matched
-            && let Some(base) = pattern.strip_suffix(" *")
-            && !fnmatchcase("", base)
-        {
-            matched = fnmatchcase(&normalized_cmd, base);
-        }
-        if matched {
+        if match_pattern(
+            &normalized_cmd,
+            &command_pattern(&rule.pattern, Some(base_cwd), true),
+        ) {
             result = Some(rule.message.clone().unwrap_or_default());
         }
     }
@@ -3161,6 +3200,117 @@ mod tests {
         assert_eq!(decide(&c, "frob status x"), None);
     }
 
+    fn decide_words(config: &Config, cmd: &[&str]) -> Option<String> {
+        let w: Vec<String> = cmd.iter().map(|s| s.to_string()).collect();
+        let sc = SimpleCommand {
+            words: &w,
+            raw_words: &[],
+            word_has_expansions: &[],
+        };
+        match_command(&sc, config, Path::new("/tmp"), &Flags::new(), false).map(|m| m.decision)
+    }
+
+    #[test]
+    fn star_inside_a_word_matches_one_argument_without_slash() {
+        let c = cfg("allow fictrm tmp/*");
+        assert_eq!(decide(&c, "fictrm tmp/a").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictrm tmp/a /etc/passwd"), None);
+        assert_eq!(decide(&c, "fictrm tmp/a/b"), None);
+        assert_eq!(decide(&c, "fictrm tmp/../../etc"), None);
+        let c = cfg("allow fictrm -rf tmp/**");
+        assert_eq!(decide(&c, "fictrm -rf tmp/a/b").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictrm -rf tmp/a /home/u"), None);
+        let c = cfg("allow fict --x=*");
+        assert_eq!(
+            decide_words(&c, &["fict", "--x=a b"]).as_deref(),
+            Some("allow")
+        );
+        assert_eq!(decide(&c, "fict --x=a b"), None);
+        // A word holding a space is one argument, never two pattern tokens.
+        let c = cfg("allow fict a *");
+        assert_eq!(decide_words(&c, &["fict", "a b"]), None);
+        // Narrower for ask and deny too.
+        let c = cfg("allow fictrm *\ndeny fictrm -rf /*");
+        assert_eq!(decide(&c, "fictrm -rf /etc").as_deref(), Some("deny"));
+        assert_eq!(decide(&c, "fictrm -rf /etc/x").as_deref(), Some("allow"));
+        // An option holding `/` is resolved against cwd like any path word.
+        let c = cfg("allow fict *\ndeny fict * *--output=* *");
+        assert_eq!(decide(&c, "fict --output=/x f").as_deref(), Some("allow"));
+        let c = cfg("allow fict *\ndeny fict * **--output=** *");
+        assert_eq!(decide(&c, "fict --output=/x f").as_deref(), Some("deny"));
+        let c = cfg("allow fict *\ndeny fict /**/secret *");
+        assert_eq!(decide(&c, "fict /a/b/secret x").as_deref(), Some("deny"));
+    }
+
+    #[test]
+    fn standalone_star_matches_several_arguments() {
+        for star in ["*", "**"] {
+            let c = cfg(&format!("allow fict {star}"));
+            assert_eq!(decide(&c, "fict").as_deref(), Some("allow"));
+            assert_eq!(decide(&c, "fict a/b c").as_deref(), Some("allow"));
+            let c = cfg(&format!("allow fict {star} show *"));
+            assert_eq!(
+                decide(&c, "fict kill boom show x").as_deref(),
+                Some("allow")
+            );
+            assert_eq!(decide(&c, "fict show x").as_deref(), Some("allow"));
+            assert_eq!(decide(&c, "fict kill boom x"), None);
+        }
+        // Standalone stars around a word find it anywhere, even first or last.
+        let c = cfg("allow fict *\ndeny fict * *--ext-diff* *");
+        for cmd in [
+            "fict --ext-diff",
+            "fict diff --ext-diff",
+            "fict --ext-diff=x diff a",
+        ] {
+            assert_eq!(decide(&c, cmd).as_deref(), Some("deny"), "{cmd}");
+        }
+        assert_eq!(decide(&c, "fict diff a").as_deref(), Some("allow"));
+        let c = cfg("allow fict ?*");
+        assert_eq!(decide(&c, "fict a").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fict a b"), None);
+        assert_eq!(decide(&c, "fict"), None);
+    }
+
+    #[test]
+    fn plus_repeats_the_last_glob_for_each_argument() {
+        let c = cfg("allow fictrm tmp/*+");
+        assert_eq!(
+            decide(&c, "fictrm tmp/a tmp/b tmp/c").as_deref(),
+            Some("allow")
+        );
+        assert_eq!(decide(&c, "fictrm tmp/a").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fictrm"), None);
+        assert_eq!(decide(&c, "fictrm tmp/a /etc/passwd"), None);
+        assert_eq!(decide(&c, "fictrm tmp/a tmp/b/c"), None);
+        let c = cfg("allow fictrm -f tmp/**+ -v");
+        assert_eq!(
+            decide(&c, "fictrm -f tmp/a tmp/b/c -v").as_deref(),
+            Some("allow")
+        );
+        assert_eq!(decide(&c, "fictrm -f -v"), None);
+        let c = cfg("allow fict *+");
+        assert_eq!(decide(&c, "fict a/b c").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fict"), None);
+        // `+` without a glob before it is literal.
+        let c = cfg("allow fict++ *\nallow fict c++");
+        assert_eq!(decide(&c, "fict++ x").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fict c++ x").as_deref(), Some("allow"));
+        assert_eq!(decide(&c, "fict c"), None);
+    }
+
+    #[test]
+    fn after_rules_match_per_argument() {
+        let c = cfg("after fictrm tmp/* \"done\"");
+        let w = words("fictrm tmp/a");
+        assert_eq!(
+            match_after(&w, &c, Path::new("/tmp")).as_deref(),
+            Some("done")
+        );
+        let w = words("fictrm tmp/a /etc/passwd");
+        assert_eq!(match_after(&w, &c, Path::new("/tmp")), None);
+    }
+
     #[test]
     fn env_prefix_fallback_and_raw_deny() {
         let c = cfg("allow frob *\n");
@@ -3569,6 +3719,8 @@ mod tests {
                 ("ask", "/w/${P}/**")
             );
             assert_eq!(decide(&c, "fict run x").as_deref(), Some("ask"));
+            assert_eq!(decide(&c, "fict /etc/passwd x").as_deref(), Some("ask"));
+            assert_eq!(decide(&c, "fict /").as_deref(), Some("ask"));
             assert_eq!(decide(&c, "fict").as_deref(), Some("allow"));
             assert_eq!(match_mcp("mcp__s__t", &c).unwrap().decision, "ask");
             assert_eq!(match_mcp("other", &c).unwrap().decision, "allow");
@@ -3583,6 +3735,24 @@ mod tests {
             assert_eq!(decide(&c, "fictq v").as_deref(), Some("ask"));
             assert_eq!(decide(&c, "fictq --q v").as_deref(), Some("ask"));
         }
+        // Inside a word the reference also matches a value holding `/`.
+        let (c, _) = env_cfg(
+            &[],
+            "allow fict *\ndeny fict /opt/${P} *\nallow fictp *\ndeny-opt \"fictp /opt/${P}\" -f",
+        );
+        assert_eq!(decide(&c, "fict /opt/a/b x").as_deref(), Some("ask"));
+        assert_eq!(decide(&c, "fictp /opt/a/b -f").as_deref(), Some("ask"));
+        // A value bringing the first `/` makes the argument a cwd-resolved path.
+        let (c, _) = env_cfg(&[], "allow fict *\ndeny fict --out=${P} *\ndeny fict x${P}");
+        for cmd in [
+            "fict --out=/etc/passwd x",
+            "fict --out=a/b",
+            "fict --out=v",
+            "fict x/y",
+        ] {
+            assert_eq!(decide(&c, cmd).as_deref(), Some("ask"), "{cmd}");
+        }
+        assert_eq!(decide(&c, "fict y").as_deref(), Some("allow"));
         // Other decisions are still left out.
         let (c, warnings) = env_cfg(&[], "allow fict ${P}\nask fict ${P}");
         assert!(c.rules.is_empty());

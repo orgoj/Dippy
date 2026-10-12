@@ -47,11 +47,11 @@ For a project-local `tmp/**` workflow, consider the complete set:
 allow-redirect tmp/**
 allow-read tmp/**
 allow-edit tmp/**
-allow rm -f tmp/**
+allow rm -f tmp/**+
 
 # Place these after a broader `ask mkdir *` rule because Dippy uses last match wins.
 allow mkdir -p tmp
-allow mkdir -p tmp/**
+allow mkdir -p tmp/**+
 ```
 
 Never extend that bundle to executing a file from `tmp/`. The agent can write

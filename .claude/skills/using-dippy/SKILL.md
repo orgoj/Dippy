@@ -24,6 +24,11 @@ install target (`~/go/bin/tool`). Never allow running a program from a directory
 the agent may write, such as a project `tmp/`; a tool downloaded there is the
 agent's mistake to fix, not a rule to add.
 
+In dippy-rs a glob inside a pattern word matches one argument and `*` stops at
+`/`; only a standalone `*` or `**` spans arguments. Write `tmp/**+` for several
+paths, `./tools/* *` for a script with arguments, and `* *--opt* *` for an
+option at any position in a `deny`.
+
 Give every `deny` and `ask` message the permitted alternative, because the agent
 sees only the message, never the config: `deny git -C * "Use: cd <repo> && git
 log|diff|show"`. A bare prohibition, or text such as "commands listed below",

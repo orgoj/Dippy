@@ -150,12 +150,12 @@ allow ls
 allow cat
 
 # Require approval for package installs
-ask npm install*
-ask pip install*
+ask npm install *
+ask pip install *
 
 # Block dangerous commands
-deny rm -rf /*
-deny mkfs.*
+deny rm -rf * /* *
+deny mkfs.* *
 ```
 
 ## Verification Checklist

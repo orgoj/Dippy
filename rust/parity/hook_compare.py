@@ -235,6 +235,22 @@ def deny_rule_asks(env: dict, payload: dict) -> bool:
     return False
 
 
+def star_within_argument(j: dict) -> bool:
+    """Intended divergence: in dippy-rs a `*` inside a pattern word matches
+    within one argument and never `/`, so `ask *prod*` matches only a
+    one-word command (Python matches the joined command string). Only the
+    listed corpus commands under that rule are exempt."""
+    payload = j["payload"]
+    if "ask *prod*" not in j["config"] or not isinstance(payload, dict):
+        return False
+    command = (
+        payload.get("tool_input", {}).get("command")
+        or payload.get("command")
+        or payload.get("toolCall", {}).get("args", {}).get("CommandLine", "")
+    )
+    return command in ("ls prod", "mytool deploy prod")
+
+
 # Gemini and Codex use Claude-shaped payloads with their own tool and event names.
 GEMINI_EXTRA = [
     {"hook_event_name": "AfterAgent"},
@@ -532,10 +548,15 @@ def main() -> int:
         stats[1] += py == rs
         same = decision(j["fmt"], py) == decision(j["fmt"], rs)
         stats[2] += same
-        if decision(j["fmt"], rs) == "allow" and decision(j["fmt"], py) != "allow":
+        is_intended = j.get("intended") or star_within_argument(j)
+        if (
+            decision(j["fmt"], rs) == "allow"
+            and decision(j["fmt"], py) != "allow"
+            and not is_intended
+        ):
             unsafe.append(j)
         if py != rs:
-            if j.get("intended"):
+            if is_intended:
                 intended += 1
             else:
                 diffs.append((j, py, rs, same))
