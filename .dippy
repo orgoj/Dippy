@@ -23,14 +23,14 @@ allow-edit ./**
 allow-read ~/.dippy/audit.log
 
 allow-redirect tmp/**
-allow rm tmp/*
+allow rm tmp/**+
 
 # Safe reading of rule files for analysis (editing remains protected by global ask-edit)
 allow-read .dippy*
 allow-read **/.dippy*
 
 #---- Python ----#
-allow rm -rf /**/__pycache__
+allow rm -rf /**/__pycache__+
 
 #deny uv run ruff * "Use `just fmt --fix` and `just lint --fix`"
 deny .venv/bin/*  "Use `uv`"
@@ -87,4 +87,4 @@ allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/NOTES.md
 allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
 
 #---- hcom ----#
-allow [$HCOM_INSTANCE_NAME=dippy_dev] hcom send @* --name dippy_dev *
+allow [$HCOM_INSTANCE_NAME=dippy_dev] hcom send @* * --name dippy_dev *
