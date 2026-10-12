@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.59] - 2026-10-12
+
+### Fixed
+
+- dippy-rs: a DuckDB main-database write batch accepted any `ATTACH` whose option list mentioned `READ_ONLY`, so `ATTACH '/tmp/side.db' (READ_ONLY false)` could create a file outside the redirect check. Only a read-only `ATTACH` of a local file without `TYPE` is accepted now; everything else asks.
+
 ## [0.4.58] - 2026-10-12
 
 ### Changed

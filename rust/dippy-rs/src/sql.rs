@@ -615,14 +615,10 @@ pub fn sqlite_readonly_pragma(sql: &str) -> bool {
 // ---------------------------------------------------------------------------
 // DuckDB output checks.
 
-static ATTACH: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)\AATTACH(?:[\s\x1c-\x1f]+DATABASE)?\b").unwrap());
-static READ_ONLY_OPTION: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r"(?i)\([\s\x1c-\x1f]*[^()]*\bREAD_ONLY\b[^()]*\)[\s\x1c-\x1f]*\z").unwrap()
-});
-
 /// `duckdb_writes_only_main`: every statement reads, attaches read-only, or
-/// mutates only the main database.
+/// mutates only the main database. Intended divergence: Python accepts any
+/// ATTACH whose option list mentions `READ_ONLY` (also `READ_ONLY false`,
+/// `TYPE`, remote paths); Rust requires [`duckdb_readonly_attach`].
 pub fn duckdb_writes_only_main(sql: &str) -> bool {
     let Some(statements) = split_sql_statements(sql, false, false) else {
         return false;
@@ -639,11 +635,8 @@ pub fn duckdb_writes_only_main(sql: &str) -> bool {
         if is_readonly_sql(statement, &opts) == Some(true) {
             continue;
         }
-        if ATTACH.is_match(statement) {
-            if READ_ONLY_OPTION.is_match(statement) {
-                continue;
-            }
-            return false;
+        if duckdb_readonly_attach(statement) {
+            continue;
         }
         if !verified_main_write(statement) {
             return false;
@@ -652,7 +645,7 @@ pub fn duckdb_writes_only_main(sql: &str) -> bool {
     true
 }
 
-/// A read-only ATTACH of a local database file (Rust only: Python asks).
+/// A read-only ATTACH of a local database file.
 pub fn duckdb_readonly_attach(statement: &str) -> bool {
     checker::verify_readonly_attach(statement)
 }
@@ -888,6 +881,26 @@ mod tests {
             assert_ne!(ro_d(sql, "tsql"), Some(true), "{sql}");
         }
         assert_eq!(ro_d("SELECT 'NEXT VALUE FOR dbo.seq'", "tsql"), Some(true));
+    }
+
+    #[test]
+    fn duckdb_main_writes_attach_only_read_only_local_files() {
+        let write = "CREATE TABLE main.t AS SELECT 1";
+        assert!(duckdb_writes_only_main(&format!(
+            "ATTACH 'side.db' AS s (READ_ONLY); {write}"
+        )));
+        for attach in [
+            "ATTACH '/tmp/side.db' (READ_ONLY false)",
+            "ATTACH 'side.db' (TYPE sqlite, READ_ONLY)",
+            "ATTACH 'https://example.com/x.db' AS x (READ_ONLY)",
+            "ATTACH 'md:x' AS x (READ_ONLY)",
+            "ATTACH 'side.db' AS s",
+        ] {
+            assert!(
+                !duckdb_writes_only_main(&format!("{attach}; {write}")),
+                "{attach}"
+            );
+        }
     }
 
     #[test]

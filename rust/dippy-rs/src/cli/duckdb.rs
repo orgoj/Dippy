@@ -467,6 +467,30 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
         assert!(asked.is_empty(), "{}", asked.join("\n\n"));
     }
 
+    /// A writable ATTACH can create a file outside the redirect check.
+    #[test]
+    fn database_write_needs_read_only_local_attach() {
+        let write = "CREATE TABLE main.t AS SELECT 1";
+        assert_eq!(
+            redirects(&format!(
+                "duckdb main.db \"ATTACH 'side.db' AS s (READ_ONLY); {write}\""
+            )),
+            Some(vec!["main.db".to_string()])
+        );
+        for attach in [
+            "ATTACH '/tmp/side.db' (READ_ONLY false)",
+            "ATTACH 'side.db' (TYPE sqlite, READ_ONLY)",
+            "ATTACH 'https://example.com/x.db' AS x (READ_ONLY)",
+        ] {
+            let command = format!("duckdb main.db \"{attach}; {write}\"");
+            assert_ne!(
+                classify(&test_ctx(&command)).action,
+                Action::Allow,
+                "{command}"
+            );
+        }
+    }
+
     fn redirects(command: &str) -> Option<Vec<String>> {
         let result = classify(&test_ctx(command));
         assert_eq!(result.action, Action::Allow, "{command}");
