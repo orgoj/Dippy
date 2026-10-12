@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.60] - 2026-10-12
+
+### Changed
+
+- dippy-rs: `duckdb` treats `INSTALL name` / `LOAD name` of the extensions `icu`, `inet`, `json` and `parquet` as neutral: the rest of the batch decides, and the reason ends with `with safe extensions`. Other extensions (`httpfs`, scanners, ...), paths, `FROM` repositories and `FORCE INSTALL` still ask. `read_text(path)` is verified like `read_csv`.
+
 ## [0.4.59] - 2026-10-12
 
 ### Fixed

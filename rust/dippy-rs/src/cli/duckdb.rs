@@ -1,10 +1,10 @@
 //! Port of `src/dippy/cli/duckdb.py`.
 
-use super::{Classification, Describe, HandlerContext};
+use super::{Action, Classification, Describe, HandlerContext};
 use crate::bash::decode_literal_word;
 use crate::sql::{
-    ReadonlyOptions, duckdb_copy_export_target, duckdb_readonly_attach, duckdb_writes_only_main,
-    is_readonly_sql, py_lstrip, split_sql_statements,
+    ReadonlyOptions, duckdb_copy_export_target, duckdb_readonly_attach, duckdb_safe_extension,
+    duckdb_writes_only_main, is_readonly_sql, py_lstrip, split_sql_statements,
 };
 
 pub const COMMANDS: &[&str] = &["duckdb"];
@@ -143,10 +143,36 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     // behind an initial SELECT during statement classification.
     let sql = parts.join(";\n");
     let readonly_flag = has("-readonly") || has("-safe");
+    let filename = filename.filter(|f| !f.is_empty() && !filename_has_expansions);
+
+    // INSTALL/LOAD of a safe extension is neutral (Rust only); the rest of
+    // the batch decides, and the reason names the extensions.
+    let statements = split_sql_statements(&sql, false, false).unwrap_or_default();
+    if !statements.iter().any(|s| duckdb_safe_extension(s)) {
+        return classify_sql(&sql, readonly_flag, filename);
+    }
+    let rest: Vec<String> = statements
+        .into_iter()
+        .filter(|s| !duckdb_safe_extension(s))
+        .collect();
+    if rest.is_empty() {
+        return Classification::ask_desc("duckdb (extensions only)");
+    }
+    let result = classify_sql(&rest.join(";\n"), readonly_flag, filename);
+    match (&result.action, result.description.as_deref()) {
+        (Action::Allow, Some(desc)) => {
+            let base = desc.strip_suffix(')').unwrap_or(desc).to_string();
+            result.desc(format!("{base} with safe extensions)"))
+        }
+        _ => result,
+    }
+}
+
+fn classify_sql(sql: &str, readonly_flag: bool, filename: Option<&str>) -> Classification {
     let single = options(false, readonly_flag);
     let mut export_targets: Vec<String> = Vec::new();
     let mut unverified_statement = false;
-    for statement in split_sql_statements(&sql, false, false).unwrap_or_default() {
+    for statement in split_sql_statements(sql, false, false).unwrap_or_default() {
         if is_readonly_sql(&statement, &single) == Some(true) {
             continue;
         }
@@ -161,10 +187,10 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
         }
         return Classification::allow_desc("duckdb (query export)").redirects(export_targets);
     }
-    let readonly = is_readonly_sql(&sql, &options(true, readonly_flag));
+    let readonly = is_readonly_sql(sql, &options(true, readonly_flag));
     if readonly_flag {
         let attaches_and_reads = || {
-            split_sql_statements(&sql, false, false).is_some_and(|statements| {
+            split_sql_statements(sql, false, false).is_some_and(|statements| {
                 statements.iter().all(|statement| {
                     duckdb_readonly_attach(statement)
                         || is_readonly_sql(statement, &single) == Some(true)
@@ -180,9 +206,7 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
         return Classification::allow_desc("duckdb (read-only query)");
     }
     if let Some(filename) = filename
-        && !filename.is_empty()
-        && !filename_has_expansions
-        && duckdb_writes_only_main(&sql)
+        && duckdb_writes_only_main(sql)
     {
         return Classification::allow_desc("duckdb (database write)")
             .redirects(vec![filename.to_string()]);
@@ -465,6 +489,39 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
             .filter(|command| classify(&test_ctx(command)).action != Action::Allow)
             .collect();
         assert!(asked.is_empty(), "{}", asked.join("\n\n"));
+    }
+
+    /// Safe extensions do not change the verdict of the rest of the batch.
+    #[test]
+    fn safe_extensions_are_neutral() {
+        assert!(classifies_as(
+            "duckdb -readonly db.db 'INSTALL inet; LOAD inet; SELECT 1'",
+            true
+        ));
+        assert_eq!(
+            redirects("duckdb w.db 'LOAD inet; CREATE TABLE t AS SELECT 1'"),
+            Some(vec!["w.db".to_string()])
+        );
+        for command in [
+            "duckdb -readonly db.db 'INSTALL httpfs; SELECT 1'",
+            "duckdb -readonly db.db \"LOAD '/tmp/x.duckdb_extension'; SELECT 1\"",
+            "duckdb -readonly db.db 'INSTALL inet FROM community; SELECT 1'",
+            "duckdb -readonly db.db 'LOAD inet; DROP TABLE t'",
+            "duckdb -readonly db.db 'LOAD inet'",
+            "duckdb db.db 'LOAD inet; INSTALL httpfs; CREATE TABLE t AS SELECT 1'",
+            "duckdb -readonly db.db \"LOAD inet; COPY (SELECT 1) TO '/tmp/o.csv'; INSTALL httpfs\"",
+        ] {
+            assert_ne!(
+                classify(&test_ctx(command)).action,
+                Action::Allow,
+                "{command}"
+            );
+        }
+    }
+
+    fn classifies_as(command: &str, allowed: bool) -> bool {
+        let result = classify(&test_ctx(command));
+        (result.action == Action::Allow && result.redirect_targets.is_none()) == allowed
     }
 
     /// A writable ATTACH can create a file outside the redirect check.

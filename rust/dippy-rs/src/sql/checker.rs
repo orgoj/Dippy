@@ -19,7 +19,9 @@
 //! parameters, ...) and for main-database writes other than plain CREATE
 //! TABLE, INSERT, UPDATE, DELETE, DROP TABLE and ALTER TABLE ADD COLUMN.
 //! `duckdb -readonly` also allows a read-only local ATTACH before verified
-//! reads (Python asks; `rust/parity/audit_replay.py` reports it as "wider").
+//! reads, DuckDB batches may INSTALL/LOAD [`SAFE_EXTENSIONS`], and
+//! [`DUCKDB_READ_FUNCTIONS`] are verified (Python asks;
+//! `rust/parity/audit_replay.py` reports them as "wider").
 
 use std::collections::HashSet;
 use std::ops::ControlFlow;
@@ -232,10 +234,17 @@ const DUCKDB_PURE_FUNCTIONS: [&str; 3] = ["hash", "url_decode", "url_encode"];
 /// identifiers.
 const DUCKDB_NON_KEYWORDS: [&str; 2] = ["operator", "top"];
 
+/// DuckDB file readers SQLGlot does not know, like the known `read_csv`
+/// (Python asks for them). Exactly one argument (the path).
+const DUCKDB_READ_FUNCTIONS: [&str; 1] = ["read_text"];
+
 fn function_known(name: &str, count: usize, d: Dialect) -> bool {
     let lower = name.to_ascii_lowercase();
     if d == Duckdb && DUCKDB_PURE_FUNCTIONS.contains(&lower.as_str()) {
         return true;
+    }
+    if d == Duckdb && DUCKDB_READ_FUNCTIONS.contains(&lower.as_str()) {
+        return count == 1;
     }
     let mask = FUNCTIONS
         .binary_search_by(|(n, _)| n.cmp(&lower.as_str()))
@@ -771,6 +780,23 @@ pub fn verify_readonly_attach(sql: &str) -> bool {
         )
 }
 
+/// DuckDB core extensions that only add functions and types: no network,
+/// file-system or external database access of their own.
+const SAFE_EXTENSIONS: [&str; 4] = ["icu", "inet", "json", "parquet"];
+
+/// `INSTALL name` or `LOAD name` of a [`SAFE_EXTENSIONS`] entry, unquoted:
+/// no path, repository (`FROM`) or `FORCE`.
+pub fn verify_safe_extension(sql: &str) -> bool {
+    let name = match Duckdb.parse_one(sql) {
+        Some(Statement::Install { extension_name } | Statement::Load { extension_name }) => {
+            extension_name
+        }
+        _ => return false,
+    };
+    name.quote_style.is_none()
+        && SAFE_EXTENSIONS.contains(&name.value.to_ascii_lowercase().as_str())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -871,6 +897,26 @@ mod tests {
     }
 
     #[test]
+    fn safe_extensions() {
+        for sql in ["INSTALL inet", "LOAD inet", "load JSON", "INSTALL icu;"] {
+            assert!(verify_safe_extension(sql), "{sql}");
+        }
+        for sql in [
+            "INSTALL httpfs",
+            "LOAD postgres_scanner",
+            "LOAD '/tmp/evil.duckdb_extension'",
+            "LOAD \"inet\"",
+            "INSTALL inet FROM community",
+            "INSTALL inet FROM 'http://example.com'",
+            "FORCE INSTALL inet",
+            "INSTALL evil.inet",
+            "SELECT 1",
+        ] {
+            assert!(!verify_safe_extension(sql), "{sql}");
+        }
+    }
+
+    #[test]
     fn argument_counts() {
         assert!(function_known("LOWER", 1, Base));
         assert!(!function_known("lower", 2, Base));
@@ -879,5 +925,8 @@ mod tests {
         assert!(function_known("url_decode", 1, Duckdb));
         assert!(!function_known("url_decode", 1, Postgres));
         assert!(!function_known("load_extension", 1, Sqlite));
+        assert!(function_known("read_text", 1, Duckdb));
+        assert!(!function_known("read_text", 2, Duckdb));
+        assert!(!function_known("read_text", 1, Postgres));
     }
 }

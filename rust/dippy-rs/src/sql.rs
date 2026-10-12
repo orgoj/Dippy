@@ -645,6 +645,12 @@ pub fn duckdb_writes_only_main(sql: &str) -> bool {
     true
 }
 
+/// `INSTALL`/`LOAD` of an extension that only adds functions and types
+/// (Rust only: Python asks).
+pub fn duckdb_safe_extension(statement: &str) -> bool {
+    checker::verify_safe_extension(statement)
+}
+
 /// A read-only ATTACH of a local database file.
 pub fn duckdb_readonly_attach(statement: &str) -> bool {
     checker::verify_readonly_attach(statement)
@@ -1560,7 +1566,7 @@ mod tests {
                 "duckdb",
                 "SELECT * FROM read_csv('x.csv', header=query('x'))",
             ),
-            ("duckdb", "SELECT * FROM read_text('x.csv')"),
+            ("duckdb", "SELECT * FROM read_text('x.csv', query('x'))"),
             ("duckdb", "SELECT (a, writefile('x', 'y')) FROM t"),
             ("duckdb", "SELECT * FROM query('DELETE FROM t')"),
             ("duckdb", "SELECT nextval('s')"),

@@ -12,8 +12,9 @@ DIPPY_CONFIG_ONLY are replayed with the normal stack.
 
 A Rust allow where Python asks is UNSAFE (exit status 1), except WIDER
 cases: Python asked only because it could not verify SQL queries, which
-dippy-rs verifies with sqlparser, or for a sqlite3 PRAGMA or dot-command
-that dippy-rs allows as read-only introspection (intended divergences).
+dippy-rs verifies with sqlparser, for a sqlite3 PRAGMA or dot-command that
+dippy-rs allows as read-only introspection, or for a DuckDB batch with
+INSTALL/LOAD of a safe extension (intended divergences).
 
 Usage: audit_replay.py --scratch DIR [--out FILE] AUDIT_LOG...
 """
@@ -91,10 +92,19 @@ SQL_REASON = re.compile(
     r"(duckdb|sqlite3|psql|mysql|mariadb|sqlcmd) "
     r"\((unverified read-only query|unknown query)\)"
 )
-# Python asks for every sqlite3 PRAGMA and dot-command; dippy-rs allows
-# read-only introspection ones and says so in its reason.
-SQLITE_INTROSPECTION = re.compile(r"sqlite3 \((write query|dot-command)\)")
-RS_INTROSPECTION = "sqlite3 (read-only introspection)"
+# Python reasons that are wider only when dippy-rs names the Rust-only allow
+# in its reason: read-only sqlite3 PRAGMA/dot-commands, and DuckDB batches
+# with INSTALL/LOAD of a safe extension.
+RUST_ONLY_ALLOWS = (
+    (
+        re.compile(r"sqlite3 \((write query|dot-command)\)"),
+        re.compile(r"sqlite3 \(read-only introspection\)"),
+    ),
+    (
+        re.compile(r"duckdb \((write query|unknown query)\)"),
+        re.compile(r"duckdb \(.* with safe extensions\)"),
+    ),
+)
 
 
 def reason_parts(reason: str) -> list[str]:
@@ -104,14 +114,18 @@ def reason_parts(reason: str) -> list[str]:
 
 def sql_only(py_reason: str, rs_reason: str) -> bool:
     """Python asked only because it could not verify SQL queries, or for a
-    sqlite3 statement that dippy-rs allowed as read-only introspection."""
+    statement that dippy-rs allowed as a Rust-only allow named in its reason."""
     parts = reason_parts(py_reason)
-    introspection = [p for p in parts if SQLITE_INTROSPECTION.fullmatch(p)]
-    if introspection and RS_INTROSPECTION not in reason_parts(rs_reason):
-        return False
-    return bool(parts) and all(
-        SQL_REASON.fullmatch(p) or SQLITE_INTROSPECTION.fullmatch(p) for p in parts
-    )
+    rs_parts = reason_parts(rs_reason)
+    for part in parts:
+        if SQL_REASON.fullmatch(part):
+            continue
+        if not any(
+            py.fullmatch(part) and any(rs.fullmatch(p) for p in rs_parts)
+            for py, rs in RUST_ONLY_ALLOWS
+        ):
+            return False
+    return bool(parts)
 
 
 def main() -> int:
