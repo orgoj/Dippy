@@ -8,7 +8,9 @@
 //! `_verified_main_write`, the COPY export check and the temp-table parse).
 //! Rust parses with the `sqlparser` crate and checks the AST against an
 //! allowlist instead ([`checker`]). Intended divergences are documented
-//! there.
+//! there; Rust-only additions are the read-only DuckDB ATTACH
+//! ([`duckdb_readonly_attach`]) and SQLite introspection pragmas
+//! ([`sqlite_readonly_pragma`]), which Python asks for.
 
 mod checker;
 mod functions;
@@ -1450,7 +1452,7 @@ mod tests {
     // -- Syntax beyond the ported Python tests (checked with sql_compare) -----
 
     #[test]
-    fn grammar_extensions() {
+    fn syntax_beyond_python_tests() {
         for (dialect, sql) in [
             ("duckdb", "SELECT a FROM t GROUP BY ALL"),
             ("duckdb", "SELECT a FROM t GROUP BY ROLLUP (a, t.b), c"),
