@@ -186,6 +186,29 @@ mod tests {
         ("sqlite3 mydb.db '.shell touch x'", false),
         ("sqlite3 mydb.db 'SELECT 1' 'SELECT 2'", false),
         ("sqlite3 mydb.db \"SELECT writefile('x', 'data')\"", false),
+        // Audit log 2026-10-12: read-only queries that asked.
+        (
+            "sqlite3 -readonly ~/.hcom/hcom.db \"select id, timestamp, type, substr(data,1,400) from events where instance='dippy_dev' and type='life' order by id desc limit 4\"",
+            true,
+        ),
+        (
+            "sqlite3 -readonly ~/.hcom/hcom.db \"select id, timestamp, instance, data from events where type='life' and data like '%4c04bf6e%' order by id limit 3\"",
+            true,
+        ),
+        (
+            "sqlite3 -readonly ~/.hcom/hcom.db \"select json_extract(data,'$.snapshot.launch_context') from events where id=144725\"",
+            true,
+        ),
+        (
+            "sqlite3 -readonly ~/.hcom/hcom.db \"SELECT id, life_action, life_reason, json_extract(data,'$.snapshot.last_event_id'), json_extract(data,'$.snapshot.session_id') FROM events_v WHERE type='life' AND instance='wdt_mp2' AND id > 145300;\"",
+            true,
+        ),
+        ("sqlite3 db \"select load_extension('x')\"", false),
+        ("sqlite3 db \"select x from t; delete from t\"", false),
+        (
+            "sqlite3 db \"with d as (delete from t returning *) select * from d\"",
+            false,
+        ),
     ];
 
     #[test]

@@ -3,8 +3,8 @@
 use super::{Classification, Describe, HandlerContext};
 use crate::bash::decode_literal_word;
 use crate::sql::{
-    ReadonlyOptions, duckdb_copy_export_target, duckdb_writes_only_main, is_readonly_sql,
-    py_lstrip, split_sql_statements,
+    ReadonlyOptions, duckdb_copy_export_target, duckdb_readonly_attach, duckdb_writes_only_main,
+    is_readonly_sql, py_lstrip, split_sql_statements,
 };
 
 pub const COMMANDS: &[&str] = &["duckdb"];
@@ -163,7 +163,15 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     }
     let readonly = is_readonly_sql(&sql, &options(true, readonly_flag));
     if readonly_flag {
-        if readonly == Some(true) {
+        let attaches_and_reads = || {
+            split_sql_statements(&sql, false, false).is_some_and(|statements| {
+                statements.iter().all(|statement| {
+                    duckdb_readonly_attach(statement)
+                        || is_readonly_sql(statement, &single) == Some(true)
+                })
+            })
+        };
+        if readonly == Some(true) || attaches_and_reads() {
             return Classification::allow_desc("duckdb (read-only query)");
         }
         return Classification::ask_desc("duckdb (unverified read-only query)");
@@ -300,6 +308,30 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
             false,
         ),
         (
+            "duckdb -readonly work.db \"ATTACH 'other.db' AS o (READ_ONLY); SELECT * FROM o.t\"",
+            true,
+        ),
+        (
+            "duckdb -readonly work.db \"ATTACH 'other.db' AS o (READ_ONLY); CREATE TABLE o.t AS SELECT 1\"",
+            false,
+        ),
+        (
+            "duckdb -readonly work.db \"ATTACH 'other.db' AS o (READ_ONLY); ATTACH 'x.db' AS x\"",
+            false,
+        ),
+        (
+            "duckdb -readonly work.db \"ATTACH 'other.db' AS o (READ_ONLY); COPY (SELECT 1) TO '/tmp/out.csv'\"",
+            false,
+        ),
+        (
+            "duckdb -readonly work.db \"ATTACH 'https://example.com/x.db' AS o (READ_ONLY); SELECT 1\"",
+            false,
+        ),
+        (
+            "duckdb -readonly work.db -c \"ATTACH 'other.db' AS o (READ_ONLY)\" -c '.shell id'",
+            false,
+        ),
+        (
             "duckdb -cmd 'SELECT 1' work.db \"EXPORT DATABASE '/tmp/backup'\"",
             false,
         ),
@@ -421,6 +453,18 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
             let approved = result.action == Action::Allow && result.redirect_targets.is_none();
             assert_eq!(approved, *allowed, "{command}");
         }
+    }
+
+    /// Read-only `wdt_traffic` analytics commands that asked (audit log
+    /// 2026-10-12).
+    #[test]
+    fn audit_queries_2026_10_12_are_allowed() {
+        let fixture = include_str!("../../../../tests/fixtures/sql/duckdb_audit_2026_10_12.txt");
+        let asked: Vec<&str> = fixture
+            .lines()
+            .filter(|command| classify(&test_ctx(command)).action != Action::Allow)
+            .collect();
+        assert!(asked.is_empty(), "{}", asked.join("\n\n"));
     }
 
     fn redirects(command: &str) -> Option<Vec<String>> {

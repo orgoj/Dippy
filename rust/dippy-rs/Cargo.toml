@@ -1,6 +1,6 @@
 [package]
 name = "dippy-rs"
-version = "0.4.56"
+version = "0.4.57"
 edition = "2024"
 license = "MIT"
 description = "Rust port of Dippy approval decisions"
@@ -25,6 +25,7 @@ sha2 = "0.10"
 libc = "0.2"
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
 rustls-native-certs = "0.8"
+sqlparser = { version = "=0.63.0", features = ["visitor"] }
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 x11rb = "0.13"

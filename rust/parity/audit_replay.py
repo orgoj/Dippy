@@ -10,6 +10,10 @@ DIPPY_TEST_NO_LOG disables the audit log, a DIPPY_CONFIG override points
 fake script that denies without opening a dialog. Agents launched with
 DIPPY_CONFIG_ONLY are replayed with the normal stack.
 
+A Rust allow where Python asks is UNSAFE (exit status 1), except WIDER
+cases: Python asked only because it could not verify SQL queries, which
+dippy-rs verifies with sqlparser (intended divergence).
+
 Usage: audit_replay.py --scratch DIR [--out FILE] AUDIT_LOG...
 """
 
@@ -19,6 +23,7 @@ import argparse
 import collections
 import json
 import os
+import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
@@ -61,7 +66,8 @@ def payload(tool: str, value: str, cwd: str) -> dict:
     }
 
 
-def run(binary: str, key: tuple, base_env: dict) -> str:
+def run(binary: str, key: tuple, base_env: dict) -> tuple[str, str]:
+    """Decision and reason of one hook call."""
     tool, value, cwd, env = key
     proc = subprocess.run(
         [binary, "--claude"],
@@ -72,7 +78,25 @@ def run(binary: str, key: tuple, base_env: dict) -> str:
         cwd=cwd if os.path.isdir(cwd) else "/",
         timeout=60,
     )
-    return decision("claude", (proc.returncode, proc.stdout.strip(), ""))
+    result = decision("claude", (proc.returncode, proc.stdout.strip(), ""))
+    try:
+        hso = json.loads(proc.stdout).get("hookSpecificOutput", {})
+    except (json.JSONDecodeError, AttributeError):
+        hso = {}
+    return result, hso.get("permissionDecisionReason", "")
+
+
+SQL_REASON = re.compile(
+    r"(duckdb|sqlite3|psql|mysql|mariadb|sqlcmd) "
+    r"\((unverified read-only query|unknown query)\)"
+)
+
+
+def sql_only(reason: str) -> bool:
+    """Python asked only because it could not verify SQL queries."""
+    reason = reason.removeprefix("🐤").strip()
+    parts = [part.strip() for part in reason.split(",") if part.strip()]
+    return bool(parts) and all(SQL_REASON.fullmatch(part) for part in parts)
 
 
 def main() -> int:
@@ -116,30 +140,44 @@ def main() -> int:
     with ThreadPoolExecutor(os.cpu_count() or 4) as pool:
         results = list(pool.map(both, keys))
 
-    diffs = [(k, py, rs) for k, (py, rs) in zip(keys, results) if py != rs]
-    # Unsafe first: dippy-rs allows what Python does not.
-    diffs.sort(key=lambda d: (d[2] != "allow", d[1], d[2]))
-    unsafe = sum(1 for _, _, rs in diffs if rs == "allow")
-    pairs = collections.Counter((py, rs) for _, py, rs in diffs)
+    # Rust allowing where Python asks only for unverifiable SQL is WIDER, an
+    # intended divergence (sqlparser verifies the query; sql_compare.py and
+    # sql_fuzz.py check each SQL verdict). Any other Rust allow is UNSAFE.
+    diffs = []
+    for k, ((py, py_reason), (rs, _)) in zip(keys, results):
+        if py == rs:
+            continue
+        kind = "safe"
+        if rs == "allow":
+            kind = "wider" if py == "ask" and sql_only(py_reason) else "unsafe"
+        diffs.append((k, py, rs, kind))
+    order = ("unsafe", "wider", "safe")
+    diffs.sort(key=lambda d: (order.index(d[3]), d[1], d[2]))
+    kinds = collections.Counter(kind for *_, kind in diffs)
+    pairs = collections.Counter((py, rs) for _, py, rs, _ in diffs)
     lines = [
         f"{len(keys)} unique payloads ({skipped} entries skipped): "
-        f"{len(diffs)} differ, {unsafe} unsafe (rs allow)",
+        f"{len(diffs)} differ, {kinds['unsafe']} unsafe (rs allow), "
+        f"{kinds['wider']} wider (SQL verified by Rust only)",
         "  rust decisions: "
         + ", ".join(
-            f"{d} {n}" for d, n in collections.Counter(r for _, r in results).items()
+            f"{d} {n}"
+            for d, n in collections.Counter(r for _, (r, _) in results).items()
         ),
         *(f"  python {py} -> rust {rs}: {n}" for (py, rs), n in pairs.most_common()),
     ]
-    for (tool, value, cwd, env), py, rs in diffs:
+    for (tool, value, cwd, env), py, rs, kind in diffs:
         flags = " ".join(f"{k}={v}" for k, v in env)
-        lines.append(f"[py {py} | rs {rs}] {tool} cwd={cwd} {flags}\n    {value}")
+        lines.append(
+            f"[{kind}: py {py} | rs {rs}] {tool} cwd={cwd} {flags}\n    {value}"
+        )
     report = "\n".join(lines)
     if args.out:
         args.out.write_text(report + "\n", encoding="utf-8")
         print("\n".join(lines[: 2 + len(pairs)]))
     else:
         print(report)
-    return 1 if unsafe else 0
+    return 1 if kinds["unsafe"] else 0
 
 
 if __name__ == "__main__":

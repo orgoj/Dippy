@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.57] - 2026-10-12
+
+### Changed
+
+- dippy-rs: SQL query verification uses the maintained `sqlparser` crate (Apache DataFusion) instead of the hand-written grammar; the AST is checked against an allowlist of node kinds and SQLGlot-known functions. Unparsed or unlisted syntax still asks.
+- dippy-rs: `duckdb -readonly` allows `ATTACH 'local.db' AS x (READ_ONLY)` followed by verified read-only queries. Remote paths, `TYPE` options and writes still ask.
+
 ## [0.4.56] - 2026-10-12
 
 ### Changed

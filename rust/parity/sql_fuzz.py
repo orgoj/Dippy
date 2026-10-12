@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """Differential fuzzing of the Rust SQL checker against Python/SQLGlot.
 
-Generates random SQL from a grammar that covers (and slightly exceeds) the
-conservative Rust grammar, plus token-level mutations of generated and
-collected SQL, and compares both implementations with ``sql_compare``.
-Every Rust "verified" answer must match Python (unsafe count 0).
+Generates random SQL from a grammar of common read-only and write
+constructs, plus token-level mutations of generated and collected SQL, and
+compares both implementations with ``sql_compare``. Every Rust "verified"
+answer must match Python or be WIDER (Python cannot verify the syntax); the
+unsafe count must be 0. Review the WIDER examples.
 
 Usage: sql_fuzz.py [--count N] [--seed S] [--seeds FILE.jsonl] [--show N]
 """

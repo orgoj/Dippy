@@ -26,7 +26,7 @@ def unsafe(fn: str, opts: dict, sql: str) -> bool:
         check=True,
     )
     rs = json.loads(proc.stdout)["rs"]
-    record["result"] = python_result(record)
+    record["result"], record["rejected"] = python_result(record)
     return classify(record, rs) == "unsafe"
 
 
