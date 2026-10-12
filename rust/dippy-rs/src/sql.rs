@@ -695,13 +695,14 @@ pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
 /// * functions outside [`FUNCTIONS`]/`EXTRA_FUNCTIONS` (or with other
 ///   argument counts), function call syntax other than plain comma-separated
 ///   arguments, `count(*)`, `DISTINCT` in simple and string aggregates,
-///   `FILTER`, `OVER` (ROWS/RANGE frames with integer or UNBOUNDED bounds)
+///   `FILTER` (DuckDB also without `WHERE`), DuckDB `string_agg(... ORDER
+///   BY ...)`, `OVER` (ROWS/RANGE frames with integer or UNBOUNDED bounds)
 ///   and `date_trunc('<unit>', x)`; predicate arguments of functions that
 ///   SQLGlot rewrites (`strpos`, `mod`, `substr`, ...);
 /// * types outside the small built-in list (arrays only in DuckDB);
 /// * identifiers in [`RESERVED`] (e.g. `key`, `user`), even where SQLGlot
 ///   would accept them, except explicit `AS` column aliases in
-///   `AS_ALIASES` (e.g. `value`, `mode`);
+///   `AS_ALIASES` (e.g. `value`, `mode`) and DuckDB `sample`/`top`;
 /// * tagged dollar strings and untagged ones outside PostgreSQL/DuckDB,
 ///   prefixed strings (`N'..'`, `E'..'`), strings with backslashes where they
 ///   escape, numbers other than plain decimals/exponents, parameters,
@@ -711,10 +712,12 @@ pub(crate) fn test_ctx(command: &str) -> HandlerContext<'static> {
 ///   operators such as `=-1` and operators glued to a comment;
 /// * clauses outside SELECT/FROM/JOIN/WHERE/GROUP BY (with ALL, ROLLUP and
 ///   CUBE over columns)/HAVING/ORDER BY/LIMIT/OFFSET/set operations/CTEs,
-///   T-SQL `TOP n`, DuckDB `QUALIFY`, `USING SAMPLE`, `FROM`-first and
-///   `VALUES`; e.g. `NULLS FIRST`, `FETCH`, `GROUPS` frames, lateral joins,
-///   table functions, `COLLATE`, `INTERVAL`, `EXTRACT`, `CONVERT`, T-SQL
-///   `SELECT name = expr`;
+///   T-SQL `TOP n`, DuckDB `QUALIFY`, `USING SAMPLE`, `FROM`-first,
+///   `VALUES`, tuples, `INTERVAL <integer | (expr)> <unit>`, `TIMESTAMP`/
+///   `DATE` string literals, `(DESCRIBE table)` and `read_csv('<path>',
+///   name = <literal>, ...)`; e.g. `NULLS FIRST`, `FETCH`, `GROUPS` frames,
+///   lateral joins, other table functions, `COLLATE`, other `INTERVAL`
+///   forms, `EXTRACT`, `CONVERT`, T-SQL `SELECT name = expr`;
 /// * DuckDB writes other than plain CREATE TABLE (AS query or column list),
 ///   INSERT, UPDATE, DELETE, DROP TABLE and ALTER TABLE ADD COLUMN;
 /// * COPY exports with options other than FORMAT/HEADER/DELIMITER/QUOTE/
@@ -1225,16 +1228,18 @@ mod grammar {
 
     /// Hand-added rows in the format of [`FUNCTIONS`], derived with the same
     /// probe as `rust/parity/sql_tables.py` (zero-argument bits dropped).
-    const EXTRA_FUNCTIONS: [(&str, [u8; 7]); 11] = [
+    const EXTRA_FUNCTIONS: [(&str, [u8; 7]); 13] = [
         ("day", [2, 2, 2, 2, 2, 2, 2]),
         ("epoch_ms", [0, 0, 0, 0, 0, 2, 0]),
         ("month", [2, 2, 2, 2, 2, 2, 2]),
         ("quantile_cont", [0, 0, 0, 0, 0, 6, 0]),
         ("quantile_disc", [0, 0, 0, 0, 0, 6, 0]),
         ("regexp_matches", [0, 0, 0, 0, 0, 12, 0]),
+        ("str_split", [0, 0, 0, 0, 0, 12, 0]),
         ("strftime", [0, 0, 0, 6, 0, 4, 0]),
         ("string_split", [0, 0, 0, 0, 0, 12, 0]),
         ("strptime", [0, 0, 0, 0, 0, 4, 0]),
+        ("time_bucket", [0, 0, 0, 0, 0, 28, 0]),
         ("to_timestamp", [0, 6, 0, 0, 0, 6, 0]),
         ("year", [2, 2, 2, 2, 2, 2, 2]),
     ];
@@ -1741,9 +1746,15 @@ mod grammar {
             (!dialects.contains(&self.d)).then_some(())
         }
 
+        /// [`RESERVED`] words that SQLGlot accepts as identifiers in every
+        /// probed DuckDB position (`sql_tables.py` identifier templates).
+        fn reserved(&self, word: &str) -> bool {
+            is_reserved(word) && !(self.d == Duckdb && matches!(word, "SAMPLE" | "TOP"))
+        }
+
         fn is_ident(&self) -> bool {
             match self.peek() {
-                Some(Tok::Word(w)) => !is_reserved(w),
+                Some(Tok::Word(w)) => !self.reserved(w),
                 Some(Tok::Ident(_)) => true,
                 _ => false,
             }
@@ -1752,7 +1763,7 @@ mod grammar {
         /// Identifier; returns the upper-cased word for unquoted names.
         fn ident(&mut self) -> Option<Option<String>> {
             let result = match self.peek()? {
-                Tok::Word(w) if !is_reserved(w) => Some(w.clone()),
+                Tok::Word(w) if !self.reserved(w) => Some(w.clone()),
                 Tok::Ident(_) => None,
                 _ => return None,
             };
@@ -1792,10 +1803,18 @@ mod grammar {
                     }
                 }
                 let bare_values = p.is_kw("VALUES");
-                let terms = p.set_expr()?;
+                let (terms, bare_from) = p.set_expr()?;
                 if bare_values
                     && (with || terms == 1)
                     && (p.is_kw("ORDER") || p.is_kw("LIMIT") || with)
+                {
+                    return None;
+                }
+                // SQLGlot loses the clauses of a nested `FROM t` without
+                // SELECT.
+                if let Some(tail) = bare_from
+                    && p.depth > 1
+                    && (tail || p.is_kw("ORDER") || p.is_kw("LIMIT"))
                 {
                     return None;
                 }
@@ -1820,40 +1839,51 @@ mod grammar {
             self.op(")")
         }
 
-        /// Set operation chain; returns the number of operands.
-        fn set_expr(&mut self) -> Option<usize> {
-            self.term()?;
+        /// Set operation chain; returns the number of operands and
+        /// [`Self::term`]'s result for the last one.
+        fn set_expr(&mut self) -> Option<(usize, Option<bool>)> {
+            let mut bare_from = self.term()?;
             let mut terms = 1;
             loop {
                 if self.eat_kw("UNION") {
                     self.eat_kw("ALL");
                 } else if !(self.eat_kw("INTERSECT") || self.eat_kw("EXCEPT")) {
-                    return Some(terms);
+                    return Some((terms, bare_from));
                 }
-                self.term()?;
+                // SQLGlot loses the clauses of `FROM t WHERE ...` before a
+                // set operation.
+                if bare_from == Some(true) {
+                    return None;
+                }
+                bare_from = self.term()?;
                 terms += 1;
             }
         }
 
-        fn term(&mut self) -> Option<()> {
+        /// One set operand; `Some(has_clauses)` for a DuckDB `FROM t`
+        /// without SELECT.
+        fn term(&mut self) -> Option<Option<bool>> {
             if self.eat_op("(") {
                 self.query()?;
-                return self.op(")");
+                return self.op(")").map(|_| None);
             }
             if self.is_kw("SELECT") {
-                return self.select_core();
+                return self.select_core().map(|_| None);
             }
             if self.d == Duckdb && self.root_values && self.depth == 1 && self.is_kw("VALUES") {
-                return self.values();
+                return self.values().map(|_| None);
             }
             if self.d == Duckdb && self.eat_kw("FROM") {
                 // One table only: SQLGlot rejects a SELECT tail after
                 // joined FROM-first items.
                 self.table_factor()?;
-                if self.eat_kw("SELECT") {
+                let select = self.eat_kw("SELECT");
+                if select {
                     self.select_list()?;
                 }
-                return self.select_tail();
+                let start = self.pos;
+                self.select_tail()?;
+                return Some((!select).then_some(self.pos != start));
             }
             None
         }
@@ -2066,12 +2096,37 @@ mod grammar {
 
         fn table_factor(&mut self) -> Option<()> {
             if self.eat_op("(") {
-                self.query()?;
+                // DuckDB `(DESCRIBE table)`.
+                if self.d == Duckdb && self.eat_kw("DESCRIBE") {
+                    self.table_name()?;
+                } else {
+                    self.query()?;
+                }
                 self.op(")")?;
+            } else if self.d == Duckdb
+                && self.is_kw("READ_CSV")
+                && matches!(self.peek_at(1), Some(Tok::Op("(")))
+            {
+                self.read_csv()?;
             } else {
                 self.table_name()?;
             }
             self.alias()
+        }
+
+        /// DuckDB `read_csv('<path>', name = <literal>, ...)`.
+        fn read_csv(&mut self) -> Option<()> {
+            self.kw("READ_CSV")?;
+            self.op("(")?;
+            self.string()?;
+            while self.eat_op(",") {
+                self.ident()?;
+                self.op("=")?;
+                if !(self.eat_kw("TRUE") || self.eat_kw("FALSE") || self.string().is_some()) {
+                    self.num()?;
+                }
+            }
+            self.op(")")
         }
 
         fn qualified_name(&mut self) -> Option<Vec<Option<String>>> {
@@ -2234,6 +2289,10 @@ mod grammar {
                         self.query()?;
                     } else {
                         self.expr()?;
+                        // DuckDB tuple `(a, b)`.
+                        if self.d == Duckdb && self.eat_op(",") {
+                            self.expr_list()?;
+                        }
                     }
                     self.op(")")?;
                 }
@@ -2278,6 +2337,15 @@ mod grammar {
                             self.op("(")?;
                             self.query()?;
                             self.op(")")?;
+                        }
+                        "INTERVAL" if self.d == Duckdb => self.interval()?,
+                        "TIMESTAMP" | "DATE"
+                            if self.d == Duckdb && matches!(self.peek_at(1), Some(Tok::Str(_))) =>
+                        {
+                            self.pos += 2;
+                            if matches!(self.peek(), Some(Tok::Str(_))) {
+                                return None;
+                            }
                         }
                         _ if matches!(self.peek_at(1), Some(Tok::Op("("))) => {
                             self.function_call(&w)?;
@@ -2432,6 +2500,11 @@ mod grammar {
                         break;
                     }
                 }
+                // DuckDB ordered aggregate: `string_agg(a, ',' ORDER BY b)`.
+                if self.d == Duckdb && name == "STRING_AGG" && self.eat_kw("ORDER") {
+                    self.kw("BY")?;
+                    self.order_list()?;
+                }
             }
             // SQLGlot drops a DISTINCT call with an inet containment
             // operator in its arguments.
@@ -2459,7 +2532,10 @@ mod grammar {
                     return None;
                 }
                 self.op("(")?;
-                self.kw("WHERE")?;
+                // DuckDB also accepts `FILTER (cond)`.
+                if !(self.eat_kw("WHERE") || self.d == Duckdb) {
+                    return None;
+                }
                 self.expr()?;
                 self.op(")")?;
             }
@@ -2532,6 +2608,36 @@ mod grammar {
             self.op(",")?;
             self.expr()?;
             self.op(")")
+        }
+
+        /// DuckDB `INTERVAL <integer | (expr)> <unit>`.
+        fn interval(&mut self) -> Option<()> {
+            // SQLGlot does not verify WEEK.
+            const UNITS: [&str; 8] = [
+                "YEAR",
+                "MONTH",
+                "DAY",
+                "HOUR",
+                "MINUTE",
+                "SECOND",
+                "MILLISECOND",
+                "MICROSECOND",
+            ];
+            self.kw("INTERVAL")?;
+            if self.eat_op("(") {
+                self.expr()?;
+                self.op(")")?;
+            } else {
+                // SQLGlot does not verify an exponent; decimals are not needed.
+                self.integer()?;
+            }
+            match self.peek() {
+                Some(Tok::Word(w)) if UNITS.contains(&w.as_str()) => {
+                    self.pos += 1;
+                    Some(())
+                }
+                _ => None,
+            }
         }
 
         fn type_name(&mut self) -> Option<()> {
@@ -3420,6 +3526,35 @@ mod tests {
         assert_eq!(ro_duckdb(sql), Some(true));
     }
 
+    /// Queries from the `wdt_traffic` audit log that Python verifies:
+    /// read-only statements and the main-database write batches.
+    #[test]
+    fn reported_duckdb_traffic_queries_2026_10() {
+        let options = ReadonlyOptions {
+            extra_write: words(&[
+                "ATTACH", "COPY", "DETACH", "EXPORT", "IMPORT", "INSTALL", "LOAD", "PRAGMA",
+                "VACUUM",
+            ]),
+            allow_temp_tables: true,
+            bracket_identifiers: false,
+            ..opts(Some("duckdb"))
+        };
+        let fixture = include_str!("../../../tests/fixtures/sql/duckdb_traffic_2026_10.jsonl");
+        let mut failed = Vec::new();
+        for line in fixture.lines() {
+            let item: serde_json::Value = serde_json::from_str(line).unwrap();
+            let sql = item["sql"].as_str().unwrap();
+            let ok = match item["fn"].as_str().unwrap() {
+                "is_readonly_sql" => is_readonly_sql(sql, &options) == Some(true),
+                _ => duckdb_writes_only_main(sql),
+            };
+            if !ok {
+                failed.push(sql.to_string());
+            }
+        }
+        assert!(failed.is_empty(), "{}", failed.join("\n\n"));
+    }
+
     #[test]
     fn cast_type_normalization() {
         for dialect in DIALECTS {
@@ -3535,6 +3670,42 @@ mod tests {
                 "postgres",
                 "SELECT sum(d) OVER (ORDER BY ts RANGE BETWEEN 1 PRECEDING AND CURRENT ROW) FROM e",
             ),
+            ("duckdb", "SELECT count(DISTINCT (a, b)) FROM t"),
+            (
+                "duckdb",
+                "SELECT count(*) FILTER (a > 1), max(b) FILTER (c) FROM t",
+            ),
+            (
+                "duckdb",
+                "SELECT ts - INTERVAL (CAST(a AS BIGINT)) MILLISECOND FROM t",
+            ),
+            (
+                "duckdb",
+                "SELECT time_bucket(INTERVAL 30 SECOND, ts) FROM t",
+            ),
+            (
+                "duckdb",
+                "SELECT a FROM t WHERE ts < TIMESTAMP '2026-10-08 06:45:30'",
+            ),
+            (
+                "duckdb",
+                "SELECT string_agg(a, ', ' ORDER BY n DESC) FROM t",
+            ),
+            ("duckdb", "SELECT column_name FROM (DESCRIBE t)"),
+            (
+                "duckdb",
+                "SELECT * FROM read_csv('x.csv', header=true, quote='')",
+            ),
+            (
+                "duckdb",
+                "WITH top AS (SELECT a FROM t) SELECT a sample FROM top",
+            ),
+            ("duckdb", "SELECT unnest(str_split(a, '&')) FROM t"),
+            ("duckdb", "FROM t WHERE x"),
+            ("duckdb", "FROM t ORDER BY a LIMIT 1"),
+            ("duckdb", "FROM t SELECT a WHERE x UNION ALL SELECT 1"),
+            ("duckdb", "SELECT * FROM (FROM t SELECT a LIMIT 1)"),
+            ("duckdb", "SELECT * FROM (FROM read_csv('x.csv'))"),
         ] {
             assert_eq!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
         }
@@ -3567,6 +3738,35 @@ mod tests {
             ("tsql", "SELECT TOP 2.5 a FROM t"),
             ("duckdb", "SELECT a value FROM t"),
             ("duckdb", "SELECT a AS key FROM t"),
+            // DuckDB-only syntax, unverified forms and side effects.
+            ("postgres", "SELECT count(*) FILTER (a > 1) FROM t"),
+            ("postgres", "SELECT count(DISTINCT (a, b)) FROM t"),
+            ("postgres", "SELECT column_name FROM (DESCRIBE t)"),
+            ("postgres", "SELECT string_agg(a, ',' ORDER BY a) FROM t"),
+            ("duckdb", "SELECT INTERVAL (query('DROP TABLE t')) SECOND"),
+            ("duckdb", "SELECT INTERVAL 1 fortnight"),
+            ("duckdb", "SELECT INTERVAL 1 WEEK"),
+            ("duckdb", "SELECT INTERVAL 1e6 MILLISECOND"),
+            ("duckdb", "SELECT INTERVAL (a) week FROM t"),
+            ("duckdb", "FROM t WHERE x UNION ALL SELECT 1"),
+            ("duckdb", "FROM t GROUP BY a UNION ALL SELECT 1"),
+            ("duckdb", "FROM t USING SAMPLE 10 UNION ALL SELECT 1"),
+            ("duckdb", "SELECT * FROM (FROM t LIMIT 1)"),
+            ("duckdb", "SELECT * FROM (FROM t WHERE a)"),
+            ("duckdb", "SELECT * FROM t WHERE a IN (FROM t ORDER BY a)"),
+            (
+                "duckdb",
+                "SELECT * FROM (FROM read_csv('x.csv') AS c LIMIT 1)",
+            ),
+            ("duckdb", "SELECT INTERVAL '1 day'"),
+            ("duckdb", "SELECT TIMESTAMP 'a' 'b'"),
+            ("duckdb", "SELECT * FROM read_csv(a)"),
+            (
+                "duckdb",
+                "SELECT * FROM read_csv('x.csv', header=query('x'))",
+            ),
+            ("duckdb", "SELECT * FROM read_text('x.csv')"),
+            ("duckdb", "SELECT (a, writefile('x', 'y')) FROM t"),
         ] {
             assert_ne!(ro_d(sql, dialect), Some(true), "{dialect}: {sql}");
         }

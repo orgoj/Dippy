@@ -32,8 +32,8 @@ length list_sum list_value ln log log10 lower lpad ltrim mad max md5 median
 min mod mode nullif nvl pow power product regexp_extract regexp_replace repeat
 replace right round row_number rpad rtrim sha1 sign skewness split_part sqrt
 starts_with stats stddev string_agg strpos substr substring sum to_days
-to_milliseconds to_years trim unnest upper var_pop variance
-query writefile read_csv fictional_effect rank now date_trunc nextval""".split()
+to_milliseconds to_years trim unnest upper var_pop variance time_bucket
+str_split query writefile read_csv fictional_effect rank now date_trunc nextval""".split()
 
 TYPES = (
     """INT INTEGER BIGINT SMALLINT TINYINT BOOL BOOLEAN TEXT FLOAT REAL BLOB
@@ -146,10 +146,13 @@ class Gen:
             args = ", ".join(self.expr(depth + 1) for _ in range(n))
             if n and self.r.random() < 0.15:
                 args = self.kw("DISTINCT") + " " + args
+            if n and self.r.random() < 0.08:
+                args = self.join(args, self.kw("ORDER BY"), self.order_list(depth + 1))
         out = f"{name}({args})"
         if self.r.random() < 0.08:
+            where = self.kw("WHERE") if self.r.random() < 0.5 else ""
             out = self.join(
-                out, self.kw("FILTER"), f"({self.kw('WHERE')} {self.expr(depth + 1)})"
+                out, self.kw("FILTER"), f"({self.join(where, self.expr(depth + 1))})"
             )
         if self.r.random() < 0.15:
             inner = []
@@ -186,6 +189,8 @@ class Gen:
     def primary(self, depth: int) -> str:
         if depth > 4:
             return self.r.choice([self.literal(), self.column()])
+        if self.r.random() < 0.06:
+            return self.typed_literal(depth)
         roll = self.r.random()
         if roll < 0.25:
             return self.literal()
@@ -216,6 +221,8 @@ class Gen:
             )
             return self.join(self.kw("CASE"), operand, whens, other, self.kw("END"))
         if roll < 0.9:
+            if self.r.random() < 0.3:
+                return f"({self.expr(depth + 1)}, {self.expr_list(depth + 1)})"
             return f"({self.expr(depth + 1)})"
         if roll < 0.94:
             return f"({self.query(depth + 1)})"
@@ -226,6 +233,25 @@ class Gen:
             + ", ".join(self.expr(depth + 1) for _ in range(self.r.choice([0, 1, 2])))
             + "]"
         )
+
+    def typed_literal(self, depth: int) -> str:
+        if self.r.random() < 0.5:
+            word = self.kw(self.r.choice(["TIMESTAMP", "DATE", "TIME", "INTERVAL"]))
+            return self.join(word, self.r.choice(STRINGS))
+        unit = self.kw(
+            self.r.choice(
+                ["SECOND", "MILLISECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH"]
+                + ["YEAR", "MICROSECOND", "SECONDS", "QUARTER", "x"]
+            )
+        )
+        roll = self.r.random()
+        if roll < 0.4:
+            value = self.r.choice(["30", "1", "1.5", "'2'", "-1"])
+        elif roll < 0.8:
+            value = f"({self.expr(depth + 1)})"
+        else:
+            value = self.primary(depth + 1)
+        return self.join(self.kw("INTERVAL"), value, unit)
 
     def expr(self, depth: int = 0) -> str:
         left = self.primary(depth)
@@ -284,7 +310,13 @@ class Gen:
         if depth < 4 and self.r.random() < 0.15:
             base = f"({self.query(depth + 1)})"
         elif self.r.random() < 0.03:
-            base = f"read_csv({self.r.choice(STRINGS)})"
+            options = [
+                f"{self.ident()} = {self.r.choice(['true', 'FALSE', '1', *STRINGS])}"
+                for _ in range(self.r.choice([0, 1, 2]))
+            ]
+            base = f"read_csv({', '.join([self.r.choice(STRINGS), *options])})"
+        elif self.r.random() < 0.02:
+            base = f"({self.kw('DESCRIBE')} {self.column()})"
         else:
             base = self.column()
         roll = self.r.random()

@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.54] - 2026-10-12
+
+### Fixed
+
+- dippy-rs: DuckDB queries that Python verifies as read-only (or as main-database writes) are allowed instead of asking. The SQL grammar now accepts in DuckDB: tuples (`count(DISTINCT (a, b))`), `FILTER (cond)` without `WHERE`, `INTERVAL <integer | (expr)> <unit>` (not WEEK), `TIMESTAMP`/`DATE` string literals, `string_agg(... ORDER BY ...)`, `(DESCRIBE table)`, `read_csv('<path>', name = <literal>, ...)`, `time_bucket`, `str_split`, and `sample`/`top` as identifiers. Covers all 25 `wdt_traffic` queries from the audit log that Python allowed and Rust asked for.
+- dippy-rs: a DuckDB `FROM t` query without SELECT asks when it is nested and has clauses or ORDER BY/LIMIT (`SELECT * FROM (FROM t LIMIT 1)`), or when clauses precede a set operation (`FROM t WHERE x UNION ALL SELECT 1`); SQLGlot loses those clauses, so Python does not verify them.
+
 ## [0.4.53] - 2026-10-12
 
 ### Fixed
