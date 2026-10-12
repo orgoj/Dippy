@@ -194,7 +194,11 @@ set deny-format-pi "TEST_DENY: {command}|{reason}"
             capture_output=True,
             text=True,
             cwd=str(Path(__file__).parent.parent),
-            env={**{"DIPPY_CONFIG": str(config_file), "PYTHONPATH": "src"}},
+            env={
+                "DIPPY_CONFIG": str(config_file),
+                "PYTHONPATH": "src",
+                "HOME": str(tmp_path),
+            },
         )
 
         output = json.loads(result.stdout)
