@@ -557,6 +557,60 @@ fn verify_query_ast(sql: &str, dialect: Option<&str>) -> Option<bool> {
 }
 
 // ---------------------------------------------------------------------------
+// SQLite introspection pragmas (Rust only: Python asks for every PRAGMA).
+
+/// Pragmas that only report, with or without a table/index name argument.
+const SQLITE_NAME_PRAGMAS: &[&str] = &[
+    "foreign_key_check",
+    "foreign_key_list",
+    "index_info",
+    "index_list",
+    "index_xinfo",
+    "table_info",
+    "table_list",
+    "table_xinfo",
+];
+
+/// Pragmas that only report in the argument-less form; with an argument
+/// some of them set a value.
+const SQLITE_QUERY_PRAGMAS: &[&str] = &[
+    "application_id",
+    "collation_list",
+    "compile_options",
+    "data_version",
+    "database_list",
+    "encoding",
+    "freelist_count",
+    "function_list",
+    "integrity_check",
+    "module_list",
+    "page_count",
+    "page_size",
+    "pragma_list",
+    "quick_check",
+    "schema_version",
+    "user_version",
+];
+
+static SQLITE_PRAGMA: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(
+        r#"(?i)\A\s*PRAGMA\s+(?:[A-Za-z_][A-Za-z0-9_]*\s*\.\s*)?([A-Za-z_]+)\s*(\(\s*(?:[A-Za-z_][A-Za-z0-9_]*|'[A-Za-z0-9_]+'|"[A-Za-z0-9_]+")\s*\))?\s*;?\s*\z"#,
+    )
+    .unwrap()
+});
+
+/// A single read-only introspection `PRAGMA name` or `PRAGMA name(table)`;
+/// the `=` form, comments and other statements are not matched.
+pub fn sqlite_readonly_pragma(sql: &str) -> bool {
+    let Some(caps) = SQLITE_PRAGMA.captures(sql) else {
+        return false;
+    };
+    let name = caps[1].to_ascii_lowercase();
+    SQLITE_NAME_PRAGMAS.contains(&name.as_str())
+        || (caps.get(2).is_none() && SQLITE_QUERY_PRAGMAS.contains(&name.as_str()))
+}
+
+// ---------------------------------------------------------------------------
 // DuckDB output checks.
 
 static ATTACH: LazyLock<Regex> =

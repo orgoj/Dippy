@@ -1,7 +1,17 @@
 //! Port of `src/dippy/cli/sqlite3.py`.
+//!
+//! Intended divergence: read-only introspection pragmas and dot-commands are
+//! allowed (Python asks; `rust/parity/audit_replay.py` reports them as
+//! "wider").
+
+use std::sync::LazyLock;
+
+use regex::Regex;
 
 use super::{Classification, Describe, HandlerContext};
-use crate::sql::{ReadonlyOptions, is_readonly_sql, literal_sql_arg, py_lstrip};
+use crate::sql::{
+    ReadonlyOptions, is_readonly_sql, literal_sql_arg, py_lstrip, sqlite_readonly_pragma,
+};
 
 pub const COMMANDS: &[&str] = &["sqlite3"];
 pub const PORTED: bool = true;
@@ -61,6 +71,21 @@ const ARG_OPTIONS: &[&str] = &[
     "-A",
 ];
 
+/// Dot-commands that only print the schema, on one line with simple
+/// arguments (no quotes, so no hidden second command).
+static READONLY_DOT_COMMAND: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"\A\.(?:databases|indexes|indices|schema|tables)(?: +[A-Za-z0-9_%.-]+)* *\z")
+        .unwrap()
+});
+
+fn read_options() -> ReadonlyOptions {
+    ReadonlyOptions {
+        extra_write: SQLITE_WRITE.iter().map(|s| s.to_string()).collect(),
+        dialect: Some("sqlite".into()),
+        ..ReadonlyOptions::default()
+    }
+}
+
 pub fn classify(ctx: &HandlerContext) -> Classification {
     let tokens = &ctx.tokens;
     if tokens
@@ -117,16 +142,22 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     let Some(parts) = parts else {
         return Classification::ask_desc("sqlite3 (ambiguous SQL argument)");
     };
+    // Read-only dot-commands and introspection pragmas are separate
+    // arguments; the remaining SQL is checked as before.
+    let (introspection, parts): (Vec<String>, Vec<String>) = parts
+        .into_iter()
+        .partition(|p| READONLY_DOT_COMMAND.is_match(p) || sqlite_readonly_pragma(p));
     if parts.iter().any(|p| py_lstrip(p).starts_with('.')) {
         return Classification::ask_desc("sqlite3 (dot-command)");
     }
-    let sql = parts.join(";\n");
-    let opts = ReadonlyOptions {
-        extra_write: SQLITE_WRITE.iter().map(|s| s.to_string()).collect(),
-        dialect: Some("sqlite".into()),
-        ..ReadonlyOptions::default()
-    };
-    match is_readonly_sql(&sql, &opts) {
+    if !introspection.is_empty() {
+        let reads =
+            parts.is_empty() || is_readonly_sql(&parts.join(";\n"), &read_options()) == Some(true);
+        if reads {
+            return Classification::allow_desc("sqlite3 (read-only introspection)");
+        }
+    }
+    match is_readonly_sql(&parts.join(";\n"), &read_options()) {
         Some(true) => Classification::allow_desc("sqlite3 (read-only query)"),
         Some(false) => Classification::ask_desc("sqlite3 (write query)"),
         None => Classification::ask_desc("sqlite3 (unknown query)"),
@@ -203,6 +234,42 @@ mod tests {
             "sqlite3 -readonly ~/.hcom/hcom.db \"SELECT id, life_action, life_reason, json_extract(data,'$.snapshot.last_event_id'), json_extract(data,'$.snapshot.session_id') FROM events_v WHERE type='life' AND instance='wdt_mp2' AND id > 145300;\"",
             true,
         ),
+        // Read-only introspection pragmas and dot-commands (Rust only).
+        ("sqlite3 db 'PRAGMA table_info(users)'", true),
+        (
+            "sqlite3 -readonly db 'pragma main.table_xinfo(\"users\");'",
+            true,
+        ),
+        ("sqlite3 db \"PRAGMA index_list('users')\"", true),
+        ("sqlite3 db 'PRAGMA database_list'", true),
+        ("sqlite3 db 'PRAGMA user_version'", true),
+        ("sqlite3 db 'PRAGMA user_version = 3'", false),
+        ("sqlite3 db 'PRAGMA user_version(3)'", false),
+        ("sqlite3 db 'PRAGMA journal_mode(WAL)'", false),
+        ("sqlite3 db 'PRAGMA journal_mode'", false),
+        ("sqlite3 db 'PRAGMA table_info = users'", false),
+        (
+            "sqlite3 db 'PRAGMA table_info(users); DROP TABLE users'",
+            false,
+        ),
+        (
+            "sqlite3 db 'PRAGMA table_info(users)' 'DELETE FROM users'",
+            false,
+        ),
+        ("sqlite3 db 'PRAGMA table_info(users) -- x'", false),
+        ("sqlite3 db 'PRAGMA optimize'", false),
+        ("sqlite3 db .tables", true),
+        ("sqlite3 db '.schema users'", true),
+        ("sqlite3 db '.schema --indent main.users'", true),
+        ("sqlite3 db '.indexes users'", true),
+        ("sqlite3 db .databases", true),
+        ("sqlite3 db \".tables 'u%'\"", false),
+        ("sqlite3 db '.tables\n.shell id'", false),
+        ("sqlite3 db '.schema users;.shell id'", false),
+        ("sqlite3 db ' .tables'", false),
+        ("sqlite3 db .output", false),
+        ("sqlite3 -cmd '.tables' db 'PRAGMA table_info(t)'", true),
+        ("sqlite3 -cmd '.once out.txt' db .tables", false),
         ("sqlite3 db \"select load_extension('x')\"", false),
         ("sqlite3 db \"select x from t; delete from t\"", false),
         (
@@ -224,7 +291,23 @@ mod tests {
         let desc = |c: &str| classify(&test_ctx(c)).description.unwrap();
         assert_eq!(desc("sqlite3 db 'SELECT 1'"), "sqlite3 (read-only query)");
         assert_eq!(desc("sqlite3 db 'DROP TABLE t'"), "sqlite3 (write query)");
-        assert_eq!(desc("sqlite3 db '.tables'"), "sqlite3 (dot-command)");
+        assert_eq!(desc("sqlite3 db '.shell id'"), "sqlite3 (dot-command)");
+        assert_eq!(
+            desc("sqlite3 db '.tables'"),
+            "sqlite3 (read-only introspection)"
+        );
+        assert_eq!(
+            desc("sqlite3 db 'PRAGMA table_info(t)'"),
+            "sqlite3 (read-only introspection)"
+        );
+        assert_eq!(
+            desc("sqlite3 -cmd .tables db 'SELECT 1'"),
+            "sqlite3 (read-only introspection)"
+        );
+        assert_eq!(
+            desc("sqlite3 db 'PRAGMA user_version=1'"),
+            "sqlite3 (write query)"
+        );
         assert_eq!(desc("sqlite3 db"), "sqlite3 (interactive)");
         assert_eq!(desc("sqlite3 -init x db"), "sqlite3 (init script)");
     }

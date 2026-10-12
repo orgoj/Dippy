@@ -12,7 +12,8 @@ DIPPY_CONFIG_ONLY are replayed with the normal stack.
 
 A Rust allow where Python asks is UNSAFE (exit status 1), except WIDER
 cases: Python asked only because it could not verify SQL queries, which
-dippy-rs verifies with sqlparser (intended divergence).
+dippy-rs verifies with sqlparser, or for a sqlite3 PRAGMA or dot-command
+that dippy-rs allows as read-only introspection (intended divergences).
 
 Usage: audit_replay.py --scratch DIR [--out FILE] AUDIT_LOG...
 """
@@ -90,13 +91,27 @@ SQL_REASON = re.compile(
     r"(duckdb|sqlite3|psql|mysql|mariadb|sqlcmd) "
     r"\((unverified read-only query|unknown query)\)"
 )
+# Python asks for every sqlite3 PRAGMA and dot-command; dippy-rs allows
+# read-only introspection ones and says so in its reason.
+SQLITE_INTROSPECTION = re.compile(r"sqlite3 \((write query|dot-command)\)")
+RS_INTROSPECTION = "sqlite3 (read-only introspection)"
 
 
-def sql_only(reason: str) -> bool:
-    """Python asked only because it could not verify SQL queries."""
+def reason_parts(reason: str) -> list[str]:
     reason = reason.removeprefix("🐤").strip()
-    parts = [part.strip() for part in reason.split(",") if part.strip()]
-    return bool(parts) and all(SQL_REASON.fullmatch(part) for part in parts)
+    return [part.strip() for part in reason.split(",") if part.strip()]
+
+
+def sql_only(py_reason: str, rs_reason: str) -> bool:
+    """Python asked only because it could not verify SQL queries, or for a
+    sqlite3 statement that dippy-rs allowed as read-only introspection."""
+    parts = reason_parts(py_reason)
+    introspection = [p for p in parts if SQLITE_INTROSPECTION.fullmatch(p)]
+    if introspection and RS_INTROSPECTION not in reason_parts(rs_reason):
+        return False
+    return bool(parts) and all(
+        SQL_REASON.fullmatch(p) or SQLITE_INTROSPECTION.fullmatch(p) for p in parts
+    )
 
 
 def main() -> int:
@@ -144,12 +159,13 @@ def main() -> int:
     # intended divergence (sqlparser verifies the query; sql_compare.py and
     # sql_fuzz.py check each SQL verdict). Any other Rust allow is UNSAFE.
     diffs = []
-    for k, ((py, py_reason), (rs, _)) in zip(keys, results):
+    for k, ((py, py_reason), (rs, rs_reason)) in zip(keys, results):
         if py == rs:
             continue
         kind = "safe"
         if rs == "allow":
-            kind = "wider" if py == "ask" and sql_only(py_reason) else "unsafe"
+            wider = py == "ask" and sql_only(py_reason, rs_reason)
+            kind = "wider" if wider else "unsafe"
         diffs.append((k, py, rs, kind))
     order = ("unsafe", "wider", "safe")
     diffs.sort(key=lambda d: (order.index(d[3]), d[1], d[2]))
