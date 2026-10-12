@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.53] - 2026-10-12
+
+### Fixed
+
+- dippy-rs: a command sent to the background (`&`) and followed by a newline and another command, e.g. `nohup job > log 2>&1 &` then `echo started $!`, is parsed instead of asking with "parse error: syntax error: unparsed input"; a here-document opened by the background command keeps its body. Rable spans the `&` through the newline and the body, so the adapter ends the node at the `&`.
+
 ## [0.4.52] - 2026-10-11
 
 ### Changed

@@ -1710,6 +1710,19 @@ mod tests {
     }
 
     #[test]
+    fn background_command_before_newline() {
+        assert_eq!(decide("ls &\necho started"), Action::Allow);
+        assert_eq!(decide("ls > /dev/null 2>&1 &\necho $!"), Action::Allow);
+        assert_eq!(decide("ls &\n\necho a; echo b &\necho c"), Action::Allow);
+        assert_eq!(decide("ls &\nrm -rf x"), Action::Ask);
+        let d = decide_with("deny zorptool *", "ls &\nzorptool x");
+        assert_eq!(d.action, Action::Deny);
+        // The newline after `&` starts the here-document body.
+        assert_eq!(decide("cat <<EOF &\nrm -rf x\nEOF\necho ok"), Action::Allow);
+        assert_eq!(decide("cat <<EOF &\nbody\nEOF\nrm -rf x"), Action::Ask);
+    }
+
+    #[test]
     fn code_env_assignment_asks() {
         let cases = [
             ("LD_PRELOAD=/tmp/x.so git status", "LD_PRELOAD"),

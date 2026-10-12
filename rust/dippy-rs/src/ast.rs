@@ -1087,7 +1087,17 @@ fn effective_end(src: &[char], n: &RNode) -> Option<usize> {
         }
         K::List { items } => {
             let last = items.last()?;
-            Some(n.span.end.max(effective_end(src, &last.command)?))
+            let last_end = effective_end(src, &last.command)?;
+            // Rable spans a trailing `&` through the next newline and any
+            // here-document body; end the node at the `&` so the newline
+            // separates the next command and starts the pending bodies.
+            if last.operator == Some(ListOperator::Background) {
+                let amp = (last_end..src.len()).find(|&i| !matches!(src[i], ' ' | '\t'));
+                if let Some(amp) = amp.filter(|&i| src[i] == '&') {
+                    return Some(amp + 1);
+                }
+            }
+            Some(n.span.end.max(last_end))
         }
         K::Pipeline { commands, .. } => {
             let last = commands.last()?;
