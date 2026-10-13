@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.1] - 2026-10-13
+
+### Fixed
+
+- dippy-rs: a file-writing redirect inside a configured `wrapper` (e.g. `cca-tmux-cli ... run "grep x f > /etc/passwd"`) or `dippy run-on-server` was not checked at all, so any allowed remote command could write any server file. Every remote redirect, `ssh` included, now asks unless an `allow-redirect` rule with a remote context flag (`allow-redirect [cca-tmux-cli] /tmp/**`) allows it; an unflagged `allow-redirect` never permits a server write, while `ask-redirect`/`deny-redirect` apply as usual. The same holds for files written by handlers (`awk 'print > "f"'`, `sed w`, `tee`).
+- dippy-rs askpass: a remote redirect cause carries the structural flag `@remote`, so the dialog previews a candidate redirect rule the way the hook will apply it.
+
 ## [0.5.0] - 2026-10-12
 
 ### Changed

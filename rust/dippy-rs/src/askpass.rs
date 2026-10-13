@@ -236,7 +236,13 @@ pub fn decide_cause(req: &Request, cause: &Cause, config: &Config) -> &'static s
     flags.extend(cause.flags.iter().cloned());
     let (t, cwd, default) = (&cause.target, &req.cwd, config.default.as_str());
     match cause.kind.as_str() {
-        "redirect" => verdict(config::match_redirect(t, config, cwd, &flags, false), "ask"),
+        "redirect" => {
+            let remote = flags.contains("@remote");
+            verdict(
+                config::match_redirect(t, config, cwd, &flags, remote),
+                "ask",
+            )
+        }
         "read" => verdict(config::match_read(t, config, cwd, &flags), default),
         "edit" => verdict(config::match_edit(t, config, cwd, &flags), default),
         "web" => verdict(config::match_web(t, config, &flags), default),
@@ -510,6 +516,29 @@ mod tests {
             dir.display()
         ));
         assert!(check(&bare, None, "allow", "command", "", "zorp x", &files).can_save("allow"));
+        // A server write needs a redirect rule with a remote tag.
+        let remote = req(&format!(
+            r#"{{"command": "ls", "cwd": "{}", "causes": [{{"kind": "redirect",
+            "target": "/tmp/x", "rule": null, "flags": ["zorpwrap", "@remote"]}}]}}"#,
+            dir.display()
+        ));
+        let cause_of = |tags| {
+            check(
+                &remote,
+                remote.causes.first(),
+                "allow",
+                "redirect",
+                tags,
+                "/tmp/**",
+                &files,
+            )
+            .outcome
+            .map(|o| o.cause)
+        };
+        assert_eq!(
+            (cause_of(""), cause_of("zorpwrap")),
+            (Ok("ask"), Ok("allow"))
+        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 
@@ -618,8 +647,8 @@ mod tests {
             check(&r, cause, "allow", "command", " ", "zorp x", &files).line,
             "allow zorp x"
         );
-        // The request is analysed as remote: a remote redirect target is
-        // not a local file.
+        // The request is analysed as remote: a server write asks like a
+        // local one unless a rule with a remote context flag allows it.
         let remote = req(&format!(
             r#"{{"command": "ls > /etc/zorp", "cwd": "{}", "remote": true}}"#,
             dir.display()
@@ -631,7 +660,7 @@ mod tests {
         let config = config::load_config_from(&dir, &user).unwrap();
         assert_eq!(
             (decide(&remote, &config), decide(&local, &config)),
-            ("allow", "ask")
+            ("ask", "ask")
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

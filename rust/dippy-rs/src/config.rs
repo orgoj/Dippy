@@ -2724,7 +2724,17 @@ fn normalize_redirect_pattern(pattern: &str, cwd: &Path) -> String {
     }
 }
 
-/// `match_redirect`: last matching redirect rule.
+/// Whether a rule requires a remote context flag (wrapper, ssh, host), not
+/// only an environment (`$NAME=...`) or synthetic (`@pipeline`) flag.
+fn requires_remote_flag(rule: &Rule) -> bool {
+    rule.required_flags
+        .as_ref()
+        .is_some_and(|req| req.iter().any(|f| !f.starts_with(['$', '@'])))
+}
+
+/// `match_redirect`: last matching redirect rule. A remote target ignores
+/// `allow` rules without a remote context flag, so a locally writable path
+/// never permits a server write.
 pub fn match_redirect(
     target: &str,
     config: &Config,
@@ -2744,7 +2754,9 @@ pub fn match_redirect(
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
     let mut result = None;
     for rule in &config.redirect_rules {
-        if !check_rule_context_flags(rule, active) {
+        if !check_rule_context_flags(rule, active)
+            || (remote && rule.decision == "allow" && !requires_remote_flag(rule))
+        {
             continue;
         }
         if glob_match(

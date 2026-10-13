@@ -124,6 +124,15 @@ fn with(flags: &Flags, extra: &[&str]) -> Flags {
 const SAFE_REDIRECT_TARGETS: [&str; 4] = ["/dev/null", "-", "/dev/stdout", "/dev/stdin"];
 const FILE_WRITING_REDIRECTS: [&str; 7] = [">", ">>", ">|", ">&", "&>", "&>>", "<>"];
 
+/// Flags for a redirect: `@remote` tells askpass the target is on a server.
+fn redirect_cause_flags(flags: &Flags, remote: bool) -> Flags {
+    if remote {
+        with(flags, &["@remote"])
+    } else {
+        flags.clone()
+    }
+}
+
 fn is_digits(s: &str) -> bool {
     !s.is_empty() && s.chars().all(|c| c.is_numeric())
 }
@@ -1019,29 +1028,19 @@ fn analyze_redirects(
                     &Flags::new(),
                     remote,
                 ));
-                if remote {
-                    if flags_ref.contains("ssh")
-                        && redirect_writes_file(op)
-                        && !redirect_target_is_safe(&target_value)
-                    {
-                        decisions.push(
-                            Decision::ask(format!("remote redirect to {target_value}")).cause(
-                                "redirect",
-                                &target_value,
-                                None,
-                                flags_ref,
-                            ),
-                        );
-                    }
-                    continue;
-                }
                 if redirect_target_is_safe(&target_value) {
                     continue;
                 }
                 if redirect_writes_file(op) {
-                    match config::match_redirect(&target_value, config, cwd, flags_ref, false) {
+                    let what = if remote {
+                        "remote redirect"
+                    } else {
+                        "redirect"
+                    };
+                    let flags_ref = &redirect_cause_flags(flags_ref, remote);
+                    match config::match_redirect(&target_value, config, cwd, flags_ref, remote) {
                         Some(m) if m.decision == "allow" => {
-                            decisions.push(Decision::allow(format!("redirect to {target_value}")))
+                            decisions.push(Decision::allow(format!("{what} to {target_value}")))
                         }
                         Some(m) => {
                             let msg = m.message.clone().unwrap_or(m.pattern.clone());
@@ -1051,12 +1050,12 @@ fn analyze_redirects(
                                 Action::Ask
                             };
                             decisions.push(
-                                Decision::new(action, format!("redirect to {target_value}: {msg}"))
+                                Decision::new(action, format!("{what} to {target_value}: {msg}"))
                                     .cause("redirect", &target_value, Some(&m), flags_ref),
                             );
                         }
                         None => decisions.push(
-                            Decision::ask(format!("redirect to {target_value}")).cause(
+                            Decision::ask(format!("{what} to {target_value}")).cause(
                                 "redirect",
                                 &target_value,
                                 None,
@@ -1368,15 +1367,12 @@ fn analyze_simple_command(
             .filter(|d| !d.is_empty())
             .unwrap_or_else(|| cli::get_description(tokens, Some(base)));
         if let Some(targets) = &result.redirect_targets {
+            let flags = &redirect_cause_flags(flags, remote);
             for target in targets {
                 if redirect_target_is_safe(target) {
                     continue;
                 }
-                if flags.contains("ssh") {
-                    return Decision::ask(format!("remote redirect to {target}"))
-                        .cause("redirect", target, None, flags);
-                }
-                match config::match_redirect(target, config, cwd, flags, false) {
+                match config::match_redirect(target, config, cwd, flags, remote) {
                     Some(m) if m.decision == "deny" => {
                         let msg = m.message.clone().unwrap_or(m.pattern.clone());
                         return Decision::new(Action::Deny, format!("{desc}: {msg}")).cause(
@@ -1707,6 +1703,55 @@ mod tests {
     fn decide_with(rules: &str, cmd: &str) -> Decision {
         let config = config::parse_config(rules, None).unwrap();
         analyze(cmd, &config, Path::new("/tmp"), None, false)
+    }
+
+    #[test]
+    fn remote_writes_ask_unless_a_flagged_rule_allows() {
+        let base = "wrapper zorpwrap --cmd run --context -t --script-stdin --script\n\
+                    ask [zorpwrap] *\n\
+                    allow [zorpwrap] grep *\n\
+                    delegate [zorpwrap] awk *\n\
+                    allow-redirect /tmp/**\n\
+                    allow-redirect ./**\n";
+        let awk = "zorpwrap -t h run --script <<'R'\nawk '{print > \"/tmp/a\"}' f\nR";
+        for cmd in [
+            "zorpwrap -t h run \"grep x f > /etc/passwd\"",
+            // A local allow-redirect never permits a server write.
+            "zorpwrap -t h run \"grep x f > /tmp/a\"",
+            "zorpwrap -t h run \"grep x f > out.txt\"",
+            awk,
+            "ssh h 'grep x f > /tmp/a'",
+        ] {
+            let d = decide_with(base, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+        assert_eq!(
+            decide_with(base, "zorpwrap -t h run \"grep x f > /dev/null 2>&1\"").action,
+            Action::Allow
+        );
+        let d = decide_with(base, "zorpwrap -t h run \"grep x f > /tmp/a\"");
+        assert!(d.causes[0].flags.contains("@remote"), "{:?}", d.causes);
+        assert!(
+            !decide_with(base, "grep x f > /etc/a").causes[0]
+                .flags
+                .contains("@remote")
+        );
+
+        let flagged =
+            format!("{base}allow-redirect [zorpwrap] /tmp/**\ndeny-redirect /tmp/keep \"no\"\n");
+        for cmd in ["zorpwrap -t h run \"grep x f > /tmp/a\"", awk] {
+            assert_eq!(decide_with(&flagged, cmd).action, Action::Allow, "{cmd}");
+        }
+        for cmd in [
+            "zorpwrap -t h run \"grep x f > /etc/passwd\"",
+            "zorpwrap -t h run \"grep x f > /tmp/../etc/passwd\"",
+        ] {
+            assert_eq!(decide_with(&flagged, cmd).action, Action::Ask, "{cmd}");
+        }
+        assert_eq!(
+            decide_with(&flagged, "zorpwrap -t h run \"grep x f > /tmp/keep\"").action,
+            Action::Deny
+        );
     }
 
     #[test]

@@ -1160,6 +1160,20 @@ mean the directory.
 
 Without a matching rule these commands ask, which is what they did before.
 
+### Remote redirects
+
+A write inside a remote command (`ssh`, a configured `wrapper`, `dippy
+run-on-server`) is matched literally, never against the local cwd or home. It
+asks unless an `allow-redirect` rule carries a remote context flag (the wrapper
+name, `ssh`, a host); an unflagged `allow-redirect`, such as `/tmp/**`, never
+permits a server write. `ask-redirect` and `deny-redirect` rules apply with or
+without flags.
+
+```
+# Helper files in the server's /tmp; every other server write asks.
+allow-redirect [cca-tmux-cli] /tmp/**
+```
+
 ## Option Rules
 
 Option rules provide fine-grained control over specific subcommands or flags. Unlike normal pattern matching, option rules match if:
