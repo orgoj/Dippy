@@ -15,10 +15,10 @@ just fmt     # ruff format --check
 
 ## Development rules
 
-- On branch `rust-port`, Python `src/dippy` is frozen: implement every
-  feature and fix only in `dippy-rs` with Rust tests, never in Python. A
-  resulting Rust/Python difference is an intended divergence; record it in
-  the parity tool that reports it.
+- On branch `rust-port`, the Python Dippy (`src/dippy`, `tests/`,
+  `rust/parity/`) is unmaintained and will be deleted. Implement every
+  feature and fix only in `rust/dippy-rs` with Rust tests; never edit, run or
+  cite the Python version or parity tools.
 - Use TDD for every code fix: add a failing test first.
 - Treat an unintentionally broad `allow` as a safety bug. Dippy guides
   non-adversarial agents; it is not a security boundary. Accept a broad trust
