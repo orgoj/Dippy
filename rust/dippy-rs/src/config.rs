@@ -2595,6 +2595,21 @@ pub struct SimpleCommand<'a> {
     pub word_has_expansions: &'a [bool],
 }
 
+/// Remote words stay literal, but `..` in an absolute path collapses
+/// lexically so `/tmp/../etc` cannot match a `/tmp/**` pattern.
+fn collapse_remote_words(words: &[String]) -> Vec<String> {
+    words
+        .iter()
+        .map(|w| {
+            if w.starts_with('/') {
+                collapse_path(w)
+            } else {
+                w.clone()
+            }
+        })
+        .collect()
+}
+
 fn match_words(
     cmd: &SimpleCommand,
     config: &Config,
@@ -2611,7 +2626,7 @@ fn match_words(
         words.to_vec()
     };
     let normalized_cmd = if remote {
-        resolved
+        collapse_remote_words(&resolved)
     } else {
         normalize_words(&resolved, cwd)
     };
@@ -2642,7 +2657,7 @@ fn match_words(
     let (stripped_words, normalized_stripped) = if i > 0 {
         let s = words[i..].to_vec();
         let n = if remote {
-            s.clone()
+            collapse_remote_words(&s)
         } else {
             normalize_words(&s, cwd)
         };

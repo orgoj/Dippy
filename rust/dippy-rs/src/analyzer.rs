@@ -14,6 +14,7 @@ use regex::Regex;
 
 use crate::allowlists::{is_simple_safe, is_wrapper_command};
 use crate::ast::{self, Node, Word};
+use crate::bash::shell_values;
 use crate::cli::{self, Action as HAction, HandlerContext};
 use crate::config::{self, Config, Flags, SimpleCommand, WrapperInfo};
 use crate::parser::strip_quotes;
@@ -1278,7 +1279,8 @@ fn analyze_simple_command(
         if info.transparent {
             return Decision::ask(base).flags(flags).suggest(&suggestion);
         }
-        let (dest, inner_cmd, context_value) = extract_wrapper_args(tokens, Some(info));
+        let values = shell_values(tokens, &slice_str(raw_words, i));
+        let (dest, inner_cmd, context_value) = extract_wrapper_args(&values, Some(info));
         if inner_cmd.is_empty() {
             let reason = match &dest {
                 Some(d) if !d.is_empty() => format!("{base} {d}"),
@@ -1751,6 +1753,48 @@ mod tests {
         assert_eq!(
             decide_with(&flagged, "zorpwrap -t h run \"grep x f > /tmp/keep\"").action,
             Action::Deny
+        );
+    }
+
+    #[test]
+    fn remote_path_words_collapse_dot_dot() {
+        let rules = "wrapper zorpwrap --cmd run --context -t\n\
+                     ask [zorpwrap] *\n\
+                     allow [zorpwrap] zorprm -f /tmp/**+\n";
+        let decide = |cmd| decide_with(rules, cmd).action;
+        assert_eq!(
+            decide("zorpwrap -t h run \"zorprm -f /tmp/a /tmp/b/c\""),
+            Action::Allow
+        );
+        assert_eq!(
+            decide("zorpwrap -t h run \"zorprm -f /tmp/../etc/passwd\""),
+            Action::Ask
+        );
+        assert_eq!(
+            decide("zorpwrap -t h run \"zorprm -f /tmp/a/../../etc\""),
+            Action::Ask
+        );
+    }
+
+    #[test]
+    fn remote_command_in_double_quotes_is_decoded() {
+        let base = "wrapper zorpwrap --cmd run --context -t\n\
+                    ask [zorpwrap] *\n\
+                    delegate [zorpwrap] awk *\n\
+                    allow [zorpwrap] echo *\n";
+        // The server runs awk '{print > "/etc/a"}' f, not the \" escapes.
+        for cmd in [
+            "zorpwrap -t h run \"awk '{print > \\\"/etc/a\\\"}' f\"",
+            "ssh h \"awk '{print > \\\"/etc/a\\\"}' f\"",
+        ] {
+            let d = decide_with(base, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+            assert_eq!(d.reason, "awk redirect", "{cmd}");
+        }
+        // An expansion keeps the word as written.
+        assert_eq!(
+            decide_with(base, "zorpwrap -t h run \"echo $HOME\"").action,
+            Action::Allow
         );
     }
 

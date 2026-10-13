@@ -4,6 +4,7 @@
 //! check with `ssh` and exact target wrapper contexts.
 
 use super::{Classification, Describe, HandlerContext};
+use crate::bash::shell_values;
 
 pub const COMMANDS: &[&str] = &["ssh"];
 pub const PORTED: bool = true;
@@ -91,7 +92,7 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
 
     // ssh concatenates its arguments with spaces for a remote shell; do not
     // re-quote (that would hide a remote compound command).
-    let remote_cmd = tokens[i..].join(" ");
+    let remote_cmd = shell_values(tokens, &ctx.raw_words)[i..].join(" ");
 
     Classification::delegate(remote_cmd)
         .desc(format!("ssh {host}"))

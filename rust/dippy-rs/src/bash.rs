@@ -49,6 +49,19 @@ pub fn decode_literal_word(raw: &str, reject_globs: bool) -> Option<String> {
     if quote.is_some() { None } else { Some(output) }
 }
 
+/// The values a command receives: each raw word after quote removal, or the
+/// token as given when the word has an expansion or no raw word is known.
+pub fn shell_values(tokens: &[String], raw_words: &[String]) -> Vec<String> {
+    if raw_words.len() != tokens.len() {
+        return tokens.to_vec();
+    }
+    tokens
+        .iter()
+        .zip(raw_words)
+        .map(|(t, raw)| decode_literal_word(raw, false).unwrap_or_else(|| t.clone()))
+        .collect()
+}
+
 /// Quote a string for safe use in bash (single quotes when needed).
 pub fn bash_quote(s: &str) -> String {
     if s.is_empty() {
@@ -87,6 +100,20 @@ mod tests {
         assert_eq!(decode_literal_word("a\\ b", false).as_deref(), Some("a b"));
         assert_eq!(decode_literal_word("*.txt", true), None);
         assert_eq!(decode_literal_word("'unterminated", false), None);
+    }
+
+    #[test]
+    fn shell_values_decode_literal_words_only() {
+        let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            shell_values(
+                &s(&["awk '\\\"x\\\"'", "$HOME"]),
+                &s(&["\"awk '\\\"x\\\"'\"", "$HOME"])
+            ),
+            s(&["awk '\"x\"'", "$HOME"])
+        );
+        // Without raw words (handler tests) the tokens stay as they are.
+        assert_eq!(shell_values(&s(&["a\\b"]), &[]), s(&["a\\b"]));
     }
 
     #[test]
