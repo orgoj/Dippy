@@ -4,8 +4,9 @@ title: Remove rable 0.2.1 workarounds after upstream fix
 status: To Do
 assignee: []
 created_date: '2026-10-13 05:06'
+updated_date: '2026-10-13 06:11'
 labels:
-  - 'upstream:rable'
+  - 'blocked:external'
 dependencies: []
 references:
   - 'https://github.com/mpecan/rable/pull/80'
