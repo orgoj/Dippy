@@ -2,6 +2,7 @@
 
 include .dippy-yolo
 
+allow backlog *
 allow cargo *
 allow rustup show *
 allow **/parity/run *
