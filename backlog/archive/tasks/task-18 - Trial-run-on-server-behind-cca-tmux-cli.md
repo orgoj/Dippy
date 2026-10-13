@@ -4,6 +4,7 @@ title: Trial run-on-server behind cca-tmux-cli
 status: To Do
 assignee: []
 created_date: '2026-10-13 05:06'
+updated_date: '2026-10-13 05:35'
 labels:
   - 'scope:local'
 dependencies: []
@@ -25,3 +26,9 @@ Trial rollout of `dippy run-on-server`: change only the internal execution path 
 - [ ] #4 Mismatched server lists in both directions cannot bypass either allowlist
 - [ ] #5 Existing agents and hooks behave unchanged and rollback to the legacy path is simple
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Archived 2026-10-13: machine-local (cca-tmux-cli wrapper trial); moved to the dippy_dev bundle TODO.md.
+<!-- SECTION:NOTES:END -->

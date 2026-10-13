@@ -4,6 +4,7 @@ title: Drop HCOM_INSTANCE_NAME agent-bundle rules after hcom 0.7.28
 status: To Do
 assignee: []
 created_date: '2026-10-13 05:06'
+updated_date: '2026-10-13 05:35'
 labels:
   - 'scope:local'
 dependencies: []
@@ -23,3 +24,9 @@ The user config scopes agent-bundle file rules with both ${HCOM_AGENT_NAME} and 
 - [ ] #2 The HCOM_INSTANCE_NAME rule lines are removed from the user config with explicit user consent
 - [ ] #3 Bundle reads/edits and file commands still allow for an agent in its own bundle and ask outside it
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Archived 2026-10-13: machine-local (live user config); moved to the dippy_dev bundle TODO.md.
+<!-- SECTION:NOTES:END -->

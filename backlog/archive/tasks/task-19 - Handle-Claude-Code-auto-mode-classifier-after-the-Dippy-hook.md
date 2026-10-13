@@ -4,6 +4,7 @@ title: Handle Claude Code auto mode classifier after the Dippy hook
 status: To Do
 assignee: []
 created_date: '2026-10-13 05:06'
+updated_date: '2026-10-13 05:35'
 labels:
   - 'scope:local'
   - 'status:needs-decision'
@@ -23,3 +24,9 @@ Since Claude Code v2.1.283 auto mode is the default; its classifier runs after t
 - [ ] #1 The user chose an option or decided to drop the task
 - [ ] #2 If the hook option is chosen, classifier denials appear in dippy audit, with tests
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Archived 2026-10-13: split. Portable part (audit-log hook) is TASK-23; the machine-local settings decision moved to the dippy_dev bundle TODO.md.
+<!-- SECTION:NOTES:END -->
