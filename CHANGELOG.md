@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.4] - 2026-10-14
+
+### Fixed
+
+- dippy-rs duckdb: `ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT` is verified as a main-database write like `CREATE TABLE IF NOT EXISTS`, so redirect rules for the database file decide it instead of an unconditional ask. Column options, positions, other tables and `ALTER TABLE IF EXISTS` still ask.
+
 ## [0.5.3] - 2026-10-14
 
 ### Fixed

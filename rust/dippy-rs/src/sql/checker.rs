@@ -659,7 +659,7 @@ fn alter_table(a: &AlterTable) -> Option<String> {
     let [
         AlterTableOperation::AddColumn {
             column_keyword,
-            if_not_exists: false,
+            if_not_exists,
             column_def,
             column_position: None,
         },
@@ -671,9 +671,10 @@ fn alter_table(a: &AlterTable) -> Option<String> {
         return None;
     }
     Some(format!(
-        "ALTER TABLE {} ADD {}{column_def}",
+        "ALTER TABLE {} ADD {}{}{column_def}",
         a.name,
-        if *column_keyword { "COLUMN " } else { "" }
+        if *column_keyword { "COLUMN " } else { "" },
+        if *if_not_exists { "IF NOT EXISTS " } else { "" }
     ))
 }
 
@@ -825,6 +826,8 @@ mod tests {
             ("DELETE", "DELETE FROM t WHERE a IN (SELECT a FROM u)"),
             ("DROP", "DROP TABLE IF EXISTS t"),
             ("ALTER", "ALTER TABLE t ADD COLUMN c INTEGER"),
+            ("ALTER", "ALTER TABLE t ADD COLUMN IF NOT EXISTS c INTEGER"),
+            ("ALTER", "ALTER TABLE main.t ADD IF NOT EXISTS c BOOLEAN"),
         ] {
             assert!(verify_main_write(sql, root), "{sql}");
         }
@@ -847,6 +850,19 @@ mod tests {
             ("DROP", "DROP TABLE t, u"),
             ("DROP", "DROP TABLE t CASCADE"),
             ("ALTER", "ALTER TABLE t DROP COLUMN c"),
+            (
+                "ALTER",
+                "ALTER TABLE other.t ADD COLUMN IF NOT EXISTS c INTEGER",
+            ),
+            (
+                "ALTER",
+                "ALTER TABLE t ADD COLUMN IF NOT EXISTS c INTEGER DEFAULT writefile('x', 'y')",
+            ),
+            ("ALTER", "ALTER TABLE IF EXISTS t ADD COLUMN c INTEGER"),
+            (
+                "ALTER",
+                "ALTER TABLE t ADD COLUMN IF NOT EXISTS c INTEGER, ADD COLUMN d INTEGER",
+            ),
             ("UPDATE", "INSERT INTO t VALUES (1)"),
         ] {
             assert!(!verify_main_write(sql, root), "{sql}");

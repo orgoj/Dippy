@@ -679,6 +679,24 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
     }
 
     #[test]
+    fn add_column_if_not_exists_targets_the_database() {
+        let result = classify(&test_ctx(
+            "duckdb tmp/work.db 'ALTER TABLE t ADD COLUMN IF NOT EXISTS c BOOLEAN'",
+        ));
+        assert_eq!(result.action, Action::Allow);
+        assert_eq!(result.redirect_targets, Some(vec!["tmp/work.db".into()]));
+        for sql in [
+            "ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT DEFAULT writefile('x', 'y')",
+            "ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT, DROP COLUMN d",
+            "ALTER TABLE other.t ADD COLUMN IF NOT EXISTS c INT",
+        ] {
+            let result = classify(&test_ctx(&format!("duckdb tmp/work.db \"{sql}\"")));
+            assert_eq!(result.action, Action::Ask, "{sql}");
+            assert_eq!(result.redirect_targets, None, "{sql}");
+        }
+    }
+
+    #[test]
     fn shell_expansion_asks() {
         for expansion in [
             "$(touch /tmp/dippy-bypass)",
@@ -715,7 +733,7 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
             "duckdb (unverified database write)"
         );
         assert_eq!(
-            desc("duckdb db 'ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT'"),
+            desc("duckdb db 'ALTER TABLE t RENAME TO u'"),
             "duckdb (unverified database write)"
         );
         assert_eq!(desc("duckdb db '.tables'"), "duckdb (dot-command)");
