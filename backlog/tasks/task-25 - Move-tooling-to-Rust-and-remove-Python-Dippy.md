@@ -4,10 +4,12 @@ title: Move tooling to Rust and remove Python Dippy
 status: To Do
 assignee: []
 created_date: '2026-10-13 10:37'
+updated_date: '2026-10-14 19:54'
 labels: []
 dependencies:
   - TASK-8
 priority: medium
+type: chore
 ---
 
 ## Description

@@ -5,12 +5,14 @@ status: Done
 assignee:
   - '@dippy_dev'
 created_date: '2026-10-14 09:25'
-updated_date: '2026-10-14 19:52'
+updated_date: '2026-10-14 19:54'
 labels:
   - rust
   - hooks
   - 'resolution:rejected'
 dependencies: []
+priority: low
+type: bug
 ---
 
 ## Description
