@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.5] - 2026-10-14
+
+### Fixed
+
+- dippy-rs hook (AGY): the askpass dialog's answer is logged as its own audit entry after the rule decision (`allow` with message `askpass: approved by user`, `deny` with `askpass: denied by user`). Before, a user approval or refusal left no trace and an unmatched tool showed only `pass`.
+
 ## [0.5.4] - 2026-10-14
 
 ### Fixed

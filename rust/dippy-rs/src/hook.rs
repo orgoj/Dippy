@@ -592,7 +592,24 @@ impl<'a> Hook<'a> {
         let deadline = Instant::now() + timeout;
         loop {
             match child.try_wait() {
-                Ok(Some(status)) => return status.code() == Some(0),
+                Ok(Some(status)) => {
+                    // The answer is its own entry after the rule decision.
+                    let allowed = status.code() == Some(0);
+                    self.audit(Entry {
+                        decision: if allowed { "allow" } else { "deny" },
+                        message: Some(if allowed {
+                            "askpass: approved by user"
+                        } else {
+                            "askpass: denied by user"
+                        }),
+                        command: s.command,
+                        cwd: s.cwd,
+                        tool,
+                        file_path: s.file_path,
+                        ..Entry::default()
+                    });
+                    return allowed;
+                }
                 Ok(None) if Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_millis(20));
                 }
@@ -2021,6 +2038,44 @@ mod tests {
             entries[4],
             json!({"decision": "deny", "message": not_found, "tool": "search_web", "event": "PreToolUse", "agent": "pi"})
         );
+    }
+
+    #[test]
+    fn agy_logs_the_askpass_answer_after_the_rule_decision() {
+        let dir = temp_dir("answer");
+        let calls = [
+            json!({"toolCall": {"name": "search_web", "args": {"query": "cats"}}}),
+            json!({"toolCall": {"name": "run_command", "args": {"CommandLine": "rm x"}}}),
+        ];
+        for (code, decision, message) in [
+            (0, "allow", "askpass: approved by user"),
+            (1, "deny", "askpass: denied by user"),
+        ] {
+            let program = dir.join(format!("askpass{code}"));
+            std::fs::write(
+                &program,
+                format!("#!/bin/sh\ncat > /dev/null\nexit {code}\n"),
+            )
+            .unwrap();
+            std::fs::set_permissions(
+                &program,
+                std::os::unix::fs::PermissionsExt::from_mode(0o755),
+            )
+            .unwrap();
+            let entries = logged(Mode::Agy, Some(&program), &calls);
+            assert_eq!(entries.len(), 4, "{entries:?}");
+            assert_eq!(entries[0]["decision"], "pass");
+            assert_eq!(
+                entries[1],
+                json!({"decision": decision, "message": message, "cwd": "/w", "tool": "search_web", "agent": "pi"})
+            );
+            assert_eq!(entries[2]["decision"], "ask");
+            assert_eq!(
+                entries[3],
+                json!({"decision": decision, "message": message, "cwd": "/w", "tool": "run_command", "agent": "pi"})
+            );
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     /// The payload a denying fake askpass received for one AGY tool call.

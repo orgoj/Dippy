@@ -1980,6 +1980,11 @@ a decision (PostToolUse, Stop, SubagentStop, AfterAgent, Notification) logs
 unavailable dashboard go into `message`; a config error, invalid JSON input or
 an AGY workspace error is logged to `~/.dippy/audit.log` (the `set log` path
 is unknown then); an internal panic logs decision `error` and denies.
+When the AGY hook shows the askpass dialog (an `ask` rule, or an unmatched
+tool logged as `pass` under the default `ask`), the user's answer is a
+separate entry after the rule decision: `allow` with message `askpass:
+approved by user` or `deny` with `askpass: denied by user`
+(`dippy audit --grep askpass`).
 
 **Checking the log:** `dippy doctor` (dippy-rs) checks the audit log a hook
 in the current directory writes: the `set log` path or the default, its
