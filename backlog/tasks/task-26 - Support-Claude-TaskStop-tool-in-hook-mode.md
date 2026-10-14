@@ -1,10 +1,11 @@
 ---
 id: TASK-26
 title: Support Claude TaskStop tool in hook mode
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@dippy_dev'
 created_date: '2026-10-14 09:25'
-updated_date: '2026-10-14 19:34'
+updated_date: '2026-10-14 19:50'
 labels:
   - rust
   - hooks
@@ -29,3 +30,9 @@ Claude Code's TaskStop tool (stops the agent's own background task) is logged as
 <!-- SECTION:NOTES:BEGIN -->
 Invalid premise. In Claude hook mode dippy-rs defers unsupported tools (hook.rs tool_input_payload: hook.defer, no decision), so Claude Code decides itself; TaskStop needs no permission and never prompted. The audit entry 'pass: unsupported tool: TaskStop' is informational, not an ask. Nothing to fix.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Not implemented: invalid premise (see notes). Claude hook mode defers unsupported tools, TaskStop never prompted; nothing to change in dippy-rs.
+<!-- SECTION:FINAL_SUMMARY:END -->
