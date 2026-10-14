@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.6] - 2026-10-14
+
+### Fixed
+
+- dippy-rs sed: scripts are scanned command by command (GNU syntax) instead of searched with regexes, so a `w` or `e` inside an address, regex or replacement is no longer taken for a command (`sed -n '/w x/p' f` allows as a read). Real `w`/`W` file names are the rest of the line, as in GNU sed, and are still checked against `allow-redirect`, like `-i`. The `e` command and `s///e` flag are now also recognized in `1e`, `s/a/b/eg` and `echo` (which runs `cho`). A script the scanner does not understand asks as `sed (unparsed script)`. With `-f`, the first positional argument is an input file, not a script.
+
 ## [0.5.5] - 2026-10-14
 
 ### Fixed
