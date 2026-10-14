@@ -31,7 +31,7 @@
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands
 - **`cp`/`mv` through redirect rules** — destinations (and `mv` sources, which get removed) are checked against `allow-redirect`/`ask-redirect`/`deny-redirect`, so `deny-redirect **/.dippy` also stops `mv .dippy /tmp/saved`
-- **SQL command validation** — DuckDB, PostgreSQL, MySQL, SQLite, SQL Server, and Athena parse literal SQL with their own dialect, inspect nested operations and every statement, and ask when syntax or shell expansion makes the effects uncertain. Parenthesized queries and set-operation branches use the same checks, including DuckDB `USING SAMPLE` unions. Read-only casts handle dialect type aliases (such as DuckDB `VARCHAR`/`TEXT`) without mistaking normalization for discarded syntax; malformed queries and user-defined cast types require approval. MySQL/MariaDB executable comments and SQL Server `NEXT VALUE FOR` sequence increments require approval. DuckDB recognizes pure interval constructors, `stats` and `list_sum`; unknown and qualified functions require approval. DuckDB writes to the main database and verified single-file `COPY (SELECT ...) TO` CSV exports follow redirect rules, including exports under `-readonly`. Export options support `HEADER`, `DELIMITER`, `QUOTE`, `ESCAPE`, `NULL` and `FORMAT CSV`; unsupported options, mixed export/database-write batches and extension commands require approval. Verified temporary table creation is allowed under `-readonly` or `-safe`. dippy-rs verifies query structure with the `sqlparser` crate against an allowlist of syntax and SQLGlot-known functions (Python uses SQLGlot), accepts `ATTACH` in DuckDB batches only as `ATTACH 'local.db' AS x (READ_ONLY)` (no `TYPE`, no remote path), additionally allows `duckdb -readonly` to run such an `ATTACH` before verified reads, lets `INSTALL`/`LOAD` of the function-only extensions `icu`, `inet`, `json` and `parquet` pass in any DuckDB batch (other extensions, paths and repositories ask), verifies DuckDB `read_text(path)`, and `sqlite3` read-only introspection: `PRAGMA name` / `PRAGMA name(table)` for schema and status pragmas (never `=` or setters) and single-line `.schema`, `.tables`, `.indexes` and `.databases` with simple arguments.
+- **SQL command validation** — DuckDB, PostgreSQL, MySQL, SQLite, SQL Server, and Athena parse literal SQL with their own dialect, inspect nested operations and every statement, and ask when syntax or shell expansion makes the effects uncertain. Parenthesized queries and set-operation branches use the same checks, including DuckDB `USING SAMPLE` unions. Read-only casts handle dialect type aliases (such as DuckDB `VARCHAR`/`TEXT`) without mistaking normalization for discarded syntax; malformed queries and user-defined cast types require approval. MySQL/MariaDB executable comments and SQL Server `NEXT VALUE FOR` sequence increments require approval. DuckDB recognizes pure interval constructors, `stats` and `list_sum`; unknown and qualified functions require approval. DuckDB writes to the main database and verified single-file `COPY (SELECT ...) TO` CSV exports follow redirect rules, including exports under `-readonly` (see [SQL Databases](#sql-databases)). Export options support `HEADER`, `DELIMITER`, `QUOTE`, `ESCAPE`, `NULL` and `FORMAT CSV`; unsupported options, mixed export/database-write batches and extension commands require approval. Verified temporary table creation is allowed under `-readonly` or `-safe`. dippy-rs verifies query structure with the `sqlparser` crate against an allowlist of syntax and SQLGlot-known functions (Python uses SQLGlot), accepts `ATTACH` in DuckDB batches only as `ATTACH 'local.db' AS x (READ_ONLY)` (no `TYPE`, no remote path), additionally allows `duckdb -readonly` to run such an `ATTACH` before verified reads, lets `INSTALL`/`LOAD` of the function-only extensions `icu`, `inet`, `json` and `parquet` pass in any DuckDB batch (other extensions, paths and repositories ask), verifies DuckDB `read_text(path)`, and `sqlite3` read-only introspection: `PRAGMA name` / `PRAGMA name(table)` for schema and status pragmas (never `=` or setters) and single-line `.schema`, `.tables`, `.indexes` and `.databases` with simple arguments.
 - **Log rotation** — `set log-rotate-max-days N` for automatic cleanup
 - **Notifier (Sidekick)** — `set notifier-command "CMD"` for external notifications (mail check). Supports long-polling via `--idle` in stop hooks. Use `set notifier-include "tool1, tool2"` to limit when it triggers.
 - **Idle Prompt Notifications** — `set idle-notifier-command "notify-send {title} {message}"` for notifications when Claude is waiting for input
@@ -429,6 +429,35 @@ deny-read **/.env*
 deny-edit **/.env*
 ask-edit **/config.*
 ```
+
+### SQL Databases
+
+SQL clients pass only literal SQL that Dippy verifies as read-only; anything
+uncertain asks. Changes to data or structure differ by client:
+
+| Client | Read-only SQL | Data or schema change |
+|---|---|---|
+| `psql`, `mysql`, `sqlcmd`, `aws athena start-query-execution` | allow | always ask |
+| `sqlite3 FILE` | allow | always ask |
+| `duckdb FILE` | allow | redirect rules for `FILE` |
+| `duckdb` without a database file | allow | always ask |
+
+DuckDB treats a verified change of the main database file (`CREATE`,
+`INSERT`, `UPDATE`, `DELETE`, `DROP TABLE`, `ALTER TABLE ... ADD COLUMN`) as a
+write to that file, so a broad `allow-redirect ./**` or `tmp/**` also lets the
+agent change every DuckDB database below it. Any other write statement asks as
+`duckdb (unverified database write)`. Single-file `COPY (SELECT ...) TO 'f.csv'`
+exports follow redirect rules for `f.csv`.
+
+```bash
+# DuckDB: read-only everywhere, writes only to one scratch database
+ask-redirect **/*.db "Database changes need approval; use read-only queries."
+ask-redirect **/*.duckdb "Database changes need approval; use read-only queries."
+allow-redirect tmp/work.db
+```
+
+Redirect rules cannot tell a schema change from a data change; both count as
+writing the file.
 
 ### Advanced Features
 
