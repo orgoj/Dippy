@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.3] - 2026-10-14
+
+### Fixed
+
+- dippy-rs duckdb: a write batch on a database file that is not verified as main-database writes only (e.g. `ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT`) now asks as `duckdb (unverified database write)` instead of the generic `duckdb (write query)`, which hid that `allow-redirect` rules for the database file were never consulted.
+
 ## [0.5.2] - 2026-10-13
 
 ### Fixed

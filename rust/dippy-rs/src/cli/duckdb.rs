@@ -205,11 +205,14 @@ fn classify_sql(sql: &str, readonly_flag: bool, filename: Option<&str>) -> Class
     if readonly == Some(true) {
         return Classification::allow_desc("duckdb (read-only query)");
     }
-    if let Some(filename) = filename
-        && duckdb_writes_only_main(sql)
-    {
-        return Classification::allow_desc("duckdb (database write)")
-            .redirects(vec![filename.to_string()]);
+    if let Some(filename) = filename {
+        if duckdb_writes_only_main(sql) {
+            return Classification::allow_desc("duckdb (database write)")
+                .redirects(vec![filename.to_string()]);
+        }
+        if readonly == Some(false) {
+            return Classification::ask_desc("duckdb (unverified database write)");
+        }
     }
     if readonly == Some(false) {
         return Classification::ask_desc("duckdb (write query)");
@@ -706,7 +709,15 @@ TO 'tmp/wdt_traffic-tos-pool-ips.txt' (HEADER false, DELIMITER ' ')";
     fn descriptions() {
         let desc = |c: &str| classify(&test_ctx(c)).description.unwrap();
         assert_eq!(desc("duckdb db 'SELECT 1'"), "duckdb (read-only query)");
-        assert_eq!(desc("duckdb db 'DROP SECRET x'"), "duckdb (write query)");
+        assert_eq!(desc("duckdb -c 'DROP SECRET x'"), "duckdb (write query)");
+        assert_eq!(
+            desc("duckdb db 'DROP SECRET x'"),
+            "duckdb (unverified database write)"
+        );
+        assert_eq!(
+            desc("duckdb db 'ALTER TABLE t ADD COLUMN IF NOT EXISTS c INT'"),
+            "duckdb (unverified database write)"
+        );
         assert_eq!(desc("duckdb db '.tables'"), "duckdb (dot-command)");
         assert_eq!(desc("duckdb db"), "duckdb (interactive)");
         assert_eq!(desc("duckdb -init x db"), "duckdb (init script)");
