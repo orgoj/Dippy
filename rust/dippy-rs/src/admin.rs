@@ -11,7 +11,7 @@ use crate::config::{self, Config, PROJECT_CONFIG_NAME};
 use crate::paths::py_path_str;
 
 /// `_CONFIG_KEYS`: the settings `dippy config` reads and writes.
-pub const KEYS: [&str; 13] = [
+pub const KEYS: [&str; 7] = [
     "askpass",
     "askpass-timeout",
     "approval-wait-message",
@@ -19,12 +19,6 @@ pub const KEYS: [&str; 13] = [
     "approval-timeout-message",
     "dashboard-url",
     "dashboard-token-file",
-    "run-on-server-backend",
-    "run-on-server-session",
-    "run-on-server-timeout",
-    "run-on-server-poll-interval",
-    "run-on-server-ssh-config",
-    "run-on-server-ssh-auth-sock",
 ];
 
 #[derive(clap::Args)]
@@ -63,8 +57,6 @@ enum Action {
         #[command(flatten)]
         scope: Scope,
     },
-    /// Manage allowed `run-on-server` targets
-    Server(ServerArgs),
     /// Append one allow/ask/deny rule line; `--project` writes the project
     /// config loaded for the cwd, else `.dippy` in the Git root or the cwd
     AddRule {
@@ -75,36 +67,10 @@ enum Action {
     },
 }
 
-#[derive(clap::Args)]
-struct ServerArgs {
-    #[command(subcommand)]
-    action: Option<ServerAction>,
-}
-
-#[derive(clap::Subcommand)]
-enum ServerAction {
-    Add {
-        server: String,
-        #[command(flatten)]
-        scope: Scope,
-    },
-    Remove {
-        server: String,
-        #[command(flatten)]
-        scope: Scope,
-    },
-    List {
-        #[command(flatten)]
-        scope: Scope,
-    },
-}
-
 /// One line edit of `edit_config`.
 pub enum Edit<'a> {
     Set(&'a str, &'a str),
     Unset(&'a str),
-    ServerAdd(&'a str),
-    ServerRemove(&'a str),
 }
 
 fn normalize(key: &str) -> String {
@@ -162,7 +128,7 @@ pub fn write_atomic_mode(path: &Path, text: &str, mode: Option<u32>) -> std::io:
     result
 }
 
-/// `edit_config`: change one setting or server line, keeping every other
+/// `edit_config`: change one setting line, keeping every other
 /// line (comments, rules, blank lines) as it is.
 pub fn edit_config(path: &Path, edit: Edit) -> std::io::Result<()> {
     let text = match std::fs::read_to_string(path) {
@@ -187,17 +153,6 @@ pub fn edit_config(path: &Path, edit: Edit) -> std::io::Result<()> {
                 }
             }
             output.extend(replacement);
-            output
-        }
-        Edit::ServerAdd(server) | Edit::ServerRemove(server) => {
-            let directive = format!("server {server}");
-            let mut output: Vec<String> = lines
-                .filter(|line| line.trim() != directive)
-                .map(str::to_string)
-                .collect();
-            if matches!(edit, Edit::ServerAdd(_)) {
-                output.push(directive);
-            }
             output
         }
     };
@@ -305,15 +260,6 @@ fn setting_value(config: &Config, key: &str) -> String {
         "approval-timeout-message" => config.approval_timeout_message.clone(),
         "dashboard-url" => config.dashboard_url.clone(),
         "dashboard-token-file" => py_path_str(&config.dashboard_token_path()),
-        "run-on-server-backend" => config.run_on_server_backend.clone(),
-        "run-on-server-session" => config.run_on_server_session.clone(),
-        "run-on-server-timeout" => py_float_repr(config.run_on_server_timeout),
-        "run-on-server-poll-interval" => py_float_repr(config.run_on_server_poll_interval),
-        "run-on-server-ssh-config" => path(&config.run_on_server_ssh_config),
-        "run-on-server-ssh-auth-sock" => config
-            .run_on_server_ssh_auth_sock
-            .clone()
-            .unwrap_or("None".into()),
         _ => unreachable!("not in KEYS: {key}"),
     }
 }
@@ -368,7 +314,6 @@ pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
         return fail("config action required".into());
     };
     match action {
-        Action::Server(server) => run_server(server),
         Action::AddRule { rule, scope } => {
             match validate_rule(rule) {
                 Ok(warnings) => warnings.iter().for_each(|w| eprintln!("WARNING:root:{w}")),
@@ -438,39 +383,6 @@ pub fn run(args: &ConfigArgs, cwd: Option<&str>) -> i32 {
             Err(e) => fail(e),
         },
     }
-}
-
-fn run_server(args: &ServerArgs) -> i32 {
-    let Some(action) = &args.action else {
-        return fail("server action required".into());
-    };
-    let (server, scope, add) = match action {
-        ServerAction::List { scope } => {
-            return match read_config(&scope_path(scope), !scope.project) {
-                Ok(config) => {
-                    for server in config.servers {
-                        println!("{server}");
-                    }
-                    0
-                }
-                Err(e) => fail(e),
-            };
-        }
-        ServerAction::Add { server, scope } => (server, scope, true),
-        ServerAction::Remove { server, scope } => (server, scope, false),
-    };
-    if let Err(e) = config::validate_server(server) {
-        return fail(e);
-    }
-    let path = scope_path(scope);
-    edit(
-        &path,
-        if add {
-            Edit::ServerAdd(server)
-        } else {
-            Edit::ServerRemove(server)
-        },
-    )
 }
 
 #[cfg(test)]

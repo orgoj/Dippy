@@ -66,14 +66,11 @@ For multiline approved execution, use one directly attached quoted heredoc:
 dippy run <<'DIPPY'
 CMD
 DIPPY
-dippy run-on-server SERVER <<'DIPPY'
-CMD
-DIPPY
 ```
 
 Keep the delimiter quoted so the calling shell cannot expand parameters or
 command substitutions before classification. Do not pipe or redirect a script
-file into these subcommands. Keep `dippy run 'CMD'` for a single-line command.
+file into `dippy run`. Keep `dippy run 'CMD'` for a single-line command.
 
 ## Codex `ask` Requires a Prompt Bridge
 

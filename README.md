@@ -42,8 +42,7 @@
 - **Live dashboard** — `dippy dashboard` serves a read-only web view of the audit log (stdlib only, token-protected REST API in `docs/dashboard-api.json`, `127.0.0.1:8765` by default) to watch decisions across agents as they happen; `--hub NODES_FILE` shows the same page over many machines, with nodes added at runtime
 - **Dashboard approvals (dippy-rs)** — `set approval dashboard` sends every `ask` of the agent hooks (Claude, AGY, Gemini, Cursor, Codex `PermissionRequest`, pi) and of `dippy run` to a queue on the local `dippy dashboard` node; you approve or deny in a popup laid out like `dippy-askpass` (with the rule editor) and the agent gets only allow or deny; a hub aggregates the queues of many machines. Fails closed: timeouts deny, and only a node that provably never got the request falls back to the normal prompt. See [Dashboard Approvals](docs/config.md#dashboard-approvals-dippy-rs)
 - **CLI mode** — standalone command validation with `--cmd`, `--stdin`, `--json`, `--remote`
-- **Approved execution** — `dippy run` and allowlisted `dippy run-on-server` commands classify a quoted argument or literal quoted-heredoc script before local, SSH, tmux, or Herdr execution; uncertain remote results stay blocked until recovery
-- **Optional project SSH profiles** — SSH, tmux and Herdr share explicit SSH config/agent selection with no user-authentication fallback, private control sockets, and project-scoped recovery; ordinary user SSH settings remain the default
+- **Approved execution** — `dippy run` classifies a quoted argument or literal quoted-heredoc script and runs it locally only after an `allow` or an approved `ask` (remote execution belongs to the caller's `wrapper`; `run-on-server` was removed in 0.6.0)
 - **Multi-Agent Support** — dedicated modes for Claude, Gemini, Antigravity CLI (AGY), pi-mono, Moltbot, Codex, Windsurf, PearAI
 - **pi-mono extension** — TypeScript extension for [pi-mono](https://github.com/badlogic/pi-mono) AI assistant
 - **Python `-c` AST analysis** — `python -c 'code'` is statically analyzed for safety instead of always requiring confirmation. Safe code (no I/O, no dangerous imports) is auto-approved *(design by nickdaview)*
@@ -266,8 +265,7 @@ prefix_rule(
 
 Put global rules in `~/.codex/rules/*.rules` or project rules in
 `.codex/rules/*.rules`, then restart Codex. Prefer Dippy's own stable execution
-surface for external commands: prompt `dippy run` and `dippy run-on-server` in
-the agent policy, then let the inner Dippy invocation enforce the command rules.
+surface for external commands: prompt `dippy run` in the agent policy, then let the inner Dippy invocation enforce the command rules.
 See [Codex CLI hooks](docs/hook-systems/codex-cli.md).
 
 **Current Gemini behavior:** Gemini CLI 0.42 treats `BeforeTool` hook `allow` as "continue to normal policy" by default. To enable **Pure Dippy Control** and avoid double prompts, use:
@@ -292,25 +290,15 @@ Changing hook config requires restarting the agent session. For Codex, both `hoo
 
 ```bash
 dippy run 'CMD'
-dippy run-on-server SERVER 'CMD'
 dippy run <<'DIPPY'               # literal multiline local script
 CMD
 DIPPY
-dippy run-on-server SERVER <<'DIPPY'
-CMD
-DIPPY
-dippy recover SERVER               # check an uncertain persistent run
-dippy recover SERVER --clear       # release after manual inspection
 ```
 
-`run-on-server` accepts only aliases declared with `server SERVER`. Its
-transport comes from configuration and cannot be overridden at invocation.
-By default it uses your ordinary SSH settings. Projects can opt into an
-[isolated SSH profile](docs/config.md#project-ssh-profiles) with their own
-configuration, keys and authentication socket, shared by all three backends.
-See [the configuration reference](docs/config.md#direct-execution) for SSH,
-tmux, Herdr, askpass, config-management setup, and the interaction between
-approval and agent CLI timeouts. Projects with a supervising agent or a custom
+The command runs locally with Bash in the current directory. See
+[the configuration reference](docs/config.md#direct-execution) for askpass,
+config-management setup, and the interaction between approval and agent CLI
+timeouts. Projects with a supervising agent or a custom
 user channel can set `approval-wait-message` without exposing the underlying
 enforcement mechanism.
 

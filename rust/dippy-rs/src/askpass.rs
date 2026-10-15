@@ -58,10 +58,6 @@ pub struct Request {
     pub message: String,
     pub file_path: Option<String>,
     pub causes: Vec<Cause>,
-    /// Context flags and remoteness the command was analysed with
-    /// (`dippy run-on-server`); empty and false for hooks.
-    pub flags: Vec<String>,
-    pub remote: bool,
     pub timeout: Option<Duration>,
 }
 
@@ -129,8 +125,6 @@ impl Request {
                 .and_then(Value::as_array)
                 .map(|a| a.iter().filter_map(cause).collect())
                 .unwrap_or_default(),
-            flags: strings(&v, "flags"),
-            remote: v.get("remote").and_then(Value::as_bool).unwrap_or(false),
             timeout: env("DIPPY_ASKPASS_TIMEOUT")
                 .and_then(|t| t.parse::<u64>().ok())
                 .filter(|t| *t > 0)
@@ -149,11 +143,9 @@ impl Request {
         (kind, pattern.replace("${", "$${"))
     }
 
-    /// Initial rule tags: the first cause's, else the request's.
+    /// Initial rule tags: the first cause's.
     pub fn prefill_tags(&self) -> String {
-        self.causes
-            .first()
-            .map_or_else(|| tags_of(&self.flags), Cause::tags)
+        self.causes.first().map(Cause::tags).unwrap_or_default()
     }
 
     /// The whole request as shown (command, else file path or tool).
@@ -197,15 +189,9 @@ pub fn rule_line(action: &str, kind: &str, tags: &str, pattern: &str) -> String 
     }
 }
 
-fn analyze(
-    command: &str,
-    flags: &[String],
-    remote: bool,
-    cwd: &Path,
-    config: &Config,
-) -> &'static str {
+fn analyze(command: &str, flags: &[String], cwd: &Path, config: &Config) -> &'static str {
     let flags: config::Flags = flags.iter().cloned().collect();
-    analyzer::analyze(command, config, cwd, Some(&flags), remote)
+    analyzer::analyze(command, config, cwd, Some(&flags), false)
         .action
         .as_str()
 }
@@ -217,7 +203,7 @@ pub fn decide(req: &Request, config: &Config) -> &'static str {
         Some(c) if !matches!(c.kind.as_str(), "command" | "redirect") => {
             decide_cause(req, c, config)
         }
-        _ => analyze(&req.command, &req.flags, req.remote, &req.cwd, config),
+        _ => analyze(&req.command, &[], &req.cwd, config),
     }
 }
 
@@ -247,7 +233,7 @@ pub fn decide_cause(req: &Request, cause: &Cause, config: &Config) -> &'static s
         "edit" => verdict(config::match_edit(t, config, cwd, &flags), default),
         "web" => verdict(config::match_web(t, config, &flags), default),
         "mcp" => verdict(config::match_mcp(t, config), default),
-        _ => analyze(t, &cause.flags, req.remote, cwd, config),
+        _ => analyze(t, &cause.flags, cwd, config),
     }
 }
 
@@ -610,57 +596,41 @@ mod tests {
             target: &target,
         };
         let r = req(&format!(
-            r#"{{"command": "zorp x | cat", "cwd": "{}", "server": "srv",
-            "flags": ["run-on-server", "srv"], "remote": true,
+            r#"{{"command": "zorp x | cat", "cwd": "{}",
             "causes": [{{"kind": "command", "target": "zorp x", "rule": null,
-            "flags": ["@compound", "@pipeline", "run-on-server", "srv"]}}]}}"#,
+            "flags": ["@compound", "@pipeline", "srv", "zorpwrap"]}}]}}"#,
             dir.display()
         ));
-        assert_eq!(r.flags, ["run-on-server", "srv"]);
-        assert!(r.remote);
         // Structural `@` flags are not prefilled.
-        assert_eq!(r.causes[0].tags(), "run-on-server,srv");
-        assert_eq!(r.prefill_tags(), "run-on-server,srv");
+        assert_eq!(r.causes[0].tags(), "srv,zorpwrap");
+        assert_eq!(r.prefill_tags(), "srv,zorpwrap");
         let bare = Request {
             causes: Vec::new(),
             ..r.clone()
         };
-        assert_eq!(bare.prefill_tags(), "run-on-server,srv");
+        assert_eq!(bare.prefill_tags(), "");
         assert_eq!(statuses(&r, &user), Ok(vec!["ask"]));
         let cause = r.causes.first();
         let both = |cause, request| Ok(Outcome { cause, request });
+        // The tagged rule matches the cause in its context, not the bare
+        // request.
         let tagged = check(
             &r,
             cause,
             "allow",
             "command",
-            "run-on-server,srv",
+            "srv,zorpwrap",
             "zorp x",
             &files,
         );
-        assert_eq!(tagged.line, "allow [run-on-server,srv] zorp x");
-        assert_eq!(tagged.outcome, both("allow", "allow"));
+        assert_eq!(tagged.line, "allow [srv,zorpwrap] zorp x");
+        assert_eq!(tagged.outcome, both("allow", "ask"));
         let other = check(&r, cause, "allow", "command", "other", "zorp x", &files);
         assert_eq!(other.line, "allow [other] zorp x");
         assert_eq!(other.outcome, both("ask", "ask"));
         assert_eq!(
             check(&r, cause, "allow", "command", " ", "zorp x", &files).line,
             "allow zorp x"
-        );
-        // The request is analysed as remote: a server write asks like a
-        // local one unless a rule with a remote context flag allows it.
-        let remote = req(&format!(
-            r#"{{"command": "ls > /etc/zorp", "cwd": "{}", "remote": true}}"#,
-            dir.display()
-        ));
-        let local = Request {
-            remote: false,
-            ..remote.clone()
-        };
-        let config = config::load_config_from(&dir, &user).unwrap();
-        assert_eq!(
-            (decide(&remote, &config), decide(&local, &config)),
-            ("ask", "ask")
         );
         std::fs::remove_dir_all(&dir).unwrap();
     }

@@ -494,12 +494,9 @@ impl<'a> Hook<'a> {
             file_path: non_empty(s.file_path),
             message: reason,
             agent: self.log.agent(),
-            server: None,
             decision: "ask",
             reason,
             context_flags: s.context_flags.into_iter().flatten().cloned().collect(),
-            flags: Vec::new(),
-            remote: false,
             causes: s.causes,
         };
         let outcome = approval::wait(config, &ask, &|_| {}, &|| {});

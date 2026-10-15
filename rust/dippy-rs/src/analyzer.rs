@@ -1196,35 +1196,16 @@ fn analyze_simple_command(
         return d;
     }
 
-    // 2. Dippy execution subcommands with one literal script on stdin.
-    if base == "dippy" && tokens.len() > 1 && (tokens[1] == "run" || tokens[1] == "run-on-server") {
-        let content = quoted_heredoc_content(redirects);
-        if tokens[1] == "run"
-            && tokens.len() == 2
-            && let Some(content) = &content
+    // 2. `dippy run` with one literal script on stdin.
+    if base == "dippy" && tokens.len() > 1 && tokens[1] == "run" {
+        if tokens.len() == 2
+            && let Some(content) = &quoted_heredoc_content(redirects)
         {
             return analyze(content, config, cwd, Some(flags), remote);
         }
-        if tokens[1] == "run-on-server"
-            && tokens.len() == 3
-            && content.is_some()
-            && !(!has_exp.is_empty() && has_exp.get(i + 2).copied().unwrap_or(false))
-        {
-            let inner_flags = with(flags, &["run-on-server", tokens[2].as_str()]);
-            return analyze(
-                content.as_deref().unwrap_or(""),
-                config,
-                cwd,
-                Some(&inner_flags),
-                true,
-            );
-        }
-        return Decision::ask(format!(
-            "dippy {}: requires one non-empty quoted heredoc",
-            tokens[1]
-        ))
-        .flags(flags)
-        .suggest(&suggestion);
+        return Decision::ask("dippy run: requires one non-empty quoted heredoc")
+            .flags(flags)
+            .suggest(&suggestion);
     }
 
     // 3. Wrapper commands (inner command analysed).
@@ -1917,8 +1898,8 @@ mod tests {
                 .collect()
         };
         assert_eq!(
-            flags("zorp x", &["run-on-server", "srv"], true),
-            [["run-on-server", "srv"]]
+            flags("zorp x", &["zorpwrap", "srv"], true),
+            [["srv", "zorpwrap"]]
         );
         assert_eq!(flags("ssh host 'zorp x'", &[], false), [["host", "ssh"]]);
         assert_eq!(flags("ls > /etc/foo", &["srv"], false), [["srv"]]);

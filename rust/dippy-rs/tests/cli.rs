@@ -73,6 +73,23 @@ fn help_lists_options_subcommands_and_exit_codes() {
         assert!(out.contains(text), "{text} missing in:\n{out}");
     }
     assert!(!out.contains("--claude"), "hook flags stay hidden:\n{out}");
+    for text in ["run-on-server", "recover"] {
+        assert!(!out.contains(text), "{text} is removed:\n{out}");
+    }
+}
+
+#[test]
+fn removed_run_on_server_subcommands_are_rejected() {
+    let dir = sandbox("removed-run-on-server");
+    for args in [
+        &["run-on-server", "srv", "echo hi"][..],
+        &["recover", "srv"],
+        &["config", "server", "list"],
+    ] {
+        let o = run(&dir, args, "");
+        assert_eq!(o.status.code(), Some(2), "{args:?}");
+        assert!(stdout(&o).is_empty(), "{args:?}");
+    }
 }
 
 #[test]
@@ -268,7 +285,6 @@ fn config_set_get_unset_keeps_other_lines() {
     let dir = sandbox("config");
     let user = dir.join("home/.dippy/config");
     assert_eq!(config(&dir, &["get", "askpass-timeout"]).1, "59\n");
-    assert_eq!(config(&dir, &["get", "run-on-server-timeout"]).1, "300.0\n");
     assert_eq!(config(&dir, &["get", "askpass"]).1, "None\n");
     assert_eq!(config(&dir, &["set", "askpass-timeout", "30"]).0, 0);
     let mode = std::fs::metadata(&user).unwrap().permissions().mode() & 0o777;
@@ -287,10 +303,7 @@ fn config_set_get_unset_keeps_other_lines() {
     let mode = std::fs::metadata(&user).unwrap().permissions().mode() & 0o777;
     assert_eq!(mode, 0o644);
     assert_eq!(config(&dir, &["get", "askpass-timeout"]).1, "7\n");
-    assert_eq!(config(&dir, &["set", "run-on-server-timeout", "1e-5"]).0, 0);
-    assert_eq!(config(&dir, &["get", "run-on-server-timeout"]).1, "1e-05\n");
     assert_eq!(config(&dir, &["unset", "askpass-timeout"]).0, 0);
-    assert_eq!(config(&dir, &["unset", "run-on-server-timeout"]).0, 0);
     assert_eq!(config(&dir, &["get"]).1, "# keep\nallow ls\n");
     let (code, _, err) = config(&dir, &["set", "askpass-timeout", "abc"]);
     assert_eq!(code, 1);
@@ -358,27 +371,8 @@ fn config_rejects_values_that_add_lines() {
 }
 
 #[test]
-fn config_server_add_remove_list_and_project_scope() {
-    let dir = sandbox("config-server");
-    assert_eq!(config(&dir, &["server", "add", "web1"]).0, 0);
-    assert_eq!(config(&dir, &["server", "add", "web1"]).0, 0);
-    assert_eq!(config(&dir, &["server", "add", "db.2"]).0, 0);
-    assert_eq!(config(&dir, &["server", "list"]).1, "web1\ndb.2\n");
-    let (code, _, err) = config(&dir, &["server", "add", "me@web"]);
-    assert_eq!(
-        (code, err.as_str()),
-        (1, "invalid server alias: 'me@web'\n")
-    );
-    assert_eq!(config(&dir, &["server", "remove", "web1"]).0, 0);
-    assert_eq!(config(&dir, &["get"]).1, "server db.2\n");
-    assert_eq!(config(&dir, &["server", "add", "--project", "p1"]).0, 0);
-    assert_eq!(
-        std::fs::read_to_string(dir.join(".dippy")).unwrap(),
-        "server p1\n"
-    );
-    assert_eq!(config(&dir, &["server", "list", "--project"]).1, "p1\n");
-    let (code, _, err) = config(&dir, &["server"]);
-    assert_eq!((code, err.as_str()), (1, "server action required\n"));
+fn config_requires_an_action() {
+    let dir = sandbox("config-action");
     let (code, _, err) = config(&dir, &[]);
     assert_eq!((code, err.as_str()), (1, "config action required\n"));
     assert_eq!(config(&dir, &["get", "--user", "--project"]).0, 2);

@@ -215,12 +215,9 @@ fn dashboard(
         file_path: tool.and(text("path")),
         message: reason,
         agent: logs.agent(),
-        server: None,
         decision: "ask",
         reason,
         context_flags: flags.iter().cloned().collect(),
-        flags: Vec::new(),
-        remote: false,
         causes,
     };
     let outcome = approval::wait(config, &ask, &|_| {}, &|| {});

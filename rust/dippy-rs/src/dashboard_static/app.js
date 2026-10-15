@@ -266,7 +266,7 @@ function prefill(request, index) {
   $("d-kind").value = kind;
   // A prefilled rule never introduces an environment reference.
   $("d-pattern").value = pattern.split("${").join("$${");
-  $("d-tags").value = cause ? tagsOf(cause.flags) : tagsOf(request.flags);
+  $("d-tags").value = cause ? tagsOf(cause.flags) : "";
 }
 
 function ruleText(rule) {
@@ -325,7 +325,7 @@ function openDialog(item) {
   const request = item.request;
   selected = request.causes.length ? 0 : null;
   $("d-title").textContent = (item.node ? item.node + ": " : "") + (request.agent || "")
-    + " asks" + (request.server ? " to run on " + request.server : "");
+    + " asks";
   $("d-request").value = subject(request) || request.tool || "";
   $("d-meta").textContent = "cwd " + request.cwd
     + (request.tool ? "  tool " + request.tool : "") + "  reason: " + request.reason;

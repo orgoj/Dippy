@@ -1269,8 +1269,7 @@ pub(crate) mod tests {
         let request = json!({
             "version": 2, "id": id, "command": "zorp x", "cwd": dir.join("proj").to_string_lossy(),
             "tool": null, "file_path": null, "message": "zorp x", "agent": "claude",
-            "server": null, "decision": "ask", "reason": "zorp x", "context_flags": [],
-            "flags": [], "remote": false,
+            "decision": "ask", "reason": "zorp x", "context_flags": [],
             "causes": [{"kind": "command", "target": "zorp x", "rule": null, "flags": []}],
             "deadline": crate::queue::now_ms() + 60_000,
         });

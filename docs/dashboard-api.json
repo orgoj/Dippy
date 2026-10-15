@@ -271,12 +271,9 @@
           "file_path",
           "message",
           "agent",
-          "server",
           "decision",
           "reason",
           "context_flags",
-          "flags",
-          "remote",
           "causes",
           "deadline"
         ],
@@ -313,13 +310,7 @@
           },
           "agent": {
             "type": "string",
-            "description": "claude, agy, gemini, cursor, codex, pi, run, run-on-server, ..."
-          },
-          "server": {
-            "type": [
-              "string",
-              "null"
-            ]
+            "description": "claude, agy, gemini, cursor, codex, pi, run, ..."
           },
           "decision": {
             "enum": [
@@ -336,16 +327,6 @@
             "items": {
               "type": "string"
             }
-          },
-          "flags": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Flags the command was analysed with (run-on-server)."
-          },
-          "remote": {
-            "type": "boolean"
           },
           "causes": {
             "type": "array",
@@ -480,7 +461,7 @@
           },
           "tags": {
             "type": "string",
-            "description": "Comma-separated context flags, e.g. run-on-server,srv."
+            "description": "Comma-separated context flags, e.g. srv,ssh."
           },
           "pattern": {
             "type": "string"

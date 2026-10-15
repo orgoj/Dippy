@@ -19,11 +19,7 @@ Dippy can validate commands from the command line without running as a hook. Thi
 
 ```bash
 dippy run 'CMD'
-dippy run-on-server SERVER 'CMD'
 dippy run <<'DIPPY'
-CMD
-DIPPY
-dippy run-on-server SERVER <<'DIPPY'
 CMD
 DIPPY
 ```
@@ -94,164 +90,28 @@ Only the instruction is configurable; the neutral status, timeout, and
 not-started facts remain fixed so a project cannot accidentally hide them. An
 empty message is rejected.
 
-Remote targets must be safe SSH-config aliases declared explicitly:
-
-```text
-server build1
-server database-readonly
-
-set run-on-server-backend ssh       # ssh, tmux, or herdr
-set run-on-server-session dippy     # managed tmux session / Herdr session
-set run-on-server-timeout 300
-set run-on-server-poll-interval 0.1
-set askpass dippy-askpass-gui
-set askpass-timeout 59
-set approval-wait-message "Contact the supervising agent and wait."
-
-allow [run-on-server] frob status
-ask [run-on-server,build1] frob deploy
-```
-
-`ssh` preserves separate stdout and stderr. The tmux and Herdr backends return
-their merged terminal capture and do not support interactive stdin. Each
-operation creates a fresh local Bash transport pane and sends the command only
-through SSH stdin. It does not reuse an interactive remote shell. Panes remain
-available for inspection and recovery; close completed panes when no longer
-needed. Changes of remote working directory or shell variables do not persist
-between operations: include them in the approved command when needed.
-
-A timeout, interruption, missing remote marker, or uncertain SSH disconnect is
-recorded as `INDETERMINATE`; Dippy will not run another command on that server
-within the same project. A leftover `running` record after a crash also blocks
-execution. Changing the SSH profile, backend or session does not bypass this
-guard. Projects are identified by their nearest `.dippy` or Git root, falling
-back to the supplied working directory. Use the same project with `--cwd` for
-execution and recovery.
-Use `dippy recover SERVER` to check a persistent backend's completion marker,
-or inspect the target manually and run `dippy recover SERVER --clear`.
-If a persistent backend's start marker has already scrolled out but its
-completion marker remains, Dippy returns all command output still present in
-the capture buffer. Output discarded by tmux or Herdr itself cannot be
-recovered.
-
-Recovery checks the saved backend, session and SSH profile before capturing
-the saved concrete pane. `--clear` acknowledges an uncertain result; it does
-not cancel a remote command. Inspect the server first. A subsequent operation
-creates a new pane, so it cannot send input into the old SSH process. Corrupt
-state files are reported as errors, not discarded. Old alias-only pending
-records require manual inspection and `recover SERVER --clear`; Dippy never
-adopts an old interactive SSH pane. The legacy alias lock is retained for
-compatibility, so calls to the same alias serialize even across projects.
-
-### Project SSH profiles
-
-Without an override, all backends use the user's normal SSH configuration,
-agent and multiplexing settings. No SSH files, keys or agents are created or
-changed by Dippy.
-
-To select a project profile, put both settings in the project's `.dippy`:
-
-```text
-server production
-set run-on-server-ssh-config .agent-ssh/config
-set run-on-server-ssh-auth-sock /run/user/1000/project-a-agent.sock
-```
-
-The socket must belong to an already-running, separately provisioned SSH
-agent. Dippy does not launch an agent or load keys. Alternatively, use
-`set run-on-server-ssh-auth-sock none` to disable agent authentication and
-select private key files in the SSH config. Missing config, missing/non-socket
-agent path, validation errors and authentication failures stop execution;
-there is no retry using the user's configuration, agent, default keys or
-master connection. Batch mode disables password and passphrase prompts.
-Malformed `run-on-server-ssh-*` directives are fatal configuration errors,
-including unknown setting names; they cannot be silently skipped into user mode.
-
-Both settings follow normal Dippy scope precedence, including `--config` and
-`set final`. A partial profile is rejected at execution. Relative paths are
-resolved against the Dippy file that declares them, including an `include`
-file. Paths containing spaces can be quoted. Socket paths containing `%`, `$`,
-double quotes, backslashes or line breaks are rejected because OpenSSH can
-interpret those characters instead of selecting a literal socket.
-
-An example `.agent-ssh/config`, with deployment-specific absolute paths:
-
-```sshconfig
-Host production
-    HostName production.example.net
-    User project-a-agent
-    IdentityFile /secure/project-a/id_ed25519.pub
-
-Host *
-    IdentitiesOnly yes
-    ForwardAgent no
-    StrictHostKeyChecking yes
-    UserKnownHostsFile /secure/project-a/known_hosts
-    ControlMaster auto
-```
-
-The public `IdentityFile` selects its matching private key from the project
-agent. With agent authentication disabled, point `IdentityFile` at a private
-key usable without an interactive passphrase prompt. Provision the known-host
-entry separately. Keep private keys out of version control.
-
-For an explicit profile Dippy supplies `-F`, `IdentityFile=none` as a baseline,
-the selected `IdentityAgent`, `IdentitiesOnly=yes`, public-key-only batch
-authentication, `ForwardAgent=no`, `PKCS11Provider=none` and
-`PermitLocalCommand=no`. It validates effective options with `ssh -G` for the
-actual destination and requires at least one explicitly selected identity.
-The matching `SSH_AUTH_SOCK` is set (or removed for `none`) in every backend,
-including inside terminal panes; a multiplexer daemon's old agent environment
-cannot override it.
-
-The profile's `ControlMaster` mode is honored, but Dippy replaces `ControlPath`
-with a fresh private socket for each operation and forces `ControlPersist=no`.
-The directory is owned by the current user with mode `0700`. This prevents
-reuse of either the user's master or authentication cached before a profile
-or agent changed. Connection caching **between operations** is intentionally
-unavailable in profile mode. The default user mode retains normal caching.
-
-SSH configuration is trusted executable configuration: `Match exec`, includes
-and `ProxyCommand` may run local programs, even during `ssh -G`. Dippy does not
-sandbox these programs. Automatic `ProxyJump` is rejected in profile mode
-because destination options do not isolate jump-host authentication. If a
-trusted administrator uses `ProxyCommand`, that command must explicitly
-isolate its own SSH configuration, identity, agent and control socket too.
-Native SSH relative `Include` paths follow OpenSSH's rules, not the containing
-file's directory; use absolute paths for SSH includes and identity files.
-
-To restore user mode over an inherited profile, reset both settings:
-
-```text
-set run-on-server-ssh-config none
-set run-on-server-ssh-auth-sock none
-```
-
-Removing settings with `dippy config unset --project KEY` exposes any inherited
-values; it is not an explicit reset. The keys also work with `dippy config
-get/set --project`. This feature isolates connections made through Dippy.
-Preventing an agent running as the same OS user from independently accessing
-other keys or sockets requires an OS sandbox or a separate OS identity.
+`dippy run` executes only locally. Remote execution belongs to the caller's
+own wrapper (for example CCA), declared with `wrapper` so Dippy classifies the
+inner command. Version 0.6.0 removed `run-on-server`, `recover`, the `server`
+directive and the `run-on-server-*` settings; such old config lines warn and
+are skipped.
 
 Configuration can be changed without rewriting rules or comments:
 
 ```bash
 dippy config get --user
-dippy config get --user run-on-server-backend
-dippy config set --user run-on-server-backend herdr
+dippy config get --user askpass-timeout
+dippy config set --user askpass-timeout 120
 dippy config set --project approval-wait-message \
   "Contact the supervising agent through the project channel and wait."
 dippy config unset --user askpass
-dippy config server add --project build1
-dippy config server remove --project build1
-dippy config server list --project
 ```
 
 The default scope is `--user`; `--project` edits `.dippy` in the current
 directory. Setting administration writes canonical hyphenated keys and updates
 an existing underscore spelling in place instead of creating a duplicate.
-Global `--config` and `--cwd` options apply to `run`, `run-on-server`, and
-`recover` as well as validation mode.
+Global `--config` and `--cwd` options apply to `run` as well as validation
+mode.
 
 The Rust implementation also appends rules:
 
@@ -1162,8 +1022,8 @@ Without a matching rule these commands ask, which is what they did before.
 
 ### Remote redirects
 
-A write inside a remote command (`ssh`, a configured `wrapper`, `dippy
-run-on-server`) is matched literally, never against the local cwd or home. It
+A write inside a remote command (`ssh`, a configured `wrapper`) is matched
+literally, never against the local cwd or home. It
 asks unless an `allow-redirect` rule carries a remote context flag (the wrapper
 name, `ssh`, a host); an unflagged `allow-redirect`, such as `/tmp/**`, never
 permits a server write. `ask-redirect` and `deny-redirect` rules apply with or
@@ -1617,12 +1477,9 @@ analysis of its command, so one cause is sent:
 (for `ssh host 'zorp x'`: `["host", "ssh"]`), i.e. the `[flags]` a rule can
 be scoped to.
 
-`dippy run` and `run-on-server` send their own payload: `version` (1),
-`command`, `cwd`, `server` (null for `run`), `decision`, `reason`,
-`context_flags` (all flags seen during the analysis), and in dippy-rs also
-`causes`, `flags` (the flags the command was analysed with:
-`["run-on-server", SERVER]` or `[]`) and `remote` (true for
-`run-on-server`).
+`dippy run` sends its own payload: `version` (1), `command`, `cwd`,
+`decision`, `reason`, `context_flags` (all flags seen during the analysis),
+and in dippy-rs also `causes`.
 
 ### Rust Dialog (`dippy-askpass`)
 
@@ -1637,7 +1494,7 @@ It shows the whole request read-only with its causes and their current
 decisions, and a rule editor: action (`allow`, `ask`, `deny`), kind, tags
 and pattern (prefilled from the selected cause, the first one initially;
 tags are its context flags without the structural `@` ones, so a rule saved
-for `dippy run-on-server srv` reads `allow [run-on-server,srv] ...`; clear
+for `ssh srv 'zorp x'` reads `allow [srv,ssh] zorp x`; clear
 them for a rule that applies everywhere) and
 target file (the project config Dippy loads, else `.dippy` in the Git root,
 or `~/.dippy/config`). A live check shows the decision the selected cause and
@@ -2071,7 +1928,7 @@ What is queued:
 | Cursor | every `ask` | `pass` |
 | Codex | `ask` in `PermissionRequest` | PreToolUse (an allow there does not approve; a deny still blocks); commands Codex runs without a `PermissionRequest` |
 | pi (`dippy --pi`) | `{action: ask}` replies | |
-| `dippy run`, `run-on-server` | every `ask`, replacing the askpass call; the `STATUS: Approval required` line stays | |
+| `dippy run` | every `ask`, replacing the askpass call; the `STATUS: Approval required` line stays | |
 
 A config error denies every request with a reason telling the agent to
 stop (without a config there is no `approval` setting).
@@ -2128,8 +1985,8 @@ defaults of Claude Code, Gemini CLI and Codex.
 **Payload.** Dashboard requests use version 2 of the approval payload
 (`docs/dashboard-api.json`, schema `ApprovalRequest`): `version`, `id`
 (random, 32 hex digits, generated by the client), `command`, `cwd`
-(absolute), `tool`, `file_path`, `message`, `agent`, `server`, `decision`,
-`reason`, `context_flags`, `flags`, `remote`, `causes` (each with `kind`,
+(absolute), `tool`, `file_path`, `message`, `agent`, `decision`,
+`reason`, `context_flags`, `causes` (each with `kind`,
 `target`, `rule` and `flags`) and `deadline` (Unix milliseconds, UTC). The
 node rejects a missing or relative `cwd`, unknown fields and wrong types
 with 400 and never falls back to environment variables. Native askpass

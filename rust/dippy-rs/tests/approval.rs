@@ -346,13 +346,7 @@ fn run_executes_only_after_dashboard_approval() {
     );
     assert!(entries[1]["approval"].is_string());
     let item = &server.approvals.list(None)[0];
-    assert_eq!(
-        (
-            item.request["tool"].as_str(),
-            item.request["remote"].as_bool()
-        ),
-        (Some("run"), Some(false))
-    );
+    assert_eq!(item.request["tool"].as_str(), Some("run"));
     sb.reset();
     decide_soon(&server, true, None);
     let o = sb.run(&["run", "zorp --fictional"], "");
@@ -386,7 +380,6 @@ fn mode_cases(sb: &Sandbox) -> Vec<(Vec<&'static str>, String)> {
         (vec!["--agy"], json!({"toolCall": {"name": "view_file", "args": {"AbsolutePath": "/etc/x"}}, "workspacePaths": [proj]}).to_string()),
         (vec!["--pi"], json!({"type": "bash", "command": "zorp x", "cwd": proj}).to_string()),
         (vec!["run"], String::new()),
-        (vec!["run-on-server", "srv"], String::new()),
     ]
 }
 
@@ -414,7 +407,6 @@ fn observe(sb: &Sandbox, args: &[&str], stdin: &str) -> Vec<String> {
 #[test]
 fn approval_ask_is_identical_to_no_setting_in_every_mode() {
     let sb = Sandbox::new("identity");
-    std::fs::write(sb.proj().join(".dippy"), "server srv\n").unwrap();
     for (args, stdin) in mode_cases(&sb) {
         sb.config("");
         let without = observe(&sb, &args, &stdin);
@@ -423,7 +415,7 @@ fn approval_ask_is_identical_to_no_setting_in_every_mode() {
         assert_eq!(without, with, "{args:?} {stdin}");
         // The fake askpass denies; every mode produced something to compare.
         assert!(!without[1].is_empty() || !without[2].is_empty(), "{args:?}");
-        if matches!(args[0], "--agy" | "run" | "run-on-server") {
+        if matches!(args[0], "--agy" | "run") {
             assert!(
                 !without[4].is_empty(),
                 "askpass did not run: {args:?} {without:?}"

@@ -41,15 +41,6 @@ pub fn print_warnings() {
     }
 }
 
-/// `validate_server` (execution.py): a safe SSH-config alias.
-pub fn validate_server(server: &str) -> Result<(), String> {
-    if SERVER_ALIAS_RE.is_match(server) && !server.contains('@') {
-        Ok(())
-    } else {
-        Err(format!("invalid server alias: {}", py_repr(server)))
-    }
-}
-
 /// Python `repr(str)` for messages.
 pub(crate) fn py_repr(s: &str) -> String {
     let quote = if s.contains('\'') && !s.contains('"') {
@@ -176,7 +167,6 @@ pub struct Config {
     pub python_deny_modules: Vec<String>,
     pub python_allow_symbols: Vec<String>,
     pub context_env: Vec<String>,
-    pub servers: Vec<String>,
     pub configured_settings: BTreeSet<String>,
     pub path_rule_cwd: Option<PathBuf>,
     /// 'allow' | 'ask' | 'pass'
@@ -199,15 +189,6 @@ pub struct Config {
     pub dashboard_url: String,
     /// User config only; `None` means `~/.dippy/dashboard-token`.
     pub dashboard_token_file: Option<PathBuf>,
-    /// 'ssh' | 'tmux' | 'herdr'
-    pub run_on_server_backend: String,
-    pub run_on_server_session: String,
-    pub run_on_server_timeout: f64,
-    pub run_on_server_poll_interval: f64,
-    /// `None` for `none` or unset.
-    pub run_on_server_ssh_config: Option<PathBuf>,
-    /// `none` is kept as the string "none".
-    pub run_on_server_ssh_auth_sock: Option<String>,
     /// Audit log (`set log`); `load_config` fills in [`default_log_path`].
     pub log: Option<PathBuf>,
     pub log_full: bool,
@@ -236,7 +217,6 @@ impl Default for Config {
             python_deny_modules: Vec::new(),
             python_allow_symbols: Vec::new(),
             context_env: Vec::new(),
-            servers: Vec::new(),
             configured_settings: BTreeSet::new(),
             path_rule_cwd: None,
             default: "ask".into(),
@@ -252,12 +232,6 @@ impl Default for Config {
             approval_timeout_message: DEFAULT_APPROVAL_TIMEOUT_MESSAGE.into(),
             dashboard_url: DEFAULT_DASHBOARD_URL.into(),
             dashboard_token_file: None,
-            run_on_server_backend: "ssh".into(),
-            run_on_server_session: "dippy".into(),
-            run_on_server_timeout: 300.0,
-            run_on_server_poll_interval: 0.1,
-            run_on_server_ssh_config: None,
-            run_on_server_ssh_auth_sock: None,
             log: None,
             log_full: false,
             log_rotate_max_days: 30,
@@ -497,9 +471,6 @@ static MODULE_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$").unwrap());
 static IDENTIFIER_RE: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"^[a-zA-Z_][a-zA-Z0-9_]*$").unwrap());
-/// Also the `run-on-server-session` name pattern (execution.py `_SESSION_RE`).
-pub(crate) static SERVER_ALIAS_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$").unwrap());
 
 fn strip_comment(rest: &str) -> &str {
     match rest.find('#') {
@@ -677,12 +648,6 @@ struct Settings {
     approval_timeout_message: Option<String>,
     dashboard_url: Option<String>,
     dashboard_token_file: Option<PathBuf>,
-    run_on_server_backend: Option<String>,
-    run_on_server_session: Option<String>,
-    run_on_server_timeout: Option<f64>,
-    run_on_server_poll_interval: Option<f64>,
-    run_on_server_ssh_config: Option<PathBuf>,
-    run_on_server_ssh_auth_sock: Option<String>,
     log: Option<PathBuf>,
     log_full: bool,
     log_rotate_max_days: Option<i64>,
@@ -711,24 +676,6 @@ fn py_int_ok(value: &str) -> bool {
         && !v.contains("__")
         && v.chars()
             .all(|c| c.is_ascii_digit() || c == '_' || c.is_numeric())
-}
-
-/// Python `float(str)`.
-fn py_float(value: &str) -> Option<f64> {
-    let v = value.trim();
-    let lower = v.to_ascii_lowercase();
-    let body = lower.trim_start_matches(['+', '-']);
-    if matches!(body, "inf" | "infinity" | "nan") {
-        return lower.parse::<f64>().ok().or(Some(f64::NAN));
-    }
-    if v.contains("__") || v.starts_with('_') || v.ends_with('_') {
-        return None;
-    }
-    let cleaned: String = v.chars().filter(|c| *c != '_').collect();
-    if cleaned.is_empty() || cleaned.contains("inf") || cleaned.contains("nan") {
-        return None;
-    }
-    cleaned.parse::<f64>().ok()
 }
 
 /// The reply to an agent when the config cannot be loaded: every tool call
@@ -775,44 +722,6 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
                 ));
             }
         },
-        "run_on_server_ssh_config" | "run_on_server_ssh_auth_sock" => {
-            let v = value.clone().unwrap_or_default();
-            if value.is_none() || strip_quotes(&v).trim().is_empty() {
-                return Err(format!("'{key}' requires a path or none"));
-            }
-            let v = strip_quotes(&v);
-            if v.contains(['\0', '\r', '\n']) {
-                return Err(format!("'{key}' must be a single path"));
-            }
-            if key_n == "run_on_server_ssh_config" {
-                settings.run_on_server_ssh_config =
-                    (v != "none").then(|| local_profile_path(v, base));
-            } else {
-                settings.run_on_server_ssh_auth_sock = Some(if v == "none" {
-                    v.to_string()
-                } else {
-                    paths::py_path_str(&local_profile_path(v, base))
-                });
-            }
-        }
-        "run_on_server_backend" => match value.as_deref() {
-            Some(v @ ("ssh" | "tmux" | "herdr")) => {
-                settings.run_on_server_backend = Some(v.to_string());
-            }
-            other => {
-                return Err(format!(
-                    "'run-on-server-backend' must be 'ssh', 'tmux' or 'herdr', got '{}'",
-                    other.unwrap_or("None")
-                ));
-            }
-        },
-        "run_on_server_session" => {
-            let v = need("'run-on-server-session' requires a name")?;
-            if v.trim().is_empty() {
-                return Err("'run-on-server-session' requires a name".into());
-            }
-            settings.run_on_server_session = Some(strip_quotes(&v).to_string());
-        }
         "log" => {
             let v = need("'log' requires a path")?;
             settings.log = Some(PathBuf::from(paths::expanduser(&v)));
@@ -879,18 +788,6 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
                 settings.log_rotate_max_days = n;
             }
         }
-        "run_on_server_timeout" | "run_on_server_poll_interval" => {
-            let v = need(&format!("'{key}' requires a positive number"))?;
-            let n = py_float(&v).ok_or_else(|| format!("'{key}' must be a number, got '{v}'"))?;
-            if n <= 0.0 {
-                return Err(format!("'{key}' must be positive"));
-            }
-            if key_n == "run_on_server_timeout" {
-                settings.run_on_server_timeout = Some(n);
-            } else {
-                settings.run_on_server_poll_interval = Some(n);
-            }
-        }
         "notifier_command" => {
             let v = need("'notifier-command' requires a command string")?;
             settings.notifier_command = Some(strip_quotes(&v).to_string());
@@ -924,6 +821,9 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
         "context_env" => {
             let v = need("'context-env' requires an environment variable name")?;
             settings.context_env.push(strip_quotes(&v).to_string());
+        }
+        k if k.starts_with("run_on_server_") => {
+            return Err(format!("'{}' was removed in 0.6.0", k.replace('_', "-")));
         }
         _ => return Err(format!("unknown setting '{key}'")),
     }
@@ -1584,17 +1484,7 @@ fn parse_config_from(
                     push_rule(&mut cfg.web_rules, rule, EnvKind::Text, &place)?;
                 }
                 "set" => apply_setting(&mut settings, &rest, &base)?,
-                "server" => {
-                    if rest.is_empty() || py_split(&rest).len() != 1 {
-                        return Err("'server' requires exactly one SSH alias".into());
-                    }
-                    if !SERVER_ALIAS_RE.is_match(&rest) || rest.contains('@') {
-                        return Err(format!("invalid server alias: {rest:?}"));
-                    }
-                    if !cfg.servers.contains(&rest) {
-                        cfg.servers.push(rest.clone());
-                    }
-                }
+                "server" => return Err("'server' was removed in 0.6.0".into()),
                 "python-allow-module" => cfg.python_allow_modules.push(parse_module_name(&rest)?),
                 "python-deny-module" => cfg.python_deny_modules.push(parse_module_name(&rest)?),
                 "python-allow-symbol" => cfg.python_allow_symbols.push(parse_symbol_name(&rest)?),
@@ -1605,12 +1495,9 @@ fn parse_config_from(
         if let Err(e) = result {
             let setting = rest.to_lowercase().replace('_', "-");
             // An invalid setting is a config error: a value Dippy would have
-            // to guess (an approval route, an SSH profile, a log path, the
-            // default decision) must stop the agent, not silently fall back.
-            if directive == "set" && setting.starts_with("run-on-server-ssh-") {
-                return Err(ConfigError(format!("{place}: invalid SSH profile: {e}")));
-            }
-            if directive == "set" {
+            // to guess (an approval route, a log path, the default decision)
+            // must stop the agent, not silently fall back.
+            if directive == "set" && !setting.starts_with("run-on-server-") {
                 return Err(ConfigError(format!("{place}: {e}")));
             }
             warn(format!("{place}: {e} (skipped)"));
@@ -1646,20 +1533,6 @@ fn parse_config_from(
         .unwrap_or(d.approval_timeout_message);
     cfg.dashboard_url = settings.dashboard_url.unwrap_or(d.dashboard_url);
     cfg.dashboard_token_file = settings.dashboard_token_file;
-    cfg.run_on_server_backend = settings
-        .run_on_server_backend
-        .unwrap_or(d.run_on_server_backend);
-    cfg.run_on_server_session = settings
-        .run_on_server_session
-        .unwrap_or(d.run_on_server_session);
-    cfg.run_on_server_timeout = settings
-        .run_on_server_timeout
-        .unwrap_or(d.run_on_server_timeout);
-    cfg.run_on_server_poll_interval = settings
-        .run_on_server_poll_interval
-        .unwrap_or(d.run_on_server_poll_interval);
-    cfg.run_on_server_ssh_config = settings.run_on_server_ssh_config;
-    cfg.run_on_server_ssh_auth_sock = settings.run_on_server_ssh_auth_sock;
     cfg.log = settings.log;
     cfg.log_full = settings.log_full;
     cfg.log_rotate_max_days = settings.log_rotate_max_days.unwrap_or(30);
@@ -1682,12 +1555,6 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
     }
     let mut wrappers = base.wrappers.clone();
     wrappers.extend(overlay.wrappers);
-    let mut servers = base.servers.clone();
-    for s in overlay.servers {
-        if !base.servers.contains(&s) {
-            servers.push(s);
-        }
-    }
     Config {
         rules: [base.rules, overlay.rules].concat(),
         redirect_rules: [base.redirect_rules, overlay.redirect_rules].concat(),
@@ -1704,7 +1571,6 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
         python_deny_modules: [base.python_deny_modules, overlay.python_deny_modules].concat(),
         python_allow_symbols: [base.python_allow_symbols, overlay.python_allow_symbols].concat(),
         context_env: [base.context_env, overlay.context_env].concat(),
-        servers,
         configured_settings: base
             .configured_settings
             .union(&overlay.configured_settings)
@@ -1756,36 +1622,6 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
             overlay.dashboard_token_file
         } else {
             base.dashboard_token_file
-        },
-        run_on_server_backend: if set("run_on_server_backend") {
-            overlay.run_on_server_backend
-        } else {
-            base.run_on_server_backend
-        },
-        run_on_server_session: if set("run_on_server_session") {
-            overlay.run_on_server_session
-        } else {
-            base.run_on_server_session
-        },
-        run_on_server_timeout: if set("run_on_server_timeout") {
-            overlay.run_on_server_timeout
-        } else {
-            base.run_on_server_timeout
-        },
-        run_on_server_poll_interval: if set("run_on_server_poll_interval") {
-            overlay.run_on_server_poll_interval
-        } else {
-            base.run_on_server_poll_interval
-        },
-        run_on_server_ssh_config: if set("run_on_server_ssh_config") {
-            overlay.run_on_server_ssh_config
-        } else {
-            base.run_on_server_ssh_config
-        },
-        run_on_server_ssh_auth_sock: if set("run_on_server_ssh_auth_sock") {
-            overlay.run_on_server_ssh_auth_sock
-        } else {
-            base.run_on_server_ssh_auth_sock
         },
         log: overlay.log.or(base.log),
         log_full: overlay.log_full || base.log_full,
@@ -3370,49 +3206,33 @@ mod tests {
     }
 
     #[test]
-    fn run_on_server_settings_parse_and_merge_by_membership() {
+    fn approval_wait_message_parses_and_merges_by_membership() {
         let d = Config::default();
-        assert_eq!(d.run_on_server_backend, "ssh");
-        assert_eq!(d.run_on_server_session, "dippy");
-        assert_eq!(d.run_on_server_timeout, 300.0);
-        assert_eq!(d.run_on_server_poll_interval, 0.1);
-        assert_eq!(d.run_on_server_ssh_config, None);
-        assert_eq!(d.run_on_server_ssh_auth_sock, None);
         assert!(d.approval_wait_message.starts_with("Stop work and wait"));
-        let c = parse_config(
-            "set run-on-server-backend tmux\n\
-             set run-on-server-session 'work'\n\
-             set run-on-server-timeout 5\n\
-             set run-on-server-poll-interval 1e-1\n\
-             set run-on-server-ssh-config ssh/cfg\n\
-             set run-on-server-ssh-auth-sock none\n\
-             set approval-wait-message ' Wait. '",
-            Some("/etc/dippy/config"),
-        )
-        .unwrap();
-        assert_eq!(c.run_on_server_backend, "tmux");
-        assert_eq!(c.run_on_server_session, "work");
-        assert_eq!(c.run_on_server_timeout, 5.0);
-        assert_eq!(c.run_on_server_poll_interval, 0.1);
-        assert_eq!(
-            c.run_on_server_ssh_config,
-            Some(PathBuf::from("/etc/dippy/ssh/cfg"))
-        );
-        assert_eq!(c.run_on_server_ssh_auth_sock.as_deref(), Some("none"));
+        let c = cfg("set approval-wait-message ' Wait. '");
         assert_eq!(c.approval_wait_message, "Wait.");
-        let none = cfg("set run-on-server-ssh-config none");
-        assert_eq!(none.run_on_server_ssh_config, None);
-        let restored = merge_configs(c.clone(), cfg("set run-on-server-backend ssh"));
-        assert_eq!(restored.run_on_server_backend, "ssh");
-        assert_eq!(restored.run_on_server_session, "work");
         let kept = merge_configs(c, cfg(""));
-        assert_eq!(kept.run_on_server_timeout, 5.0);
         assert_eq!(kept.approval_wait_message, "Wait.");
     }
 
     #[test]
-    fn ssh_profile_error_is_fatal() {
-        assert!(parse_config("set run-on-server-ssh-config", None).is_err());
+    fn removed_run_on_server_lines_warn_and_skip() {
+        take_warnings();
+        parse_config(
+            "set run-on-server-backend tmux\n\
+             set Run_On_Server_Ssh_Config\n\
+             server srv\n",
+            Some("/c"),
+        )
+        .unwrap();
+        assert_eq!(
+            take_warnings(),
+            [
+                "/c: line 1: 'run-on-server-backend' was removed in 0.6.0 (skipped)",
+                "/c: line 2: 'run-on-server-ssh-config' was removed in 0.6.0 (skipped)",
+                "/c: line 3: 'server' was removed in 0.6.0 (skipped)",
+            ]
+        );
         assert!(parse_config("set unknown-thing 1", None).is_err());
     }
 
@@ -4032,10 +3852,6 @@ mod tests {
             (
                 "set log-hook-approvals maybe",
                 "'log-hook-approvals' must be 'on' or 'off', got 'maybe'",
-            ),
-            (
-                "set run-on-server-timeout -1",
-                "'run-on-server-timeout' must be positive",
             ),
             (
                 "set approval bogus",

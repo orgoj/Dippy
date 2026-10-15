@@ -508,8 +508,8 @@ mod tests {
         json!({
             "version": 2, "id": id, "command": "zorp x; echo a > /etc/zorp.conf",
             "cwd": dir.join("proj").to_string_lossy(), "tool": "Bash", "file_path": null,
-            "message": "zorp x", "agent": "claude", "server": null, "decision": "ask",
-            "reason": "zorp x", "context_flags": [], "flags": [], "remote": false,
+            "message": "zorp x", "agent": "claude", "decision": "ask",
+            "reason": "zorp x", "context_flags": [],
             "causes": [cause("command", "zorp x"), cause("redirect", "/etc/zorp.conf")],
             "deadline": deadline,
         })

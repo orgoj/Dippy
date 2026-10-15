@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-10-15
+
+### Removed
+
+- dippy-rs: the `run-on-server` and `recover` subcommands and everything that served only them: the SSH/tmux/herdr transports, run state files, the `server` directive, `dippy config server` and the `run-on-server-*` settings, the `[run-on-server SERVER]` context of `dippy run-on-server` commands, the `DIPPY_SERVER` askpass variable, `server`, `flags` and `remote` of the dashboard approval payload (version 2) and `flags` and `remote` of the `dippy run` askpass payload (the dialog prefills tags only from a cause). The unused `sha2` dependency is gone. Remote execution belongs to the caller's wrapper (e.g. CCA); `dippy run` still classifies, approves and runs a command locally. Old `server` and `run-on-server-*` config lines warn and are skipped.
+
 ## [0.5.6] - 2026-10-14
 
 ### Fixed

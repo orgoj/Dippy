@@ -145,10 +145,6 @@ enum Subcommand {
     Doctor(dippy_rs::doctor::DoctorArgs),
     /// Approve and execute one local Bash command string
     Run(dippy_rs::run::RunArgs),
-    /// Approve and execute one Bash command on an allowed server
-    RunOnServer(dippy_rs::run::RunOnServerArgs),
-    /// Recover an indeterminate run-on-server target
-    Recover(dippy_rs::run::RecoverArgs),
     /// Serve a live web view of the audit log, or a hub over nodes
     #[command(
         long_about = "Serve the audit log since yesterday (UTC) as a live web page (node), or \
@@ -307,8 +303,6 @@ fn main() {
             };
             let code = match &cli.command {
                 Some(Subcommand::Run(args)) => dippy_rs::run::run(args, &global),
-                Some(Subcommand::RunOnServer(args)) => dippy_rs::run::run_on_server(args, &global),
-                Some(Subcommand::Recover(args)) => dippy_rs::run::recover(args, &global),
                 Some(Subcommand::Dashboard(args)) => dippy_rs::dashboard::run(args, &global),
                 Some(Subcommand::Audit(query)) => run_audit(&cli, query),
                 Some(Subcommand::Config(args)) => dippy_rs::admin::run(args, cli.cwd.as_deref()),

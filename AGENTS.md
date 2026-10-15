@@ -58,8 +58,8 @@ just fmt     # ruff format --check
 - Propagate `context_flags` through every `Decision` and delegated
   `Classification`; preserve `remote=ctx.remote`.
 - Propagate global `--config` and `--cwd` through config loading,
-  classification, approval and execution for `run`, `run-on-server` and
-  `recover`; local execution must pass `cwd` to Bash.
+  classification, approval and execution for `run`; execution must pass
+  `cwd` to Bash.
 - Treat paths as literal when `remote=True`; never expand them against the host
   working directory.
 - Prefer native read and edit matchers over simulated shell commands.

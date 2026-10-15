@@ -1,5 +1,5 @@
 //! Dashboard approvals (`set approval dashboard`): the version-2 request
-//! payload shared by every agent hook and `dippy run`/`run-on-server`, and
+//! payload shared by every agent hook and `dippy run`, and
 //! its strict parser on the node.
 //!
 //! Native askpass payloads (the unversioned hook payload, version 1 of
@@ -21,7 +21,7 @@ use crate::queue::now_ms;
 pub const VERSION: u64 = 2;
 
 /// Payload keys, in the order [`Ask::payload`] writes them.
-pub const KEYS: [&str; 16] = [
+pub const KEYS: [&str; 13] = [
     "version",
     "id",
     "command",
@@ -30,12 +30,9 @@ pub const KEYS: [&str; 16] = [
     "file_path",
     "message",
     "agent",
-    "server",
     "decision",
     "reason",
     "context_flags",
-    "flags",
-    "remote",
     "causes",
     "deadline",
 ];
@@ -50,15 +47,11 @@ pub struct Ask<'a> {
     pub tool: Option<&'a str>,
     pub file_path: Option<&'a str>,
     pub message: &'a str,
-    /// `claude`, `agy`, `run`, `run-on-server`, ...
+    /// `claude`, `agy`, `run`, ...
     pub agent: &'a str,
-    pub server: Option<&'a str>,
     pub decision: &'a str,
     pub reason: &'a str,
     pub context_flags: Vec<String>,
-    /// Flags and remoteness the command was analysed with.
-    pub flags: Vec<String>,
-    pub remote: bool,
     pub causes: &'a [Cause],
 }
 
@@ -74,12 +67,9 @@ impl Ask<'_> {
             "file_path": self.file_path,
             "message": self.message,
             "agent": self.agent,
-            "server": self.server,
             "decision": self.decision,
             "reason": self.reason,
             "context_flags": self.context_flags,
-            "flags": self.flags,
-            "remote": self.remote,
             "causes": self.causes.iter().map(cause_json).collect::<Vec<_>>(),
             "deadline": deadline,
         })
@@ -178,7 +168,7 @@ pub fn validate(v: &Value) -> Result<(), String> {
     for key in ["command", "message", "agent", "reason"] {
         string(o, key)?;
     }
-    for key in ["tool", "file_path", "server"] {
+    for key in ["tool", "file_path"] {
         optional_string(o, key)?;
     }
     let decision = string(o, "decision")?;
@@ -186,10 +176,6 @@ pub fn validate(v: &Value) -> Result<(), String> {
         return Err("decision must be allow, ask or deny".into());
     }
     strings(field(o, "context_flags")?, "context_flags")?;
-    strings(field(o, "flags")?, "flags")?;
-    if !field(o, "remote")?.is_boolean() {
-        return Err("remote must be a boolean".into());
-    }
     let causes = field(o, "causes")?
         .as_array()
         .ok_or("causes must be a list")?;
@@ -563,7 +549,7 @@ mod tests {
 
     #[test]
     fn invalid_payloads_are_rejected() {
-        let cases: [(&str, Value); 14] = [
+        let cases: [(&str, Value); 13] = [
             ("cwd", json!("relative")),
             ("cwd", json!(null)),
             ("version", json!(1)),
@@ -571,8 +557,7 @@ mod tests {
             ("id", json!("0123456789ABCDEF0123456789ABCDEF")),
             ("command", json!(5)),
             ("tool", json!(["Bash"])),
-            ("remote", json!("false")),
-            ("flags", json!(["a", 1])),
+            ("context_flags", json!(["a", 1])),
             ("causes", json!({})),
             (
                 "causes",
