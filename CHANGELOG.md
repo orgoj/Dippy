@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] - 2026-10-15
+
+### Added
+
+- dippy-rs: `wrapper NAME --subcommand WORD` unwraps only when the first argument is WORD, and `--script-stdin -` takes a quoted heredoc after the options as the remote script when the trigger is absent. `wrapper cca --subcommand run --cmd -- --context -t --script-stdin -` classifies `cca run [--timeout SEC] -t SERVER -- CMD...` and `cca run -t SERVER <<'EOF'` as remote commands with the flags `[cca]` and `[cca,SERVER]`, while other `cca` subcommands stay plain commands.
+
 ## [0.6.0] - 2026-10-15
 
 ### Removed

@@ -477,16 +477,17 @@ agent (such as `HCOM_INSTANCE_NAME`) over values an agent session changes.
 Define your own wrapper commands with the `wrapper` directive:
 
 ```
-wrapper <command_name> [--cmd <trigger>] [--flag <target_flag>] [--context <flag>] [--context-first] [--script-stdin <marker>]
+wrapper <command_name> [--subcommand <word>] [--cmd <trigger>] [--flag <target_flag>] [--context <flag>] [--context-first] [--script-stdin <marker>]
 ```
 
 | Option | Meaning |
 |--------|---------|
+| `--subcommand <word>` | Unwrap only when the first argument is this word (e.g. `cca run`); other invocations are plain commands |
 | `--cmd <trigger>` | Subcommand after which the inner command starts (e.g. `run`, `exec`) |
 | `--flag <target_flag>` | Flag whose value is the destination (e.g. `-t`) |
 | `--context <flag>` | Flag whose value is added to the context flags |
 | `--context-first` | First positional arg is the destination and becomes a context flag |
-| `--script-stdin <marker>` | At the marker, analyze one directly attached quoted heredoc as the remote shell script |
+| `--script-stdin <marker>` | At the marker, analyze one directly attached quoted heredoc as the remote shell script; marker `-` means after the options when the trigger is absent |
 | `--transparent` | Skip options and analyze inner command directly without altering context (like `timeout`, `nice`) |
 
 **Example:**
@@ -506,6 +507,9 @@ wrapper docker --cmd exec --flag -t
 
 # 'cca-tmux-cli -t SESSION run CMD' - SESSION becomes a context flag
 wrapper cca-tmux-cli --cmd run --context -t --script-stdin --script
+
+# 'cca run -t SERVER -- CMD' or 'cca run -t SERVER <<'EOF''
+wrapper cca --subcommand run --cmd -- --context -t --script-stdin -
 
 # 'ssh SERVER CMD' - first positional arg becomes a context flag
 wrapper ssh --context-first
@@ -566,6 +570,16 @@ normal redirect rules, so an allowed log target does not prevent script analysis
 Redirects that change stdin or use variable file descriptors remain on `ask`.
 This strict form keeps local shell expansion and indirect input out of
 auto-approved multiline scripts.
+
+With `--subcommand`, the wrapper applies only when the first argument is that
+word. Marker `-` makes a command without the trigger a script: everything
+after the subcommand must be option flags and their values, followed by one
+non-empty quoted heredoc. `cca run --timeout 60 -t gate2 -- df -h` and
+`cca run -t gate2 <<'EOF'` both get the flags `[cca]` and `[cca,gate2]`;
+`cca run --list`, `cca run --read gate2`, `cca doctor` or
+`cca -t gate2 run -- ...` are plain commands. Without `-t` (e.g.
+`cca run --all -- ...`) only rules without a server flag apply. The wrapped
+tool must treat stdin of the script form only as the remote script.
 
 **Wrapper flags only exist once the trigger is found.** `cca-tmux-cli -t host read`
 (no `run`) is analyzed as a plain command, so `[cca-tmux-cli]` rules do not apply

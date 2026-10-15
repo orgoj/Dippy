@@ -139,6 +139,8 @@ pub const USER_ONLY_SETTINGS: [&str; 2] = ["dashboard_url", "dashboard_token_fil
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct WrapperInfo {
     pub name: String,
+    /// Unwrap only when the first argument is this subcommand (`cca run`).
+    pub subcommand: Option<String>,
     pub trigger: Option<String>,
     pub target_flag: Option<String>,
     pub context_flag: Option<String>,
@@ -1417,6 +1419,11 @@ fn parse_config_from(
                             "--cmd" if has_next => {
                                 new_syntax = true;
                                 info.trigger = Some(p[i + 1].clone());
+                                i += 2;
+                            }
+                            "--subcommand" if has_next => {
+                                new_syntax = true;
+                                info.subcommand = Some(p[i + 1].clone());
                                 i += 2;
                             }
                             "--flag" if has_next => {

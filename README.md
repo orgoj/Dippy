@@ -18,7 +18,7 @@
 - **Environment context flags** — `set context-env VAR` exposes an environment variable as the flag `[$VAR=value]`, so one config can hold per-agent rules across commands, output redirects, file edit/read operations, and web requests
 - **Environment variables in rule patterns** — `allow-edit ${HCOM_DIR}/agents/${HCOM_INSTANCE_NAME}/**` expands `${NAME}` from Dippy's environment in every rule kind; values match literally, and an unset, empty or unsafe value disables the rule with a warning instead of widening it
 - **Argument-aware command patterns (dippy-rs)** — a glob inside a pattern word matches one argument and `*` stops at `/`, so `allow rm tmp/*` never allows `rm tmp/a /etc/passwd`; a standalone `*` spans any arguments, and `allow rm -f tmp/**+` checks each of several paths
-- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), including literal quoted-heredoc script analysis with `--script-stdin` and output redirects validated by redirect rules
+- **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), including literal quoted-heredoc script analysis with `--script-stdin`, two-word wrappers such as `cca run` with `--subcommand` (heredoc without a marker word: `--script-stdin -`), and output redirects validated by redirect rules
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **Option-aware command patterns** — `[opts: -s, --header="Host: *"]` declares optional flags and single-value globs, with literal shell argument decoding and an exact positional argument count
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*

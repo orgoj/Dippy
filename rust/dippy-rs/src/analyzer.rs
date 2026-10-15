@@ -1256,13 +1256,47 @@ fn analyze_simple_command(
     }
 
     // 6. Custom wrapper commands.
-    if let Some(info) = config.wrappers.get(base) {
+    if let Some(info) = config.wrappers.get(base)
+        && info
+            .subcommand
+            .as_ref()
+            .is_none_or(|s| tokens.get(1) == Some(s))
+    {
         if info.transparent {
             return Decision::ask(base).flags(flags).suggest(&suggestion);
         }
         let values = shell_values(tokens, &slice_str(raw_words, i));
-        let (dest, inner_cmd, context_value) = extract_wrapper_args(&values, Some(info));
-        if inner_cmd.is_empty() {
+        let (dest, inner_cmd, mut context_value) = extract_wrapper_args(&values, Some(info));
+        // `(marker, start, marker index)`: the script marker follows the
+        // trigger; marker `-` is a quoted heredoc after the options when the
+        // trigger is absent.
+        let trigger_idx = info
+            .trigger
+            .as_ref()
+            .and_then(|t| tokens.iter().position(|x| x == t));
+        let script = info.script_stdin_marker.as_ref().and_then(|marker| {
+            if marker == "-" {
+                let start = usize::from(info.subcommand.is_some());
+                return (trigger_idx.is_none() && quoted_heredoc_content(redirects).is_some())
+                    .then_some((marker, start, tokens.len()));
+            }
+            let start = if info.trigger.is_some() {
+                trigger_idx?
+            } else {
+                0
+            };
+            let p = tokens.get(start + 1..)?.iter().position(|x| x == marker)?;
+            Some((marker, start, p + start + 1))
+        });
+        if let Some((_, _, marker_idx)) = script
+            && context_value.is_none()
+            && let Some(cf) = &info.context_flag
+            && let Some(c) = values[..marker_idx].iter().position(|t| t == cf)
+            && c + 1 < marker_idx
+        {
+            context_value = Some(values[c + 1].clone());
+        }
+        if inner_cmd.is_empty() && script.is_none() {
             let reason = match &dest {
                 Some(d) if !d.is_empty() => format!("{base} {d}"),
                 _ => base.to_string(),
@@ -1281,54 +1315,46 @@ fn analyze_simple_command(
         let mut inner_flags = flags.clone();
         inner_flags.extend(wrapper_context);
 
-        if let Some(marker) = &info.script_stdin_marker {
-            let trigger_idx = match &info.trigger {
-                Some(t) => tokens.iter().position(|x| x == t),
-                None => Some(0),
-            };
-            let marker_idx = trigger_idx.and_then(|ti| {
-                tokens
-                    .get(ti + 1..)
-                    .and_then(|rest| rest.iter().position(|x| x == marker).map(|p| p + ti + 1))
-            });
-            if let (Some(trigger_idx), Some(marker_idx)) = (trigger_idx, marker_idx) {
-                let content = quoted_heredoc_content(redirects);
-                let has_expansions = !has_exp.is_empty()
-                    && (0..=marker_idx).any(|k| has_exp.get(i + k).copied().unwrap_or(false));
-                let mut valid_options = true;
-                let mut prev_was_flag = false;
-                for opt in &tokens[trigger_idx + 1..marker_idx] {
-                    if opt == "--" {
-                        valid_options = false;
-                        break;
-                    }
-                    if opt.starts_with('-') {
-                        prev_was_flag = true;
-                    } else if prev_was_flag {
-                        prev_was_flag = false;
-                    } else {
-                        valid_options = false;
-                        break;
-                    }
+        if let Some((marker, start, marker_idx)) = script {
+            let content = quoted_heredoc_content(redirects);
+            let has_expansions = !has_exp.is_empty()
+                && (0..=marker_idx).any(|k| has_exp.get(i + k).copied().unwrap_or(false));
+            let mut valid_options = true;
+            let mut prev_was_flag = false;
+            for opt in &tokens[start + 1..marker_idx] {
+                if opt == "--" {
+                    valid_options = false;
+                    break;
                 }
-                let valid = marker_idx == tokens.len() - 1
-                    && !has_expansions
-                    && valid_options
-                    && content.is_some();
-                if !valid {
-                    return Decision::ask(format!(
-                        "{base} {marker}: requires one non-empty quoted heredoc"
-                    ))
-                    .flags(&inner_flags);
+                if opt.starts_with('-') {
+                    prev_was_flag = true;
+                } else if prev_was_flag {
+                    prev_was_flag = false;
+                } else {
+                    valid_options = false;
+                    break;
                 }
-                return analyze(
-                    content.as_deref().unwrap_or(""),
-                    config,
-                    cwd,
-                    Some(&inner_flags),
-                    true,
-                );
             }
+            let valid = (marker == "-" || marker_idx == tokens.len() - 1)
+                && !has_expansions
+                && valid_options
+                && content.is_some();
+            if !valid {
+                let what = if marker == "-" {
+                    tokens[..=start].join(" ")
+                } else {
+                    format!("{base} {marker}")
+                };
+                return Decision::ask(format!("{what}: requires one non-empty quoted heredoc"))
+                    .flags(&inner_flags);
+            }
+            return analyze(
+                content.as_deref().unwrap_or(""),
+                config,
+                cwd,
+                Some(&inner_flags),
+                true,
+            );
         }
         return analyze(&inner_cmd, config, cwd, Some(&inner_flags), true);
     }
@@ -1734,6 +1760,56 @@ mod tests {
         assert_eq!(
             decide_with(&flagged, "zorpwrap -t h run \"grep x f > /tmp/keep\"").action,
             Action::Deny
+        );
+    }
+
+    #[test]
+    fn wrapper_subcommand_scopes_unwrapping() {
+        let rules = "wrapper zorpcli --subcommand run --cmd -- --context -t --script-stdin -\n\
+                     ask [zorpcli] *\n\
+                     allow [zorpcli] grep *\n\
+                     allow [zorpcli,gate2] zorpstat *\n\
+                     allow zorpcli run --list\n";
+        let script = |opts: &str, body: &str| format!("zorpcli run {opts} <<'R'\n{body}\nR");
+        for cmd in [
+            "zorpcli run --timeout 60 -t gate2 -- zorpstat x".to_string(),
+            "zorpcli run -t gate2 -- 'grep x f | zorpstat'".to_string(),
+            "zorpcli run -t other -- grep x f".to_string(),
+            "zorpcli run --list".to_string(),
+            script("--timeout 60 -t gate2", "grep x f\nzorpstat y"),
+            // Without a server only rules without one apply.
+            script("--all", "grep x f"),
+            "zorpcli run --all -- grep x f".to_string(),
+        ] {
+            let d = decide_with(rules, &cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
+        }
+        for cmd in [
+            "zorpcli run -t other -- zorpstat x".to_string(),
+            "zorpcli run -t gate2 -- 'grep x f; rm -rf /x'".to_string(),
+            "zorpcli run --all -- zorpstat x".to_string(),
+            script("-t other", "zorpstat y"),
+            script("-t gate2", "grep x f\nrm -rf /x"),
+            script("-t gate2 extra", "grep x f"),
+            script("-t $SRV", "grep x f"),
+            "zorpcli run -t gate2 <<R\ngrep x f\nR".to_string(),
+            "zorpcli run -t gate2 zorpstat x".to_string(),
+            "zorpcli run -t gate2".to_string(),
+            // A positional SERVER is not the script form.
+            "zorpcli run --create-file /etc/x gate2 <<'R'\ngrep x f\nR".to_string(),
+            // Only the declared subcommand unwraps.
+            "zorpcli exec -t gate2 -- grep x f".to_string(),
+            "zorpcli -t gate2 run -- grep x f".to_string(),
+            "zorpcli run --read gate2".to_string(),
+        ] {
+            let d = decide_with(rules, &cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+        let d = decide_with(rules, &script("-t gate2", "zorpstat y"));
+        let flags = d.context_flags.unwrap_or_default();
+        assert!(
+            flags.contains("zorpcli") && flags.contains("gate2"),
+            "{flags:?}"
         );
     }
 
