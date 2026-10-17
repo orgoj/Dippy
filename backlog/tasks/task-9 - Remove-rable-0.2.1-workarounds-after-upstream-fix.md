@@ -4,7 +4,7 @@ title: Remove rable 0.2.1 workarounds after upstream fix
 status: To Do
 assignee: []
 created_date: '2026-10-13 05:06'
-updated_date: '2026-10-13 18:19'
+updated_date: '2026-10-17 08:22'
 labels:
   - 'blocked:external'
 dependencies: []
@@ -31,4 +31,6 @@ dippy-rs works around rable 0.2.1 bugs we reported: mpecan/rable#75 (`$'` in dou
 
 <!-- SECTION:NOTES:BEGIN -->
 2026-10-13: mpecan/rable#80 merged into main as 61f3de25; issues #75-#79 closed as completed. Latest release is still 0.2.1 (GitHub and crates.io) and no release PR is open yet; waiting for the next rable release (likely 0.2.2).
+
+2026-10-17: still blocked. crates.io latest is 0.2.1; no release PR open. Open PR mpecan/rable#81 (more bash-oracle fixes) may land before the next release.
 <!-- SECTION:NOTES:END -->

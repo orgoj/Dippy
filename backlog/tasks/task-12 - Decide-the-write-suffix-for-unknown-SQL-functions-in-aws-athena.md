@@ -1,10 +1,12 @@
 ---
 id: TASK-12
 title: Decide the (write) suffix for unknown SQL functions in aws athena
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-10-13 05:06'
-labels: []
+updated_date: '2026-10-17 08:22'
+labels:
+  - 'resolution:obsolete'
 dependencies: []
 priority: low
 type: task
@@ -21,3 +23,9 @@ hook_compare reports a reason-text divergence with the same decision: Python say
 - [ ] #1 The intended reason text is decided
 - [ ] #2 Rust either emits the suffix (with a test) or the divergence is recorded as intended in hook_compare
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Obsolete: the divergence exists only against the Python Dippy, which is unmaintained on rust-port and will be deleted; Rust reason text stays as is.
+<!-- SECTION:FINAL_SUMMARY:END -->
