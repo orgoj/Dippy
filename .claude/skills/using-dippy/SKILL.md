@@ -27,7 +27,14 @@ agent's mistake to fix, not a rule to add.
 In dippy-rs a glob inside a pattern word matches one argument and `*` stops at
 `/`; only a standalone `*` or `**` spans arguments. Write `tmp/**+` for several
 paths, `./tools/* *` for a script with arguments, and `* *--opt* *` for an
-option at any position in a `deny`.
+option at any position in a `deny`. A command argument containing `/` is also
+resolved against cwd (`git -C .`, `jsr:@std/x`), so a `?*` or `*:*` word never
+matches it: use `/**` for a path value (`deny git -C /** push *`) and `**jsr:**`
+for a specifier.
+
+`deny-read` covers only native read tools, not shell readers such as `cat`, `ls`
+or `rg`. Protect a path from them with a command rule on the argument:
+`deny * ~/.secret/** *` and `deny * ~/.secret *`.
 
 Give every `deny` and `ask` message the permitted alternative, because the agent
 sees only the message, never the config: `deny git -C * "Use: cd <repo> && git
