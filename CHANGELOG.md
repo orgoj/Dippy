@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] - 2026-10-17
+
+### Added
+
+- dippy-rs: `dippy check-rule read|edit|redirect|web|mcp VALUE...` prints the rule that decides each path, web query or MCP tool name, honouring the global `--cwd`, `--config`, `--config-only` and `--remote`, with `--flag` for context flags. It replaces the Python `scripts/debug/check-rule.py`.
+
+### Fixed
+
+- dippy-rs: a local path of a `*-edit`, `*-read` or `*-redirect` rule is also matched after resolving the symlinks of its existing part, and the stricter result wins (`deny` > `ask` > no match > `allow`). Before, an absolute path was only collapsed lexically, so a link inside an allowed tree (`src/styles/x -> ~/.ssh`) allowed edits of its target.
+
 ## [0.6.1] - 2026-10-15
 
 ### Added

@@ -2600,31 +2600,32 @@ pub fn match_redirect(
     active: &Flags,
     remote: bool,
 ) -> Option<Match> {
-    let normalized_target = if remote {
-        if target.starts_with('/') {
-            collapse_path(target)
-        } else {
-            target.to_string()
-        }
-    } else {
-        normalize_path(target, cwd)
-    };
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
-    let mut result = None;
-    for rule in &config.redirect_rules {
-        if !check_rule_context_flags(rule, active)
-            || (remote && rule.decision == "allow" && !requires_remote_flag(rule))
-        {
-            continue;
+    let find = |normalized_target: &str| {
+        let mut result = None;
+        for rule in &config.redirect_rules {
+            if !check_rule_context_flags(rule, active)
+                || (remote && rule.decision == "allow" && !requires_remote_flag(rule))
+            {
+                continue;
+            }
+            if glob_match(
+                normalized_target,
+                &normalize_redirect_pattern(&rule.pattern, base),
+            ) {
+                result = Some(Match::from_rule(rule));
+            }
         }
-        if glob_match(
-            &normalized_target,
-            &normalize_redirect_pattern(&rule.pattern, base),
-        ) {
-            result = Some(Match::from_rule(rule));
-        }
+        result
+    };
+    if !remote {
+        return with_symlink_target(normalize_path(target, cwd), find);
     }
-    result
+    if target.starts_with('/') {
+        find(&collapse_path(target))
+    } else {
+        find(target)
+    }
 }
 
 /// `match_command` (the analyzer never passes redirects here).
@@ -2703,19 +2704,45 @@ fn match_path(
     cwd: &Path,
     active: &Flags,
 ) -> Option<Match> {
-    let normalized_path = normalize_path(file_path, cwd);
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
-    rules
-        .iter()
-        .rev()
-        .find(|r| {
-            check_rule_context_flags(r, active)
-                && glob_match(
-                    &normalized_path,
-                    &normalize_redirect_pattern(&r.pattern, base),
-                )
-        })
-        .map(Match::from_rule)
+    with_symlink_target(normalize_path(file_path, cwd), |path| {
+        rules
+            .iter()
+            .rev()
+            .find(|r| {
+                check_rule_context_flags(r, active)
+                    && glob_match(path, &normalize_redirect_pattern(&r.pattern, base))
+            })
+            .map(Match::from_rule)
+    })
+}
+
+/// The stricter match of a local path and its symlink-resolved target, so a
+/// link inside an allowed tree cannot reach outside it. No match ranks
+/// stricter than `allow`: both paths must allow.
+fn with_symlink_target(path: String, find: impl Fn(&str) -> Option<Match>) -> Option<Match> {
+    let found = find(&path);
+    if !path.starts_with('/') {
+        return found;
+    }
+    let target = paths::resolve(Path::new(&path))
+        .to_string_lossy()
+        .into_owned();
+    if target == path {
+        return found;
+    }
+    let rank = |m: &Option<Match>| match m.as_ref().map(|m| m.decision.as_str()) {
+        Some("deny") => 0,
+        Some("ask") => 1,
+        None => 2,
+        _ => 3,
+    };
+    let other = find(&target);
+    if rank(&other) < rank(&found) {
+        other
+    } else {
+        found
+    }
 }
 
 pub fn match_edit(file_path: &str, config: &Config, cwd: &Path, active: &Flags) -> Option<Match> {
@@ -3317,6 +3344,41 @@ mod tests {
         );
         assert_eq!(match_read("/tmp/w/srcx/y", &c, cwd, &Flags::new()), None);
         assert_eq!(match_read("/tmp/w/a/b.txt", &c, cwd, &Flags::new()), None);
+    }
+
+    #[test]
+    fn path_rules_allow_only_when_the_symlink_target_allows_too() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-symlink-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("w/src")).unwrap();
+        std::fs::create_dir_all(dir.join("secret")).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        let w = dir.join("w");
+        std::os::unix::fs::symlink(dir.join("secret"), w.join("src/out")).unwrap();
+        std::os::unix::fs::symlink(w.join("keep"), w.join("src/alias")).unwrap();
+        let c = cfg("deny-edit /** \"no\"\nallow-edit src/**\ndeny-edit keep\n\
+                     allow-read src/**\nallow-redirect src/**");
+        let flags = Flags::new();
+        let path = |p: &str| w.join(p).to_string_lossy().into_owned();
+        let edit = |p: &str| match_edit(&path(p), &c, &w, &flags).map(|m| m.decision);
+        let s = |d: &str| Some(d.to_string());
+        assert_eq!(edit("src/a.css"), s("allow"));
+        // The target outside the allowed tree decides, also for a new file.
+        assert_eq!(edit("src/out/id"), s("deny"));
+        assert_eq!(edit("src/out/sub/new.css"), s("deny"));
+        // A link to a denied file inside the project.
+        assert_eq!(edit("src/alias"), s("deny"));
+        // No rule for the target: no longer allowed by the link's path.
+        assert_eq!(match_read(&path("src/out/id"), &c, &w, &flags), None);
+        assert_eq!(
+            match_redirect(&path("src/out/id"), &c, &w, &flags, false),
+            None
+        );
+        assert_eq!(
+            match_redirect(&path("src/a.log"), &c, &w, &flags, false).map(|m| m.decision),
+            s("allow")
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

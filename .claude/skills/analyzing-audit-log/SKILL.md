@@ -63,11 +63,11 @@ and preserve unrelated content.
 
 Validate representative commands. Use `scripts/debug/try-rules.sh` from the
 Dippy repo, which runs the engine with an empty HOME so nothing leaks in, and
-`scripts/debug/check-rule.py` for read, edit, redirect, web and MCP rules:
+`dippy check-rule` for read, edit, redirect, web and MCP rules:
 
 ```bash
 ./scripts/debug/try-rules.sh tmp/candidate-rules 'mkdir -p tmp' 'rm -f tmp/x'
-PYTHONPATH=src python3 ./scripts/debug/check-rule.py edit --config-only tmp/candidate-rules tmp/x tmp/../x
+dippy --config-only tmp/candidate-rules check-rule edit tmp/x tmp/../x
 ```
 
 Write paths out literally - a `$VAR` or `$PWD` in the command is a literal to

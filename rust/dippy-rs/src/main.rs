@@ -152,6 +152,71 @@ enum Subcommand {
                       token guards the API."
     )]
     Dashboard(dippy_rs::dashboard::DashboardArgs),
+    /// Check paths, web queries or MCP tool names against the rules
+    #[command(
+        long_about = "Print the rule that decides each VALUE, as a hook would see it. Uses the \
+                      global --cwd, --config, --config-only and --remote. Command rules are \
+                      checked with --cmd."
+    )]
+    CheckRule(CheckRuleArgs),
+}
+
+#[derive(clap::Args)]
+struct CheckRuleArgs {
+    /// Rule kind
+    #[arg(value_parser = ["read", "edit", "redirect", "web", "mcp"])]
+    kind: String,
+    /// Paths, web queries or MCP tool names
+    #[arg(required = true)]
+    values: Vec<String>,
+    /// Active context flag, e.g. '$HCOM_INSTANCE_NAME=knowledge' (repeatable)
+    #[arg(long, value_name = "FLAG")]
+    flag: Vec<String>,
+}
+
+/// `check-rule`: the deciding rule per value (port of check-rule.py).
+fn check_rule(global: &Cli, args: &CheckRuleArgs) -> i32 {
+    let cwd = match &global.cwd {
+        Some(c) => paths::resolve(&PathBuf::from(c)),
+        None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
+    };
+    let loaded = config::load_config(
+        &cwd,
+        global.config.as_deref(),
+        global.config_only.as_deref(),
+    );
+    config::print_warnings();
+    let config = match loaded {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("config error: {e}");
+            return 1;
+        }
+    };
+    let flags: config::Flags = args.flag.iter().cloned().collect();
+    for value in &args.values {
+        let found = match args.kind.as_str() {
+            "read" => config::match_read(value, &config, &cwd, &flags),
+            "edit" => config::match_edit(value, &config, &cwd, &flags),
+            "redirect" => config::match_redirect(value, &config, &cwd, &flags, global.remote),
+            "web" => config::match_web(value, &config, &flags),
+            _ => config::match_mcp(value, &config),
+        };
+        match found {
+            Some(m) => {
+                let detail = match &m.source {
+                    Some(source) => format!("{} @ {source}", m.pattern),
+                    None => m.pattern.clone(),
+                };
+                println!("{} {value} -> {} ({detail})", args.kind, m.decision);
+            }
+            None => println!(
+                "{} {value} -> no match (default: {})",
+                args.kind, config.default
+            ),
+        }
+    }
+    0
 }
 
 /// The derived parser plus the hidden agent hook flags (`--claude`, ...).
@@ -308,6 +373,7 @@ fn main() {
                 Some(Subcommand::Config(args)) => dippy_rs::admin::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Hooks(args)) => dippy_rs::hooks::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Doctor(args)) => dippy_rs::doctor::run(args, cli.cwd.as_deref()),
+                Some(Subcommand::CheckRule(args)) => check_rule(&cli, args),
                 None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),
                 None => hook_mode(&matches),
             };

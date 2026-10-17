@@ -214,6 +214,11 @@ done < commands.txt
 # Test if a rule works as expected
 dippy --cmd 'docker run --privileged nginx' --config .dippy
 # → ask: docker run: needs approval
+
+# Which rule decides a path, web query or MCP tool (read|edit|redirect|web|mcp)
+dippy --config-only cand.dippy --cwd ~/proj check-rule edit src/a.css .env
+# → edit src/a.css -> allow (src/** @ /home/u/cand.dippy)
+dippy check-rule --flag '$HCOM_INSTANCE_NAME=bot1' web 'https://docs.x/a'
 ```
 
 ## File Locations
@@ -907,6 +912,7 @@ Both commands and patterns are normalized before matching:
 - `./foo` and `../foo` resolve against cwd to absolute paths
 - Relative paths without `./` (e.g., `bin/foo`) resolve against cwd to absolute paths
 - Absolute and `~/` paths collapse `..`, `.` and repeated slashes lexically (`/a/b/../c` → `/a/c`, `//etc` → `/etc`); unlike relative paths, symlinks are not followed, so `/allowed/link/../x` is judged as `/allowed/x`
+- A local path of a file or redirect rule (`*-edit`, `*-read`, `*-redirect`) is also matched after resolving the symlinks of its existing part, and the stricter result wins (`deny` > `ask` > no match > `allow`): with `allow-edit src/**`, a link `src/out -> /home/u/.ssh` does not allow `src/out/id`. Remote redirect targets stay literal
 
 ```
 # Config (cwd: /home/user/project)

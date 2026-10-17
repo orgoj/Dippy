@@ -466,6 +466,64 @@ fn audit_takes_global_config_options() {
 }
 
 #[test]
+fn check_rule_matches_each_rule_kind() {
+    let dir = sandbox("check-rule");
+    std::fs::write(
+        dir.join("config"),
+        "deny-edit /**\nallow-edit src/**\nallow-read src/*\nask-redirect /var/**\n\
+         allow-redirect [$AGENT=a] /var/a/*\nallow-web https://docs.x/*\ndeny-mcp mcp__x__*\n",
+    )
+    .unwrap();
+    let check = |args: &[&str]| {
+        let mut all = vec!["--config-only", "config", "--cwd", "/w", "check-rule"];
+        all.extend_from_slice(args);
+        let o = run(&dir, &all, "");
+        assert_eq!(
+            o.status.code(),
+            Some(0),
+            "{}",
+            String::from_utf8_lossy(&o.stderr)
+        );
+        stdout(&o)
+    };
+    let out = check(&["edit", "/w/src/a.css", "/w/x"]);
+    let lines: Vec<&str> = out.lines().collect();
+    assert!(
+        lines[0].starts_with("edit /w/src/a.css -> allow (src/** @ "),
+        "{out}"
+    );
+    assert!(lines[1].starts_with("edit /w/x -> deny (/** @ "), "{out}");
+    assert_eq!(
+        check(&["read", "/w/y"]),
+        "read /w/y -> no match (default: ask)\n"
+    );
+    assert!(check(&["redirect", "/var/b"]).starts_with("redirect /var/b -> ask"));
+    let o = run(
+        &dir,
+        &[
+            "--config-only",
+            "config",
+            "--remote",
+            "check-rule",
+            "redirect",
+            "/var/a/f",
+        ],
+        "",
+    );
+    // Remote: an allow without a remote context flag does not apply.
+    assert!(
+        stdout(&o).starts_with("redirect /var/a/f -> ask"),
+        "{}",
+        stdout(&o)
+    );
+    assert!(check(&["web", "https://docs.x/a"]).starts_with("web https://docs.x/a -> allow"));
+    assert!(check(&["mcp", "mcp__x__drop"]).starts_with("mcp mcp__x__drop -> deny"));
+    assert!(check(&["--flag", "$AGENT=a", "redirect", "/var/a/f"]).contains("-> allow"));
+    let o = run(&dir, &["check-rule", "bogus", "x"], "");
+    assert_eq!(o.status.code(), Some(2));
+}
+
+#[test]
 fn hooks_install_and_uninstall_stay_in_the_sandbox() {
     let dir = sandbox("hooks");
     let settings = dir.join(".claude/settings.json");

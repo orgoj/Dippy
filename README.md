@@ -10,7 +10,7 @@
 <!-- FORK ENHANCEMENTS START -->
 ### 🍴 Fork Enhancements (vs [upstream](https://github.com/ldayton/Dippy))
 
-- **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules
+- **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules; a path through a symlink is allowed only when its target is allowed too (also for redirects), and `dippy check-rule KIND VALUE...` shows the rule that decides a path, web query or MCP tool
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Exclusive config** — `DIPPY_CONFIG_ONLY` and `--config-only` isolate role-specific processes from user and project configuration
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
