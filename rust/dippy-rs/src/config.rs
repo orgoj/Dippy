@@ -2693,7 +2693,8 @@ fn match_path(
             .map(Match::from_rule)
     };
     if !remote {
-        return with_symlink_target(normalize_path(file_path, cwd), find);
+        let opened = cwd.join(expand_home_only(file_path));
+        return with_symlink_target(normalize_path(file_path, cwd), &opened, find);
     }
     if file_path.starts_with('/') {
         find(&collapse_path(file_path))
@@ -2702,17 +2703,20 @@ fn match_path(
     }
 }
 
-/// The stricter match of a local path and its symlink-resolved target, so a
-/// link inside an allowed tree cannot reach outside it. No match ranks
+/// The stricter match of a local path and the file the OS opens for it
+/// (`opened` resolved link by link before `..`, unlike the lexical `path`),
+/// so a link inside an allowed tree cannot reach outside it. No match ranks
 /// stricter than `allow`: both paths must allow.
-fn with_symlink_target(path: String, find: impl Fn(&str) -> Option<Match>) -> Option<Match> {
+fn with_symlink_target(
+    path: String,
+    opened: &Path,
+    find: impl Fn(&str) -> Option<Match>,
+) -> Option<Match> {
     let found = find(&path);
     if !path.starts_with('/') {
         return found;
     }
-    let target = paths::resolve(Path::new(&path))
-        .to_string_lossy()
-        .into_owned();
+    let target = paths::resolve(opened).to_string_lossy().into_owned();
     if target == path {
         return found;
     }

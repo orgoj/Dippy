@@ -423,10 +423,14 @@ In dippy-rs `deny-read` and `ask-read` also filter the path arguments of shell
 commands, on top of the command rules: `cat .env`, `cat -- .env`,
 `zorp --file=.env` and `git show HEAD:.env` are denied by `deny-read **/.env*`
 even when `allow cat *` matches. Candidates are literal non-option words
-(after Bash quote removal), `--opt=value` values and every word after `--`,
+(after Bash quote removal and `~` expansion), `--opt=value` and `-fVALUE`
+values, every word after `--`, and input redirect targets (`cat < .env`),
 resolved against the cwd after `cd`, that name an existing file; a missing file
 cannot be read, so grep patterns and commit messages (`grep -rn credentials
-src/`) pass. The path of `git show rev:path` is always checked. A later
+src/`) pass. The path of `git show rev:path` and `git cat-file -p rev:path` is
+always checked, also with git global options and behind wrappers such as
+`timeout`. A single `cd` moves the cwd of the commands after it; a command
+with several `cd` (`cd a && cd b`, `cd a || cd b`) is denied. A later
 `allow-read **/.env.example` exempts that file; `allow-read` is never required
 for an argument, and a path without a matching read rule leaves the command
 decision unchanged. Over SSH or a wrapper the server's files are unknown, so
@@ -436,7 +440,9 @@ flag apply (`allow-read [ssh] /**` trusts every server read).
 This filter is best effort. It does not see paths built at runtime
 (`cat $(echo .env)`, `cat "$F"`, globs such as `cat .env*`, a script opening
 the file itself), files created or replaced after the check (`ln -s .env l &&
-cat l`), or the files below a directory argument (`grep -r KEY .`).
+cat l`), or the files below a directory argument (`grep -r KEY .`). A search
+term or metadata operand that names an existing protected file is treated as a
+read: with `.env` present, `rg -F '.env' README.md` and `ls -l .env` are denied.
 
 ### SQL Databases
 

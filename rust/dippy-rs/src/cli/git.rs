@@ -85,7 +85,7 @@ const GLOBAL_FLAGS_NO_ARG: &[&str] = &[
 ];
 
 /// Find the git action (subcommand) accounting for global flags.
-fn find_action(tokens: &[String]) -> Option<(usize, &str)> {
+pub(crate) fn find_action(tokens: &[String]) -> Option<(usize, &str)> {
     let mut i = 1;
     while i < tokens.len() {
         let token = tokens[i].as_str();

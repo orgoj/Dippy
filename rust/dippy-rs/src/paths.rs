@@ -92,8 +92,13 @@ pub fn normpath(path: &str) -> String {
 }
 
 /// `Path.resolve()` (non-strict): make absolute, resolve symlinks of the
-/// existing prefix, normalise the rest lexically.
+/// existing prefix, normalise the rest lexically. A link cycle stops after 40
+/// links in total and keeps the link path.
 pub fn resolve(path: &Path) -> PathBuf {
+    resolve_links(path, &mut 0)
+}
+
+fn resolve_links(path: &Path, seen: &mut usize) -> PathBuf {
     let abs = if path.is_absolute() {
         path.to_path_buf()
     } else {
@@ -102,7 +107,6 @@ pub fn resolve(path: &Path) -> PathBuf {
             .join(path)
     };
     let mut result = PathBuf::from("/");
-    let mut seen = 0;
     for comp in abs.components() {
         match comp {
             Component::RootDir | Component::Prefix(_) => {}
@@ -113,15 +117,15 @@ pub fn resolve(path: &Path) -> PathBuf {
             Component::Normal(name) => {
                 let candidate = result.join(name);
                 match std::fs::read_link(&candidate) {
-                    Ok(target) if seen < 40 => {
-                        seen += 1;
+                    Ok(target) if *seen < 40 => {
+                        *seen += 1;
                         let base = result.clone();
                         let joined = if target.is_absolute() {
                             target
                         } else {
                             base.join(target)
                         };
-                        result = resolve(&joined);
+                        result = resolve_links(&joined, seen);
                     }
                     _ => result = candidate,
                 }
@@ -165,6 +169,23 @@ pub fn pathlib_str(path: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn resolve_survives_symlink_cycles() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-cycle-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("real")).unwrap();
+        let dir = dir.canonicalize().unwrap();
+        std::os::unix::fs::symlink(dir.join("self"), dir.join("self")).unwrap();
+        std::os::unix::fs::symlink(dir.join("b"), dir.join("a")).unwrap();
+        std::os::unix::fs::symlink(dir.join("a"), dir.join("b")).unwrap();
+        std::os::unix::fs::symlink(dir.join("real"), dir.join("c1")).unwrap();
+        std::os::unix::fs::symlink(dir.join("c1"), dir.join("c2")).unwrap();
+        resolve(&dir.join("self/x"));
+        resolve(&dir.join("a/x"));
+        assert_eq!(resolve(&dir.join("c2/f")), dir.join("real/f"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn py_path_str_cases() {

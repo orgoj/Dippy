@@ -2062,15 +2062,18 @@ deny-read <glob> "message"
 
 - `*-edit` applies to Write, Edit, and MultiEdit operations.
 - `*-read` applies to Read operations. In dippy-rs `deny-read` and `ask-read`
-  also filter literal arguments of shell commands (non-option words,
-  `--opt=value` values, words after `--`) that name an existing file, resolved
-  against the cwd after `cd`, plus the path of `git show rev:path`: a match
-  denies or asks for the whole command, even over an `allow` command rule; no
-  match or a missing file leaves it unchanged. Over SSH or a wrapper every
-  literal word is checked and only an `allow-read` with a remote context flag
-  exempts one. Best effort: runtime-built paths (`cat $(echo .env)`,
-  `cat "$F"`, globs), files created after the check and files below a directory
-  argument (`grep -r KEY .`) are not checked.
+  also filter literal arguments of shell commands (non-option words after `~`
+  expansion, `--opt=value` and `-fVALUE` values, words after `--`, input
+  redirect targets) that name an existing file, resolved against the cwd after
+  `cd`, plus the path of `git show`/`git cat-file` `rev:path`: a match denies
+  or asks for the whole command, even over an `allow` command rule; no match or
+  a missing file leaves it unchanged. One `cd` moves the cwd of later commands;
+  several `cd` in one command are denied. Over SSH or a wrapper every literal
+  word is checked and only an `allow-read` with a remote context flag exempts
+  one. Best effort: runtime-built paths (`cat $(echo .env)`, `cat "$F"`,
+  globs), files created after the check and files below a directory argument
+  (`grep -r KEY .`) are not checked; a search term naming an existing protected
+  file (`rg -F .env README.md`, `ls -l .env`) is treated as a read.
 
 Globs match file paths using `**` for recursive directory matching (same as redirect rules).
 

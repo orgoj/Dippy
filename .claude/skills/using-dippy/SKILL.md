@@ -33,11 +33,13 @@ matches it: use `/**` for a path value (`deny git -C /** push *`) and `**jsr:**`
 for a specifier.
 
 `deny-read` and `ask-read` also filter literal shell arguments that name an
-existing file (`cat .env`, `--file=.env`; `git show HEAD:.env` always), even
-over `allow cat *`; a missing file or no match leaves the command decision
-unchanged. They miss runtime-built paths (`cat $(echo .env)`, `cat "$F"`,
-globs), files created after the check and files below a directory argument
-(`grep -r KEY .`). Over SSH or a wrapper every word is checked and only an
+existing file (`cat .env`, `cat ~/.env`, `--file=.env`, `grep -f.env`,
+`cat < .env`; `git show HEAD:.env` always), even over `allow cat *`; a missing
+file or no match leaves the command decision unchanged. They miss runtime-built
+paths (`cat $(echo .env)`, `cat "$F"`, globs), files created after the check
+and files below a directory argument (`grep -r KEY .`); a search term naming an
+existing protected file (`rg -F .env README.md`) is denied. Several `cd` in one
+command are denied. Over SSH or a wrapper every word is checked and only an
 `allow-read` with a remote context flag (`allow-read [ssh] /**`) exempts it.
 
 Give every `deny` and `ask` message the permitted alternative, because the agent

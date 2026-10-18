@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.4] - 2026-10-18
+
+### Fixed
+
+- dippy-rs: a symlink cycle no longer overflows the stack while path rules resolve links (native Read/Edit, redirects and shell arguments); the link budget is shared across the whole resolution.
+- dippy-rs: an absolute path through a directory symlink followed by `..` is matched against the file the OS opens, not its lexically collapsed spelling.
+- dippy-rs: the shell read-argument filter also checks unquoted `~` and `~/x` arguments (a quoted `~` stays a literal relative path), input redirect targets (`cat < .env`), attached short-option values (`grep -f.env`), and `rev:path` of `git cat-file` and of `git show` with global options (`-C`, `-c`, `--no-pager`) or behind wrappers (`timeout`, `command`).
+- dippy-rs: one `cd` moves the cwd of the commands after it, wherever it stands in a command list, including `cd -- DIR`; a command with several `cd` is denied with a message naming `cd DIR && CMD`.
+
 ## [0.6.3] - 2026-10-18
 
 ### Fixed

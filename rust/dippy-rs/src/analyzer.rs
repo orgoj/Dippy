@@ -140,15 +140,24 @@ fn is_digits(s: &str) -> bool {
 
 /// Whether a redirect operator can open its target for writing.
 fn redirect_writes_file(op: &str) -> bool {
-    let op = if op.starts_with('{') {
+    FILE_WRITING_REDIRECTS.contains(&redirect_operator(op))
+}
+
+/// Whether a redirect operator opens its target for reading.
+fn redirect_reads_file(op: &str) -> bool {
+    matches!(redirect_operator(op), "<" | "<>")
+}
+
+/// The operator without its fd number or `{var}` prefix.
+fn redirect_operator(op: &str) -> &str {
+    if op.starts_with('{') {
         match op.find('}') {
             Some(end) => &op[end + 1..],
             None => op,
         }
     } else {
         op.trim_start_matches(|c: char| c.is_ascii_digit())
-    };
-    FILE_WRITING_REDIRECTS.contains(&op)
+    }
 }
 
 /// Whether a redirect target is a sink or literal fd operation.
@@ -266,20 +275,27 @@ fn analyze_node(node: &Node, config: &Config, cwd: &Path, flags: &Flags, remote:
                 .iter()
                 .filter(|p| !matches!(p, Node::Operator { .. }))
                 .collect();
-            let mut effective_cwd = cwd.to_path_buf();
-            if !parts.is_empty()
-                && !remote
-                && let Some(target) = extract_cd_target(parts[0])
-            {
-                effective_cwd = resolve_cd_target(&target, cwd);
+            let is_cd = |p: &Node| matches!(p, Node::Command { words, .. } if words.first().is_some_and(|w| strip_quotes(&w.value) == "cd"));
+            // One cd moves the cwd of the commands after it; with several
+            // (`cd a || cd b`) the cwd of later commands is uncertain.
+            if !remote && parts.iter().filter(|p| is_cd(p)).count() > 1 {
+                return Decision::new(
+                    Action::Deny,
+                    "several cd in one command: use one cd per command (cd DIR && CMD) \
+                     or paths relative to the current directory",
+                )
+                .flags(&lf);
             }
+            let mut effective_cwd = cwd.to_path_buf();
             let mut decisions = Vec::new();
             for p in parts {
-                let is_cd = matches!(p, Node::Command { words, .. } if words.first().is_some_and(|w| strip_quotes(&w.value) == "cd"));
-                if remote && is_cd {
+                if remote && is_cd(p) {
                     continue;
                 }
                 decisions.push(analyze_node(p, config, &effective_cwd, &lf, remote));
+                if !remote && let Some(target) = extract_cd_target(p) {
+                    effective_cwd = resolve_cd_target(&target, &effective_cwd);
+                }
             }
             if decisions.is_empty() {
                 return Decision::allow("empty list").flags(&lf);
@@ -998,79 +1014,135 @@ fn analyze_command(
         &words, config, cwd, flags, remote, &has_exp, &raw_words, redirects,
     ));
     let raw_args = raw_words.get(base_idx + 1..).unwrap_or_default();
+    let inner = base_idx + unwrap_all_transparent_wrappers(&words[base_idx..], Some(config));
+    let object_paths = words.get(inner).is_some_and(|w| w == "git")
+        && cli::git::find_action(&words[inner..])
+            .is_some_and(|(_, action)| matches!(action, "show" | "cat-file"));
     decisions.extend(read_arg_decision(
-        &base, raw_args, config, cwd, flags, remote,
+        &base,
+        raw_args,
+        object_paths,
+        config,
+        cwd,
+        flags,
+        remote,
     ));
     combine(decisions)
 }
 
 /// Read rules on the literal path arguments of a shell command: a matching
 /// `deny-read` or `ask-read` decides, any other result leaves the command
-/// decision alone. Candidates are non-option words, `--opt=value` values and
-/// every word after `--` that name an existing local file (any word when
-/// remote), plus the path of `git show rev:path`. Best effort: words with
+/// decision alone. Candidates are non-option words, `--opt=value` and `-fVALUE`
+/// values, and every word after `--`, plus the path of `rev:path` when
+/// `object_paths` (`git show`, `git cat-file`). Best effort: words with
 /// expansions or globs, and files created after the check, are not seen.
 fn read_arg_decision(
     base: &str,
     raw_args: &[String],
+    object_paths: bool,
     config: &Config,
     cwd: &Path,
     flags: &Flags,
     remote: bool,
 ) -> Option<Decision> {
-    let cause_flags = redirect_cause_flags(flags, remote);
-    let values: Vec<String> = raw_args
-        .iter()
-        .filter_map(|raw| decode_literal_word(raw, true))
-        .collect();
-    let git_show = base == "git"
-        && values
-            .iter()
-            .find(|v| !v.starts_with('-'))
-            .is_some_and(|v| v == "show");
     let mut ask = None;
     let mut after_dashes = false;
-    for word in &values {
+    for word in raw_args.iter().filter_map(|raw| literal_arg(raw, remote)) {
         let path = if after_dashes || !word.starts_with('-') {
             word.as_str()
         } else if word == "--" {
             after_dashes = true;
             continue;
-        } else if let Some((_, value)) = word.split_once('=').filter(|_| word.starts_with("--")) {
-            value
+        } else if word.starts_with("--") {
+            match word.split_once('=') {
+                Some((_, value)) => value,
+                None => continue,
+            }
         } else {
-            continue;
+            word.char_indices().nth(2).map_or("", |(i, _)| &word[i..])
         };
-        // A missing local file cannot be read, so grep patterns and messages
-        // pass; the server's files are unknown.
-        let file = (remote || config::path_exists(path, cwd)).then_some(path);
         let rev_path = path
             .split_once(':')
-            .filter(|(rev, _)| git_show && !rev.contains('/'))
+            .filter(|(rev, _)| object_paths && !rev.contains('/'))
             .map(|(_, p)| p);
-        for p in file.into_iter().chain(rev_path) {
-            if p.is_empty() {
-                continue;
-            }
-            let Some(m) = config::match_read(p, config, cwd, &cause_flags, remote) else {
-                continue;
-            };
-            let msg = m.message.clone().unwrap_or(m.pattern.clone());
-            let action = match m.decision.as_str() {
-                "deny" => Action::Deny,
-                "ask" if ask.is_none() => Action::Ask,
-                _ => continue,
-            };
-            let d = Decision::new(action, format!("{base}: {msg}"))
-                .flags(flags)
-                .cause("read", p, Some(&m), &cause_flags);
-            if action == Action::Deny {
+        let decisions = [
+            read_file_decision(base, path, config, cwd, flags, remote),
+            rev_path.and_then(|p| read_rule_decision(base, p, config, cwd, flags, remote)),
+        ];
+        for d in decisions.into_iter().flatten() {
+            if d.action == Action::Deny {
                 return Some(d);
             }
-            ask = Some(d);
+            ask.get_or_insert(d);
         }
     }
     ask
+}
+
+/// `read_rule_decision` for a path a command opens. A missing local file
+/// cannot be read, so grep patterns and messages pass; the server's files are
+/// unknown, so every remote word is checked.
+fn read_file_decision(
+    what: &str,
+    path: &str,
+    config: &Config,
+    cwd: &Path,
+    flags: &Flags,
+    remote: bool,
+) -> Option<Decision> {
+    if !remote && !config::path_exists(path, cwd) {
+        return None;
+    }
+    read_rule_decision(what, path, config, cwd, flags, remote)
+}
+
+/// The deny or ask of the read rule matching `path`; `None` otherwise.
+fn read_rule_decision(
+    what: &str,
+    path: &str,
+    config: &Config,
+    cwd: &Path,
+    flags: &Flags,
+    remote: bool,
+) -> Option<Decision> {
+    if path.is_empty() {
+        return None;
+    }
+    let cause_flags = redirect_cause_flags(flags, remote);
+    let m = config::match_read(path, config, cwd, &cause_flags, remote)?;
+    let action = match m.decision.as_str() {
+        "deny" => Action::Deny,
+        "ask" => Action::Ask,
+        _ => return None,
+    };
+    let msg = m.message.clone().unwrap_or(m.pattern.clone());
+    Some(
+        Decision::new(action, format!("{what}: {msg}"))
+            .flags(flags)
+            .cause("read", path, Some(&m), &cause_flags),
+    )
+}
+
+/// The value Bash passes for a literal word: quote removal plus expansion of
+/// a leading unquoted `~` or `~/` (kept literal when remote). A quoted `~`
+/// becomes `./~`, so path matching never expands it. `None` for other
+/// expansions and globs.
+fn literal_arg(raw: &str, remote: bool) -> Option<String> {
+    if raw == "~" || raw.starts_with("~/") {
+        let rest = decode_literal_word(&raw[1..], true)?;
+        let home = if remote {
+            "~".to_string()
+        } else {
+            paths::home().to_string_lossy().into_owned()
+        };
+        return Some(format!("{home}{rest}"));
+    }
+    let value = decode_literal_word(raw, true)?;
+    Some(if value.starts_with('~') {
+        format!("./{value}")
+    } else {
+        value
+    })
 }
 
 fn analyze_redirects(
@@ -1104,6 +1176,18 @@ fn analyze_redirects(
                 ));
                 if redirect_target_is_safe(&target_value) {
                     continue;
+                }
+                if redirect_reads_file(op)
+                    && let Some(path) = literal_arg(&target.value, remote)
+                {
+                    decisions.extend(read_file_decision(
+                        "input redirect",
+                        &path,
+                        config,
+                        cwd,
+                        flags_ref,
+                        remote,
+                    ));
                 }
                 if redirect_writes_file(op) {
                     let what = if remote {
@@ -1674,10 +1758,15 @@ fn extract_cd_target(node: &Node) -> Option<String> {
     let Node::Command { words, .. } = node else {
         return None;
     };
-    if words.len() != 2 || word_value(&words[0]) != "cd" {
+    let target = match words.len() {
+        2 => &words[1],
+        3 if word_value(&words[1]) == "--" => &words[2],
+        _ => return None,
+    };
+    if word_value(&words[0]) != "cd" {
         return None;
     }
-    if words[1].parts.iter().any(|p| {
+    if target.parts.iter().any(|p| {
         matches!(
             p,
             Node::CmdSub { .. }
@@ -1689,7 +1778,7 @@ fn extract_cd_target(node: &Node) -> Option<String> {
     }) {
         return None;
     }
-    Some(word_value(&words[1]))
+    Some(word_value(target))
 }
 
 fn resolve_cd_target(target: &str, cwd: &Path) -> PathBuf {
@@ -1897,6 +1986,7 @@ mod tests {
             "base64 .env",
             "zorp --file=.env",
             "zorp --file .env",
+            "zorp -x.env",
             "tar czf out.tgz secrets/key",
             "(cd secrets && cat key)",
             "cd secrets; cat key",
@@ -1916,7 +2006,6 @@ mod tests {
         for cmd in [
             "cat .env.example",
             "zorp README.md",
-            "zorp -x.env",
             "cat \"$F\"",
             // Globs and directory arguments (TASK-32) are not expanded.
             "cat .env*",
@@ -1935,6 +2024,29 @@ mod tests {
     }
 
     #[test]
+    fn read_args_expand_only_an_unquoted_tilde() {
+        let home = paths::home().to_string_lossy().into_owned();
+        assert_eq!(literal_arg("~", false).as_deref(), Some(home.as_str()));
+        assert_eq!(literal_arg("~/x", false), Some(format!("{home}/x")));
+        assert_eq!(literal_arg("~/'a b'", false), Some(format!("{home}/a b")));
+        // The server's home is unknown: the word stays literal.
+        assert_eq!(literal_arg("~/x", true).as_deref(), Some("~/x"));
+        for quoted in ["'~/x'", "\\~/x", "\"~\"/x"] {
+            assert_eq!(
+                literal_arg(quoted, false).as_deref(),
+                Some("./~/x"),
+                "{quoted}"
+            );
+        }
+        assert_eq!(literal_arg("~user/x", false), None);
+        assert_eq!(literal_arg("$HOME/x", false), None);
+        let dir = fixture("readarg-tilde", &["~/", "~/.env"]);
+        let d = decide_in(&dir, READ_RULES, "cat '~/.env'");
+        assert_eq!(d.action, Action::Deny, "{}", d.reason);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn read_rules_skip_missing_local_files() {
         let dir = fixture("readarg-missing", &["src/"]);
         for cmd in [
@@ -1948,9 +2060,63 @@ mod tests {
             let d = decide_in(&dir, READ_RULES, cmd);
             assert_ne!(d.action, Action::Deny, "{cmd}: {}", d.reason);
         }
-        for cmd in ["git show HEAD:.env", "git show HEAD:./x/../.env"] {
+        for cmd in [
+            "git show HEAD:.env",
+            "git show HEAD:./x/../.env",
+            "git -C . show HEAD:.env",
+            "git -c color.ui=false show HEAD:.env",
+            "git --no-pager show HEAD:.env",
+            "timeout 5 git show HEAD:.env",
+            "command git show HEAD:.env",
+            "git cat-file -p HEAD:.env",
+        ] {
             let d = decide_in(&dir, READ_RULES, cmd);
             assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn one_cd_moves_the_cwd_of_later_commands() {
+        let dir = fixture("readarg-cd", &["secrets/", "secrets/key", "a/"]);
+        for cmd in [
+            "pwd; cd secrets; cat key",
+            "cd -- secrets && cat key",
+            "cd a && (cd ../secrets && cat key)",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        // `key` before the cd is the starting directory's (missing) file.
+        let d = decide_in(&dir, READ_RULES, "cat key; cd secrets");
+        assert_ne!(d.action, Action::Deny, "{}", d.reason);
+        for cmd in ["cd a && cd ../secrets && cat key", "cd a || cd b"] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+            assert!(d.reason.contains("cd DIR && CMD"), "{}", d.reason);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_rules_filter_input_redirects_and_attached_values() {
+        let dir = fixture("readarg-redirect", &[".env", "notes.txt", "README.md"]);
+        for cmd in [
+            "cat < .env",
+            "cat 0< .env",
+            "grep -f.env README.md",
+            "grep -f .env README.md",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        for cmd in ["cat < notes.txt", "zorp -fnotes.txt"] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+        for cmd in ["cat < README.md", "grep -rn x README.md", "zorp -x5"] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
         }
         let _ = std::fs::remove_dir_all(&dir);
     }
@@ -1977,15 +2143,22 @@ mod tests {
 
     #[test]
     fn read_rules_filter_symlink_arguments() {
-        let dir = fixture("readarg-link", &["secrets/", "secrets/key"]);
+        let dir = fixture("readarg-link", &["secrets/", "secrets/key", "secrets/sub/"]);
         std::os::unix::fs::symlink(dir.join(".env"), dir.join("dangling")).unwrap();
         std::os::unix::fs::symlink(dir.join("secrets/key"), dir.join("link")).unwrap();
-        for cmd in ["cat dangling", "cat link"] {
+        std::os::unix::fs::symlink(dir.join("secrets/sub"), dir.join("up")).unwrap();
+        std::os::unix::fs::symlink(dir.join("cycle"), dir.join("cycle")).unwrap();
+        // `..` after a directory link leaves the link's target, not `dir`.
+        let abs_up = format!("cat {}/up/../key", dir.display());
+        for cmd in ["cat dangling", "cat link", "cat up/../key", abs_up.as_str()] {
             let d = decide_in(&dir, READ_RULES, cmd);
             assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
         }
         assert!(config::path_exists("dangling", &dir));
         assert!(!config::path_exists("missing", &dir));
+        // A link cycle neither crashes nor matches anything else.
+        let d = decide_in(&dir, READ_RULES, "cat cycle");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
