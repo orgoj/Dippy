@@ -14,7 +14,7 @@ use regex::Regex;
 
 use crate::allowlists::{is_simple_safe, is_wrapper_command};
 use crate::ast::{self, Node, Word};
-use crate::bash::shell_values;
+use crate::bash::{decode_literal_word, shell_values};
 use crate::cli::{self, Action as HAction, HandlerContext};
 use crate::config::{self, Config, Flags, SimpleCommand, WrapperInfo};
 use crate::parser::strip_quotes;
@@ -997,7 +997,80 @@ fn analyze_command(
     decisions.push(analyze_simple_command(
         &words, config, cwd, flags, remote, &has_exp, &raw_words, redirects,
     ));
+    let raw_args = raw_words.get(base_idx + 1..).unwrap_or_default();
+    decisions.extend(read_arg_decision(
+        &base, raw_args, config, cwd, flags, remote,
+    ));
     combine(decisions)
+}
+
+/// Read rules on the literal path arguments of a shell command: a matching
+/// `deny-read` or `ask-read` decides, any other result leaves the command
+/// decision alone. Candidates are non-option words, `--opt=value` values and
+/// every word after `--` that name an existing local file (any word when
+/// remote), plus the path of `git show rev:path`. Best effort: words with
+/// expansions or globs, and files created after the check, are not seen.
+fn read_arg_decision(
+    base: &str,
+    raw_args: &[String],
+    config: &Config,
+    cwd: &Path,
+    flags: &Flags,
+    remote: bool,
+) -> Option<Decision> {
+    let cause_flags = redirect_cause_flags(flags, remote);
+    let values: Vec<String> = raw_args
+        .iter()
+        .filter_map(|raw| decode_literal_word(raw, true))
+        .collect();
+    let git_show = base == "git"
+        && values
+            .iter()
+            .find(|v| !v.starts_with('-'))
+            .is_some_and(|v| v == "show");
+    let mut ask = None;
+    let mut after_dashes = false;
+    for word in &values {
+        let path = if after_dashes || !word.starts_with('-') {
+            word.as_str()
+        } else if word == "--" {
+            after_dashes = true;
+            continue;
+        } else if let Some((_, value)) = word.split_once('=').filter(|_| word.starts_with("--")) {
+            value
+        } else {
+            continue;
+        };
+        // A missing local file cannot be read, so grep patterns and messages
+        // pass; the server's files are unknown.
+        let file = (remote || config::path_exists(path, cwd)).then_some(path);
+        let rev_path = path
+            .split_once(':')
+            .filter(|(rev, _)| git_show && !rev.contains('/'))
+            .map(|(_, p)| p);
+        for p in file.into_iter().chain(rev_path) {
+            if p.is_empty() {
+                continue;
+            }
+            let Some(m) = config::match_read(p, config, cwd, &cause_flags, remote) else {
+                continue;
+            };
+            let msg = m.message.clone().unwrap_or(m.pattern.clone());
+            let action = match m.decision.as_str() {
+                "deny" => Action::Deny,
+                "ask" if ask.is_none() => Action::Ask,
+                _ => continue,
+            };
+            let d = Decision::new(action, format!("{base}: {msg}"))
+                .flags(flags)
+                .cause("read", p, Some(&m), &cause_flags);
+            if action == Action::Deny {
+                return Some(d);
+            }
+            ask = Some(d);
+        }
+    }
+    ask
 }
 
 fn analyze_redirects(
@@ -1761,6 +1834,159 @@ mod tests {
             decide_with(&flagged, "zorpwrap -t h run \"grep x f > /tmp/keep\"").action,
             Action::Deny
         );
+    }
+
+    /// A fresh directory holding `files` (a trailing `/` makes a directory).
+    fn fixture(name: &str, files: &[&str]) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for f in files {
+            if let Some(d) = f.strip_suffix('/') {
+                std::fs::create_dir_all(dir.join(d)).unwrap();
+            } else {
+                std::fs::write(dir.join(f), "").unwrap();
+            }
+        }
+        dir.canonicalize().unwrap()
+    }
+
+    fn decide_in(dir: &Path, rules: &str, cmd: &str) -> Decision {
+        let config = config::parse_config(rules, None).unwrap();
+        analyze(cmd, &config, dir, None, false)
+    }
+
+    const READ_RULES: &str = "allow zorp *\n\
+                              wrapper zorpwrap --cmd run --context -t\n\
+                              allow [zorpwrap] cat *\n\
+                              allow [zorpwrap] grep *\n\
+                              deny-read **/.env* \"no env\"\n\
+                              allow-read **/.env*.example*\n\
+                              deny-read **/secrets/** \"no secrets\"\n\
+                              deny-read **/*credentials* \"no credentials\"\n\
+                              ask-read **/notes.txt \"check notes\"\n";
+
+    #[test]
+    fn read_rules_filter_existing_path_arguments() {
+        let dir = fixture(
+            "readarg",
+            &[
+                ".env",
+                ".env.example",
+                ".env x",
+                ".envx",
+                ".env;1",
+                "notes.txt",
+                "README.md",
+                "secrets/",
+                "secrets/key",
+                "x/",
+            ],
+        );
+        let abs = format!("cat {}/.env", dir.display());
+        for cmd in [
+            "cat .env",
+            "cat '.env'",
+            "cat .env\\ x",
+            "cat \".env\"x",
+            "cat .env\\;1",
+            "cat -- .env",
+            "head ./x/../.env",
+            "head .//.env",
+            abs.as_str(),
+            "base64 .env",
+            "zorp --file=.env",
+            "zorp --file .env",
+            "tar czf out.tgz secrets/key",
+            "(cd secrets && cat key)",
+            "cd secrets; cat key",
+            "timeout 5 cat .env",
+            "bash -c 'cat .env'",
+            "ls | zorp .env",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        let d = decide_in(&dir, READ_RULES, "cat .env");
+        assert!(d.reason.contains("no env"), "{}", d.reason);
+        assert_eq!(d.causes[0].kind, "read", "{:?}", d.causes);
+        let d = decide_in(&dir, READ_RULES, "zorp notes.txt");
+        assert_eq!(d.action, Action::Ask, "{}", d.reason);
+        assert!(d.reason.contains("check notes"), "{}", d.reason);
+        for cmd in [
+            "cat .env.example",
+            "zorp README.md",
+            "zorp -x.env",
+            "cat \"$F\"",
+            // Globs and directory arguments (TASK-32) are not expanded.
+            "cat .env*",
+            "grep -r KEY .",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
+        }
+        // No read rule: the command decision is unchanged.
+        assert_eq!(
+            decide_in(&dir, "allow zorp *", "zorp .env").action,
+            Action::Allow
+        );
+        assert_eq!(decide_in(&dir, "", "zorp .env").action, Action::Ask);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_rules_skip_missing_local_files() {
+        let dir = fixture("readarg-missing", &["src/"]);
+        for cmd in [
+            "cat .env",
+            "zorp credentials src/",
+            "zorp -n 'password|credentials' src",
+            "git commit -m 'rotate credentials'",
+            // Only `git show` reads `rev:path` from the object store.
+            "zorp label:.env",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_ne!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        for cmd in ["git show HEAD:.env", "git show HEAD:./x/../.env"] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_rules_check_every_remote_word() {
+        let dir = fixture("readarg-remote", &[]);
+        for cmd in [
+            "zorpwrap -t h run 'cat .env'",
+            "zorpwrap -t h run 'grep credentials f'",
+            // A local allow-read exception never permits a server read.
+            "zorpwrap -t h run 'cat .env.example'",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        let d = decide_in(&dir, READ_RULES, "zorpwrap -t h run 'cat README.md'");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
+        let flagged = format!("{READ_RULES}allow-read [zorpwrap] /**\n");
+        let d = decide_in(&dir, &flagged, "zorpwrap -t h run 'cat /etc/.env'");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_rules_filter_symlink_arguments() {
+        let dir = fixture("readarg-link", &["secrets/", "secrets/key"]);
+        std::os::unix::fs::symlink(dir.join(".env"), dir.join("dangling")).unwrap();
+        std::os::unix::fs::symlink(dir.join("secrets/key"), dir.join("link")).unwrap();
+        for cmd in ["cat dangling", "cat link"] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        assert!(config::path_exists("dangling", &dir));
+        assert!(!config::path_exists("missing", &dir));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

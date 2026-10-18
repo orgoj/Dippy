@@ -11,6 +11,7 @@
 ### 🍴 Fork Enhancements (vs [upstream](https://github.com/ldayton/Dippy))
 
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules; a path through a symlink is allowed only when its target is allowed too (also for redirects), and `dippy check-rule KIND VALUE...` shows the rule that decides a path, web query or MCP tool
+- **Read rules on shell arguments (dippy-rs)** — a `deny-read` or `ask-read` matching a literal argument that names an existing file (`cat .env`, `--file=.env`, after `cd`; `git show HEAD:.env` always) denies or asks for the whole command, also over an `allow` command rule; missing files, grep patterns and messages pass, no match leaves the decision unchanged, and over SSH or a wrapper every word is checked with only flagged `allow-read` exceptions (best effort, see [File Operations](#file-operations))
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Exclusive config** — `DIPPY_CONFIG_ONLY` and `--config-only` isolate role-specific processes from user and project configuration
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
@@ -417,6 +418,25 @@ deny-read **/.env*
 deny-edit **/.env*
 ask-edit **/config.*
 ```
+
+In dippy-rs `deny-read` and `ask-read` also filter the path arguments of shell
+commands, on top of the command rules: `cat .env`, `cat -- .env`,
+`zorp --file=.env` and `git show HEAD:.env` are denied by `deny-read **/.env*`
+even when `allow cat *` matches. Candidates are literal non-option words
+(after Bash quote removal), `--opt=value` values and every word after `--`,
+resolved against the cwd after `cd`, that name an existing file; a missing file
+cannot be read, so grep patterns and commit messages (`grep -rn credentials
+src/`) pass. The path of `git show rev:path` is always checked. A later
+`allow-read **/.env.example` exempts that file; `allow-read` is never required
+for an argument, and a path without a matching read rule leaves the command
+decision unchanged. Over SSH or a wrapper the server's files are unknown, so
+every literal word is checked and only `allow-read` rules with a remote context
+flag apply (`allow-read [ssh] /**` trusts every server read).
+
+This filter is best effort. It does not see paths built at runtime
+(`cat $(echo .env)`, `cat "$F"`, globs such as `cat .env*`, a script opening
+the file itself), files created or replaced after the check (`ln -s .env l &&
+cat l`), or the files below a directory argument (`grep -r KEY .`).
 
 ### SQL Databases
 

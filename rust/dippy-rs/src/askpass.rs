@@ -197,10 +197,11 @@ fn analyze(command: &str, flags: &[String], cwd: &Path, config: &Config) -> &'st
 }
 
 /// The decision the request gets under `config`, as the AGY hook applies it
-/// (an unmatched tool gets `set default`).
+/// (an unmatched tool gets `set default`). A shell command is always analyzed
+/// whole, also when a path argument's read rule asked.
 pub fn decide(req: &Request, config: &Config) -> &'static str {
     match req.causes.first() {
-        Some(c) if !matches!(c.kind.as_str(), "command" | "redirect") => {
+        Some(c) if req.command.is_empty() && !matches!(c.kind.as_str(), "command" | "redirect") => {
             decide_cause(req, c, config)
         }
         _ => analyze(&req.command, &[], &req.cwd, config),
@@ -221,15 +222,13 @@ pub fn decide_cause(req: &Request, cause: &Cause, config: &Config) -> &'static s
     let mut flags = config::env_context_flags(config);
     flags.extend(cause.flags.iter().cloned());
     let (t, cwd, default) = (&cause.target, &req.cwd, config.default.as_str());
+    let remote = flags.contains("@remote");
     match cause.kind.as_str() {
-        "redirect" => {
-            let remote = flags.contains("@remote");
-            verdict(
-                config::match_redirect(t, config, cwd, &flags, remote),
-                "ask",
-            )
-        }
-        "read" => verdict(config::match_read(t, config, cwd, &flags), default),
+        "redirect" => verdict(
+            config::match_redirect(t, config, cwd, &flags, remote),
+            "ask",
+        ),
+        "read" => verdict(config::match_read(t, config, cwd, &flags, remote), default),
         "edit" => verdict(config::match_edit(t, config, cwd, &flags), default),
         "web" => verdict(config::match_web(t, config, &flags), default),
         "mcp" => verdict(config::match_mcp(t, config), default),
@@ -369,6 +368,27 @@ mod tests {
     }
 
     #[test]
+    fn shell_command_with_a_read_cause_is_analyzed_whole() {
+        let r = req(r#"{"command": "zorp .env", "cwd": "/w",
+            "causes": [{"kind": "read", "target": ".env", "rule": null}]}"#);
+        let c = config::parse_config("set default ask\nallow zorp *\n", None).unwrap();
+        assert_eq!(decide(&r, &c), "allow");
+        assert_eq!(r.subject(), "zorp .env");
+        assert_eq!(r.prefill(), ("read", ".env".to_string()));
+        // A server read keeps its flag: only a flagged allow-read exempts it.
+        let remote = req(r#"{"command": "ssh h cat /x", "cwd": "/w",
+            "causes": [{"kind": "read", "target": "/x", "rule": null,
+            "flags": ["@remote", "ssh"]}]}"#);
+        let local = config::parse_config("set default ask\nallow-read /**\n", None).unwrap();
+        assert_eq!(decide_cause(&remote, &remote.causes[0], &local), "ask");
+        let flagged = config::parse_config("set default ask\nallow-read [ssh] /**\n", None);
+        assert_eq!(
+            decide_cause(&remote, &remote.causes[0], &flagged.unwrap()),
+            "allow"
+        );
+    }
+
+    #[test]
     fn parses_stdin_and_env_fallback() {
         let r = req(
             r#"{"command": "ls && zorp x", "cwd": "/w", "tool": "run_command",
@@ -444,6 +464,32 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn check_reevaluates_a_shell_read_cause_with_the_whole_command() {
+        let dir = temp("check-read");
+        std::fs::write(dir.join(".env"), "").unwrap();
+        let target = dir.join(".dippy");
+        std::fs::write(&target, "ask-read **/.env\n").unwrap();
+        let user = dir.join("no-user-config");
+        let files = Files {
+            user: &user,
+            target: &target,
+        };
+        let r = req(&format!(
+            r#"{{"command": "cat .env && zorp x", "cwd": "{}",
+            "causes": [{{"kind": "read", "target": ".env", "rule": null}}]}}"#,
+            dir.display()
+        ));
+        let cause = r.causes.first();
+        let both = |cause, request| Ok(Outcome { cause, request });
+        let allow = check(&r, cause, "allow", "read", "", "**/.env", &files);
+        // The read is resolved; the unknown `zorp x` still asks.
+        assert_eq!(allow.outcome, both("allow", "ask"));
+        let deny = check(&r, cause, "deny", "read", "", "**/.env", &files);
+        assert_eq!(deny.outcome, both("deny", "deny"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

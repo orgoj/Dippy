@@ -196,7 +196,7 @@ fn check_rule(global: &Cli, args: &CheckRuleArgs) -> i32 {
     let flags: config::Flags = args.flag.iter().cloned().collect();
     for value in &args.values {
         let found = match args.kind.as_str() {
-            "read" => config::match_read(value, &config, &cwd, &flags),
+            "read" => config::match_read(value, &config, &cwd, &flags, global.remote),
             "edit" => config::match_edit(value, &config, &cwd, &flags),
             "redirect" => config::match_redirect(value, &config, &cwd, &flags, global.remote),
             "web" => config::match_web(value, &config, &flags),

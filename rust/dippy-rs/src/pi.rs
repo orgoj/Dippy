@@ -245,7 +245,7 @@ fn file_decision(config: &Config, kind: &str, path: &str, cwd: &Path) -> (String
     let found = if kind == "edit" {
         config::match_edit(path, config, cwd, &no_flags)
     } else {
-        config::match_read(path, config, cwd, &no_flags)
+        config::match_read(path, config, cwd, &no_flags, false)
     };
     match found {
         Some(m) => {

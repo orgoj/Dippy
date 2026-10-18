@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.3] - 2026-10-18
+
+### Fixed
+
+- dippy-rs: `deny-read` and `ask-read` also apply to literal arguments of shell commands (non-option words after Bash quote removal, `--opt=value` values, words after `--`) that name an existing file, resolved against the cwd after `cd`, and to the path of `git show rev:path`. Before, `deny-read **/.env*` blocked only the native Read tool while `allow cat *` let `cat .env` through. A missing file (a grep pattern, a commit message) or a path without a matching read rule leaves the command decision unchanged. Over SSH or a wrapper every literal word is checked and only `allow-read` rules with a remote context flag apply, like redirect rules; `dippy check-rule read` honours `--remote`. Best effort: runtime-built paths, globs, files created after the check and files below a directory argument (TASK-32) are not checked.
+
 ## [0.6.2] - 2026-10-17
 
 ### Added

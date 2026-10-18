@@ -2590,9 +2590,7 @@ fn requires_remote_flag(rule: &Rule) -> bool {
         .is_some_and(|req| req.iter().any(|f| !f.starts_with(['$', '@'])))
 }
 
-/// `match_redirect`: last matching redirect rule. A remote target ignores
-/// `allow` rules without a remote context flag, so a locally writable path
-/// never permits a server write.
+/// `match_redirect`: last matching redirect rule.
 pub fn match_redirect(
     target: &str,
     config: &Config,
@@ -2600,32 +2598,7 @@ pub fn match_redirect(
     active: &Flags,
     remote: bool,
 ) -> Option<Match> {
-    let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
-    let find = |normalized_target: &str| {
-        let mut result = None;
-        for rule in &config.redirect_rules {
-            if !check_rule_context_flags(rule, active)
-                || (remote && rule.decision == "allow" && !requires_remote_flag(rule))
-            {
-                continue;
-            }
-            if glob_match(
-                normalized_target,
-                &normalize_redirect_pattern(&rule.pattern, base),
-            ) {
-                result = Some(Match::from_rule(rule));
-            }
-        }
-        result
-    };
-    if !remote {
-        return with_symlink_target(normalize_path(target, cwd), find);
-    }
-    if target.starts_with('/') {
-        find(&collapse_path(target))
-    } else {
-        find(target)
-    }
+    match_path(&config.redirect_rules, target, config, cwd, active, remote)
 }
 
 /// `match_command` (the analyzer never passes redirects here).
@@ -2696,25 +2669,37 @@ pub fn match_after_web(query: &str, config: &Config) -> Option<String> {
     match_after_value(&config.after_web_rules, query)
 }
 
-/// Last path rule matching `file_path` (same globs as redirect rules).
+/// Last path rule matching `file_path`. A remote path is literal and ignores
+/// `allow` rules without a remote context flag, so a local exception never
+/// permits a server access.
 fn match_path(
     rules: &[Rule],
     file_path: &str,
     config: &Config,
     cwd: &Path,
     active: &Flags,
+    remote: bool,
 ) -> Option<Match> {
     let base = config.path_rule_cwd.as_deref().unwrap_or(cwd);
-    with_symlink_target(normalize_path(file_path, cwd), |path| {
+    let find = |path: &str| {
         rules
             .iter()
             .rev()
             .find(|r| {
                 check_rule_context_flags(r, active)
+                    && !(remote && r.decision == "allow" && !requires_remote_flag(r))
                     && glob_match(path, &normalize_redirect_pattern(&r.pattern, base))
             })
             .map(Match::from_rule)
-    })
+    };
+    if !remote {
+        return with_symlink_target(normalize_path(file_path, cwd), find);
+    }
+    if file_path.starts_with('/') {
+        find(&collapse_path(file_path))
+    } else {
+        find(file_path)
+    }
 }
 
 /// The stricter match of a local path and its symlink-resolved target, so a
@@ -2746,11 +2731,27 @@ fn with_symlink_target(path: String, find: impl Fn(&str) -> Option<Match>) -> Op
 }
 
 pub fn match_edit(file_path: &str, config: &Config, cwd: &Path, active: &Flags) -> Option<Match> {
-    match_path(&config.edit_rules, file_path, config, cwd, active)
+    match_path(&config.edit_rules, file_path, config, cwd, active, false)
 }
 
-pub fn match_read(file_path: &str, config: &Config, cwd: &Path, active: &Flags) -> Option<Match> {
-    match_path(&config.read_rules, file_path, config, cwd, active)
+/// Whether `path` names an entry a command in `cwd` could open. The OS
+/// resolves `..` and links as the command would; a dangling link exists, and
+/// only `NotFound` counts as absent, so an unreadable path stays checked.
+pub fn path_exists(path: &str, cwd: &Path) -> bool {
+    match std::fs::symlink_metadata(cwd.join(expand_home_only(path))) {
+        Ok(_) => true,
+        Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+    }
+}
+
+pub fn match_read(
+    file_path: &str,
+    config: &Config,
+    cwd: &Path,
+    active: &Flags,
+    remote: bool,
+) -> Option<Match> {
+    match_path(&config.read_rules, file_path, config, cwd, active, remote)
 }
 
 #[cfg(test)]
@@ -3337,13 +3338,19 @@ mod tests {
         assert_eq!(m.decision, "deny");
         assert_eq!(match_edit("/tmp/wx/a", &c, cwd, &Flags::new()), None);
         assert_eq!(
-            match_read("src/x.rs", &c, cwd, &Flags::new())
+            match_read("src/x.rs", &c, cwd, &Flags::new(), false)
                 .unwrap()
                 .pattern,
             "src/*"
         );
-        assert_eq!(match_read("/tmp/w/srcx/y", &c, cwd, &Flags::new()), None);
-        assert_eq!(match_read("/tmp/w/a/b.txt", &c, cwd, &Flags::new()), None);
+        assert_eq!(
+            match_read("/tmp/w/srcx/y", &c, cwd, &Flags::new(), false),
+            None
+        );
+        assert_eq!(
+            match_read("/tmp/w/a/b.txt", &c, cwd, &Flags::new(), false),
+            None
+        );
     }
 
     #[test]
@@ -3369,7 +3376,7 @@ mod tests {
         // A link to a denied file inside the project.
         assert_eq!(edit("src/alias"), s("deny"));
         // No rule for the target: no longer allowed by the link's path.
-        assert_eq!(match_read(&path("src/out/id"), &c, &w, &flags), None);
+        assert_eq!(match_read(&path("src/out/id"), &c, &w, &flags, false), None);
         assert_eq!(
             match_redirect(&path("src/out/id"), &c, &w, &flags, false),
             None
@@ -3494,7 +3501,7 @@ mod tests {
         assert_eq!(m.pattern, "${D}/out/**");
         assert_eq!(edit(&c, "/w/d/src/a.rs").as_deref(), Some("allow"));
         assert_eq!(edit(&c, "/w/d/a.rs"), None);
-        let m = match_read("/w/d/secret/k", &c, cwd, &flags).unwrap();
+        let m = match_read("/w/d/secret/k", &c, cwd, &flags, false).unwrap();
         assert_eq!(
             (m.decision.as_str(), m.pattern.as_str()),
             ("deny", "${D}/secret/*")
@@ -3644,7 +3651,9 @@ mod tests {
             let m = match_redirect("/w/s/f", &c, cwd, &flags, false).unwrap();
             assert_eq!(m.decision, "ask");
             assert_eq!(
-                match_read("/w/a/b", &c, cwd, &flags).unwrap().decision,
+                match_read("/w/a/b", &c, cwd, &flags, false)
+                    .unwrap()
+                    .decision,
                 "ask"
             );
             assert_eq!(decide(&c, "fictpush --x").as_deref(), Some("ask"));

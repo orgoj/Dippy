@@ -32,9 +32,13 @@ resolved against cwd (`git -C .`, `jsr:@std/x`), so a `?*` or `*:*` word never
 matches it: use `/**` for a path value (`deny git -C /** push *`) and `**jsr:**`
 for a specifier.
 
-`deny-read` covers only native read tools, not shell readers such as `cat`, `ls`
-or `rg`. Protect a path from them with a command rule on the argument:
-`deny * ~/.secret/** *` and `deny * ~/.secret *`.
+`deny-read` and `ask-read` also filter literal shell arguments that name an
+existing file (`cat .env`, `--file=.env`; `git show HEAD:.env` always), even
+over `allow cat *`; a missing file or no match leaves the command decision
+unchanged. They miss runtime-built paths (`cat $(echo .env)`, `cat "$F"`,
+globs), files created after the check and files below a directory argument
+(`grep -r KEY .`). Over SSH or a wrapper every word is checked and only an
+`allow-read` with a remote context flag (`allow-read [ssh] /**`) exempts it.
 
 Give every `deny` and `ask` message the permitted alternative, because the agent
 sees only the message, never the config: `deny git -C * "Use: cd <repo> && git

@@ -1,10 +1,11 @@
 ---
 id: TASK-29
 title: Enforce deny-read/ask-read rules on path arguments of shell commands
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@dippy_dev'
 created_date: '2026-10-18 15:43'
-updated_date: '2026-10-18 17:54'
+updated_date: '2026-10-18 19:05'
 labels: []
 dependencies: []
 priority: high
@@ -31,18 +32,26 @@ Full brief: /home/michael/.hcom/tmp/dippy-read-rules-command-args.md (copied fro
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A `deny-read` pattern matching any path-like argument denies the whole shell command with the message of that read rule, in normal and `DIPPY_CONFIG_ONLY` mode
-- [ ] #2 An `ask-read` pattern matching a path argument yields ask; a path with no matching read rule leaves the command decision unchanged versus today; `allow-read` is never required for shell arguments
-- [ ] #3 Path extraction handles non-option arguments, `--opt=value`, `--opt value`, arguments after `--`, `~` expansion, cwd changes via `cd` in compound commands and subshells, and `git show <rev>:<path>`
-- [ ] #4 Paths are normalized like the native read matcher (`..`, `//`, trailing `/`, symlink target); a symlink pointing to a denied target is denied; decisions never depend on file existence
-- [ ] #5 Rust tests cover at least: `cat .env`, `cat -- .env`, `head ./x/../.env`, `grep -r KEY .`, `rg KEY group_vars`, `git show HEAD:.env`, `git show HEAD:./x/../.env`, `base64 .env`, `tar czf out.tgz secrets/`, symlink `link -> .env`, `(cd secrets && cat key)`, `cd secrets; cat key`, `cat .env.example` allowed by `allow-read **/.env*.example*`, an `ask-read` path, and no read rule
-- [ ] #6 Documentation (README, using-dippy skill) describes the argument filter and the runtime-built-path limitation (`cat $(echo .env)`)
-- [ ] #7 Verification: `dippy --cmd` and `dippy --config-only FILE --cmd` evaluations of the test cases against `~/.dippy/config` and `~/.hcom/dippy/security.dippy` match the expected decisions; existing rule tests stay green; `just install-rs` completion gate passed
-- [ ] #8 Recursive directory arguments (grep -r, rg, fd, tar c) are out of scope; tracked in TASK-32 (user decision)
+- [x] #1 A `deny-read` pattern matching any path-like argument denies the whole shell command with the message of that read rule, in normal and `DIPPY_CONFIG_ONLY` mode
+- [x] #2 An `ask-read` pattern matching a path argument yields ask; a path with no matching read rule leaves the command decision unchanged versus today; `allow-read` is never required for shell arguments
+- [x] #3 Documentation (README, using-dippy skill) describes the argument filter and the runtime-built-path limitation (`cat $(echo .env)`)
+- [x] #4 Verification: `dippy --cmd` and `dippy --config-only FILE --cmd` evaluations of the test cases against `~/.dippy/config` and `~/.hcom/dippy/security.dippy` match the expected decisions; existing rule tests stay green; `just install-rs` completion gate passed
+- [x] #5 Recursive directory arguments (grep -r, rg, fd, tar c) are out of scope; tracked in TASK-32 (user decision)
+- [x] #6 Path extraction handles non-option arguments after Bash quote removal, --opt=value, --opt value, arguments after --, cwd changes via cd in compound commands and subshells, and the path of git show rev:path (only git show)
+- [x] #7 A local argument is checked only when it names an existing entry (symlink_metadata; only NotFound counts as absent, a dangling link exists); git show rev:path and every remote word are always checked; matching normalizes like the native read matcher (.., //, symlink target). Best effort: files created after the check (incl. same-command symlinks), globs and runtime-built paths are documented limitations (user decision)
+- [x] #8 Rust tests cover: cat .env, quoted/escaped/concatenated spellings, cat -- .env, head ./x/../.env, --file=.env, base64 .env, tar czf out.tgz secrets/key, (cd secrets && cat key), cd secrets; cat key, dangling and resolved symlinks, cat .env.example allowed by allow-read **/.env*.example*, an ask-read path, no read rule, missing-file grep patterns and commit messages unchanged, git show HEAD:.env without a worktree file, remote words, and askpass/dashboard re-evaluation of a shell read cause
 <!-- AC:END -->
 
 ## Implementation Notes
 
 <!-- SECTION:NOTES:BEGIN -->
 User decision 2026-10-18: recursive directory arguments split into TASK-32, not addressed now.
+
+First version (every literal word) produced false positives in security.dippy (grep -rn credentials, commit messages); user chose the existence gate; agent_review pre-implementation review applied: NotFound-only absence, Bash quote removal via decode_literal_word, rev:path only for git show, lstat on cwd.join(word), docs state best effort. Remote: every word checked, flagged allow-read exempts (user decision).
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+deny-read/ask-read filter literal shell arguments naming an existing file (git show rev:path and remote words always), merged via combine in analyze_command; match_path unified for read/edit/redirect with remote semantics; askpass decide() analyzes shell requests whole. Verified with cargo test (444+38, empty HOME), clippy, just check, try-rules.sh against ~/.dippy/config and security.dippy, and normal-mode dippy --cmd.
+<!-- SECTION:FINAL_SUMMARY:END -->

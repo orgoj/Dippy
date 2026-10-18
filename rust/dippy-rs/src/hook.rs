@@ -1359,7 +1359,7 @@ fn check_file_tool(
     let active = config::env_context_flags(config);
     let kind = file_kind(tool_name);
     let found = if kind == "read" {
-        config::match_read(file_path, config, cwd, &active)
+        config::match_read(file_path, config, cwd, &active, false)
     } else {
         config::match_edit(file_path, config, cwd, &active)
     }?;
@@ -1414,7 +1414,7 @@ fn multi_file(hook: Hook, config: &Config, tool_name: &str, paths: &[Value], cwd
             return hook.ask(reason, s);
         };
         let found = if read {
-            config::match_read(path, config, cwd, &config::Flags::new())
+            config::match_read(path, config, cwd, &config::Flags::new(), false)
         } else {
             config::match_edit(path, config, cwd, &config::Flags::new())
         };
