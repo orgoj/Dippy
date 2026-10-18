@@ -4,6 +4,7 @@ title: Enforce deny-read/ask-read rules on path arguments of shell commands
 status: To Do
 assignee: []
 created_date: '2026-10-18 15:43'
+updated_date: '2026-10-18 17:54'
 labels: []
 dependencies: []
 priority: high
@@ -34,8 +35,14 @@ Full brief: /home/michael/.hcom/tmp/dippy-read-rules-command-args.md (copied fro
 - [ ] #2 An `ask-read` pattern matching a path argument yields ask; a path with no matching read rule leaves the command decision unchanged versus today; `allow-read` is never required for shell arguments
 - [ ] #3 Path extraction handles non-option arguments, `--opt=value`, `--opt value`, arguments after `--`, `~` expansion, cwd changes via `cd` in compound commands and subshells, and `git show <rev>:<path>`
 - [ ] #4 Paths are normalized like the native read matcher (`..`, `//`, trailing `/`, symlink target); a symlink pointing to a denied target is denied; decisions never depend on file existence
-- [ ] #5 Recursive directory arguments (`grep -r X .`, `rg X .`, `fd . dir`, `tar c dir`) are denied when a `deny-read` pattern can match under that directory, with a message naming the alternative; or this case is tracked as an explicit follow-up task approved by the user
-- [ ] #6 Rust tests cover at least: `cat .env`, `cat -- .env`, `head ./x/../.env`, `grep -r KEY .`, `rg KEY group_vars`, `git show HEAD:.env`, `git show HEAD:./x/../.env`, `base64 .env`, `tar czf out.tgz secrets/`, symlink `link -> .env`, `(cd secrets && cat key)`, `cd secrets; cat key`, `cat .env.example` allowed by `allow-read **/.env*.example*`, an `ask-read` path, and no read rule
-- [ ] #7 Documentation (README, using-dippy skill) describes the argument filter and the runtime-built-path limitation (`cat $(echo .env)`)
-- [ ] #8 Verification: `dippy --cmd` and `dippy --config-only FILE --cmd` evaluations of the test cases against `~/.dippy/config` and `~/.hcom/dippy/security.dippy` match the expected decisions; existing rule tests stay green; `just install-rs` completion gate passed
+- [ ] #5 Rust tests cover at least: `cat .env`, `cat -- .env`, `head ./x/../.env`, `grep -r KEY .`, `rg KEY group_vars`, `git show HEAD:.env`, `git show HEAD:./x/../.env`, `base64 .env`, `tar czf out.tgz secrets/`, symlink `link -> .env`, `(cd secrets && cat key)`, `cd secrets; cat key`, `cat .env.example` allowed by `allow-read **/.env*.example*`, an `ask-read` path, and no read rule
+- [ ] #6 Documentation (README, using-dippy skill) describes the argument filter and the runtime-built-path limitation (`cat $(echo .env)`)
+- [ ] #7 Verification: `dippy --cmd` and `dippy --config-only FILE --cmd` evaluations of the test cases against `~/.dippy/config` and `~/.hcom/dippy/security.dippy` match the expected decisions; existing rule tests stay green; `just install-rs` completion gate passed
+- [ ] #8 Recursive directory arguments (grep -r, rg, fd, tar c) are out of scope; tracked in TASK-32 (user decision)
 <!-- AC:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+User decision 2026-10-18: recursive directory arguments split into TASK-32, not addressed now.
+<!-- SECTION:NOTES:END -->
