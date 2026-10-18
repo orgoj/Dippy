@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.5] - 2026-10-18
+
+### Fixed
+
+- dippy-rs: the deny for several `cd` in one command names the `cd` commands found, says why it is denied, and shows the corrected form with the first `cd` (`2 cd in one command (cd a, cd ../b): ... Fix: keep the first cd and name the other places relative to it (cd a && cat ../other/file), or run each cd in its own command`).
+
 ## [0.6.4] - 2026-10-18
 
 ### Fixed

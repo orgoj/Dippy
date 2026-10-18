@@ -278,13 +278,25 @@ fn analyze_node(node: &Node, config: &Config, cwd: &Path, flags: &Flags, remote:
             let is_cd = |p: &Node| matches!(p, Node::Command { words, .. } if words.first().is_some_and(|w| strip_quotes(&w.value) == "cd"));
             // One cd moves the cwd of the commands after it; with several
             // (`cd a || cd b`) the cwd of later commands is uncertain.
-            if !remote && parts.iter().filter(|p| is_cd(p)).count() > 1 {
-                return Decision::new(
-                    Action::Deny,
-                    "several cd in one command: use one cd per command (cd DIR && CMD) \
-                     or paths relative to the current directory",
-                )
-                .flags(&lf);
+            let cds: Vec<String> = parts
+                .iter()
+                .filter_map(|p| match p {
+                    Node::Command { words, .. } if is_cd(p) => {
+                        Some(words.iter().map(word_value).collect::<Vec<_>>().join(" "))
+                    }
+                    _ => None,
+                })
+                .collect();
+            if !remote && cds.len() > 1 {
+                let reason = format!(
+                    "{} cd in one command ({}): Dippy follows only one directory change \
+                     per command. Fix: keep the first cd and name the other places relative \
+                     to it ({} && cat ../other/file), or run each cd in its own command",
+                    cds.len(),
+                    cds.join(", "),
+                    cds[0]
+                );
+                return Decision::new(Action::Deny, reason).flags(&lf);
             }
             let mut effective_cwd = cwd.to_path_buf();
             let mut decisions = Vec::new();
@@ -2090,11 +2102,18 @@ mod tests {
         // `key` before the cd is the starting directory's (missing) file.
         let d = decide_in(&dir, READ_RULES, "cat key; cd secrets");
         assert_ne!(d.action, Action::Deny, "{}", d.reason);
-        for cmd in ["cd a && cd ../secrets && cat key", "cd a || cd b"] {
-            let d = decide_in(&dir, READ_RULES, cmd);
-            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
-            assert!(d.reason.contains("cd DIR && CMD"), "{}", d.reason);
-        }
+        let d = decide_in(&dir, READ_RULES, "cd a && cd ../secrets && cat key");
+        assert_eq!(d.action, Action::Deny, "{}", d.reason);
+        assert_eq!(
+            d.reason,
+            "2 cd in one command (cd a, cd ../secrets): Dippy follows only one \
+             directory change per command. Fix: keep the first cd and name the \
+             other places relative to it (cd a && cat ../other/file), or run \
+             each cd in its own command"
+        );
+        let d = decide_in(&dir, READ_RULES, "cd a || cd b");
+        assert_eq!(d.action, Action::Deny, "{}", d.reason);
+        assert!(d.reason.starts_with("2 cd in one command (cd a, cd b)"));
         let _ = std::fs::remove_dir_all(&dir);
     }
 
