@@ -2165,6 +2165,20 @@ mod tests {
     }
 
     #[test]
+    fn read_rules_skip_words_that_cannot_name_a_file() {
+        let dir = fixture("readarg-name", &["file"]);
+        let rules = format!("allow zorp *\ndeny-read {}/** \"no\"\n", dir.display());
+        let long = format!("zorp -- '{}'", "word ".repeat(60));
+        for cmd in [long.as_str(), "zorp file/x"] {
+            let d = decide_in(&dir, &rules, cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
+        }
+        let d = decide_in(&dir, &rules, "zorp file");
+        assert_eq!(d.action, Action::Deny, "{}", d.reason);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn wrapper_subcommand_scopes_unwrapping() {
         let rules = "wrapper zorpcli --subcommand run --cmd -- --context -t --script-stdin -\n\
                      ask [zorpcli] *\n\

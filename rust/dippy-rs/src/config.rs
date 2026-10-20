@@ -2744,7 +2744,13 @@ pub fn match_edit(file_path: &str, config: &Config, cwd: &Path, active: &Flags) 
 pub fn path_exists(path: &str, cwd: &Path) -> bool {
     match std::fs::symlink_metadata(cwd.join(expand_home_only(path))) {
         Ok(_) => true,
-        Err(e) => e.kind() != std::io::ErrorKind::NotFound,
+        // Fail closed except where the word cannot name a file at all.
+        Err(e) => !matches!(
+            e.kind(),
+            std::io::ErrorKind::NotFound
+                | std::io::ErrorKind::NotADirectory
+                | std::io::ErrorKind::InvalidFilename
+        ),
     }
 }
 

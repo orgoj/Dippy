@@ -2067,7 +2067,9 @@ deny-read <glob> "message"
   redirect targets) that name an existing file, resolved against the cwd after
   `cd`, plus the path of `git show`/`git cat-file` `rev:path`: a match denies
   or asks for the whole command, even over an `allow` command rule; no match or
-  a missing file leaves it unchanged. One `cd` moves the cwd of later commands;
+  a missing file leaves it unchanged (as does a word that cannot name a file:
+  longer than the file-name limit or through a regular file; other lookup
+  errors such as permission denied count as existing). One `cd` moves the cwd of later commands;
   several `cd` in one command are denied. Over SSH or a wrapper every literal
   word is checked and only an `allow-read` with a remote context flag exempts
   one. Best effort: runtime-built paths (`cat $(echo .env)`, `cat "$F"`,

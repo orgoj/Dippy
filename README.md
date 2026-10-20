@@ -427,7 +427,7 @@ even when `allow cat *` matches. Candidates are literal non-option words
 values, every word after `--`, and input redirect targets (`cat < .env`),
 resolved against the cwd after `cd`, that name an existing file; a missing file
 cannot be read, so grep patterns and commit messages (`grep -rn credentials
-src/`) pass. The path of `git show rev:path` and `git cat-file -p rev:path` is
+src/`) pass, as do words longer than the file-name limit (long messages). The path of `git show rev:path` and `git cat-file -p rev:path` is
 always checked, also with git global options and behind wrappers such as
 `timeout`. A single `cd` moves the cwd of the commands after it; a command
 with several `cd` (`cd a && cd b`, `cd a || cd b`) is denied. A later
