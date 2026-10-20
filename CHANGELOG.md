@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.8] - 2026-10-20
+
+### Fixed
+
+- dippy-rs: command rules match the arguments Bash passes, not the written text. Mid-word quotes, backslash escapes and ANSI-C quoting (`$'...'`) are removed first, so `zorp --dan\ger`, `zorp --dan''ger` and `zorp $'--dan\x67er'` hit `ask zorp * --danger *`. A word with a parameter, command or arithmetic expansion or an unquoted glob is matched as written, as before.
+- dippy-rs: an unquoted brace list (`zorp {--danger,x}`) is also matched as expanded; the expansion can only make the decision stricter, and an `allow` asks when the brace syntax is not supported (`{a..b}`, more than 64 words).
+- dippy-rs: an argument that is an existing symlink is also matched against its target, and the stricter decision wins (no match ranks stricter than `allow`), so a link to a denied path hits the deny and an allow for the link spelling alone asks. Remote words stay literal.
+- dippy-rs: CLI handlers see the decoded, brace-expanded arguments too, so `git remote {remove,origin}` and `env zorp --dan\ger` are judged as Bash runs them.
+- dippy-rs: only an unquoted `NAME=value` prefix counts as an environment assignment; `FOO\=bar zorp` runs the command `FOO=bar` and is no longer matched as `zorp`.
+
 ## [0.6.7] - 2026-10-20
 
 ### Fixed

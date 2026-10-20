@@ -14,7 +14,9 @@ use regex::Regex;
 
 use crate::allowlists::{is_simple_safe, is_wrapper_command};
 use crate::ast::{self, Node, Word};
-use crate::bash::{decode_literal_word, shell_values};
+use crate::bash::{
+    Decoded, assignment_count, decode_word, expand_braces, shell_values, shell_word,
+};
 use crate::cli::{self, Action as HAction, HandlerContext};
 use crate::config::{self, Config, Flags, SimpleCommand, WrapperInfo};
 use crate::parser::strip_quotes;
@@ -884,14 +886,6 @@ fn word_value(w: &Word) -> String {
     strip_quotes(&w.value).to_string()
 }
 
-fn base_index(words: &[String]) -> usize {
-    let mut i = 0;
-    while i < words.len() && words[i].contains('=') && !words[i].starts_with('-') {
-        i += 1;
-    }
-    i
-}
-
 /// `str.strip("$()")`.
 fn strip_dollar_parens(s: &str) -> &str {
     s.trim_matches(|c| c == '$' || c == '(' || c == ')')
@@ -914,8 +908,12 @@ fn analyze_command(
     let mut decisions = Vec::new();
     let words: Vec<String> = node_words.iter().map(word_value).collect();
     let raw_words: Vec<String> = node_words.iter().map(|w| w.value.clone()).collect();
-    let has_exp: Vec<bool> = node_words.iter().map(|w| !w.parts.is_empty()).collect();
-    let base_idx = base_index(&words);
+    // ANSI-C quoting is decoded, not expanded.
+    let has_exp: Vec<bool> = node_words
+        .iter()
+        .map(|w| w.parts.iter().any(|p| !matches!(p, Node::AnsiC)))
+        .collect();
+    let base_idx = assignment_count(&words, &raw_words);
     let base = words.get(base_idx).cloned().unwrap_or_default();
     let handler = cli::get_handler(&base);
     let simple_safe = is_simple_safe(&base);
@@ -1122,25 +1120,47 @@ fn read_rule_decision(
     )
 }
 
-/// The value Bash passes for a literal word: quote removal plus expansion of
-/// a leading unquoted `~` or `~/` (kept literal when remote). A quoted `~`
-/// becomes `./~`, so path matching never expands it. `None` for other
-/// expansions and globs.
-fn literal_arg(raw: &str, remote: bool) -> Option<String> {
-    if raw == "~" || raw.starts_with("~/") {
-        let rest = decode_literal_word(&raw[1..], true)?;
-        let home = if remote {
-            "~".to_string()
-        } else {
-            paths::home().to_string_lossy().into_owned()
-        };
-        return Some(format!("{home}{rest}"));
+/// Tokens, raw words and expansion flags after Bash brace expansion of the
+/// raw words; unchanged without raw words. `None` when a word has
+/// unsupported brace syntax or an ANSI-C escape without a text value.
+fn brace_expanded(
+    tokens: &[String],
+    raw_words: &[String],
+    has_exp: &[bool],
+) -> Option<(Vec<String>, Vec<String>, Vec<bool>)> {
+    if raw_words.len() != tokens.len() {
+        return Some((tokens.to_vec(), raw_words.to_vec(), has_exp.to_vec()));
     }
-    let value = decode_literal_word(raw, true)?;
-    Some(if value.starts_with('~') {
-        format!("./{value}")
-    } else {
-        value
+    let mut out = (Vec::new(), Vec::new(), Vec::new());
+    for (k, (token, raw)) in tokens.iter().zip(raw_words).enumerate() {
+        let pieces = expand_braces(raw)?;
+        let unchanged = pieces.len() == 1 && pieces[0] == *raw;
+        for piece in pieces {
+            if decode_word(&piece, false) == Decoded::Unsupported {
+                return None;
+            }
+            out.0.push(if unchanged {
+                token.clone()
+            } else {
+                strip_quotes(&piece).to_string()
+            });
+            out.1.push(piece);
+            out.2.push(has_exp.get(k).copied().unwrap_or(false));
+        }
+    }
+    Some(out)
+}
+
+/// The value Bash passes for a literal word (`shell_word`) with a leading
+/// unquoted `~` expanded (kept literal when remote). `None` for expansions
+/// and globs.
+fn literal_arg(raw: &str, remote: bool) -> Option<String> {
+    let Decoded::Literal(value) = shell_word(raw) else {
+        return None;
+    };
+    Some(match value.strip_prefix('~') {
+        Some(rest) if !remote => format!("{}{rest}", paths::home().to_string_lossy()),
+        _ => value,
     })
 }
 
@@ -1281,7 +1301,7 @@ fn analyze_simple_command(
     if words.is_empty() {
         return Decision::allow("empty").flags(flags);
     }
-    let i = base_index(words);
+    let i = assignment_count(words, raw_words);
     if let Some(var) = words[..i].iter().find_map(|w| config::code_env_name(w)) {
         let sc = SimpleCommand {
             words,
@@ -1515,15 +1535,22 @@ fn analyze_simple_command(
         return analyze(&inner_cmd, config, cwd, Some(&inner_flags), true);
     }
 
-    // 7. CLI-specific handlers.
+    // 7. CLI-specific handlers, on the argv Bash passes.
     if let Some(handler) = cli::get_handler(base) {
+        let Some((args, raw_args, args_exp)) =
+            brace_expanded(tokens, &slice_str(raw_words, i), &slice_bool(has_exp, i))
+        else {
+            return Decision::ask(format!("{base}: cannot decode an argument"))
+                .flags(flags)
+                .suggest(&suggestion);
+        };
         let ctx = HandlerContext {
-            tokens: tokens.to_vec(),
+            tokens: shell_values(&args, &raw_args),
             remote,
             cwd: cwd.to_path_buf(),
             config: Some(config),
-            word_has_expansions: slice_bool(has_exp, i),
-            raw_words: slice_str(raw_words, i),
+            word_has_expansions: args_exp,
+            raw_words: raw_args,
         };
         let result = (handler.classify)(&ctx);
         let desc = result
@@ -2268,6 +2295,140 @@ mod tests {
             decide_with(base, "zorpwrap -t h run \"echo $HOME\"").action,
             Action::Allow
         );
+    }
+
+    const DANGER_RULES: &str = "allow zorp *\n\
+                                ask zorp * --danger * \"no danger\"\n\
+                                ask zorp --mode=danger\n\
+                                allow zorpopt *\n\
+                                ask [opts: --mode=danger] zorpopt\n\
+                                allow zorpitem *\n\
+                                ask-opt zorpitem --danger\n\
+                                wrapper zorpwrap --cmd run --context -t\n\
+                                allow [zorpwrap] zorp *\n\
+                                ask [zorpwrap] zorp * --danger *\n";
+
+    #[test]
+    fn rules_match_the_decoded_argument() {
+        for cmd in [
+            "zorpopt --mode=$'dan\\x67er'",
+            "zorpopt --mode dan\\ger",
+            "zorp --danger",
+            "zorp --dan\\ger",
+            "zorp \\--danger",
+            "zorp --dan''ger",
+            "zorp --dan\"g\"er",
+            "zorp $'--dan\\x67er'",
+            "zorp --dan$'g'er",
+            "zorp $'--danger\\0suffix'",
+            "zorp \"--mode=dan\"ger",
+            "zorp {--danger,x}",
+            "zorp {--danger,}",
+            "zorp {1..3}",
+            "zorp $'\\xff'",
+            "zorpitem --dan\\ger",
+            "zo\\rp --danger",
+            "env zorp --dan\\ger",
+            "env zorp $'\\xff'",
+            "sudo zorp --dan''ger",
+            "A=1 zorp --dan\\ger",
+            "zorpwrap -t h run 'zorp --dan\\ger'",
+            "zorpwrap -t h run 'zorp {--danger,x}'",
+        ] {
+            let d = decide_with(DANGER_RULES, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+        for cmd in [
+            "zorp --dang",
+            "zorp '--danger x'",
+            "zorp {a,b}",
+            "zorp --dan$X",
+            "zorp \"--dan${X}ger\"",
+            "zorp --dan\\ger*",
+        ] {
+            let d = decide_with(DANGER_RULES, cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
+        }
+    }
+
+    #[test]
+    fn handlers_see_brace_expanded_arguments() {
+        for cmd in [
+            "git remote {remove,origin}",
+            "env git remote {remove,origin}",
+            "git remote {1..2}",
+            "git remote re\\move origin",
+        ] {
+            assert_eq!(decide(cmd), Action::Ask, "{cmd}");
+        }
+        assert_eq!(decide("git status {a,b}"), Action::Allow);
+    }
+
+    #[test]
+    fn only_unquoted_names_assign() {
+        let rules = "allow zorp *\n";
+        assert_eq!(decide_with(rules, "A=1 zorp x").action, Action::Allow);
+        for cmd in ["FOO\\=bar zorp", "\"FOO=bar\" zorp", "F\\OO=bar zorp"] {
+            let d = decide_with(rules, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+    }
+
+    #[test]
+    fn quoted_tilde_is_a_relative_path() {
+        let rules = "allow zorp *\nask zorp ~/** \"home\"\n";
+        let d = decide_with(rules, "zorp ~/x");
+        assert_eq!(d.action, Action::Ask, "{}", d.reason);
+        let d = decide_with(rules, "zorp '~/x'");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
+    }
+
+    #[test]
+    fn rules_match_symlink_targets() {
+        let dir = fixture("rule-link", &["deny/", "deny/f", "safe/", "safe/f"]);
+        std::os::unix::fs::symlink(dir.join("deny/f"), dir.join("link")).unwrap();
+        std::os::unix::fs::symlink(dir.join("deny"), dir.join("safe/up")).unwrap();
+        let rules = format!(
+            "allow zorp *\n\
+             deny zorp * {d}/deny/** * \"no deny\"\n\
+             allow zorpitem *\n\
+             deny-opt zorpitem {d}/deny/f\n\
+             wrapper zorpwrap --cmd run --context -t\n\
+             allow [zorpwrap] zorp *\n",
+            d = dir.display()
+        );
+        let abs = format!("zorp {}/link", dir.display());
+        let up = format!("zorp {}/safe/up/f", dir.display());
+        for cmd in [
+            "zorp link",
+            "zorp ./link",
+            abs.as_str(),
+            up.as_str(),
+            "zorp {link,x}",
+            "zorpitem link",
+            "zorpitem {x,link}",
+        ] {
+            let d = decide_in(&dir, &rules, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        // A file that is not a link, and remote words, stay as written.
+        for cmd in ["zorp safe/f", "zorpwrap -t h run 'zorp link'"] {
+            let d = decide_in(&dir, &rules, cmd);
+            assert_eq!(d.action, Action::Allow, "{cmd}: {}", d.reason);
+        }
+        // An allow for the link spelling must also allow the target.
+        let exact = "allow zorpx link\nallow zorpx safe/f\nallow [opts:] zorpo link\n";
+        for cmd in ["zorpx link", "zorpo link"] {
+            let d = decide_in(&dir, exact, cmd);
+            assert_eq!(d.action, Action::Ask, "{cmd}: {}", d.reason);
+        }
+        let d = decide_in(&dir, exact, "zorpx safe/f");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
+        // A link in the cwd itself is no argument link.
+        std::os::unix::fs::symlink(dir.join("safe"), dir.join("cwdlink")).unwrap();
+        let d = decide_in(&dir.join("cwdlink"), "allow zorpx f\n", "zorpx f");
+        assert_eq!(d.action, Action::Allow, "{}", d.reason);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

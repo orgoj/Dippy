@@ -12,7 +12,7 @@ use std::sync::LazyLock;
 
 use regex::Regex;
 
-use crate::bash::decode_literal_word;
+use crate::bash::{Decoded, assignment_count, decode_literal_word, expand_braces, shell_word};
 use crate::fnmatch::{fnmatchcase, wordmatch};
 use crate::parser::tokenize;
 use crate::paths;
@@ -2453,6 +2453,113 @@ fn collapse_remote_words(words: &[String]) -> Vec<String> {
         .collect()
 }
 
+/// One argv the command can run as. `literal`: every word is a known value.
+struct Argv {
+    words: Vec<String>,
+    literal: bool,
+}
+
+impl Argv {
+    /// Append the value Bash passes for `raw`, or `token` when it is unknown.
+    fn push(&mut self, raw: &str, token: &str, unsupported: &mut bool) {
+        let value = match shell_word(raw) {
+            // Option blocks never match a tilde expansion.
+            Decoded::Literal(v) => {
+                self.literal &= !raw.starts_with('~');
+                v
+            }
+            other => {
+                self.literal = false;
+                *unsupported |= other == Decoded::Unsupported;
+                token.to_string()
+            }
+        };
+        self.words.push(value);
+    }
+}
+
+/// The argv after brace expansion of the words after the assignments, or
+/// `None` without a brace list. Unsupported brace syntax sets `unsupported`.
+fn brace_argv(
+    words: &[String],
+    raw_words: &[String],
+    assignments: usize,
+    unsupported: &mut bool,
+) -> Option<Argv> {
+    let mut argv = Argv {
+        words: Vec::new(),
+        literal: true,
+    };
+    let mut expanded = false;
+    for (j, (word, raw)) in words.iter().zip(raw_words).enumerate() {
+        let Some(pieces) = (j >= assignments).then(|| expand_braces(raw)).flatten() else {
+            *unsupported |= j >= assignments;
+            argv.push(raw, word, unsupported);
+            continue;
+        };
+        if pieces.len() == 1 && pieces[0] == *raw {
+            argv.push(raw, word, unsupported);
+            continue;
+        }
+        expanded = true;
+        for piece in &pieces {
+            argv.push(piece, crate::parser::strip_quotes(piece), unsupported);
+        }
+    }
+    expanded.then_some(argv)
+}
+
+/// The argv with each argument that is an existing local path through a
+/// symlink replaced by its target, or `None` when no link is involved. A link
+/// in the cwd itself does not count.
+fn symlink_argv(argv: &Argv, assignments: usize, cwd: &Path) -> Option<Argv> {
+    let real_cwd = paths::resolve(cwd);
+    let mut changed = false;
+    let words = argv
+        .words
+        .iter()
+        .enumerate()
+        .map(|(j, word)| {
+            if j <= assignments
+                || matches!(
+                    classify_token(word),
+                    TokenKind::Url | TokenKind::Variable | TokenKind::UserHome
+                )
+                || !path_exists(word, cwd)
+            {
+                return word.clone();
+            }
+            let path = expand_home_only(word);
+            let target = paths::resolve(&cwd.join(&path))
+                .to_string_lossy()
+                .into_owned();
+            if target == collapse_path(&real_cwd.join(&path).to_string_lossy()) {
+                return word.clone();
+            }
+            changed = true;
+            target
+        })
+        .collect();
+    changed.then_some(Argv {
+        words,
+        literal: argv.literal,
+    })
+}
+
+/// How strict a match is: deny, ask, no match, then allow (or delegate).
+fn strictness(m: &Option<Match>) -> u8 {
+    match m.as_ref().map(|m| m.decision.as_str()) {
+        Some("deny") => 0,
+        Some("ask") => 1,
+        None => 2,
+        _ => 3,
+    }
+}
+
+/// The last rule matching the argv Bash passes. Every brace-expanded form
+/// and symlink target must match as well; the strictest result wins (no
+/// match ranks stricter than `allow`). A word Dippy cannot decode turns an
+/// `allow` into an `ask`.
 fn match_words(
     cmd: &SimpleCommand,
     config: &Config,
@@ -2461,6 +2568,69 @@ fn match_words(
     remote: bool,
 ) -> Option<Match> {
     let words = cmd.words;
+    let assignments = assignment_count(words, cmd.raw_words);
+    let mut unsupported = false;
+    let mut argvs = Vec::new();
+    if cmd.raw_words.len() == words.len() && !words.is_empty() {
+        let mut argv = Argv {
+            words: Vec::new(),
+            literal: true,
+        };
+        for (word, raw) in words.iter().zip(cmd.raw_words) {
+            argv.push(raw, word, &mut unsupported);
+        }
+        argvs.push(argv);
+        argvs.extend(brace_argv(
+            words,
+            cmd.raw_words,
+            assignments,
+            &mut unsupported,
+        ));
+    } else {
+        argvs.push(Argv {
+            words: words.to_vec(),
+            literal: true,
+        });
+    }
+    if !remote {
+        let links: Vec<Argv> = argvs
+            .iter()
+            .filter_map(|a| symlink_argv(a, assignments, cwd))
+            .collect();
+        argvs.extend(links);
+    }
+    let any_exp = cmd.word_has_expansions.iter().any(|b| *b);
+    let mut result: Option<Match> = None;
+    for (k, argv) in argvs.iter().enumerate() {
+        let m = match_argv(argv, assignments, any_exp, config, cwd, active, remote);
+        if k == 0 || strictness(&m) < strictness(&result) {
+            result = m;
+        }
+    }
+    if unsupported && strictness(&result) == 3 {
+        result = result.map(|m| Match {
+            decision: "ask".into(),
+            message: Some(format!(
+                "{}: cannot decode an argument",
+                m.message.as_deref().unwrap_or(&m.pattern)
+            )),
+            ..m
+        });
+    }
+    result
+}
+
+/// `match_words` for one argv.
+fn match_argv(
+    argv: &Argv,
+    assignments: usize,
+    any_exp: bool,
+    config: &Config,
+    cwd: &Path,
+    active: &Flags,
+    remote: bool,
+) -> Option<Match> {
+    let words = argv.words.as_slice();
     let resolved: Vec<String> = if !words.is_empty() && !remote {
         let mut r = vec![resolve_alias(&words[0], config, cwd)];
         r.extend_from_slice(&words[1..]);
@@ -2474,26 +2644,8 @@ fn match_words(
         normalize_words(&resolved, cwd)
     };
     let mut result: Option<Match> = None;
-    let mut literal_words: Option<Vec<String>> = None;
-    if config.rules.iter().any(|r| r.options.is_some()) {
-        let any_exp = cmd.word_has_expansions.iter().any(|b| *b);
-        if !cmd.raw_words.is_empty() && cmd.raw_words.len() == words.len() {
-            let decoded: Vec<Option<String>> = cmd
-                .raw_words
-                .iter()
-                .map(|w| decode_literal_word(w, true))
-                .collect();
-            if !any_exp && decoded.iter().all(Option::is_some) {
-                literal_words = Some(decoded.into_iter().flatten().collect());
-            }
-        } else if cmd.raw_words.is_empty() && !any_exp {
-            literal_words = Some(words.to_vec());
-        }
-    }
-    let mut i = 0;
-    while i < words.len() && words[i].contains('=') && !words[i].starts_with('-') {
-        i += 1;
-    }
+    let literal_words = (argv.literal && !any_exp).then_some(words);
+    let i = assignments;
     // Without an assignment that changes which code runs, the stripped form may
     // still ask or deny, but only a rule spelling out the assignment allows.
     let strip_only_restricts = words[..i].iter().any(|w| code_env_name(w).is_some());
@@ -2516,12 +2668,11 @@ fn match_words(
         }
         let may_strip = !strip_only_restricts || rule.decision == "ask" || rule.decision == "deny";
         if rule.options.is_some() {
-            let raw_matched =
-                match_option_block(rule, literal_words.as_deref(), config, cwd, remote);
+            let raw_matched = match_option_block(rule, literal_words, config, cwd, remote);
             let stripped_matched = i > 0
                 && may_strip
                 && !raw_deny_set
-                && literal_words.as_ref().is_some_and(|lw| {
+                && literal_words.is_some_and(|lw| {
                     match_option_block(rule, Some(&lw[i.min(lw.len())..]), config, cwd, remote)
                 });
             if raw_matched || stripped_matched {
@@ -2720,14 +2871,8 @@ fn with_symlink_target(
     if target == path {
         return found;
     }
-    let rank = |m: &Option<Match>| match m.as_ref().map(|m| m.decision.as_str()) {
-        Some("deny") => 0,
-        Some("ask") => 1,
-        None => 2,
-        _ => 3,
-    };
     let other = find(&target);
-    if rank(&other) < rank(&found) {
+    if strictness(&other) < strictness(&found) {
         other
     } else {
         found

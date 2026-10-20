@@ -32,6 +32,12 @@ resolved against cwd (`git -C .`, `jsr:@std/x`), so a `?*` or `*:*` word never
 matches it: use `/**` for a path value (`deny git -C /** push *`) and `**jsr:**`
 for a specifier.
 
+Rules match the argv Bash passes, so write the decoded value: `ask cca * *--apply* *`
+also catches `--ap\ply`, `--ap''ply` and `$'--ap\x70ly'`. Brace-expanded forms
+and the targets of existing symlink arguments must allow too (the stricter
+result wins); words with expansions or unquoted globs are matched as written. Test escape bypasses with
+`scripts/debug/try-rules.sh`.
+
 `deny-read` and `ask-read` also filter literal shell arguments that name an
 existing file (`cat .env`, `cat ~/.env`, `--file=.env`, `grep -f.env`,
 `cat < .env`; `git show HEAD:.env` always), even over `allow cat *`; a missing

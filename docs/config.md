@@ -732,6 +732,27 @@ allow ./tools/* *      # any script directly in ./tools/, with any arguments
 allow ./tools/*        # the script alone, without arguments
 ```
 
+**Arguments are matched as Bash passes them** (dippy-rs). Quote removal comes
+first: mid-word quotes, backslash escapes and ANSI-C quoting are decoded, so
+`zorp --dan\ger`, `zorp --dan''ger` and `zorp $'--dan\x67er'` all match
+`ask zorp * --danger *`. A word with a parameter, command or arithmetic
+expansion, or an unquoted glob, is matched as written. A quoted `~` stays a
+relative path (`'~/x'` is `./~/x`); only an unquoted `~` expands. Only an
+unquoted `NAME=value` prefix is an environment assignment: `FOO\=bar zorp` runs
+the command `FOO=bar`.
+
+- An unquoted brace list is expanded as well (`zorp {--danger,x}` is matched as
+  `zorp --danger x`). Both forms must allow; the expansion can only make the
+  decision stricter. An `allow` asks when the brace syntax is not supported
+  (`{a..b}` sequences, more than 64 words) or an ANSI-C escape has no text
+  value (`$'\xff'`).
+- An argument that is an existing local path through a symlink is also matched
+  with the link target, and the stricter result wins (`deny` > `ask` > no match
+  > `allow`): a link to a denied path hits the deny, and `allow zorp link`
+  asks unless the target is allowed too. Remote words stay literal.
+- CLI handlers (such as `git`) and the commands they delegate see the same
+  decoded, brace-expanded arguments.
+
 A word of the pattern cannot contain a space; match a quoted argument with
 spaces by a glob such as `?` (`-c :write-table-to?-`), or use an
 [`[opts:]` block](#option-aware-command-patterns).
@@ -911,7 +932,7 @@ Both commands and patterns are normalized before matching:
 - `~` expands to home directory
 - `./foo` and `../foo` resolve against cwd to absolute paths
 - Relative paths without `./` (e.g., `bin/foo`) resolve against cwd to absolute paths
-- Absolute and `~/` paths collapse `..`, `.` and repeated slashes lexically (`/a/b/../c` → `/a/c`, `//etc` → `/etc`); unlike relative paths, symlinks are not followed, so `/allowed/link/../x` is judged as `/allowed/x`
+- Absolute and `~/` paths collapse `..`, `.` and repeated slashes lexically (`/a/b/../c` → `/a/c`, `//etc` → `/etc`); unlike relative paths, symlinks are not followed, so `/allowed/link/../x` is judged as `/allowed/x`; a command argument naming an existing path is also matched with its symlink target, and the stricter result wins
 - A local path of a file or redirect rule (`*-edit`, `*-read`, `*-redirect`) is also matched after resolving the symlinks of its existing part, and the stricter result wins (`deny` > `ask` > no match > `allow`): with `allow-edit src/**`, a link `src/out -> /home/u/.ssh` does not allow `src/out/id`. Remote redirect targets stay literal
 
 ```
