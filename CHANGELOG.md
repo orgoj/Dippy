@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.12] - 2026-10-24
+
+### Fixed
+
+- dippy-rs: wget parses its arguments as `getopt_long` does (bundled short options such as `-qO f`, abbreviated long options such as `--output-doc=f`, `--`), and every file it writes is checked against redirect rules: `-O`/`--output-document`, `-o`/`--output-file`, `-a`/`--append-output`, `--save-cookies`, `--rejected-log` and `--hsts-file`, also with `--spider`.
+- dippy-rs: wget asks for data sends (`--post-data`, `--post-file`, `--body-data`, `--body-file`, `--method` other than GET/HEAD/OPTIONS/TRACE), commands and configs (`-e`/`--execute`, `--config`, `--use-askpass`), `--warc-file` and `-b`/`--background`, even with `-O` or `--spider`.
+
 ## [0.6.11] - 2026-10-24
 
 ### Fixed
