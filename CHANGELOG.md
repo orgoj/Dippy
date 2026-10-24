@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.10] - 2026-10-24
+
+### Fixed
+
+- dippy-rs: curl parses its arguments as curl does, so every file it writes is checked against redirect rules: bundled and attached `-o` (`curl -sLo FILE URL`, `-sLoFILE`), `-O`/`--remote-name`/`--remote-name-all` (the file named after each URL, `curl_response` when the URL has no file name), `--output-dir`, `-D`/`--dump-header`, `-c`/`--cookie-jar`, `--trace`, `--trace-ascii`, `--stderr`, `--libcurl`, `--etag-save`, `--hsts` and `--alt-svc`. Like `-o FILE`, a write with no matching redirect rule asks.
+- dippy-rs: curl asks when the written file name is not known in advance: `-J`/`--remote-header-name`, `-O` with a URL glob, an `-o` name with `#1`, and `-w`/`--write-out` with `%output{`.
+- dippy-rs: bundled curl data, method, config and quote options (`curl -sd x URL`, `-sXPOST`, `-sK file`) ask like their standalone forms.
+
 ## [0.6.9] - 2026-10-24
 
 ### Fixed
