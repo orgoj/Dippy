@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@dippy_dev'
 created_date: '2026-10-24 14:06'
-updated_date: '2026-10-24 14:27'
+updated_date: '2026-10-24 14:47'
 labels: []
 dependencies: []
 priority: high
@@ -36,6 +36,12 @@ Out of scope: warnings for duplicate includes; doctor changes; the Python versio
 <!-- SECTION:PLAN:BEGIN -->
 1. Bump 0.6.9 + CHANGELOG. 2. Failing Rust tests in config.rs (duplicate, diamond, cycle, self-include) with tmp dirs. 3. Track the chain: remove the file from the set after expanding it. 4. Update docs/config.md. 5. just check, just test, commit.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Review (agent_review_dippy_865): repeated includes could grow exponentially (each file including the next twice). Fixed in 0.6.11: MAX_INCLUDE_EXPANSIONS = 1000 included files per config, then 'too many includes'; test a_doubling_include_graph_fails_instead_of_exhausting_memory.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@dippy_dev'
 created_date: '2026-10-24 14:06'
-updated_date: '2026-10-24 14:33'
+updated_date: '2026-10-24 14:47'
 labels: []
 dependencies: []
 priority: high
@@ -39,6 +39,12 @@ Out of scope: wget (separate finding), ~/.curlrc contents, the live ~/wiki/.dipp
 <!-- SECTION:PLAN:BEGIN -->
 1. Bump 0.6.10 + CHANGELOG. 2. Failing Rust tests in cli/curl.rs. 3. One parser yielding options (name, value) and URLs; classify over it; collect write targets. 4. Verify with dippy --cmd (empty HOME, temporary config). 5. just check, just test, commit.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Review (agent_review_dippy_865): curl 8.3+ accepts every option as --expand-<name> (e.g. --expand-data, --expand-output) and these were allowed. Fixed in 0.6.11: any --expand-* option asks; test variable_expanded_options_ask.
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 

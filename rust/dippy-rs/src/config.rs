@@ -1735,17 +1735,22 @@ fn glob_paths(pattern: &str) -> Vec<String> {
 /// One line of an include-expanded config with the file and line it came from.
 type SourceLine = (String, String, usize);
 
+/// Included files one config may expand, counting each repeated include.
+const MAX_INCLUDE_EXPANSIONS: usize = 1000;
+
 /// `_expand_includes` (the SSH-profile path rewrite does not affect
 /// classification and is omitted). Returns the expanded lines.
 ///
 /// `chain` holds the files being expanded, from the top config down to
 /// `current_file`: only a file on it is a cycle, so a file included again
-/// elsewhere is expanded again.
+/// elsewhere is expanded again. `expansions` counts included files against
+/// MAX_INCLUDE_EXPANSIONS, so repeated includes cannot grow exponentially.
 fn expand_includes(
     text: &str,
     base_dir: &Path,
     current_file: &Path,
     chain: &mut BTreeSet<PathBuf>,
+    expansions: &mut usize,
 ) -> Result<Vec<SourceLine>, ConfigError> {
     let current = paths::resolve(current_file);
     chain.insert(current.clone());
@@ -1790,6 +1795,14 @@ fn expand_includes(
                     match_path.display()
                 )));
             }
+            *expansions += 1;
+            if *expansions > MAX_INCLUDE_EXPANSIONS {
+                return Err(ConfigError(format!(
+                    "too many includes: more than {MAX_INCLUDE_EXPANSIONS} included files, at {} -> {}",
+                    current_file.display(),
+                    match_path.display()
+                )));
+            }
             let included_text = std::fs::read_to_string(&match_path).map_err(|e| {
                 if e.kind() == std::io::ErrorKind::PermissionDenied {
                     ConfigError(format!(
@@ -1804,7 +1817,8 @@ fn expand_includes(
                 }
             })?;
             let parent = match_path.parent().unwrap_or(Path::new("/")).to_path_buf();
-            let expanded = expand_includes(&included_text, &parent, &match_path, chain)?;
+            let expanded =
+                expand_includes(&included_text, &parent, &match_path, chain, expansions)?;
             out.push(here(format!("# included from: {}", match_path.display())));
             if expanded.is_empty() {
                 // Python joins an empty file to one empty line.
@@ -1830,7 +1844,7 @@ fn load_config_file(path: &Path, user: bool) -> Result<Config, ConfigError> {
     })?;
     let mut chain = BTreeSet::new();
     let parent = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    let lines = expand_includes(&text, &parent, path, &mut chain)?;
+    let lines = expand_includes(&text, &parent, path, &mut chain, &mut 0)?;
     let text: Vec<&str> = lines.iter().map(|(t, _, _)| t.as_str()).collect();
     let origins: Vec<(String, usize)> = lines.iter().map(|(_, f, n)| (f.clone(), *n)).collect();
     parse_config_from(
@@ -3112,6 +3126,7 @@ mod tests {
             Path::new("/"),
             Path::new("/c"),
             &mut included,
+            &mut 0,
         )
         .unwrap();
         assert_eq!(
@@ -3673,6 +3688,20 @@ mod tests {
             let err = load_include_tree(name, files).unwrap_err();
             assert!(err.0.starts_with("circular include: "), "{name}: {}", err.0);
         }
+    }
+
+    #[test]
+    fn a_doubling_include_graph_fails_instead_of_exhausting_memory() {
+        // f0 includes f1 twice, f1 includes f2 twice, ...: 2^30 expansions.
+        let names: Vec<String> = (0..31).map(|i| format!("f{i}")).collect();
+        let mut files: Vec<(&str, String)> = vec![("main", "include f0\n".to_string())];
+        for pair in names.windows(2) {
+            files.push((&pair[0], format!("include {0}\ninclude {0}\n", pair[1])));
+        }
+        files.push((&names[30], "allow a\n".to_string()));
+        let files: Vec<(&str, &str)> = files.iter().map(|(n, t)| (*n, t.as_str())).collect();
+        let err = load_include_tree("include-doubling", &files).unwrap_err();
+        assert!(err.0.starts_with("too many includes: "), "{}", err.0);
     }
 
     // === Environment variables in rule patterns ===

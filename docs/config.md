@@ -303,7 +303,8 @@ include <path-or-pattern>
 - **Circular detection**: Raises error when a file includes itself or a file
   that is already being included above it (`a -> b -> a`)
 - **Repeated includes**: A file included again elsewhere (twice in one file,
-  or from two different files) is expanded again at each position
+  or from two different files) is expanded again at each position; one config
+  may expand at most 1000 included files in total, then loading fails
 - **Inline expansion**: Content inserted as if written at that location
 
 **Examples:**
@@ -330,6 +331,7 @@ include conf.d/*.conf
 **Error handling:**
 - Missing files: Warning logged, config continues loading
 - Circular includes: ConfigError raised immediately
+- More than 1000 included files (counting repeats): ConfigError
 - Empty pattern: Warning logged, skipped
 
 ### Context Flags

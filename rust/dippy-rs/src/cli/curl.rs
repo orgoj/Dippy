@@ -177,7 +177,12 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
             }
             Arg::Opt(name, value) => (name, value),
         };
-        if UNSAFE_FLAGS.contains(&name.as_str()) || DATA_FLAGS.contains(&name.as_str()) {
+        // curl 8.3+ accepts every option as --expand-<name> with {{variables}}
+        // in its argument, so neither the option nor its value is known here.
+        if UNSAFE_FLAGS.contains(&name.as_str())
+            || DATA_FLAGS.contains(&name.as_str())
+            || name.starts_with("--expand-")
+        {
             return ask(&name);
         }
         match (name.as_str(), value) {
@@ -401,5 +406,31 @@ mod tests {
             assert_eq!(r.description.as_deref(), Some(*desc), "{tokens:?}");
         }
         assert_eq!(run(&["curl", "-sXGET", "u"]).action, Action::Allow);
+    }
+
+    #[test]
+    fn variable_expanded_options_ask() {
+        // curl 8.3+ accepts any option prefixed with --expand-.
+        let cases: &[(&[&str], &str)] = &[
+            (&["curl", "--expand-data=x", "u"], "curl --expand-data"),
+            (
+                &["curl", "--expand-data-binary", "x", "u"],
+                "curl --expand-data-binary",
+            ),
+            (
+                &["curl", "--expand-output", "f", "u"],
+                "curl --expand-output",
+            ),
+            (
+                &["curl", "--expand-request", "POST", "u"],
+                "curl --expand-request",
+            ),
+            (&["curl", "--expand-url", "{{u}}"], "curl --expand-url"),
+        ];
+        for (tokens, desc) in cases {
+            let r = run(tokens);
+            assert_eq!(r.action, Action::Ask, "{tokens:?}");
+            assert_eq!(r.description.as_deref(), Some(*desc), "{tokens:?}");
+        }
     }
 }
