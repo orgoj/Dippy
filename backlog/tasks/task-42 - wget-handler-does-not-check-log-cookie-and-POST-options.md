@@ -5,7 +5,7 @@ status: Done
 assignee:
   - '@dippy_dev'
 created_date: '2026-10-24 15:07'
-updated_date: '2026-10-24 15:11'
+updated_date: '2026-10-24 15:36'
 labels: []
 dependencies: []
 priority: high
@@ -36,6 +36,12 @@ In scope: wget handler and tests, CHANGELOG. Out of scope: ~/.wgetrc contents, t
 <!-- SECTION:PLAN:BEGIN -->
 1. Bump 0.6.12 + CHANGELOG. 2. Failing Rust tests in cli/wget.rs. 3. getopt_long-style parser, classify over it. 4. Verify with dippy --cmd (empty HOME). 5. just check, just test, commit, review.
 <!-- SECTION:PLAN:END -->
+
+## Implementation Notes
+
+<!-- SECTION:NOTES:BEGIN -->
+Review finding (agent_review_dippy_865): write targets with shell expansions (wget -O /tmp/$T) are matched literally. Same project-wide for shell redirects, cp and curl; pre-existing, not a regression. User decision 2026-10-24: keep literal matching (Dippy guides non-adversarial agents, not a security boundary).
+<!-- SECTION:NOTES:END -->
 
 ## Final Summary
 
