@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.9] - 2026-10-24
+
+### Fixed
+
+- dippy-rs: a file included twice (two `include` lines for the same file, or two files that both include it) is no longer reported as `circular include`, which blocked every tool call. Only a file that includes itself or a file already being included above it is a cycle; a repeated include is expanded again at each position.
+
 ## [0.6.8] - 2026-10-20
 
 ### Fixed

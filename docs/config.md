@@ -300,7 +300,10 @@ include <path-or-pattern>
 - **Home expansion**: `include ~/.dippy/shared-rules` expands `~`
 - **Relative paths**: Resolved relative to the including file's directory
 - **Recursive**: Included files can include other files
-- **Circular detection**: Raises error on circular includes
+- **Circular detection**: Raises error when a file includes itself or a file
+  that is already being included above it (`a -> b -> a`)
+- **Repeated includes**: A file included again elsewhere (twice in one file,
+  or from two different files) is expanded again at each position
 - **Inline expansion**: Content inserted as if written at that location
 
 **Examples:**

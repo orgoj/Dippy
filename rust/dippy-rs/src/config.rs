@@ -1737,13 +1737,18 @@ type SourceLine = (String, String, usize);
 
 /// `_expand_includes` (the SSH-profile path rewrite does not affect
 /// classification and is omitted). Returns the expanded lines.
+///
+/// `chain` holds the files being expanded, from the top config down to
+/// `current_file`: only a file on it is a cycle, so a file included again
+/// elsewhere is expanded again.
 fn expand_includes(
     text: &str,
     base_dir: &Path,
     current_file: &Path,
-    included: &mut BTreeSet<PathBuf>,
+    chain: &mut BTreeSet<PathBuf>,
 ) -> Result<Vec<SourceLine>, ConfigError> {
-    included.insert(paths::resolve(current_file));
+    let current = paths::resolve(current_file);
+    chain.insert(current.clone());
     let file_name = current_file.to_string_lossy().into_owned();
     let mut out: Vec<SourceLine> = Vec::new();
     for (idx, line) in text.lines().enumerate() {
@@ -1778,7 +1783,7 @@ fn expand_includes(
         matches.sort();
         for m in matches {
             let match_path = paths::resolve(Path::new(&m));
-            if included.contains(&match_path) {
+            if chain.contains(&match_path) {
                 return Err(ConfigError(format!(
                     "circular include: {} -> {}",
                     current_file.display(),
@@ -1799,7 +1804,7 @@ fn expand_includes(
                 }
             })?;
             let parent = match_path.parent().unwrap_or(Path::new("/")).to_path_buf();
-            let expanded = expand_includes(&included_text, &parent, &match_path, included)?;
+            let expanded = expand_includes(&included_text, &parent, &match_path, chain)?;
             out.push(here(format!("# included from: {}", match_path.display())));
             if expanded.is_empty() {
                 // Python joins an empty file to one empty line.
@@ -1808,6 +1813,7 @@ fn expand_includes(
             out.extend(expanded);
         }
     }
+    chain.remove(&current);
     Ok(out)
 }
 
@@ -1822,9 +1828,9 @@ fn load_config_file(path: &Path, user: bool) -> Result<Config, ConfigError> {
             ConfigError(format!("cannot read config {}: {e}", path.display()))
         }
     })?;
-    let mut included = BTreeSet::new();
+    let mut chain = BTreeSet::new();
     let parent = path.parent().unwrap_or(Path::new(".")).to_path_buf();
-    let lines = expand_includes(&text, &parent, path, &mut included)?;
+    let lines = expand_includes(&text, &parent, path, &mut chain)?;
     let text: Vec<&str> = lines.iter().map(|(t, _, _)| t.as_str()).collect();
     let origins: Vec<(String, usize)> = lines.iter().map(|(_, f, n)| (f.clone(), *n)).collect();
     parse_config_from(
@@ -3611,6 +3617,62 @@ mod tests {
         assert_eq!(origin(&c.rules[0]), (Some(main.as_ref()), Some(1)));
         assert_eq!(origin(&c.redirect_rules[0]), (Some(inc.as_ref()), Some(2)));
         assert_eq!(origin(&c.rules[1]), (Some(main.as_ref()), Some(4)));
+    }
+
+    /// Writes `files` into a fresh temp dir, loads `main` and removes the dir.
+    fn load_include_tree(name: &str, files: &[(&str, &str)]) -> Result<Config, ConfigError> {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-{name}-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        for (file, text) in files {
+            std::fs::write(dir.join(file), text).unwrap();
+        }
+        let c = load_config_file(&dir.join("main"), true);
+        std::fs::remove_dir_all(&dir).unwrap();
+        c
+    }
+
+    #[test]
+    fn a_file_included_twice_applies_at_both_positions() {
+        let c = load_include_tree(
+            "include-twice",
+            &[
+                ("main", "include inc\nask a\ninclude inc\n"),
+                ("inc", "allow a\n"),
+            ],
+        )
+        .unwrap();
+        let rules: Vec<_> = c.rules.iter().map(|r| r.decision.as_str()).collect();
+        assert_eq!(rules, ["allow", "ask", "allow"]);
+    }
+
+    #[test]
+    fn a_diamond_include_loads() {
+        let c = load_include_tree(
+            "include-diamond",
+            &[
+                ("main", "include b\ninclude c\n"),
+                ("b", "include d\n"),
+                ("c", "include d\n"),
+                ("d", "allow a\n"),
+            ],
+        )
+        .unwrap();
+        assert_eq!(c.rules.len(), 2);
+    }
+
+    #[test]
+    fn include_cycles_still_fail() {
+        for (name, files) in [
+            (
+                "include-cycle",
+                &[("main", "include b\n"), ("b", "include main\n")][..],
+            ),
+            ("include-self", &[("main", "include main\n")][..]),
+        ] {
+            let err = load_include_tree(name, files).unwrap_err();
+            assert!(err.0.starts_with("circular include: "), "{name}: {}", err.0);
+        }
     }
 
     // === Environment variables in rule patterns ===
