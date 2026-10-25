@@ -5,6 +5,13 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.13] - 2026-10-25
+
+### Fixed
+
+- dippy-rs: sqlite3 allows SQLite date functions (`date`, `time`, `datetime`, `julianday`, `unixepoch`, `strftime`) with any number of modifiers, so `strftime('%Y', c, 'unixepoch')` is a read instead of an asked write query.
+- dippy-rs: sqlite3 allows a batch of read-only statements, in one SQL argument or several; a batch with any write, setter pragma or dot-command still asks.
+
 ## [0.6.12] - 2026-10-24
 
 ### Fixed

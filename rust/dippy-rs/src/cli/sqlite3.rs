@@ -81,6 +81,7 @@ static READONLY_DOT_COMMAND: LazyLock<Regex> = LazyLock::new(|| {
 fn read_options() -> ReadonlyOptions {
     ReadonlyOptions {
         extra_write: SQLITE_WRITE.iter().map(|s| s.to_string()).collect(),
+        allow_multiple: true,
         dialect: Some("sqlite".into()),
         ..ReadonlyOptions::default()
     }
@@ -208,14 +209,36 @@ mod tests {
         ("sqlite3", false),
         ("sqlite3 mydb.db", false),
         ("sqlite3 -json mydb.db", false),
-        ("sqlite3 mydb.db 'SELECT 1; SELECT 2'", false),
+        ("sqlite3 mydb.db 'SELECT 1; SELECT 2'", true),
+        ("sqlite3 mydb.db 'SELECT 1; DELETE FROM t'", false),
+        (
+            "sqlite3 mydb.db 'SELECT 1; PRAGMA foreign_keys = ON'",
+            false,
+        ),
+        ("sqlite3 mydb.db 'SELECT 1; .shell id'", false),
+        ("sqlite3 mydb.db 'SELECT 1; SELECT writefile(1, 2)'", false),
+        // Audit log 2026-10-25: date functions with modifiers and batches.
+        (
+            "sqlite3 tmp/tm1.db \"select strftime('%Y',c2,'unixepoch') y, count(*) from f group by y; select c1, date(c2,'unixepoch','localtime') from f where c2 >= strftime('%s','2018-12-01') limit 400;\"",
+            true,
+        ),
+        (
+            "sqlite3 db \"select datetime(c2,'unixepoch','localtime','start of month','+1 month','-1 day'), julianday(c2,'unixepoch','utc'), unixepoch('now','localtime'), time(c2,'unixepoch','subsec') from f\"",
+            true,
+        ),
+        ("sqlite3 db \"select strftime() from f\"", false),
+        (
+            "sqlite3 db \"select date(writefile('x','y'),'unixepoch') from f\"",
+            false,
+        ),
         ("sqlite3 -init script.sql mydb.db", false),
         ("sqlite3 -separator '|' mydb.db 'SELECT 1'", true),
         ("sqlite3 -nullvalue NULL mydb.db 'SELECT 1'", true),
         ("sqlite3 -newline '\\n' mydb.db 'SELECT 1'", true),
         ("sqlite3 -lookaside 100 50 mydb.db 'SELECT 1'", true),
         ("sqlite3 mydb.db '.shell touch x'", false),
-        ("sqlite3 mydb.db 'SELECT 1' 'SELECT 2'", false),
+        ("sqlite3 mydb.db 'SELECT 1' 'SELECT 2'", true),
+        ("sqlite3 mydb.db 'SELECT 1' 'DROP TABLE t'", false),
         ("sqlite3 mydb.db \"SELECT writefile('x', 'data')\"", false),
         // Audit log 2026-10-12: read-only queries that asked.
         (

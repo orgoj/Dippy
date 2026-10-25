@@ -238,8 +238,22 @@ const DUCKDB_NON_KEYWORDS: [&str; 2] = ["operator", "top"];
 /// (Python asks for them). Exactly one argument (the path).
 const DUCKDB_READ_FUNCTIONS: [&str; 1] = ["read_text"];
 
+/// SQLite date and time functions: a time value followed by any number of
+/// modifiers (`strftime` first takes the format). SQLGlot limits the count.
+const SQLITE_DATE_FUNCTIONS: [&str; 6] = [
+    "date",
+    "datetime",
+    "julianday",
+    "strftime",
+    "time",
+    "unixepoch",
+];
+
 fn function_known(name: &str, count: usize, d: Dialect) -> bool {
     let lower = name.to_ascii_lowercase();
+    if d == Sqlite && SQLITE_DATE_FUNCTIONS.contains(&lower.as_str()) {
+        return lower != "strftime" || count >= 1;
+    }
     if d == Duckdb && DUCKDB_PURE_FUNCTIONS.contains(&lower.as_str()) {
         return true;
     }
