@@ -17,6 +17,10 @@ Query the log only with `dippy audit`; it is auto-approved and reads the
 rotations too. Never build `cat | grep | yq` pipelines over the log files: each
 one is a manual approval prompt for the user.
 
+Without a range from the user, start `--since` at the date of your last
+recorded review, if you keep one, so the review covers only what is new; record
+the new date and the proposals the user rejected when you finish.
+
 ```bash
 dippy audit --since 2026-10-01 --not-allow --policy-cwd ~/wiki
 dippy audit --agent agy --not-allow --group-by cwd
