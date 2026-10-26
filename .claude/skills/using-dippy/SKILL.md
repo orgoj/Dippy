@@ -40,7 +40,7 @@ result wins); words with expansions or unquoted globs are matched as written. Te
 
 `deny-read` and `ask-read` also filter literal shell arguments that name an
 existing file (`cat .env`, `cat ~/.env`, `--file=.env`, `grep -f.env`,
-`cat < .env`; `git show HEAD:.env` always), even over `allow cat *`; a missing
+`cat < .env`; `git show HEAD:.env` always; `git add|commit|rm|mv` never), even over `allow cat *`; a missing
 file or no match leaves the command decision unchanged. They miss runtime-built
 paths (`cat $(echo .env)`, `cat "$F"`, globs), files created after the check
 and files below a directory argument (`grep -r KEY .`); a search term naming an

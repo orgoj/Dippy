@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.14] - 2026-10-26
+
+### Fixed
+
+- dippy-rs: `git add`, `git commit`, `git rm` and `git mv` skip the `deny-read`/`ask-read` filter of path arguments: they stage files without printing them, so an encrypted secret can be committed while `cat`, `git diff` and `git show` of it stay denied.
+
 ## [0.6.13] - 2026-10-25
 
 ### Fixed

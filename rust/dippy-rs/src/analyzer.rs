@@ -1012,9 +1012,16 @@ fn analyze_command(
     ));
     let raw_args = raw_words.get(base_idx + 1..).unwrap_or_default();
     let inner = base_idx + unwrap_all_transparent_wrappers(&words[base_idx..], Some(config));
-    let object_paths = words.get(inner).is_some_and(|w| w == "git")
-        && cli::git::find_action(&words[inner..])
-            .is_some_and(|(_, action)| matches!(action, "show" | "cat-file"));
+    let git_action = words
+        .get(inner)
+        .filter(|w| *w == "git")
+        .and_then(|_| cli::git::find_action(&words[inner..]))
+        .map(|(_, action)| action);
+    let object_paths = matches!(git_action, Some("show" | "cat-file"));
+    // Staging stores a file without printing it (encrypted secrets get committed).
+    if matches!(git_action, Some("add" | "commit" | "rm" | "mv")) {
+        return combine(decisions);
+    }
     decisions.extend(read_arg_decision(
         &base,
         raw_args,
@@ -2095,6 +2102,31 @@ mod tests {
             "timeout 5 git show HEAD:.env",
             "command git show HEAD:.env",
             "git cat-file -p HEAD:.env",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_rules_skip_git_staging_actions() {
+        let dir = fixture("readarg-git", &[".env", "secrets/", "secrets/key"]);
+        for cmd in [
+            "git add secrets/key",
+            "git add -- .env",
+            "git commit -m x -- secrets/key",
+            "git -c core.x=y commit secrets/key",
+            "git rm --cached .env",
+            "git mv secrets/key secrets/key2",
+        ] {
+            let d = decide_in(&dir, READ_RULES, cmd);
+            assert_ne!(d.action, Action::Deny, "{cmd}: {}", d.reason);
+        }
+        for cmd in [
+            "git diff secrets/key",
+            "git log -p -- .env",
+            "git add secrets/key; cat .env",
         ] {
             let d = decide_in(&dir, READ_RULES, cmd);
             assert_eq!(d.action, Action::Deny, "{cmd}: {}", d.reason);

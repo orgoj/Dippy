@@ -11,7 +11,7 @@
 ### 🍴 Fork Enhancements (vs [upstream](https://github.com/ldayton/Dippy))
 
 - **File Edit/Read Approval** — `allow-edit`/`read`, `ask-edit`/`read`, `deny-edit`/`read` rules; a path through a symlink is allowed only when its target is allowed too (also for redirects), and `dippy check-rule KIND VALUE...` shows the rule that decides a path, web query or MCP tool
-- **Read rules on shell arguments (dippy-rs)** — a `deny-read` or `ask-read` matching a literal argument that names an existing file (`cat .env`, `--file=.env`, after `cd`; `git show HEAD:.env` always) denies or asks for the whole command, also over an `allow` command rule; missing files, grep patterns and messages pass, no match leaves the decision unchanged, and over SSH or a wrapper every word is checked with only flagged `allow-read` exceptions (best effort, see [File Operations](#file-operations))
+- **Read rules on shell arguments (dippy-rs)** — a `deny-read` or `ask-read` matching a literal argument that names an existing file (`cat .env`, `--file=.env`, after `cd`; `git show HEAD:.env` always; `git add|commit|rm|mv` never) denies or asks for the whole command, also over an `allow` command rule; missing files, grep patterns and messages pass, no match leaves the decision unchanged, and over SSH or a wrapper every word is checked with only flagged `allow-read` exceptions (best effort, see [File Operations](#file-operations))
 - **Include directive** — `include <path-or-glob>` for composable config files
 - **Exclusive config** — `DIPPY_CONFIG_ONLY` and `--config-only` isolate role-specific processes from user and project configuration
 - **Context-aware rules** — `[flags]` syntax with `@subshell`, `@compound`, negation (`!`)
@@ -429,7 +429,9 @@ resolved against the cwd after `cd`, that name an existing file; a missing file
 cannot be read, so grep patterns and commit messages (`grep -rn credentials
 src/`) pass, as do words longer than the file-name limit (long messages). The path of `git show rev:path` and `git cat-file -p rev:path` is
 always checked, also with git global options and behind wrappers such as
-`timeout`. A single `cd` moves the cwd of the commands after it; a command
+`timeout`. `git add`, `git commit`, `git rm` and `git mv` stage files without
+printing them and skip this filter, so an encrypted secret can be committed
+while `cat` or `git diff` of it stays denied. A single `cd` moves the cwd of the commands after it; a command
 with several `cd` (`cd a && cd b`, `cd a || cd b`) is denied. A later
 `allow-read **/.env.example` exempts that file; `allow-read` is never required
 for an argument, and a path without a matching read rule leaves the command

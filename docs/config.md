@@ -2091,7 +2091,8 @@ deny-read <glob> "message"
   also filter literal arguments of shell commands (non-option words after `~`
   expansion, `--opt=value` and `-fVALUE` values, words after `--`, input
   redirect targets) that name an existing file, resolved against the cwd after
-  `cd`, plus the path of `git show`/`git cat-file` `rev:path`: a match denies
+  `cd`, plus the path of `git show`/`git cat-file` `rev:path` (`git add`,
+  `commit`, `rm` and `mv` only stage files and are not filtered): a match denies
   or asks for the whole command, even over an `allow` command rule; no match or
   a missing file leaves it unchanged (as does a word that cannot name a file:
   longer than the file-name limit or through a regular file; other lookup
