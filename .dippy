@@ -83,6 +83,3 @@ allow-redirect [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
 allow-read [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/**
 allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/NOTES.md
 allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
-
-#---- hcom ----#
-allow [$HCOM_INSTANCE_NAME=dippy_dev] hcom send @* * --name dippy_dev *
