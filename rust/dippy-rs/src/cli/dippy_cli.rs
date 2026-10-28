@@ -15,10 +15,28 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     if tokens.len() > 1 && tokens[1] == "audit" {
         return Classification::allow_desc("dippy audit");
     }
-    if tokens.len() > 1 && tokens[1] == "trust" {
+    if subcommand(tokens) == Some("trust") {
         return Classification::new(Action::Deny).desc("dippy trust is not allowed");
     }
     Classification::ask()
+}
+
+/// Global options of `dippy` that take a value.
+const VALUE_OPTIONS: &[&str] = &["--cmd", "--cwd", "--config", "--config-only", "--agent"];
+
+/// First word after the global options.
+fn subcommand(tokens: &[String]) -> Option<&str> {
+    let mut i = 1;
+    while let Some(token) = tokens.get(i) {
+        if VALUE_OPTIONS.contains(&token.as_str()) {
+            i += 2;
+        } else if token.starts_with('-') {
+            i += 1;
+        } else {
+            return Some(token);
+        }
+    }
+    None
 }
 
 #[cfg(test)]
@@ -39,9 +57,16 @@ mod tests {
             classify(&HandlerContext::new(&["dippy", "dashboard"])).action,
             Action::Ask
         );
+        for cmd in [
+            &["dippy", "trust", "x.sh"][..],
+            &["dippy", "--cwd", "/p", "--json", "trust", "x.sh"],
+            &["dippy", "--config-only", "c", "trust", "x.sh"],
+        ] {
+            assert_eq!(classify(&HandlerContext::new(cmd)).action, Action::Deny);
+        }
         assert_eq!(
-            classify(&HandlerContext::new(&["dippy", "trust", "x.sh"])).action,
-            Action::Deny
+            classify(&HandlerContext::new(&["dippy", "--cmd", "trust"])).action,
+            Action::Ask
         );
     }
 }
