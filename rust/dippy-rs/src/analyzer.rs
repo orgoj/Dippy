@@ -1597,6 +1597,7 @@ fn analyze_simple_command(
         }
         return match result.action {
             HAction::Allow => Decision::allow(desc),
+            HAction::Deny => Decision::new(Action::Deny, desc).flags(flags),
             HAction::Delegate
                 if result
                     .inner_command
@@ -1907,6 +1908,30 @@ mod tests {
     fn decide_with(rules: &str, cmd: &str) -> Decision {
         let config = config::parse_config(rules, None).unwrap();
         analyze(cmd, &config, Path::new("/tmp"), None, false)
+    }
+
+    #[test]
+    fn dippy_trust_is_denied_unless_a_rule_allows_it() {
+        let d = decide_with("", "dippy trust scripts/x.sh");
+        assert_eq!(
+            (d.action, d.reason.as_str()),
+            (Action::Deny, "dippy trust is not allowed")
+        );
+        let rules = "allow [$HCOM_AGENT_NAME=bot] dippy trust *";
+        assert_eq!(
+            decide_with(rules, "dippy trust scripts/x.sh").action,
+            Action::Deny
+        );
+        let config = config::parse_config(rules, None).unwrap();
+        let flags = Flags::from(["$HCOM_AGENT_NAME=bot".to_string()]);
+        let d = analyze(
+            "dippy trust scripts/x.sh",
+            &config,
+            Path::new("/tmp"),
+            Some(&flags),
+            false,
+        );
+        assert_eq!(d.action, Action::Allow);
     }
 
     #[test]

@@ -136,6 +136,7 @@ impl<'a> HandlerContext<'a> {
 pub enum Action {
     Allow,
     Ask,
+    Deny,
     Delegate,
 }
 
@@ -144,6 +145,7 @@ impl Action {
         match self {
             Action::Allow => "allow",
             Action::Ask => "ask",
+            Action::Deny => "deny",
             Action::Delegate => "delegate",
         }
     }

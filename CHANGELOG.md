@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.15] - 2026-10-28
+
+### Added
+
+- dippy-rs: `allow [sha256:HEX] ./scripts/x.sh *` (also `bash scripts/x.sh *`) allows a local script only while its content has that sha256 and asks when it differs, the file is missing or the command is remote. `dippy trust PATH` rewrites the hash in every matching pinned rule of the nearest project `.dippy`; the built-in `dippy` handler denies `dippy trust` unless a rule allows it.
+
 ## [0.6.14] - 2026-10-26
 
 ### Fixed

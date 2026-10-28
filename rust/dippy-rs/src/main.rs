@@ -159,6 +159,38 @@ enum Subcommand {
                       checked with --cmd."
     )]
     CheckRule(CheckRuleArgs),
+    /// Approve a script's current content in its [sha256:] rules
+    #[command(
+        long_about = "Set the hash of every [sha256:] allow rule in the nearest project .dippy \
+                      that pins SCRIPT to the script's current content. Uses the global --cwd."
+    )]
+    Trust(TrustArgs),
+}
+
+#[derive(clap::Args)]
+struct TrustArgs {
+    /// Script path, as the rules name it
+    script: String,
+}
+
+/// `trust`: re-pin a script's `[sha256:]` rules to its current content.
+fn trust(global: &Cli, args: &TrustArgs) -> i32 {
+    let cwd = match &global.cwd {
+        Some(c) => paths::resolve(&PathBuf::from(c)),
+        None => std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/")),
+    };
+    match config::trust_script(&args.script, &cwd) {
+        Ok(changed) => {
+            for line in changed {
+                println!("{line}");
+            }
+            0
+        }
+        Err(e) => {
+            eprintln!("dippy trust: {e}");
+            1
+        }
+    }
 }
 
 #[derive(clap::Args)]
@@ -374,6 +406,7 @@ fn main() {
                 Some(Subcommand::Hooks(args)) => dippy_rs::hooks::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::Doctor(args)) => dippy_rs::doctor::run(args, cli.cwd.as_deref()),
                 Some(Subcommand::CheckRule(args)) => check_rule(&cli, args),
+                Some(Subcommand::Trust(args)) => trust(&cli, args),
                 None if cli.cmd.is_some() || cli.stdin => cli_mode(&cli),
                 None => hook_mode(&matches),
             };

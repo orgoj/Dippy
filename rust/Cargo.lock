@@ -615,7 +615,7 @@ dependencies = [
 
 [[package]]
 name = "dippy-rs"
-version = "0.6.14"
+version = "0.6.15"
 dependencies = [
  "chrono",
  "clap",
@@ -624,6 +624,7 @@ dependencies = [
  "rable",
  "raw-window-handle",
  "regex",
+ "ring",
  "rustls",
  "rustls-native-certs",
  "rustpython-ruff_python_ast",

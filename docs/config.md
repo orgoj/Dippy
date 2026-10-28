@@ -850,6 +850,33 @@ allow PYTHONPATH=src pytest *   # allows PYTHONPATH=src pytest -q
 allow pytest *                  # does not allow PYTHONPATH=/tmp/x pytest
 ```
 
+### Hash-pinned Scripts (dippy-rs)
+
+An `allow` rule can pin the content of a local script with a `[sha256:HEX]`
+block after any context flags and before any `[opts:]` block:
+
+```text
+allow [sha256:ab08508f...286e] ./scripts/build.sh *
+allow [ci] [sha256:ab08508f...286e] bash scripts/build.sh *
+```
+
+The pinned script is the first pattern word containing `/`; it must be a
+literal path (no glob or `${NAME}`), resolved like the rest of the pattern.
+An interpreter word before it (`bash`, `python`) is matched normally. When the
+rule matches, Dippy hashes the file (following symlinks): the rule allows only
+when the sha256 equals HEX and asks when the content differs, the file is
+missing or the command is remote. Only the script itself is pinned, not files
+it sources, imports or runs. A malformed block, a block on `ask`/`deny`/`delegate`
+or a pattern without a literal script path is skipped with a warning.
+
+After reviewing a changed script, the user runs `dippy trust scripts/build.sh`
+(honours the global `--cwd`). It sets HEX to the script's current hash in every
+pinned `allow` rule of the nearest project `.dippy` that names that script,
+leaves the rest of the file unchanged and prints each changed line; it fails
+without changes when no such rule exists. The built-in handler denies
+`dippy trust`; a rule such as `allow [$HCOM_AGENT_NAME=bot] dippy trust *`
+grants it.
+
 ### Option-aware Command Patterns
 
 Add an optional `[opts: ...]` block before the command pattern, after any

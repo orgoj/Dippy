@@ -102,6 +102,8 @@ pub struct Rule {
     pub negated_flags: Option<Flags>,
     /// Permitted optional switches/value globs; None keeps legacy matching.
     pub options: Option<Vec<(String, Option<String>)>>,
+    /// `[sha256:HEX]`: lowercase hash the pinned script must have.
+    pub sha256: Option<String>,
     /// Pattern as written, with `${NAME}`; None when it has no reference.
     pub written: Option<String>,
 }
@@ -519,7 +521,7 @@ fn parse_symbol_name(rest: &str) -> Result<String, String> {
 /// `_extract_context_flags`: `[flag1,!flag2] pattern`.
 fn extract_context_flags(s: &str) -> (String, Option<Flags>, Option<Flags>) {
     let s = s.trim();
-    if s.starts_with("[opts:") || !s.starts_with('[') {
+    if s.starts_with("[opts:") || s.starts_with("[sha256:") || !s.starts_with('[') {
         return (s.to_string(), None, None);
     }
     let Some(end) = s.find(']') else {
@@ -1184,6 +1186,10 @@ fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, St
         return Err("requires a pattern".into());
     }
     let (pattern_part, flags, neg_flags) = extract_context_flags(rest);
+    let (pattern_part, sha256) = extract_sha256(&pattern_part)?;
+    if sha256.is_some() && decision != "allow" {
+        return Err("[sha256:] is only permitted on allow".into());
+    }
     let (pattern_part, options) = extract_options(&pattern_part)?;
     if pattern_part.is_empty() {
         return Err("requires a pattern after flags".into());
@@ -1197,6 +1203,9 @@ fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, St
     if options.is_some() && !pattern.contains("${") {
         pattern_words(&pattern)?;
     }
+    if sha256.is_some() && pinned_path(&pattern).is_none() {
+        return Err("[sha256:] requires a literal script path containing '/'".into());
+    }
     Ok(Rule {
         decision: decision.into(),
         pattern: if options.is_some() {
@@ -1209,8 +1218,104 @@ fn parse_rule(decision: &str, rest: &str, with_message: bool) -> Result<Rule, St
         required_flags: flags,
         negated_flags: neg_flags,
         options,
+        sha256,
         ..Rule::default()
     })
+}
+
+/// One leading `[sha256:HEX]` block, lowercased.
+fn extract_sha256(s: &str) -> Result<(String, Option<String>), String> {
+    let Some(rest) = s.strip_prefix("[sha256:") else {
+        return Ok((s.to_string(), None));
+    };
+    let Some((hex, remaining)) = rest.split_once(']') else {
+        return Err("unterminated sha256 block".into());
+    };
+    let hex = hex.trim().to_ascii_lowercase();
+    if hex.len() != 64 || !hex.bytes().all(|b| b.is_ascii_hexdigit()) {
+        return Err("sha256 requires 64 hex digits".into());
+    }
+    Ok((remaining.trim().to_string(), Some(hex)))
+}
+
+/// The script a `[sha256:]` rule pins: its first pattern word with `/`,
+/// which must be literal.
+pub fn pinned_path(pattern: &str) -> Option<String> {
+    let word = pattern_words(pattern)
+        .ok()?
+        .into_iter()
+        .find(|w| w.contains('/'))?;
+    (!word.contains(['*', '?', '[', '$'])).then_some(word)
+}
+
+/// Lowercase hex sha256 of a file's content (symlinks followed).
+pub fn file_sha256(path: &Path) -> Option<String> {
+    let data = std::fs::read(path).ok()?;
+    let digest = ring::digest::digest(&ring::digest::SHA256, &data);
+    Some(digest.as_ref().iter().map(|b| format!("{b:02x}")).collect())
+}
+
+/// `dippy trust`: set the hash of every `[sha256:]` allow rule of the nearest
+/// project config that pins `script` to the script's current content,
+/// leaving every other byte of the file unchanged.
+pub fn trust_script(script: &str, cwd: &Path) -> Result<Vec<String>, String> {
+    let project = find_project_config(cwd).ok_or("no project .dippy found")?;
+    let new = file_sha256(&cwd.join(expand_home_only(script)))
+        .ok_or_else(|| format!("{script}: cannot read the script"))?;
+    let target = normalize_path(script, cwd);
+    let text = std::fs::read_to_string(&project).map_err(|e| e.to_string())?;
+    let mut out = String::new();
+    let mut changed = Vec::new();
+    for (n, line) in text.split_inclusive('\n').enumerate() {
+        let pinned = line
+            .trim()
+            .strip_prefix("allow")
+            .filter(|rest| rest.starts_with(char::is_whitespace))
+            .and_then(|rest| parse_rule("allow", rest.trim(), false).ok())
+            .filter(|rule| {
+                pinned_path(&rule.pattern).is_some_and(|p| normalize_path(&p, cwd) == target)
+            })
+            .and_then(|rule| rule.sha256);
+        match (pinned, line.find("[sha256:")) {
+            (Some(old), Some(start)) => {
+                let hex_start = start + "[sha256:".len();
+                let hex_end = hex_start + line[hex_start..].find(']').unwrap_or(0);
+                out.push_str(&line[..hex_start]);
+                out.push_str(&new);
+                out.push_str(&line[hex_end..]);
+                changed.push(format!("{}:{}: {old} -> {new}", project.display(), n + 1));
+            }
+            _ => out.push_str(line),
+        }
+    }
+    if changed.is_empty() {
+        return Err(format!(
+            "{script}: no [sha256:] allow rule in {}",
+            project.display()
+        ));
+    }
+    std::fs::write(&project, out).map_err(|e| e.to_string())?;
+    Ok(changed)
+}
+
+/// `Match::from_rule`, turned into ask when the script a `[sha256:]` rule
+/// pins is remote, missing or has other content.
+fn rule_match(rule: &Rule, base: &Path, remote: bool) -> Match {
+    let mut m = Match::from_rule(rule);
+    let Some(expected) = &rule.sha256 else {
+        return m;
+    };
+    let path = pinned_path(&rule.pattern).unwrap_or_default();
+    let actual = (!remote)
+        .then(|| file_sha256(&base.join(expand_home_only(&path))))
+        .flatten();
+    if actual.as_deref() != Some(expected.as_str()) {
+        m.decision = "ask".into();
+        m.message = Some(format!(
+            "{path}: script content is not the approved version"
+        ));
+    }
+    m
 }
 
 /// `allow-/ask-/deny-` rule with context flags; only non-allow forms take a
@@ -2696,7 +2801,7 @@ fn match_argv(
                     match_option_block(rule, Some(&lw[i.min(lw.len())..]), config, cwd, remote)
                 });
             if raw_matched || stripped_matched {
-                result = Some(Match::from_rule(rule));
+                result = Some(rule_match(rule, pattern_base, remote));
                 if raw_matched {
                     raw_deny_set = rule.decision == "deny";
                 }
@@ -2705,7 +2810,7 @@ fn match_argv(
         }
         if rule.items.is_some() {
             if match_option_rule(rule, words) {
-                result = Some(Match::from_rule(rule));
+                result = Some(rule_match(rule, pattern_base, remote));
                 raw_deny_set = rule.decision == "deny";
                 continue;
             }
@@ -2715,7 +2820,7 @@ fn match_argv(
                 && !raw_deny_set
                 && match_option_rule(rule, sw)
             {
-                result = Some(Match::from_rule(rule));
+                result = Some(rule_match(rule, pattern_base, remote));
             }
             continue;
         }
@@ -2726,10 +2831,10 @@ fn match_argv(
                 .as_deref()
                 .is_some_and(|ns| !ns.is_empty() && match_pattern(ns, &pattern));
         if raw_matched {
-            result = Some(Match::from_rule(rule));
+            result = Some(rule_match(rule, pattern_base, remote));
             raw_deny_set = rule.decision == "deny";
         } else if stripped_matched && may_strip && !raw_deny_set {
-            result = Some(Match::from_rule(rule));
+            result = Some(rule_match(rule, pattern_base, remote));
         }
     }
     result
@@ -4231,5 +4336,104 @@ mod tests {
         assert_eq!(edit(&c, "/w/a/b").as_deref(), Some("ask"));
         let (c, _) = env_cfg(&[], "deny-edit /w/${N}/**\nallow-edit /w/**");
         assert_eq!(edit(&c, "/w/a/b").as_deref(), Some("allow"));
+    }
+
+    const HI_SHA: &str = "ab08508fdf5ca4da5c4995987bc41c56c048aaa5eeb046417ae4049b7d40286e";
+
+    fn decide_at(config: &Config, cmd: &str, cwd: &Path, remote: bool) -> Option<Match> {
+        let w = words(cmd);
+        let sc = SimpleCommand {
+            words: &w,
+            raw_words: &[],
+            word_has_expansions: &[],
+        };
+        match_command(&sc, config, cwd, &Flags::new(), remote)
+    }
+
+    #[test]
+    fn sha256_pin_allows_only_matching_script_content() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-sha256-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("scripts")).unwrap();
+        let script = dir.join("scripts/x.sh");
+        std::fs::write(&script, "echo hi\n").unwrap();
+        std::os::unix::fs::symlink("scripts/x.sh", dir.join("link.sh")).unwrap();
+        let c = cfg(&format!(
+            "allow [sha256:{HI_SHA}] ./scripts/x.sh *\n\
+             allow [sha256:{HI_SHA}] bash scripts/x.sh *\n\
+             allow [sha256:{}] ./link.sh",
+            HI_SHA.to_uppercase()
+        ));
+        let d = |cmd: &str, remote: bool| decide_at(&c, cmd, &dir, remote).map(|m| m.decision);
+        assert_eq!(d("./scripts/x.sh a", false).as_deref(), Some("allow"));
+        assert_eq!(d("scripts/x.sh", false).as_deref(), Some("allow"));
+        assert_eq!(d("bash ./scripts/x.sh -v", false).as_deref(), Some("allow"));
+        assert_eq!(d("./link.sh", false).as_deref(), Some("allow"));
+        assert_eq!(d("./scripts/x.sh", true).as_deref(), Some("ask"));
+
+        std::fs::write(&script, "echo bye\n").unwrap();
+        for cmd in ["./scripts/x.sh a", "bash scripts/x.sh", "./link.sh"] {
+            let m = decide_at(&c, cmd, &dir, false).unwrap();
+            assert_eq!(m.decision, "ask", "{cmd}");
+            let message = m.message.unwrap();
+            assert!(!message.contains("trust"), "{message}");
+        }
+        std::fs::remove_file(&script).unwrap();
+        assert_eq!(d("./scripts/x.sh", false).as_deref(), Some("ask"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn sha256_pin_parsing() {
+        let c = cfg(&format!("allow [ci] [sha256:{HI_SHA}] ./x.sh"));
+        let rule = &c.rules[0];
+        assert_eq!(rule.sha256.as_deref(), Some(HI_SHA));
+        assert!(rule.required_flags.as_ref().unwrap().contains("ci"));
+        assert_eq!(rule.pattern, "./x.sh");
+        let c = cfg(&format!("allow [sha256:{HI_SHA}] [opts: -v] ./x.sh"));
+        assert!(c.rules[0].sha256.is_some() && c.rules[0].options.is_some());
+        for bad in [
+            "allow [sha256:abc] ./x.sh".to_string(),
+            format!("ask [sha256:{HI_SHA}] ./x.sh"),
+            format!("deny [sha256:{HI_SHA}] ./x.sh"),
+            format!("allow [sha256:{HI_SHA}] frob x"),
+            format!("allow [sha256:{HI_SHA}] ./s/*.sh"),
+            format!("allow [sha256:{HI_SHA}"),
+        ] {
+            assert!(cfg(&bad).rules.is_empty(), "{bad}");
+        }
+    }
+
+    #[test]
+    fn trust_rewrites_pinned_hashes_in_the_project_config() {
+        let dir = std::env::temp_dir().join(format!("dippy-rs-trust-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("scripts")).unwrap();
+        std::fs::write(dir.join("scripts/x.sh"), "echo bye\n").unwrap();
+        let bye = "07bc42e4aabea98b4f1ce467235e1c0ed4e591219d2b24c7f20698fc12805fd2";
+        let project = dir.join(".dippy");
+        let before = format!(
+            "# scripts\nallow [sha256:{HI_SHA}] ./scripts/x.sh *\n\
+             allow  [ci] [sha256:{HI_SHA}]  bash scripts/x.sh   \"keep\"\n\
+             allow [sha256:{HI_SHA}] ./scripts/y.sh\nallow frob\n"
+        );
+        std::fs::write(&project, &before).unwrap();
+        let changed = trust_script("scripts/x.sh", &dir).unwrap();
+        assert_eq!(changed.len(), 2);
+        assert_eq!(
+            std::fs::read_to_string(&project).unwrap(),
+            format!(
+                "# scripts\nallow [sha256:{bye}] ./scripts/x.sh *\n\
+                 allow  [ci] [sha256:{bye}]  bash scripts/x.sh   \"keep\"\n\
+                 allow [sha256:{HI_SHA}] ./scripts/y.sh\nallow frob\n"
+            )
+        );
+        // No pinned rule for the script: error, file unchanged.
+        let after = std::fs::read_to_string(&project).unwrap();
+        std::fs::write(dir.join("scripts/z.sh"), "z\n").unwrap();
+        assert!(trust_script("./scripts/z.sh", &dir).is_err());
+        assert!(trust_script("./scripts/missing.sh", &dir).is_err());
+        assert_eq!(std::fs::read_to_string(&project).unwrap(), after);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 }

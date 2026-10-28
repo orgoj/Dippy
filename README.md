@@ -22,6 +22,7 @@
 - **Custom wrappers** — `wrapper <name>` for project-specific tools (ssh, docker exec, etc.), including literal quoted-heredoc script analysis with `--script-stdin`, two-word wrappers such as `cca run` with `--subcommand` (heredoc without a marker word: `--script-stdin -`), and output redirects validated by redirect rules
 - **Option rules** — `allow-opt`, `ask-opt`, `deny-opt` for subcommand/flag control
 - **Option-aware command patterns** — `[opts: -s, --header="Host: *"]` declares optional flags and single-value globs, with literal shell argument decoding and an exact positional argument count
+- **Hash-pinned scripts (dippy-rs)** — `allow [sha256:HEX] ./scripts/build.sh *` (or `bash scripts/build.sh *`) allows a local script only while its content has that hash, otherwise asks; the user re-approves a changed script with `dippy trust scripts/build.sh`, which rewrites the hash in the project `.dippy` and is denied to agents unless a rule allows it
 - **WebSearch support** — auto-approval for WebSearch tool *(by tony)*
 - **Tk Approval Provider (`dippy-askpass-gui`)** — standalone Tk GUI approval dialog with operation classification (Read File, Edit File, Command, Web Request, MCP Tool), single-key keyboard shortcuts (`y`/`Y`/`Enter` = allow, `n`/`N`/`Esc` = deny), and multi-monitor geometric centering via `xrandr`
 - **Gemini CLI support** — integrated hook support for Gemini CLI tools

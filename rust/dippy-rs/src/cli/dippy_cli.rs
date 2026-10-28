@@ -1,9 +1,9 @@
 //! Port of `src/dippy/cli/dippy.py`: Dippy's own CLI handler.
 //!
-//! `dippy audit` only queries the audit log; every other subcommand needs
-//! approval unless a rule allows it.
+//! `dippy audit` only queries the audit log; `dippy trust` is denied, and
+//! every other subcommand needs approval, unless a rule allows it.
 
-use super::{Classification, Describe, HandlerContext};
+use super::{Action, Classification, Describe, HandlerContext};
 
 pub const COMMANDS: &[&str] = &["dippy"];
 pub const PORTED: bool = true;
@@ -14,6 +14,9 @@ pub fn classify(ctx: &HandlerContext) -> Classification {
     let tokens = &ctx.tokens;
     if tokens.len() > 1 && tokens[1] == "audit" {
         return Classification::allow_desc("dippy audit");
+    }
+    if tokens.len() > 1 && tokens[1] == "trust" {
+        return Classification::new(Action::Deny).desc("dippy trust is not allowed");
     }
     Classification::ask()
 }
@@ -35,6 +38,10 @@ mod tests {
         assert_eq!(
             classify(&HandlerContext::new(&["dippy", "dashboard"])).action,
             Action::Ask
+        );
+        assert_eq!(
+            classify(&HandlerContext::new(&["dippy", "trust", "x.sh"])).action,
+            Action::Deny
         );
     }
 }
