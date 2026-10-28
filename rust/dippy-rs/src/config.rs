@@ -7,6 +7,7 @@
 //! same lines are skipped or fatal) but not stored.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::sync::LazyLock;
 
@@ -1289,13 +1290,49 @@ pub fn trust_script(script: &str, cwd: &Path) -> Result<Vec<String>, String> {
         }
     }
     if changed.is_empty() {
-        return Err(format!(
-            "{script}: no [sha256:] allow rule in {}",
-            project.display()
-        ));
+        let rule = new_pin_rule(script, &target, &project, cwd, &new)?;
+        if !out.is_empty() && !out.ends_with('\n') {
+            out.push('\n');
+        }
+        out.push_str(&rule);
+        out.push('\n');
+        let line = out.lines().count();
+        changed.push(format!("{}:{line}: added {rule}", project.display()));
     }
     std::fs::write(&project, out).map_err(|e| e.to_string())?;
     Ok(changed)
+}
+
+/// `allow [sha256:HEX] PATH *` for an executable without a pinned rule,
+/// PATH relative to the project root (where agents run) when inside it.
+fn new_pin_rule(
+    script: &str,
+    target: &str,
+    project: &Path,
+    cwd: &Path,
+    hash: &str,
+) -> Result<String, String> {
+    let mode = std::fs::metadata(cwd.join(expand_home_only(script)))
+        .map(|m| m.permissions().mode())
+        .unwrap_or(0);
+    if mode & 0o111 == 0 {
+        return Err(format!(
+            "{script}: no [sha256:] allow rule in {} and the script is not executable",
+            project.display()
+        ));
+    }
+    let root = project.parent().unwrap_or(Path::new("/")).to_string_lossy();
+    let path = match target.strip_prefix(&format!("{}/", root.trim_end_matches('/'))) {
+        Some(rel) if rel.contains('/') => rel.to_string(),
+        Some(rel) => format!("./{rel}"),
+        None => target.to_string(),
+    };
+    if path.contains(|c: char| c.is_whitespace() || "*?[]$\"'\\`".contains(c)) {
+        return Err(format!(
+            "{path}: write its rule by hand (path needs quoting)"
+        ));
+    }
+    Ok(format!("allow [sha256:{hash}] {path} *"))
 }
 
 /// `Match::from_rule`, turned into ask when the script a `[sha256:]` rule
@@ -4428,12 +4465,49 @@ mod tests {
                  allow [sha256:{HI_SHA}] ./scripts/y.sh\nallow frob\n"
             )
         );
-        // No pinned rule for the script: error, file unchanged.
+        // No pinned rule and not executable (or missing): error, file unchanged.
         let after = std::fs::read_to_string(&project).unwrap();
         std::fs::write(dir.join("scripts/z.sh"), "z\n").unwrap();
         assert!(trust_script("./scripts/z.sh", &dir).is_err());
         assert!(trust_script("./scripts/missing.sh", &dir).is_err());
         assert_eq!(std::fs::read_to_string(&project).unwrap(), after);
+
+        // No pinned rule for an executable: a rule relative to the project
+        // root is appended, also when trusted from a subdirectory.
+        let exec = std::fs::Permissions::from_mode(0o755);
+        std::fs::set_permissions(dir.join("scripts/z.sh"), exec.clone()).unwrap();
+        std::fs::write(&project, after.trim_end()).unwrap();
+        let z_sha = file_sha256(&dir.join("scripts/z.sh")).unwrap();
+        assert_eq!(trust_script("z.sh", &dir.join("scripts")).unwrap().len(), 1);
+        assert_eq!(
+            std::fs::read_to_string(&project).unwrap(),
+            format!(
+                "{}\nallow [sha256:{z_sha}] scripts/z.sh *\n",
+                after.trim_end()
+            )
+        );
+        let c = parse_config(&std::fs::read_to_string(&project).unwrap(), None).unwrap();
+        let d = decide_at(&c, "scripts/z.sh -x", &dir, false).unwrap();
+        assert_eq!(d.decision, "allow");
+        // A second trust updates the added rule instead of appending again.
+        assert_eq!(trust_script("scripts/z.sh", &dir).unwrap().len(), 1);
+        assert_eq!(
+            c.rules.len(),
+            cfg(&std::fs::read_to_string(&project).unwrap()).rules.len()
+        );
+
+        std::fs::write(dir.join("top.sh"), "t\n").unwrap();
+        std::fs::set_permissions(dir.join("top.sh"), exec.clone()).unwrap();
+        trust_script("top.sh", &dir).unwrap();
+        assert!(
+            std::fs::read_to_string(&project)
+                .unwrap()
+                .ends_with("] ./top.sh *\n")
+        );
+
+        std::fs::write(dir.join("a b.sh"), "t\n").unwrap();
+        std::fs::set_permissions(dir.join("a b.sh"), exec).unwrap();
+        assert!(trust_script("a b.sh", &dir).is_err());
         let _ = std::fs::remove_dir_all(&dir);
     }
 }

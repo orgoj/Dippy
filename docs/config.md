@@ -872,8 +872,13 @@ or a pattern without a literal script path is skipped with a warning.
 After reviewing a changed script, the user runs `dippy trust scripts/build.sh`
 (honours the global `--cwd`). It sets HEX to the script's current hash in every
 pinned `allow` rule of the nearest project `.dippy` that names that script,
-leaves the rest of the file unchanged and prints each changed line; it fails
-without changes when no such rule exists. The built-in handler denies
+leaves the rest of the file unchanged and prints each changed line. When no
+such rule exists and the script is executable, it appends
+`allow [sha256:HEX] PATH *`, with PATH relative to the project root
+(`./name` for a file in the root) or absolute outside it; a path that would
+need quoting, or a script that is not executable, fails without changes.
+The appended rule is the last project rule, so it also overrides an earlier
+project `deny` of that script. The built-in handler denies
 `dippy trust`; a rule such as `allow [$HCOM_AGENT_NAME=bot] dippy trust *`
 grants it.
 

@@ -5,6 +5,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.17] - 2026-10-28
+
+### Added
+
+- dippy-rs: `dippy trust PATH` appends `allow [sha256:HEX] PATH *` to the nearest project `.dippy` when no pinned rule names the script and it is executable (PATH relative to the project root), instead of failing.
+
 ## [0.6.16] - 2026-10-28
 
 ### Fixed
