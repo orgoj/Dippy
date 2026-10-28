@@ -15,10 +15,9 @@ just fmt     # cargo fmt --check
 
 ## Development rules
 
-- On branch `rust-port`, the Python Dippy (`src/dippy`, `tests/`,
-  `rust/parity/`) is unmaintained and will be deleted. Implement every
-  feature and fix only in `rust/dippy-rs` with Rust tests; never edit, run or
-  cite the Python version or parity tools.
+- Implement every feature and fix only in `rust/dippy-rs` with Rust tests.
+  `src/dippy`, `tests/` and `rust/parity/` are dead code awaiting removal:
+  never edit, run or cite them.
 - Use TDD for every code fix: add a failing test first.
 - Treat an unintentionally broad `allow` as a safety bug. Dippy guides
   non-adversarial agents; it is not a security boundary. Accept a broad trust
@@ -26,7 +25,7 @@ just fmt     # cargo fmt --check
   a destructive bypass string using `dippy --cmd` or
   `scripts/debug/try-rules.sh`; never execute the bypass.
 - Use fictional command names in rule tests; real names may hit `SIMPLE_SAFE`.
-- Isolate config tests with `tmp_path`, `monkeypatch` and an empty `HOME`.
+- Isolate config tests in a temporary directory with an empty `HOME`.
   `--config` adds an override; it does not replace `~/.dippy/config`.
 - Validate config changes in the complete file and final rule order; isolated
   snippets can miss a later last-match-wins override.
@@ -40,14 +39,12 @@ just fmt     # cargo fmt --check
 - Rust tests pass an explicit temporary audit-log path; never call a hook
   entry point that falls back to `config::default_log_path()`; `just test`
   fails when a test writes `~/.dippy` in its empty temporary `HOME`.
-- Use `monkeypatch.setattr` for module globals; bare assignment leaks state
-  between tests.
 - Never modify the user's live Dippy configuration during repository work.
-- Use `dippy.core.parser.tokenize`, never `shlex`. Parable `Word.value` retains
-  shell quoting and is not the runtime argument value. When a handler inspects
-  literal argument contents, remove Bash quoting conservatively, reject
+- Split commands with `parser::tokenize`. A raw word still holds shell
+  quoting and is not the runtime argument value. When a handler inspects
+  literal argument contents, decode it with `bash::decode_literal_word`, reject
   expansions, and test the decoded value against the reported command.
-- Keep SQL string/comment lexing and statement splitting in `dippy.core.sql`.
+- Keep SQL string/comment lexing and statement splitting in `rust/dippy-rs/src/sql/`.
   SQL CLI handlers pass shell-decoded SQL to that shared checker; do not add a
   second SQL lexer in a handler.
 - For any SQL approval change, inspect every SQL CLI handler using the shared
@@ -56,11 +53,11 @@ just fmt     # cargo fmt --check
   must ask; a read-only prefix or CLI flag alone does not prove safety.
 - Never import inside a function or duplicate a list derivable from code.
 - Propagate `context_flags` through every `Decision` and delegated
-  `Classification`; preserve `remote=ctx.remote`.
+  `Classification`; preserve `ctx.remote`.
 - Propagate global `--config` and `--cwd` through config loading,
   classification, approval and execution for `run`; execution must pass
   `cwd` to Bash.
-- Treat paths as literal when `remote=True`; never expand them against the host
+- Treat paths as literal when `remote` is true; never expand them against the host
   working directory.
 - Prefer native read and edit matchers over simulated shell commands.
 
@@ -71,9 +68,8 @@ For every requested implementation that will be committed as `feat:` or `fix:`:
 1. Before the first implementation, test, or documentation edit, choose the
    smallest reasonable version increment. Extend an existing feature with a
    patch release unless compatibility or product scope requires a minor release.
-2. Run `just bump-version X.Y.Z` (updates `pyproject.toml`,
-   `src/dippy/__init__.py` and `uv.lock`), and create the dated version
-   section in `CHANGELOG.md`.
+2. Run `just bump-version X.Y.Z` and create the dated version section in
+   `CHANGELOG.md`.
 3. Implement with the required tests and documentation, then run `just check`.
    When the change adds or changes fork behaviour (anything beyond upstream
    Dippy), update its bullet in the README fork section
