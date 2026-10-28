@@ -71,6 +71,8 @@ allow HCOM_INSTANCE_NAME=* ./scripts/debug/try-rules.sh *
 #---- dippy_dev bundle ----#
 # Exact paths, scoped to dippy_dev; SOUL.md edits stay on ask.
 set context-env HCOM_INSTANCE_NAME
+# Feeds the dippy_dev `.dippy` read exception in ~/.dippy/secrets (every instance).
+set context-env HCOM_AGENT_NAME
 allow-redirect [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/TODO.md
 allow-read [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/**
 allow-edit [$HCOM_INSTANCE_NAME=dippy_dev] ~/.hcom/agents/dippy_dev/NOTES.md
