@@ -7,10 +7,10 @@ Write all repository files in English. Answer users in their language.
 ## Commands
 
 ```bash
-just check   # lint + format check + tests
-just test    # tests only, Python 3.12
-just lint    # ruff check
-just fmt     # ruff format --check
+just check   # fmt + lint + test (Rust only)
+just test    # cargo test of dippy-rs under an empty temporary HOME
+just lint    # cargo clippy, warnings are errors
+just fmt     # cargo fmt --check
 ```
 
 ## Development rules
@@ -38,8 +38,8 @@ just fmt     # ruff format --check
   comparing their value to the default. Test that a higher-priority scope can
   explicitly restore the default value.
 - Rust tests pass an explicit temporary audit-log path; never call a hook
-  entry point that falls back to `config::default_log_path()`. Verify with
-  `cargo test` under an empty temporary `HOME`: nothing may appear in it.
+  entry point that falls back to `config::default_log_path()`; `just test`
+  fails when a test writes `~/.dippy` in its empty temporary `HOME`.
 - Use `monkeypatch.setattr` for module globals; bare assignment leaks state
   between tests.
 - Never modify the user's live Dippy configuration during repository work.

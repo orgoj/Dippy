@@ -19,11 +19,15 @@ test-py312 *ARGS: (_test-py "3.12" ARGS)
 # Run tests on Python 3.14
 # test-py314 *ARGS: (_test-py "3.14" ARGS)
 
-# Run tests (default: 3.12, no parallelization)
-test *ARGS: (_test-py "3.12" ARGS)
-
-# Run tests in parallel (with xdist)
-test-parallel *ARGS: (_test-py "3.12" "-n auto" ARGS)
+# Run the Rust tests with an empty HOME; fails if a test writes ~/.dippy
+test *ARGS:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    mkdir -p tmp
+    home=$(mktemp -d "$PWD/tmp/test-home.XXXXXX")
+    trap 'rm -rf "$home"' EXIT
+    HOME="$home" cargo test --locked --manifest-path rust/Cargo.toml -p dippy-rs {{ARGS}}
+    if [[ -e "$home/.dippy" ]]; then echo "a test wrote $home/.dippy"; exit 1; fi
 
 # Run tests on all supported Python versions (parallel)
 [parallel]
@@ -37,17 +41,16 @@ lock-check:
 check-style:
     python3 tools/check_style.py src 2>&1 | sed -u "s/^/[style] /" | tee /tmp/{{project}}-style.log
 
-# Run all checks (tests, lint, format, lock, style) in parallel
-[parallel]
-check: test-parallel lint fmt lock-check check-style check-parable
+# Run all Rust checks (format, clippy, tests)
+check: fmt lint test
 
-# Lint (--fix to apply changes)
+# Clippy with warnings as errors (--fix to apply changes)
 lint *ARGS:
-    uv run ruff check {{ if ARGS == "--fix" { "--fix" } else { "" } }} 2>&1 | sed -u "s/^/[lint] /" | tee /tmp/{{project}}-lint.log
+    cargo clippy --manifest-path rust/Cargo.toml -p dippy-rs --all-targets {{ if ARGS == "--fix" { "--fix --allow-dirty" } else { "" } }} -- -D warnings
 
-# Format (--fix to apply changes)
+# Rust formatting (--fix to apply changes)
 fmt *ARGS:
-    uv run ruff format {{ if ARGS == "--fix" { "" } else { "--check" } }} 2>&1 | sed -u "s/^/[fmt] /" | tee /tmp/{{project}}-fmt.log
+    cargo fmt --manifest-path rust/Cargo.toml {{ if ARGS == "--fix" { "" } else { "--check" } }}
 
 # Set the package version in pyproject.toml and __init__.py, then refresh uv.lock
 bump-version VERSION:
