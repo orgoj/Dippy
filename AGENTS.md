@@ -75,5 +75,8 @@ For every requested implementation that will be committed as `feat:` or `fix:`:
    `src/dippy/__init__.py` and `uv.lock`), and create the dated version
    section in `CHANGELOG.md`.
 3. Implement with the required tests and documentation, then run `just check`.
+   When the change adds or changes fork behaviour (anything beyond upstream
+   Dippy), update its bullet in the README fork section
+   (`FORK ENHANCEMENTS START`/`END`) in the same commit.
 4. Run `just test` immediately before committing. Use a conventional commit
    with a `Co-Authored-By` trailer; never commit a red suite.
