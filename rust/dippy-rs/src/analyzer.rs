@@ -63,6 +63,8 @@ pub struct Decision {
     pub suggestion: Option<String>,
     /// Parts that produced `action` (ask/deny); empty when unknown.
     pub causes: Vec<Cause>,
+    /// Ungrouped reasons of a `combine` result; empty otherwise.
+    parts: Vec<String>,
 }
 
 impl Decision {
@@ -73,6 +75,7 @@ impl Decision {
             context_flags: None,
             suggestion: None,
             causes: Vec::new(),
+            parts: Vec::new(),
         }
     }
     /// An outer construct's decision for an inner one: same action and causes.
@@ -1831,6 +1834,34 @@ fn resolve_cd_target(target: &str, cwd: &Path) -> PathBuf {
 }
 
 /// Most restrictive wins; all reasons at that level.
+/// Reasons in first-seen order, each message once: `a: m`, `b: m`, `a: m`
+/// become `a, b: m`; reasons without a message appear once.
+fn group_reasons(reasons: &[String]) -> String {
+    let mut groups: Vec<(Option<&str>, Vec<&str>)> = Vec::new();
+    for reason in reasons {
+        let (name, message) = match reason.split_once(": ") {
+            Some((name, message)) => (name, Some(message)),
+            None => (reason.as_str(), None),
+        };
+        match groups.iter_mut().find(|(m, names)| match message {
+            Some(_) => *m == message,
+            None => m.is_none() && names[0] == name,
+        }) {
+            Some((_, names)) if !names.contains(&name) => names.push(name),
+            Some(_) => {}
+            None => groups.push((message, vec![name])),
+        }
+    }
+    groups
+        .into_iter()
+        .map(|(message, names)| match message {
+            Some(m) => format!("{}: {m}", names.join(", ")),
+            None => names[0].to_string(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
 fn combine(decisions: Vec<Decision>) -> Decision {
     if decisions.is_empty() {
         return Decision::allow("empty");
@@ -1841,11 +1872,19 @@ fn combine(decisions: Vec<Decision>) -> Decision {
             context_flags.extend(f.iter().cloned());
         }
     }
-    let reasons = |a: Action| {
+    // Ungrouped reasons, so nested lists and pipelines group as one.
+    let parts = |a: Action| {
         decisions
             .iter()
             .filter(|d| d.action == a)
-            .map(|d| d.reason.clone())
+            .flat_map(|d| {
+                if d.parts.is_empty() {
+                    std::slice::from_ref(&d.reason)
+                } else {
+                    d.parts.as_slice()
+                }
+            })
+            .cloned()
             .collect::<Vec<_>>()
     };
     let causes = |a: Action| {
@@ -1855,24 +1894,29 @@ fn combine(decisions: Vec<Decision>) -> Decision {
             .flat_map(|d| d.causes.iter().cloned())
             .collect::<Vec<_>>()
     };
-    let deny = reasons(Action::Deny);
+    let grouped = |action: Action, parts: Vec<String>| {
+        let mut d = Decision::new(action, group_reasons(&parts)).flags(&context_flags);
+        d.parts = parts;
+        d
+    };
+    let deny = parts(Action::Deny);
     if !deny.is_empty() {
-        let mut d = Decision::new(Action::Deny, deny.join(", ")).flags(&context_flags);
+        let mut d = grouped(Action::Deny, deny);
         d.causes = causes(Action::Deny);
         return d;
     }
-    let ask = reasons(Action::Ask);
+    let ask = parts(Action::Ask);
     if !ask.is_empty() {
         let suggestion = decisions
             .iter()
             .find(|d| d.action == Action::Ask && d.suggestion.is_some())
             .and_then(|d| d.suggestion.clone());
-        let mut d = Decision::ask(ask.join(", ")).flags(&context_flags);
+        let mut d = grouped(Action::Ask, ask);
         d.suggestion = suggestion;
         d.causes = causes(Action::Ask);
         return d;
     }
-    Decision::allow(reasons(Action::Allow).join(", ")).flags(&context_flags)
+    grouped(Action::Allow, parts(Action::Allow))
 }
 
 #[cfg(test)]
@@ -1908,6 +1952,21 @@ mod tests {
     fn decide_with(rules: &str, cmd: &str) -> Decision {
         let config = config::parse_config(rules, None).unwrap();
         analyze(cmd, &config, Path::new("/tmp"), None, false)
+    }
+
+    #[test]
+    fn compound_reasons_are_grouped_by_message() {
+        let rules = "deny frob * \"no frob\"\ndeny zork * \"no frob\"\ndeny quux * \"other\"";
+        let d = decide_with(rules, "frob a && frob b; zork c | quux d && frob e");
+        assert_eq!(
+            (d.action, d.reason.as_str()),
+            (Action::Deny, "frob, zork: no frob, quux: other")
+        );
+        let d = decide_with("ask frob *", "frob a && frob b");
+        assert_eq!((d.action, d.reason.as_str()), (Action::Ask, "frob: frob *"));
+        // Without a message, identical reasons appear once.
+        let d = decide_with("", "rm a && rm b | rm a");
+        assert_eq!((d.action, d.reason.as_str()), (Action::Ask, "rm a, rm b"));
     }
 
     #[test]

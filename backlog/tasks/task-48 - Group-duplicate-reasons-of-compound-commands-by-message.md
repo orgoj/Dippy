@@ -1,9 +1,11 @@
 ---
 id: TASK-48
 title: Group duplicate reasons of compound commands by message
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@dippy_dev'
 created_date: '2026-10-29 11:59'
+updated_date: '2026-10-29 12:16'
 labels: []
 dependencies: []
 priority: medium
@@ -18,8 +20,14 @@ A compound command whose parts hit the same rule repeats the reason for every pa
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 A compound command whose parts share one message yields "sed, sha256sum: <msg>" (each message once, command names distinct, in first-seen order), covered by a Rust test
-- [ ] #2 Parts with different messages keep one group per message, joined in first-seen order, covered by a Rust test
-- [ ] #3 The hook reason to the agent and the audit `cmd` field carry the grouped text, covered by a Rust test
-- [ ] #4 README fork section and CHANGELOG describe the change
+- [x] #1 A compound command whose parts share one message yields "sed, sha256sum: <msg>" (each message once, command names distinct, in first-seen order), covered by a Rust test
+- [x] #2 Parts with different messages keep one group per message, joined in first-seen order, covered by a Rust test
+- [x] #3 The hook reason to the agent and the audit `cmd` field carry the grouped text, covered by a Rust test
+- [x] #4 README fork section and CHANGELOG describe the change
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+analyzer.rs combine groups reasons by message (group_reasons); Decision keeps the ungrouped parts so nested lists/pipelines group as one. Tests: analyzer compound_reasons_are_grouped_by_message (shared and distinct messages, exact duplicates without message), hook codex_allow_is_silent_until_permission_request (agent reason and audit cmd). README fork section, CHANGELOG 0.6.20. Verified with just check.
+<!-- SECTION:FINAL_SUMMARY:END -->

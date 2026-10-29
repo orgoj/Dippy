@@ -1699,6 +1699,15 @@ mod tests {
             codex(bash("frob delete")).as_deref(),
             Some("exit 2: 🐤 frob: no frob")
         );
+        // A repeated reason reaches the agent and the audit log once.
+        assert_eq!(
+            codex(bash("frob delete && frob delete")).as_deref(),
+            Some("exit 2: 🐤 frob: no frob")
+        );
+        assert_eq!(
+            logged(Mode::Codex, None, &[bash("frob delete && frob delete")])[0]["cmd"],
+            "frob: no frob"
+        );
         let ask = codex(bash("rm -rf x")).unwrap();
         assert!(ask.starts_with("{\"systemMessage\":"), "{ask}");
         // Python passes no hook_event for rule-matched tools.
