@@ -1839,7 +1839,10 @@ mod tests {
     /// Audit entries (without `ts`) written for the payloads, one hook call
     /// each.
     fn logged(mode: Mode, askpass: Option<&Path>, payloads: &[Value]) -> Vec<Value> {
-        let dir = temp_dir(&format!("{mode:?}"));
+        // One directory per call: parallel tests must not share a log.
+        static CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let dir = temp_dir(&format!("{mode:?}-{n}"));
         let audit = dir.join("audit.log");
         let mut c =
             config::parse_config(&format!("{RULES}set log {}\n", audit.display()), None).unwrap();
@@ -1990,15 +1993,15 @@ mod tests {
         assert_eq!(
             entries,
             vec![
-                json!({"decision": "allow", "cmd": "frob (frob)", "cwd": "/w", "agent": "pi"}),
+                json!({"decision": "allow", "cmd": "frob (frob)", "command": "frob x", "cwd": "/w", "agent": "pi"}),
                 json!({"decision": "allow", "cmd": "[mcp__fake__* @ /w/.dippy]", "rule": "mcp__fake__*", "agent": "pi"}),
                 json!({"decision": "pass", "message": "no matching rule", "tool": "mcp__other__x", "agent": "pi"}),
-                json!({"decision": "pass", "message": "no matching rule", "tool": "WebSearch", "agent": "pi"}),
+                json!({"decision": "pass", "message": "no matching rule", "command": "cats", "tool": "WebSearch", "agent": "pi"}),
                 json!({"decision": "allow", "rule": "/w/out/**", "cwd": "/w", "tool": "Write", "file_path": "/w/out/a.txt", "agent": "pi"}),
                 json!({"decision": "pass", "message": "no matching rule", "cwd": "/w", "tool": "Write", "file_path": "/w/src/a", "agent": "pi"}),
                 json!({"decision": "pass", "message": "no file path for Read", "tool": "Read", "agent": "pi"}),
-                json!({"decision": "ask", "rule": "/w/private/*", "message": "multi-file (2 paths): [/w/private/*]", "cwd": "/w", "tool": "read_many_files", "file_path": "/w/a", "agent": "pi"}),
-                json!({"decision": "allow", "cmd": "rm x", "message": "dontAsk", "cwd": "/w", "agent": "pi"}),
+                json!({"decision": "ask", "rule": "/w/private/*", "message": "multi-file (2 paths): [/w/private/*]", "command": "[\"/w/a\", \"/w/private/k\"]", "cwd": "/w", "tool": "read_many_files", "file_path": "/w/a", "agent": "pi"}),
+                json!({"decision": "allow", "cmd": "rm x", "message": "dontAsk", "command": "rm x", "cwd": "/w", "agent": "pi"}),
                 json!({"decision": "pass", "message": "unsupported tool: UnknownTool", "tool": "UnknownTool", "agent": "pi"}),
                 json!({"decision": "pass", "event": "Stop", "agent": "pi"}),
             ]
@@ -2029,7 +2032,7 @@ mod tests {
         );
         assert_eq!(
             entries[3],
-            json!({"decision": "pass", "message": "no matching rule", "tool": "search_web", "agent": "pi"})
+            json!({"decision": "pass", "message": "no matching rule", "command": "cats", "tool": "search_web", "agent": "pi"})
         );
         assert_eq!(
             entries[4],
@@ -2069,7 +2072,7 @@ mod tests {
             assert_eq!(entries[2]["decision"], "ask");
             assert_eq!(
                 entries[3],
-                json!({"decision": decision, "message": message, "cwd": "/w", "tool": "run_command", "agent": "pi"})
+                json!({"decision": decision, "message": message, "command": "rm x", "cwd": "/w", "tool": "run_command", "agent": "pi"})
             );
         }
         std::fs::remove_dir_all(&dir).unwrap();

@@ -1249,7 +1249,7 @@ allow [] [[] *
 
 **Boolean flags** (no value):
 ```
-set log-full             # log full commands (requires log path set)
+set log-full             # obsolete, no effect: every audit entry is complete
 ```
 
 **Value settings:**
@@ -1663,7 +1663,7 @@ Logs are structured (JSON) with minimal info:
 
 The `cmd` field is best-effort extraction of the base command - may be wrong if parsing fails.
 
-With `set log-full`, a `command` field is added containing the full command string. **Warning: may contain secrets.**
+Every entry also carries the full command string in `command` and, for an ask, the `suggestion` rule when there is one. **Warning: may contain secrets.** `set log-full` is obsolete: it is accepted and has no effect.
 
 ## Example
 
@@ -1928,13 +1928,14 @@ directory's writability and a size over 10 MB. It does not check the agents'
 
 **Log rotation:** Dippy automatically rotates audit logs daily. On the first run of a day, a log last written on an earlier day is renamed to `audit-YYYY-MM-DD.log`, named after that day (local time); concurrent runs serialize on `.audit-rotate.lock` next to the log. Old logs are automatically deleted after `log-rotate-max-days` days (default: 30). Set to `0` to disable rotation.
 
-**Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. Apart from the daily log rotation that every Dippy run performs, it writes nothing, and it is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` (relative paths resolve against the current directory) match at or below a path component boundary. A negative `--limit` is rejected.
+**Querying the audit log:** `dippy audit` reads the configured log plus its `audit-YYYY-MM-DD.log` rotations and prints matching JSON lines in time order. Apart from the daily log rotation that every Dippy run performs, it writes nothing, and it is auto-approved, so agents can analyze prompts without hand-approved pipelines. Filters combine with AND; dates are UTC and inclusive; `--cwd`/`--policy-cwd` (relative paths resolve against the current directory) match at or below a path component boundary. `--context-flag TEXT` keeps entries with a context flag containing TEXT, e.g. an agent name from `set context-env`. A negative `--limit` is rejected.
 
 ```bash
 dippy audit --since 2026-10-01 --not-allow --policy-cwd ~/wiki
 dippy audit --agent agy --decision ask --decision pass --group-by cmd
 dippy audit --not-allow --group-by tool --group-by file_path --limit 20
 dippy audit --grep 'curl -X POST' --limit 5
+dippy audit --not-allow --context-flag mikrotik_ --grep sha256sum
 ```
 
 `--group-by FIELD` (repeatable) prints `count<TAB>value...` lines, most frequent first; a missing field shows as `-`. `--limit N` keeps the last N entries or the top N groups.

@@ -196,7 +196,6 @@ pub struct Config {
     pub dashboard_token_file: Option<PathBuf>,
     /// Audit log (`set log`); `load_config` fills in [`default_log_path`].
     pub log: Option<PathBuf>,
-    pub log_full: bool,
     /// Days to keep rotated audit logs (0 disables rotation).
     pub log_rotate_max_days: i64,
     /// `set log-hook-approvals`: accepted, no effect (dippy-rs writes no
@@ -238,7 +237,6 @@ impl Default for Config {
             dashboard_url: DEFAULT_DASHBOARD_URL.into(),
             dashboard_token_file: None,
             log: None,
-            log_full: false,
             log_rotate_max_days: 30,
             log_hook_approvals: true,
         }
@@ -654,7 +652,6 @@ struct Settings {
     dashboard_url: Option<String>,
     dashboard_token_file: Option<PathBuf>,
     log: Option<PathBuf>,
-    log_full: bool,
     log_rotate_max_days: Option<i64>,
     log_hook_approvals: Option<bool>,
 }
@@ -704,11 +701,11 @@ fn apply_setting(settings: &mut Settings, rest: &str, base: &Path) -> Result<(),
     let need =
         |what: &str| -> Result<String, String> { value.clone().ok_or_else(|| what.to_string()) };
     match key_n.as_str() {
+        // Obsolete: every audit entry is complete.
         "log_full" => {
             if value.is_some() {
                 return Err(format!("'{key}' takes no value"));
             }
-            settings.log_full = true;
         }
         "log_hook_approvals" => {
             let v = need(&format!("'{key}' requires 'on' or 'off'"))?;
@@ -1683,7 +1680,6 @@ fn parse_config_from(
     cfg.dashboard_url = settings.dashboard_url.unwrap_or(d.dashboard_url);
     cfg.dashboard_token_file = settings.dashboard_token_file;
     cfg.log = settings.log;
-    cfg.log_full = settings.log_full;
     cfg.log_rotate_max_days = settings.log_rotate_max_days.unwrap_or(30);
     cfg.log_hook_approvals = settings.log_hook_approvals.unwrap_or(true);
     cfg.configured_settings = settings.names;
@@ -1773,7 +1769,6 @@ fn merge_configs(base: Config, overlay: Config) -> Config {
             base.dashboard_token_file
         },
         log: overlay.log.or(base.log),
-        log_full: overlay.log_full || base.log_full,
         // Python compares these two to their defaults, so a higher scope
         // cannot restore the default there.
         log_rotate_max_days: if overlay.configured_settings.contains("log_rotate_max_days") {
@@ -3210,20 +3205,17 @@ mod tests {
     fn log_settings_parse_and_merge() {
         let d = Config::default();
         assert_eq!(
-            (
-                &d.log,
-                d.log_full,
-                d.log_rotate_max_days,
-                d.log_hook_approvals
-            ),
-            (&None, false, 30, true)
+            (&d.log, d.log_rotate_max_days, d.log_hook_approvals),
+            (&None, 30, true)
         );
+        take_warnings();
         let base = cfg(
             "set log /x/audit.log\nset log-full\nset log-rotate-max-days 7\n\
              set log-hook-approvals off",
         );
+        // `set log-full` is obsolete: accepted silently, without effect.
+        assert_eq!(take_warnings(), Vec::<String>::new());
         assert_eq!(base.log, Some(PathBuf::from("/x/audit.log")));
-        assert!(base.log_full);
         assert_eq!(base.log_rotate_max_days, 7);
         assert!(!base.log_hook_approvals);
         let home = std::env::var("HOME").unwrap();
@@ -3237,7 +3229,6 @@ mod tests {
             cfg("set log /y.log\nset log-rotate-max-days 30\nset log-hook-approvals on"),
         );
         assert_eq!(merged.log, Some(PathBuf::from("/y.log")));
-        assert!(merged.log_full);
         assert_eq!(merged.log_rotate_max_days, 30);
         assert!(merged.log_hook_approvals);
         let kept = merge_configs(base, cfg(""));

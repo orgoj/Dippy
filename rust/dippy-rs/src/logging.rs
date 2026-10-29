@@ -20,7 +20,6 @@ pub struct Entry<'a> {
     pub cmd: Option<&'a str>,
     pub rule: Option<&'a str>,
     pub message: Option<&'a str>,
-    /// Logged only with `set log-full`.
     pub command: Option<&'a str>,
     pub cwd: Option<&'a Path>,
     pub tool: Option<&'a str>,
@@ -28,7 +27,6 @@ pub struct Entry<'a> {
     /// Hook event of a closing entry ([`Logs::close`]).
     pub event: Option<&'a str>,
     pub context_flags: Option<&'a Flags>,
-    /// Logged only with `set log-full`.
     pub suggestion: Option<&'a str>,
     /// Dashboard approval id (outcome entries of `set approval dashboard`).
     pub approval: Option<&'a str>,
@@ -36,7 +34,6 @@ pub struct Entry<'a> {
 
 struct Audit {
     path: PathBuf,
-    full: bool,
     policy_cwd: Option<PathBuf>,
 }
 
@@ -99,7 +96,6 @@ impl Logs {
         }
         *self.audit.borrow_mut() = Some(Audit {
             path: path.clone(),
-            full: config.log_full,
             policy_cwd: config.path_rule_cwd.clone(),
         });
     }
@@ -140,7 +136,6 @@ impl Logs {
         {
             *self.audit.borrow_mut() = Some(Audit {
                 path: path.clone(),
-                full: false,
                 policy_cwd: None,
             });
         }
@@ -167,7 +162,7 @@ impl Logs {
         put("cmd", e.cmd);
         put("rule", e.rule);
         put("message", e.message);
-        put("command", e.command.filter(|_| a.full));
+        put("command", e.command);
         let cwd = e.cwd.map(|p| p.to_string_lossy());
         put("cwd", cwd.as_deref());
         let policy_cwd = a.policy_cwd.as_ref().map(|p| p.to_string_lossy());
@@ -182,9 +177,7 @@ impl Logs {
         if let Some(id) = e.approval {
             entry.insert("approval".into(), json!(id));
         }
-        if a.full
-            && let Some(s) = e.suggestion
-        {
+        if let Some(s) = e.suggestion {
             entry.insert("suggestion".into(), json!(s));
         }
         entry.insert("ts".into(), json!(utc_isoformat(chrono::Utc::now())));
@@ -252,30 +245,14 @@ mod tests {
         });
         let line = std::fs::read_to_string(&log).unwrap();
         let (head, ts) = line.split_once(", \"ts\": \"").unwrap();
+        // `command` and `suggestion` are logged without `set log-full`.
         assert_eq!(
             head,
-            "{\"decision\": \"ask\", \"cmd\": \"rm \\u2713\", \"cwd\": \"/w\", \
-             \"policy_cwd\": \"/p\", \"context_flags\": [\"a\", \"b\"], \"agent\": \"pi\""
+            "{\"decision\": \"ask\", \"cmd\": \"rm \\u2713\", \"command\": \"rm -rf x\", \
+             \"cwd\": \"/w\", \"policy_cwd\": \"/p\", \"context_flags\": [\"a\", \"b\"], \
+             \"agent\": \"pi\", \"suggestion\": \"rm *\""
         );
         assert!(ts.ends_with("+00:00\"}\n"), "{ts}");
-
-        config.log_full = true;
-        logs.configure(&config);
-        logs.decision(Entry {
-            decision: "allow",
-            command: Some("ls"),
-            suggestion: Some("ls *"),
-            ..Entry::default()
-        });
-        let last = std::fs::read_to_string(&log).unwrap();
-        let last = last.lines().last().unwrap();
-        assert!(
-            last.starts_with(
-                "{\"decision\": \"allow\", \"command\": \"ls\", \"policy_cwd\": \"/p\", \
-                 \"agent\": \"pi\", \"suggestion\": \"ls *\", \"ts\": "
-            ),
-            "{last}"
-        );
         std::fs::remove_dir_all(&dir).unwrap();
     }
 }

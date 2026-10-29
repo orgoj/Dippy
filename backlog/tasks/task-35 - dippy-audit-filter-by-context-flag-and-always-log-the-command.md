@@ -1,10 +1,11 @@
 ---
 id: TASK-35
 title: 'dippy audit: filter by context flag and always log the command'
-status: To Do
-assignee: []
+status: Done
+assignee:
+  - '@dippy_dev'
 created_date: '2026-10-24 14:06'
-updated_date: '2026-10-29 11:59'
+updated_date: '2026-10-29 12:11'
 labels: []
 dependencies: []
 priority: medium
@@ -26,10 +27,10 @@ Out of scope: inheriting log settings from the user config in config-only mode; 
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `dippy audit --context-flag TEXT` keeps only entries with a context flag containing TEXT and combines with --grep by AND, covered by a Rust test
-- [ ] #2 Every audit entry records `command` and `suggestion` when present, with or without `set log-full` (hook, run and config-only paths), covered by a Rust test
-- [ ] #3 `set log-full` is still accepted silently (no error, no warning) and has no effect, covered by a Rust test
-- [ ] #4 docs/config.md marks `set log-full` obsolete and documents --context-flag; README fork section and CHANGELOG describe both changes
+- [x] #1 `dippy audit --context-flag TEXT` keeps only entries with a context flag containing TEXT and combines with --grep by AND, covered by a Rust test
+- [x] #2 Every audit entry records `command` and `suggestion` when present, with or without `set log-full` (hook, run and config-only paths), covered by a Rust test
+- [x] #3 `set log-full` is still accepted silently (no error, no warning) and has no effect, covered by a Rust test
+- [x] #4 docs/config.md marks `set log-full` obsolete and documents --context-flag; README fork section and CHANGELOG describe both changes
 <!-- AC:END -->
 
 ## Implementation Plan
@@ -48,3 +49,9 @@ More evidence 2026-10-29: a denied sha256sum of the mikrotik agent (config-only 
 
 User decision 2026-10-29 (revised): one complete log; remove the log-full mode, always write command and suggestion; keep `set log-full` accepted as a silent no-op. Duplicate reasons in `cmd` are a separate task.
 <!-- SECTION:NOTES:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Removed the log-full mode: Logs::decision always writes command and suggestion (logging.rs test decision_entry_fields_and_order, hook audit tests); set log-full parses as a silent no-op (config.rs log_settings_parse_and_merge asserts no warnings). Added dippy audit --context-flag (audit.rs test, AND with --grep). Fixed a pre-existing race: hook test helper logged() now uses one temp dir per call. Docs, README fork section, CHANGELOG 0.6.19. Verified with just check.
+<!-- SECTION:FINAL_SUMMARY:END -->

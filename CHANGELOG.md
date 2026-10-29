@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.19] - 2026-10-29
+
+### Added
+
+- dippy-rs: `dippy audit --context-flag TEXT` keeps entries with a context flag containing TEXT (e.g. an agent name from `set context-env`); it combines with the other filters by AND.
+
+### Changed
+
+- dippy-rs: every audit entry records the full `command` and the ask `suggestion`, also for config-only policies; `set log-full` is obsolete, accepted and without effect.
+
 ## [0.6.18] - 2026-10-29
 
 ### Added

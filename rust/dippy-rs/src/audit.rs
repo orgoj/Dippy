@@ -46,6 +46,9 @@ pub struct Query {
     /// Substring of command, cmd, message or path
     #[arg(long, value_name = "TEXT")]
     pub grep: Option<String>,
+    /// Substring of a context flag, e.g. an agent name
+    #[arg(long, value_name = "TEXT")]
+    pub context_flag: Option<String>,
     /// Count entries by field, e.g. cmd, command, cwd, tool (repeatable)
     #[arg(long, value_name = "FIELD")]
     pub group_by: Vec<String>,
@@ -206,6 +209,18 @@ pub fn query(log: &Path, q: &Query, cwd: &Path) -> Result<Vec<String>, String> {
             {
                 continue;
             }
+            if let Some(flag) = &q.context_flag
+                && !entry
+                    .get("context_flags")
+                    .and_then(Value::as_array)
+                    .is_some_and(|flags| {
+                        flags
+                            .iter()
+                            .any(|f| f.as_str().is_some_and(|f| f.contains(flag.as_str())))
+                    })
+            {
+                continue;
+            }
             matches.push((ts, line.to_string(), entry));
         }
     }
@@ -299,6 +314,19 @@ mod tests {
             }),
             ["2\trm"]
         );
+        // `--context-flag`: substring of any flag, AND with `--grep`.
+        let flagged = |flag: &str, grep: Option<&str>| {
+            run(Query {
+                context_flag: Some(flag.into()),
+                grep: grep.map(Into::into),
+                ..Query::default()
+            })
+            .len()
+        };
+        assert_eq!(flagged("b", None), 1);
+        assert_eq!(flagged("x", None), 0);
+        assert_eq!(flagged("b", Some("rm")), 1);
+        assert_eq!(flagged("b", Some("dd")), 0);
         let last = run(Query {
             limit: Some(1),
             grep: Some("r".into()),
