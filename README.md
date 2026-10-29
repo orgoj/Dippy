@@ -33,6 +33,7 @@
 - **Codex CLI support** — native `hooks.json` integration for Codex `PreToolUse`/`PermissionRequest`/`PostToolUse` on `Bash`
 - **Codex enforcement model** — `allow` auto-approves via `PermissionRequest`; `deny` hard-blocks via `exit 2`; `ask` falls back to Codex approval UI
 - **Structured JSON output** — for PostToolUse hooks *(by tony)*
+- **systemd handlers (dippy-rs)** — `systemctl` and `timedatectl` allow their read-only forms (`status`, `show`, `cat`, `is-*`, `list-*`, bare command; `timesync-status`, `list-timezones`) locally and over SSH or a wrapper; every other subcommand asks
 - **SSH/sudo handlers** — remote context support for ssh and sudo commands; `docker exec` and `podman exec` pass `[docker, <container>]` / `[podman, <container>]` context flags
 - **curl/wget writes through redirect rules (dippy-rs)** — both parse their arguments as the real tools do (bundled and abbreviated options), so every file they write (`-o`, `-O`, `--output-dir`, cookie jars, logs, traces) is checked against redirect rules; unknown output names, data sends, configs and `--expand-*` ask
 - **`cp`/`mv` through redirect rules** — destinations (and `mv` sources, which get removed) are checked against `allow-redirect`/`ask-redirect`/`deny-redirect`, so `deny-redirect **/.dippy` also stops `mv .dippy /tmp/saved`

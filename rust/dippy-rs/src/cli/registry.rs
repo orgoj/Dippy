@@ -96,6 +96,7 @@ pub static HANDLERS: &[Handler] = &[
     handler!(sudo),
     handler!(symbols),
     handler!(sysctl),
+    handler!(systemd),
     handler!(tar),
     handler!(tee),
     handler!(terraform),

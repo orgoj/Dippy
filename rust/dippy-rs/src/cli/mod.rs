@@ -88,6 +88,7 @@ pub mod ssh;
 pub mod sudo;
 pub mod symbols;
 pub mod sysctl;
+pub mod systemd;
 pub mod tar;
 pub mod tee;
 pub mod terraform;
